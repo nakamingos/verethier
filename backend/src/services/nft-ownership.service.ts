@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Address, BaseError, ContractFunctionRevertedError, PublicClient, createPublicClient, http, parseAbi } from 'viem';
-import { mainnet } from 'viem/chains';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { NFT_BATCH_SIZE, nftRuleLabel, parseTokenIds } from '@/utils/nft-rule.util';
+import { getNftNetwork } from '@/utils/nft-network.util';
 
 const ABI = parseAbi([
   'function supportsInterface(bytes4 interfaceId) view returns (bool)',
@@ -14,36 +14,42 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
-  blockNumber?: bigint;
-  block?: Promise<bigint>;
+  blocks?: Map<number, Promise<bigint>>;
   checks: Map<string, Promise<bigint>>;
 }
 
 @Injectable()
 export class NftOwnershipService {
-  private client: Pick<PublicClient, 'readContract' | 'getChainId' | 'getBlockNumber'>;
+  private readonly clients = new Map<number, Pick<PublicClient, 'readContract' | 'getChainId' | 'getBlockNumber'>>();
 
-  private getClient() {
-    if (!EnvironmentConfig.RPC_URL) throw new Error('NFT verification is not configured. Set RPC_URL on the backend.');
-    return this.client ||= createPublicClient({
-      chain: mainnet,
-      transport: http(EnvironmentConfig.RPC_URL, { timeout: 10000, retryCount: 1 }),
-    }) as unknown as typeof this.client;
+  private getClient(chainId: number) {
+    const network = getNftNetwork(chainId);
+    const rpcVariable = chainId === 1 ? 'RPC_URL' : 'ROBINHOOD_RPC_URL';
+    const rpcUrl = EnvironmentConfig[rpcVariable];
+    if (!rpcUrl) throw new Error(`${network.name} NFT verification is not configured. Set ${rpcVariable} on the backend.`);
+    if (!this.clients.has(chainId)) {
+      this.clients.set(chainId, createPublicClient({
+        chain: network.chain,
+        transport: http(rpcUrl, { timeout: 10000, retryCount: 1 }),
+      }));
+    }
+    return this.clients.get(chainId);
   }
 
-  async prepareRule(contract: string, tokenIds?: string | null, label?: string | null): Promise<NftRuleFields> {
+  async prepareRule(contract: string, tokenIds?: string | null, label?: string | null, chainId: number = 1): Promise<NftRuleFields> {
+    const network = getNftNetwork(chainId);
     if (!/^0x[a-fA-F0-9]{40}$/.test(contract) || /^0x0{40}$/i.test(contract)) {
-      throw new Error('Enter a valid NFT contract address on Ethereum mainnet.');
+      throw new Error(`Enter a valid NFT contract address on ${network.name} mainnet.`);
     }
-    const client = this.getClient();
-    let chainId: number;
-    try { chainId = await client.getChainId(); }
+    const client = this.getClient(chainId);
+    let rpcChainId: number;
+    try { rpcChainId = await client.getChainId(); }
     catch { throw new Error('NFT verification is temporarily unavailable. Please try again.'); }
-    if (chainId !== 1) throw new Error('RPC_URL must point to Ethereum mainnet.');
+    if (rpcChainId !== chainId) throw new Error(`The NFT RPC must point to ${network.name} mainnet.`);
     const address = contract.toLowerCase() as Address;
     const supports = (id: `0x${string}`) => client.readContract({ address, abi: ABI, functionName: 'supportsInterface', args: [id] });
     const [erc721, erc1155] = await Promise.all([supports('0x80ac58cd'), supports('0xd9b67a26')])
-      .catch(() => { throw new Error('Could not read the NFT contract. Check the address and try again.'); });
+      .catch(() => { throw new Error(`Could not read the NFT contract on ${network.name}. Check the address and try again.`); });
     if (erc721 === erc1155) throw new Error('This contract must support exactly one of ERC-721 or ERC-1155.');
     const ids = erc1155 || tokenIds != null ? parseTokenIds(tokenIds) : null;
     if (erc721 && ids && ids.length !== 1) throw new Error('For a specific ERC-721 token, enter one token ID.');
@@ -54,32 +60,37 @@ export class NftOwnershipService {
       catch { /* Collection names are optional metadata. */ }
     }
     return {
-      asset_type: 'nft', chain_id: 1, contract_address: address,
+      asset_type: 'nft', chain_id: chainId, contract_address: address,
       token_standard: erc721 ? 'erc721' : 'erc1155', token_ids: ids,
       collection_name: name || nftRuleLabel({ contract_address: address }),
     };
   }
 
   async count(rule: NftRuleFields, wallets: string[], context?: NftCheckContext): Promise<bigint> {
-    if (rule.chain_id !== 1 || !rule.contract_address || !['erc721', 'erc1155'].includes(rule.token_standard)) {
+    if (!rule.chain_id || !rule.contract_address || !['erc721', 'erc1155'].includes(rule.token_standard)) {
       throw new Error('Invalid NFT verification rule.');
     }
+    getNftNetwork(rule.chain_id);
     const addresses = [...new Set(wallets.map(wallet => wallet.toLowerCase()))] as Address[];
     if (!addresses.length) return BigInt(0);
     const run = context || { checks: new Map<string, Promise<bigint>>() };
-    const key = JSON.stringify([rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort()]);
+    const key = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort()]);
     if (!run.checks.has(key)) run.checks.set(key, this.readBalances(rule, addresses, run));
     return run.checks.get(key);
   }
 
   private async readBalances(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<bigint> {
-    const client = this.getClient();
-    context.block ||= client.getChainId().then(chainId => {
-      if (chainId !== 1) throw new Error('RPC_URL must point to Ethereum mainnet.');
-      return client.getBlockNumber();
-    });
-    context.blockNumber = await context.block;
-    const parameters = { address: rule.contract_address as Address, abi: ABI, blockNumber: context.blockNumber };
+    const network = getNftNetwork(rule.chain_id);
+    const client = this.getClient(rule.chain_id);
+    context.blocks ||= new Map();
+    if (!context.blocks.has(rule.chain_id)) {
+      context.blocks.set(rule.chain_id, client.getChainId().then(chainId => {
+        if (chainId !== rule.chain_id) throw new Error(`The NFT RPC must point to ${network.name} mainnet.`);
+        return client.getBlockNumber();
+      }));
+    }
+    const blockNumber = await context.blocks.get(rule.chain_id);
+    const parameters = { address: rule.contract_address as Address, abi: ABI, blockNumber };
     if (rule.token_standard === 'erc721') {
       if (rule.token_ids?.length) {
         try {

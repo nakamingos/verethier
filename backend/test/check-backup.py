@@ -89,15 +89,24 @@ try:
             raise RuntimeError(f"Restored values differ from the backup for {name}")
         print(f"PASS: {name}: {len(expected_rows)} rows, every backed-up value matches")
 
-    before = {table: fingerprint(table) for table in tables}
-    migration = root / "backend/supabase/migrations/20261006223000_add_nft_verification_rules.sql"
-    sql(migration.read_text())
+    has_nft_columns = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='asset_type';").strip() == "1"
+    if not has_nft_columns:
+        before = {table: fingerprint(table) for table in tables}
+        migration = root / "backend/supabase/migrations/20261006223000_add_nft_verification_rules.sql"
+        sql(migration.read_text())
+        for table in tables:
+            if fingerprint(table, upgraded=True) != before[table]:
+                raise RuntimeError(f"NFT migration changed existing data in {table}")
+        if sql("SELECT count(*) FROM public.verifier_rules WHERE asset_type IS DISTINCT FROM 'ethscription' OR chain_id IS DISTINCT FROM 1;").strip() != "0":
+            raise RuntimeError("Existing rules did not receive the expected Ethscriptions defaults")
+        print("PASS: NFT migration succeeds and preserves all existing application data")
+    # Compare every field now that the NFT columns exist, then rehearse the L2 upgrade.
+    before_robinhood = {table: fingerprint(table) for table in tables}
+    sql((root / "backend/supabase/migrations/20261007033000_add_robinhood_nft_rules.sql").read_text())
     for table in tables:
-        if fingerprint(table, upgraded=True) != before[table]:
-            raise RuntimeError(f"NFT migration changed existing data in {table}")
-    if sql("SELECT count(*) FROM public.verifier_rules WHERE asset_type IS DISTINCT FROM 'ethscription' OR chain_id IS DISTINCT FROM 1;").strip() != "0":
-        raise RuntimeError("Existing rules did not receive the expected Ethscriptions defaults")
-    print("PASS: NFT migration succeeds and preserves all existing application data")
+        if fingerprint(table) != before_robinhood[table]:
+            raise RuntimeError(f"Robinhood migration changed existing data in {table}")
+    print("PASS: Robinhood migration succeeds and preserves all existing application data")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")

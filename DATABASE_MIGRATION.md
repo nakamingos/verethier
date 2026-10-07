@@ -1,8 +1,14 @@
-Run these commands from the repository root. The NFT database migration was applied to the linked remote Supabase project `cpwubaszhjdtqlvfdlbx` on 2026-10-06. The user confirmed `RPC_URL` is configured on the Railway backend. The backend and frontend code changes still need deployment.
+Run these commands from the repository root. The initial NFT database migration was applied to the linked remote Supabase project `cpwubaszhjdtqlvfdlbx` on 2026-10-06. That upgrade is deployed, and the user confirmed NFT rule creation, wallet verification and role assignment work in production.
 
-Remote verification passed: all six NFT rule columns, the validated asset constraint, four new indexes, and the NFT ID helpers are present. All 42 existing rules remain Ethscriptions rules on chain 1. The transaction compared all existing application records and table permissions before and after the migration and confirmed they were preserved: 234 wallets and 1,108 role assignments, with RLS still enabled.
+The Robinhood extension adds `backend/supabase/migrations/20261007033000_add_robinhood_nft_rules.sql`. It expands the NFT network constraint from Ethereum (`1`) to Ethereum and Robinhood mainnet (`4663`); it changes no rule values or indexes. This migration was applied remotely on 2026-10-07, and the user confirmed `ROBINHOOD_RPC_URL` is set on the Railway backend. Deploy the backend code to activate the new network option. The existing `RPC_URL` remains the Ethereum endpoint. No frontend changes are required for this extension.
 
-The remote migration history contains older versions absent from this checkout. This upgrade applied only `20261006223000_add_nft_verification_rules.sql` directly and recorded version `20261006223000`, its name and source SQL in `supabase_migrations.schema_migrations` in the same transaction. A PostgREST schema reload was requested. Existing history was retained. Reconcile the older local/remote migration history before using a general `supabase db push` in future.
+A fresh private backup was saved in `backup/robinhood-20261007035422-UTC/` and restored successfully before the Robinhood migration. Every backed-up application value matched: 43 rules (42 Ethscriptions rules and one Ethereum NFT rule), 234 wallets, and 1,109 role assignments. The remote migration transaction compared every application record, table permissions, RLS settings and index definitions before and after the change, and confirmed they were preserved. The new constraint is validated and the migration is recorded in Supabase history.
+
+Alchemy's Robinhood mainnet endpoint is `https://robinhood-mainnet.g.alchemy.com/v2/YOUR_KEY`; enable the network for the key in Alchemy. A separate compatible Robinhood RPC provider also works. The bot verifies the endpoint's chain ID before accepting a rule or checking balances. See [Alchemy's supported endpoints](https://www.alchemy.com/docs/reference/node-supported-chains) and [Robinhood's network details](https://docs.robinhood.com/chain/add-network-to-wallet/).
+
+Initial NFT release verification passed: all six NFT rule columns, the validated asset constraint, four new indexes, and the NFT ID helpers were present. All 42 rules at that time remained Ethscriptions rules on chain 1. The transaction compared all existing application records and table permissions before and after the migration and confirmed they were preserved: 234 wallets and 1,108 role assignments, with RLS still enabled.
+
+The remote migration history contains older versions absent from this checkout. The initial NFT upgrade applied only `20261006223000_add_nft_verification_rules.sql` directly and recorded version `20261006223000`, its name and source SQL in `supabase_migrations.schema_migrations` in the same transaction. The Robinhood upgrade used the same process for version `20261007033000`. Both requested a PostgREST schema reload and retained existing history. Reconcile the older local/remote migration history before using a general `supabase db push` in future.
 
 PostgreSQL tools, Supabase CLI and Docker are already installed on this machine.
 
@@ -12,7 +18,7 @@ For the `roles.sql`, `schema.sql`, and `data.sql` backup created with the Supaba
 python3 backend/test/check-backup.py backup
 ```
 
-This creates a disposable local Supabase PostgreSQL container, restores the schema, custom roles and `public` application data, and compares every backed-up application value with the restored values. It then applies the NFT migration to that copy and checks that existing rules, wallets and role assignments stay intact. The container is removed on completion. It never connects to the remote database or starts the bot.
+This creates a disposable local Supabase PostgreSQL container, restores the schema, custom roles and `public` application data, and compares every backed-up application value with the restored values. It applies the initial NFT migration if the backup predates that upgrade, then applies the Robinhood migration and checks that existing rules, wallets and role assignments stay intact. The container is removed on completion. It never connects to the remote database or starts the bot.
 
 This checks the bot's application tables; Supabase-managed Auth and Storage data are outside this test. The three SQL files successfully restored on 2026-10-06 with 234 wallets, 42 rules and 1,108 role assignments, and the NFT migration preserved those records. The older `verethier-before-nft.dump` file is empty and must not be used as a backup.
 
@@ -73,7 +79,7 @@ pg_restore \
   backup/verethier-before-nft.dump
 ```
 
-Production order: back up → test the actual backup → apply `backend/supabase/migrations/20261006223000_add_nft_verification_rules.sql` → set the backend `RPC_URL` to an Ethereum mainnet provider → deploy the backend/frontend. The backup, restore test, remote migration and Railway `RPC_URL` configuration are complete for this upgrade. The remaining step is deploying the backend/frontend code changes. The bot registers the updated `/setup add-rule` options on startup. Existing Ethscriptions rules retain their values and default to `asset_type=ethscription`.
+The initial NFT release followed this order: back up → test the actual backup → apply `backend/supabase/migrations/20261006223000_add_nft_verification_rules.sql` → set the backend `RPC_URL` to an Ethereum mainnet provider → deploy the backend/frontend. Those steps are complete. The bot registers the updated `/setup add-rule` options on startup. Existing Ethscriptions rules retain their values and default to `asset_type=ethscription`.
 
 The NFT migration is already applied remotely; do not apply it again. It was transactional. Do not run the old universal migration on production as part of this upgrade.
 

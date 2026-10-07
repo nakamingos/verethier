@@ -6,12 +6,54 @@ import { DynamicRoleService } from '../src/services/dynamic-role.service';
 import { SimpleRoleMonitorService } from '../src/services/simple-role-monitor.service';
 import { NftRuleFields } from '../src/models/verifier-role.interface';
 import { parseTokenIds, serializeAssetCount, nftRuleCriteria } from '../src/utils/nft-rule.util';
+import { getNftNetwork, getNftNetworkId } from '../src/utils/nft-network.util';
+import { EnvironmentConfig } from '../src/config/environment.config';
 
 const contract = '0x1111111111111111111111111111111111111111';
 const wallet = '0x2222222222222222222222222222222222222222';
 const otherWallet = '0x3333333333333333333333333333333333333333';
 const maxId = ((BigInt(1) << BigInt(256)) - BigInt(1)).toString();
 const nft: NftRuleFields = { asset_type: 'nft', chain_id: 1, contract_address: contract, token_standard: 'erc1155', token_ids: ['0', '1'], collection_name: 'Example' };
+
+describe('NFT network configuration', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('defaults to Ethereum and accepts Robinhood mainnet', () => {
+    expect(getNftNetworkId()).toBe(1);
+    expect(getNftNetworkId('robinhood')).toBe(4663);
+  });
+
+  it('rejects unsupported networks', () => {
+    expect(() => getNftNetworkId('base')).toThrow('Select Ethereum or Robinhood');
+    expect(() => getNftNetwork(46630)).toThrow('mainnet only');
+  });
+
+  it('creates and caches distinct clients with the correct chain and endpoint', () => {
+    jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://eth-mainnet.g.alchemy.com/v2/example-key');
+    jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', 'https://robinhood-mainnet.g.alchemy.com/v2/example-key');
+    const service = new NftOwnershipService();
+    const ethereum = (service as any).getClient(1);
+    const robinhood = (service as any).getClient(4663);
+    expect(ethereum.chain.id).toBe(1);
+    expect(robinhood.chain.id).toBe(4663);
+    expect(robinhood.transport.url).toBe('https://robinhood-mainnet.g.alchemy.com/v2/example-key');
+    expect((service as any).getClient(4663)).toBe(robinhood);
+    expect(robinhood).not.toBe(ethereum);
+  });
+
+  it('keeps Ethereum available when Robinhood RPC is not configured', () => {
+    jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://example.org/ethereum');
+    jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', undefined);
+    const service = new NftOwnershipService();
+    expect((service as any).getClient(1).transport.url).toBe('https://example.org/ethereum');
+    expect(() => (service as any).getClient(4663)).toThrow('Set ROBINHOOD_RPC_URL');
+  });
+
+  it('supports a separate non-Alchemy provider for Robinhood', () => {
+    jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', 'https://example.org/robinhood');
+    expect((new NftOwnershipService() as any).getClient(4663).transport.url).toBe('https://example.org/robinhood');
+  });
+});
 
 describe('NFT ownership', () => {
   let service: NftOwnershipService;
@@ -61,6 +103,22 @@ describe('NFT ownership', () => {
     expect(rpc.readContract).not.toHaveBeenCalled();
   });
 
+  it.each(['erc721', 'erc1155'])('prepares a Robinhood %s rule on the selected network', async standard => {
+    rpc.getChainId.mockResolvedValue(4663);
+    rpc.readContract.mockImplementation(async ({ functionName, args }) => functionName === 'name'
+      ? 'Robinhood collection' : args[0] === (standard === 'erc721' ? '0x80ac58cd' : '0xd9b67a26'));
+    expect(await service.prepareRule(contract, undefined, undefined, 4663)).toMatchObject({
+      chain_id: 4663, token_standard: standard, collection_name: 'Robinhood collection',
+    });
+    expect((service as any).getClient).toHaveBeenCalledWith(4663);
+  });
+
+  it('rejects a Robinhood rule when the RPC actually serves Ethereum', async () => {
+    await expect(service.prepareRule(contract, undefined, undefined, 4663)).rejects.toThrow('Robinhood mainnet');
+    await expect(service.count({ ...nft, chain_id: 4663 }, [wallet])).rejects.toThrow('Robinhood mainnet');
+    expect(rpc.readContract).not.toHaveBeenCalled();
+  });
+
   it('stacks ERC-721 balances and deduplicates wallets', async () => {
     rpc.readContract.mockResolvedValue(BigInt(2));
     expect(await service.count({ ...nft, token_standard: 'erc721', token_ids: null }, [wallet, wallet.toUpperCase(), otherWallet])).toBe(BigInt(4));
@@ -106,6 +164,27 @@ describe('NFT ownership', () => {
     expect(rpc.readContract).toHaveBeenCalledTimes(2);
   });
 
+  it.each(['erc721', 'erc1155'])('keeps %s results and block snapshots separate across networks', async standard => {
+    const robinhood = {
+      getChainId: jest.fn().mockResolvedValue(4663), getBlockNumber: jest.fn().mockResolvedValue(BigInt(456)),
+      readContract: jest.fn().mockImplementation(async ({ args }) => standard === 'erc721' ? BigInt(3) : args[1].map(() => BigInt(3))),
+    };
+    rpc.readContract.mockImplementation(async ({ args }) => standard === 'erc721' ? BigInt(1) : args[1].map(() => BigInt(1)));
+    ((service as any).getClient as jest.Mock).mockImplementation(chainId => chainId === 4663 ? robinhood : rpc);
+    const rule = { ...nft, token_standard: standard as 'erc721' | 'erc1155', token_ids: standard === 'erc721' ? null : ['0'] };
+    const context: NftCheckContext = { checks: new Map() };
+    expect(await Promise.all([
+      service.count(rule, [wallet], context),
+      service.count({ ...rule, chain_id: 4663 }, [wallet], context),
+      service.count({ ...rule, chain_id: 4663 }, [wallet], context),
+    ])).toEqual([BigInt(1), BigInt(3), BigInt(3)]);
+    expect(rpc.getBlockNumber).toHaveBeenCalledTimes(1);
+    expect(robinhood.getBlockNumber).toHaveBeenCalledTimes(1);
+    expect(rpc.readContract).toHaveBeenCalledWith(expect.objectContaining({ blockNumber: BigInt(123) }));
+    expect(robinhood.readContract).toHaveBeenCalledTimes(1);
+    expect(robinhood.readContract).toHaveBeenCalledWith(expect.objectContaining({ blockNumber: BigInt(456) }));
+  });
+
   it('does not return a partial count when a batch fails', async () => {
     rpc.readContract.mockImplementationOnce(async ({ args }) => args[1].map(() => BigInt(5))).mockRejectedValueOnce(new Error('RPC timeout'));
     await expect(service.count({ ...nft, token_ids: parseTokenIds('0-100') }, [wallet])).rejects.toThrow('RPC timeout');
@@ -118,6 +197,10 @@ describe('NFT ownership', () => {
 });
 
 describe('NFT IDs and counts', () => {
+  it('includes the network in rule details', () => {
+    expect(nftRuleCriteria(nft)).toContain('Example · Ethereum · ERC-1155');
+    expect(nftRuleCriteria({ ...nft, chain_id: 4663 })).toContain('Example · Robinhood · ERC-1155');
+  });
   it('normalizes overlapping ranges, leading zeroes and unordered IDs', () => {
     expect(parseTokenIds('500,000,1-3,2,100000')).toEqual(['0', '1', '2', '3', '500', '100000']);
     expect(parseTokenIds(maxId)).toEqual([maxId]);
