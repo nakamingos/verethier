@@ -1,3 +1,4 @@
+import { nftRuleLabel } from '@/utils/nft-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { NonceService }  from './nonce.service';
@@ -98,7 +99,12 @@ export class VerifyService {
             rule.role_id,
             payload.discordId,
             payload.nonce,
-            rule.id.toString() // Pass the rule ID for proper tracking
+            rule.id.toString(), // Keep the representative rule for existing tracking.
+            {
+              last_check_status: 'passed',
+              matched_rule_ids: validRules.filter(match => match.role_id === rule.role_id).map(match => match.id),
+              rule_checks: (verificationResult.results || []).filter(check => check.rule?.role_id === rule.role_id),
+            }
           );
 
           // Role assignment and tracking is handled by assignRole() method
@@ -118,7 +124,14 @@ export class VerifyService {
       }
       
       if (!hasMatchingAssets) {
-        const errorMsg = rules[0]?.slug 
+        if (verificationResult.results?.some(result => result.status === 'unavailable' || result.error)) {
+          const errorMsg = 'Collection verification is temporarily unavailable. Please try again.';
+          await this.discordVerificationSvc.throwError(payload.nonce, errorMsg);
+          throw new Error(errorMsg);
+        }
+        const errorMsg = rules[0]?.asset_type === 'nft'
+          ? `Address does not own the required assets for collection: ${nftRuleLabel(rules[0])}`
+          : rules[0]?.slug
           ? `Address does not own the required assets for collection: ${rules[0].slug}`
           : 'Address does not own any assets in the collection';
         await this.discordVerificationSvc.throwError(payload.nonce, errorMsg);
@@ -169,7 +182,9 @@ export class VerifyService {
     const { validRules, matchingAssetCounts } = verificationResult;
     
     if (validRules.length === 0) {
-      const errorMsg = 'Address does not meet any verification requirements';
+      const errorMsg = verificationResult.results?.some(result => result.status === 'unavailable' || result.error)
+        ? 'Collection verification is temporarily unavailable. Please try again.'
+        : 'Address does not meet any verification requirements';
       await this.discordVerificationSvc.throwError(payload.nonce, errorMsg);
       throw new Error(errorMsg);
     }
@@ -185,7 +200,12 @@ export class VerifyService {
           rule.role_id,
           payload.discordId,
           payload.nonce,
-          rule.id.toString() // Pass the rule ID for proper tracking
+          rule.id.toString(), // Keep the representative rule for existing tracking.
+          {
+            last_check_status: 'passed',
+            matched_rule_ids: validRules.filter(match => match.role_id === rule.role_id).map(match => match.id),
+            rule_checks: (verificationResult.results || []).filter(check => check.rule?.role_id === rule.role_id),
+          }
         );
 
         // Role assignment and tracking is handled by addUserRole() method

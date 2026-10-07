@@ -1,3 +1,5 @@
+import { AssetOwnershipService } from '../src/services/asset-ownership.service';
+import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscordVerificationService } from '../src/services/discord-verification.service';
 import { DbService } from '../src/services/db.service';
@@ -152,6 +154,8 @@ describe('DiscordVerificationService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        AssetOwnershipService,
+        { provide: NftOwnershipService, useValue: { count: jest.fn() } },
         DiscordVerificationService,
         { provide: DbService, useValue: mockDbService },
         { provide: NonceService, useValue: mockNonceService },

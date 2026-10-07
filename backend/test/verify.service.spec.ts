@@ -187,7 +187,7 @@ describe('VerifyService', () => {
     expect(mockNonceService.invalidateNonce).toHaveBeenCalledWith('nonce123');
     expect(mockVerificationService.getRulesForChannel).toHaveBeenCalledWith('guild123', 'ch-456');
     expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc');
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1');
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [{
       roleId: 'test-role-id',
       roleName: 'Test Role',
@@ -242,8 +242,8 @@ describe('VerifyService', () => {
     const result = await service.verifySignatureFlow(payload as any, 'sig');
     
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(2);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1');
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2');
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }));
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [
       { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 5 },
       { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 3 }
@@ -354,7 +354,7 @@ describe('VerifyService', () => {
     
     // Should only assign the first role
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(1);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1');
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
     expect(result.assignedRoles).toEqual(['test-role-id']);
   });
 
@@ -444,7 +444,7 @@ describe('VerifyService', () => {
     
     // Should only process the second rule
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(1);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2');
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }));
     expect(result.assignedRoles).toEqual(['role-456']);
   });
 
@@ -514,7 +514,8 @@ describe('VerifyService', () => {
       'role123',
       'guild123',
       'nonce123',
-      '1'
+      '1',
+      expect.objectContaining({ last_check_status: 'passed' })
     );
   });
 });

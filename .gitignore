@@ -76,5 +76,6 @@ update_remote_*.sql
 # Backup files
 backup/
 *backup*
+!backend/test/check-backup.py
 
 package-lock.json

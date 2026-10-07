@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
-import { DataService } from './data.service';
+import { AssetOwnershipService } from './asset-ownership.service';
+import { NftCheckContext } from './nft-ownership.service';
+import { nftRuleLabel, serializeAssetCount } from '@/utils/nft-rule.util';
 import { UserAddressService } from './user-address.service';
-import { VerifierRole } from '@/models/verifier-role.interface';
+import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 
 /**
  * VerificationEngine - Verification logic processor
@@ -34,7 +36,7 @@ import { VerifierRole } from '@/models/verifier-role.interface';
 export class VerificationEngine {
   constructor(
     private readonly dbSvc: DbService,
-    private readonly dataSvc: DataService,
+    private readonly ownershipSvc: AssetOwnershipService,
     private readonly userAddressService: UserAddressService,
   ) {}
 
@@ -59,13 +61,15 @@ export class VerificationEngine {
   async verifyUser(
     userId: string, 
     ruleId: string | number, 
-    address: string
+    address: string,
+    context?: NftCheckContext,
+    loadedRule?: VerifierRole
   ): Promise<VerificationResult> {
     try {
       Logger.debug(`VerificationEngine: Starting verification for user ${userId} with rule ${ruleId} and address ${address}`);
       
       // Fetch the rule details
-      const rule = await this.getRuleById(ruleId);
+      const rule = loadedRule || await this.getRuleById(ruleId);
       if (!rule) {
         return {
           isValid: false,
@@ -94,28 +98,24 @@ export class VerificationEngine {
       // Apply verification logic - now checks across ALL user's wallets
       Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
       
-      const assetCount = await this.dataSvc.checkAssetOwnershipWithCriteria(
-        addressesToCheck, // Pass array of all user's wallets
-        rule.slug || 'ALL',
-        rule.attribute_key || 'ALL',
-        rule.attribute_value || 'ALL',
-        rule.min_items || 1
-      );
+      const count = await this.ownershipSvc.count(rule, addressesToCheck, context);
+      const assetCount = serializeAssetCount(count);
 
       const requiredCount = rule.min_items || 1;
-      const isValid = assetCount >= requiredCount;
+      const isValid = count >= BigInt(requiredCount);
       
       Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredCount}`);
       
       return {
         isValid,
+        status: isValid ? 'passed' : 'failed',
         userId,
         ruleId,
         address,
         rule,
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.slug || 'ALL',
+          collection: rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
           minItems: requiredCount,
@@ -127,6 +127,7 @@ export class VerificationEngine {
       Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error);
       return {
         isValid: false,
+        status: 'unavailable',
         error: error.message || 'Unknown verification error',
         userId,
         ruleId,
@@ -147,20 +148,22 @@ export class VerificationEngine {
   async verifyUserBulk(
     userId: string,
     ruleIds: (string | number)[],
-    address: string
+    address: string,
+    loadedRules?: VerifierRole[]
   ): Promise<BulkVerificationResult> {
     Logger.debug(`VerificationEngine: Starting bulk verification for user ${userId} with ${ruleIds.length} rules`);
     
     // Process all verifications in parallel for better performance
-    const verificationPromises = ruleIds.map(ruleId => 
-      this.verifyUser(userId, ruleId, address)
+    const context: NftCheckContext = { checks: new Map() };
+    const verificationPromises = ruleIds.map(ruleId =>
+      this.verifyUser(userId, ruleId, address, context, loadedRules?.find(rule => rule.id.toString() === ruleId.toString()))
     );
     
     const results = await Promise.all(verificationPromises);
     
     const validRules: VerifierRole[] = [];
     const invalidRules: VerifierRole[] = [];
-    const matchingAssetCounts = new Map<string, number>();
+    const matchingAssetCounts = new Map<string, AssetCount>();
 
     results.forEach(result => {
       if (result.isValid && result.rule) {
@@ -168,7 +171,7 @@ export class VerificationEngine {
         if (result.matchingAssetCount) {
           matchingAssetCounts.set(result.ruleId.toString(), result.matchingAssetCount);
         }
-      } else if (result.rule) {
+      } else if (result.rule && result.status !== 'unavailable') {
         invalidRules.push(result.rule);
       }
     });
@@ -240,33 +243,8 @@ export class VerificationEngine {
 
       Logger.debug(`VerificationEngine: Found ${userAddresses.length} addresses for user ${userId}: ${userAddresses.join(', ')}`);
 
-      // Try verification with each address until one passes
-      for (const address of userAddresses) {
-        Logger.debug(`VerificationEngine: Checking address ${address} for user ${userId}`);
-        
-        const result = await this.verifyUser(userId, ruleId, address);
-        
-        if (result.isValid) {
-          Logger.debug(`VerificationEngine: Multi-wallet verification PASSED for user ${userId} with address ${address}`);
-          return {
-            ...result,
-            verifiedAddress: address,
-            totalAddressesChecked: userAddresses.length
-          };
-        }
-      }
-
-      // No address passed verification
-      Logger.debug(`VerificationEngine: Multi-wallet verification FAILED for user ${userId} - no address passed`);
-      return {
-        isValid: false,
-        error: `None of ${userAddresses.length} addresses passed verification`,
-        userId,
-        ruleId,
-        address: userAddresses[0], // Show first address for reference
-        matchingAssetCount: 0,
-        totalAddressesChecked: userAddresses.length
-      };
+      const result = await this.verifyUser(userId, ruleId, userAddresses[0]);
+      return { ...result, verifiedAddress: result.isValid ? userAddresses[0] : undefined, totalAddressesChecked: userAddresses.length };
 
     } catch (error) {
       Logger.error(`VerificationEngine: Error in multi-wallet verification for user ${userId}:`, error);
@@ -303,15 +281,13 @@ export class VerificationEngine {
     Logger.debug(`VerificationEngine: Checking ${ruleIds.length} rules with multi-wallet verification`);
     
     // Process all multi-wallet verifications in parallel for better performance
-    const verificationPromises = ruleIds.map(ruleId => 
-      this.verifyUserMultiWallet(userId, ruleId)
-    );
-    
-    const results = await Promise.all(verificationPromises);
+    const addresses = await this.userAddressService.getUserAddresses(userId);
+    if (addresses.length) return this.verifyUserBulk(userId, ruleIds, addresses[0]);
+    const results = await Promise.all(ruleIds.map(ruleId => this.verifyUserMultiWallet(userId, ruleId)));
     
     const validRules: VerifierRole[] = [];
     const invalidRules: VerifierRole[] = [];
-    const matchingAssetCounts = new Map<string, number>();
+    const matchingAssetCounts = new Map<string, AssetCount>();
 
     results.forEach(result => {
       if (result.isValid && result.rule) {
@@ -319,7 +295,7 @@ export class VerificationEngine {
         if (result.matchingAssetCount) {
           matchingAssetCounts.set(result.ruleId.toString(), result.matchingAssetCount);
         }
-      } else if (result.rule) {
+      } else if (result.rule && result.status !== 'unavailable') {
         invalidRules.push(result.rule);
       }
     });
@@ -341,6 +317,19 @@ export class VerificationEngine {
    * @param ruleId - Rule ID (string or number)
    * @returns Promise<VerifierRole | null>
    */
+  async evaluateRole(userId: string, serverId: string, roleId: string): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
+    const rules = (await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
+    if (!rules.length) return { status: 'failed', results: [] };
+    const addresses = await this.userAddressService.getUserAddresses(userId);
+    if (!addresses.length) return { status: 'failed', results: [] };
+    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), addresses[0], rules);
+    return {
+      status: checked.results.some(result => result.isValid) ? 'passed'
+        : checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',
+      results: checked.results,
+    };
+  }
+
   private async getRuleById(ruleId: string | number): Promise<VerifierRole | null> {
     try {
       const ruleIdStr = typeof ruleId === 'number' ? ruleId.toString() : ruleId;
@@ -370,18 +359,19 @@ export class VerificationEngine {
  */
 export interface VerificationResult {
   isValid: boolean;
+  status?: 'passed' | 'failed' | 'unavailable';
   userId: string;
   ruleId: string | number;
   address: string;
   rule?: VerifierRole;
-  matchingAssetCount?: number;
+  matchingAssetCount?: AssetCount;
   error?: string;
   verificationDetails?: {
     collection: string;
     attributeKey: string;
     attributeValue: string;
     minItems: number;
-    foundAssets: number;
+    foundAssets: AssetCount;
   };
   // Multi-wallet specific properties
   verifiedAddress?: string; // The specific address that passed verification
@@ -410,6 +400,6 @@ export interface BulkVerificationResult {
   totalRules: number;
   validRules: VerifierRole[];
   invalidRules: VerifierRole[];
-  matchingAssetCounts: Map<string, number>;
+  matchingAssetCounts: Map<string, AssetCount>;
   results: VerificationResult[];
 }

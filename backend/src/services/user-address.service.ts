@@ -53,7 +53,7 @@ export class UserAddressService {
 
       if (error) {
         this.logger.error(`Error fetching addresses for user ${userId}:`, error);
-        return [];
+        throw error;
       }
 
       const addresses = data?.map(row => row.address) || [];
@@ -62,7 +62,7 @@ export class UserAddressService {
       return addresses;
     } catch (error) {
       this.logger.error(`Exception getting addresses for user ${userId}:`, error);
-      return [];
+      throw error;
     }
   }
 

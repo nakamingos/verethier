@@ -23,6 +23,8 @@ import { NonceService } from '@/services/nonce.service';
 import { WalletService } from '@/services/wallet.service';
 import { DbService } from '@/services/db.service';
 import { DataService } from './services/data.service';
+import { AssetOwnershipService } from './services/asset-ownership.service';
+import { NftOwnershipService } from './services/nft-ownership.service';
 import { VerifyService } from './services/verify.service';
 import { VerificationService } from './services/verification.service';
 import { VerificationEngine } from './services/verification-engine.service';
@@ -140,6 +142,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Data access layer
     DbService,                  // Database operations
     DataService,                // Ethscriptions marketplace queries
+    AssetOwnershipService,
+    NftOwnershipService,
     UserAddressService,         // Multi-wallet address management
 
     // Role management services

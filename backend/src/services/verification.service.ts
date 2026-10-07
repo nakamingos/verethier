@@ -3,7 +3,7 @@ import { DbService } from './db.service';
 import { DataService } from './data.service';
 import { DiscordVerificationService } from './discord-verification.service';
 import { VerificationEngine, VerificationResult, BulkVerificationResult } from './verification-engine.service';
-import { VerifierRole } from '@/models/verifier-role.interface';
+import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 import { DecodedData } from '@/models/app.interface';
 
 /**
@@ -99,7 +99,7 @@ export class VerificationService {
   async verifyUserAgainstRule(
     address: string,
     rule: VerifierRole
-  ): Promise<{ isValid: boolean; matchingAssetCount?: number }> {
+  ): Promise<{ isValid: boolean; matchingAssetCount?: AssetCount }> {
     Logger.warn('verifyUserAgainstRule is deprecated. Use verifyUser() instead.');
     
     const result = await this.verificationEngine.verifyUser('unknown', rule.id, address);
@@ -116,7 +116,7 @@ export class VerificationService {
   async verifyUserAgainstRules(
     address: string,
     rules: VerifierRole[]
-  ): Promise<{ validRules: VerifierRole[]; invalidRules: VerifierRole[]; matchingAssetCounts: Map<string, number> }> {
+  ): Promise<{ validRules: VerifierRole[]; invalidRules: VerifierRole[]; matchingAssetCounts: Map<string, AssetCount> }> {
     Logger.warn('verifyUserAgainstRules is deprecated. Use verifyUserBulk() instead.');
     
     const ruleIds = rules.map(rule => rule.id);
@@ -238,25 +238,19 @@ export class VerificationService {
    */
   async reverifyRoleAssignment(assignment: any): Promise<{ stillValid: boolean; updatedAssignment?: any }> {
     try {
-      // Get the associated rule
-      const rule = await this.dbSvc.getRuleById(assignment.rule_id);
-      if (!rule) {
-        Logger.warn(`Rule not found for assignment ${assignment.id}, marking as invalid`);
-        const updatedAssignment = await this.dbSvc.updateRoleVerification(assignment.id, false);
-        return { stillValid: false, updatedAssignment };
-      }
-
-      // Verify the user still meets the criteria using VerificationEngine
-      const result = await this.verificationEngine.verifyUser(assignment.user_id, assignment.rule_id, assignment.address);
-      
-      // Update the assignment status
-      const updatedAssignment = await this.dbSvc.updateRoleVerification(assignment.id, result.isValid);
-      
-      return { stillValid: result.isValid, updatedAssignment };
+      const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id);
+      await this.dbSvc.saveRoleCheckDetails(assignment.id, {
+        ...(assignment.verification_data || {}), last_check_status: result.status,
+        matched_rule_ids: result.results.filter(check => check.isValid).map(check => check.ruleId),
+        rule_checks: result.results,
+      });
+      if (result.status === 'unavailable') return { stillValid: true };
+      const stillValid = result.status === 'passed';
+      const updatedAssignment = await this.dbSvc.updateRoleVerification(assignment.id, stillValid);
+      return { stillValid, updatedAssignment };
     } catch (error) {
       Logger.error(`Error re-verifying assignment ${assignment.id}:`, error);
-      const updatedAssignment = await this.dbSvc.updateRoleVerification(assignment.id, false);
-      return { stillValid: false, updatedAssignment };
+      return { stillValid: true };
     }
   }
 

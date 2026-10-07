@@ -447,4 +447,24 @@ describe('DbService (Unit Tests)', () => {
       }));
     });
   });
+  describe('NFT rules', () => {
+    const fields = { asset_type: 'nft' as const, chain_id: 1, contract_address: '0x1111111111111111111111111111111111111111', token_standard: 'erc1155' as const, token_ids: ['0', '500'], collection_name: 'Example' };
+    it('writes NFT fields with a null Ethscriptions slug', async () => {
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
+      await service.addRoleMapping('server', 'Server', 'channel', 'verify', 'ALL', 'role', 'Holder', 'ALL', 'ALL', 1, fields);
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ ...fields, slug: null }));
+    });
+    it('preserves NFT fields when undo restores a removed rule', async () => {
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
+      await service.restoreRuleWithOriginalId({ id: 1, server_id: 'server', channel_id: 'channel', role_id: 'role', slug: null, min_items: 1, attribute_key: 'ALL', attribute_value: 'ALL', ...fields });
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ id: 1, slug: null, ...fields }));
+    });
+    it('preserves existing assignment metadata when adding check details', async () => {
+      mockSupabaseClient.maybeSingle.mockResolvedValue({ data: { id: 1, status: 'active', verification_data: { existing_metadata: true } }, error: null });
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
+      await service.trackRoleAssignment({ userId: 'user', serverId: 'server', roleId: 'role', verificationData: { matched_rule_ids: [1, 2] } });
+      expect(mockSupabaseClient.update).toHaveBeenCalledWith(expect.objectContaining({ verification_data: { existing_metadata: true, matched_rule_ids: [1, 2] } }));
+    });
+  });
+
 });

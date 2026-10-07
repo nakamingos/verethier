@@ -1,3 +1,4 @@
+import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ButtonInteraction, ChatInputCommandInteraction, ComponentType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -260,6 +261,7 @@ export class RestoreUndoInteractionHandler {
       role_id: restoredRuleData.role_id,
       role_name: restoredRuleData.role_name,
       channel_name: restoredRuleData.channel_name,
+      ...restoredRuleData,
       slug: restoredRuleData.slug,
       attribute_key: restoredRuleData.attribute_key,
       attribute_value: restoredRuleData.attribute_value,
@@ -341,7 +343,8 @@ export class RestoreUndoInteractionHandler {
         const slug = rule.slug || 'ALL';
         const minItems = rule.min_items || 1;
         
-        const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const criteria = rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
         description += ruleInfo + '\n\n';
       });
     }

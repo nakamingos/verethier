@@ -1,3 +1,5 @@
+import { AssetOwnershipService } from '../src/services/asset-ownership.service';
+import { NftOwnershipService } from '../src/services/nft-ownership.service';
 /**
  * VerificationEngine Unit Tests
  * 
@@ -70,6 +72,8 @@ describe('VerificationEngine', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        AssetOwnershipService,
+        { provide: NftOwnershipService, useValue: { count: jest.fn() } },
         VerificationEngine,
         { provide: DbService, useValue: mockDbServiceValue },
         { provide: DataService, useValue: mockDataServiceValue },
@@ -134,7 +138,7 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        3
+        1
       );
       expect(result.isValid).toBe(true);
       expect(result.matchingAssetCount).toBe(3);
@@ -334,7 +338,7 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        3
+        1
       );
       expect(result.isValid).toBe(true);
     });
@@ -429,7 +433,7 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        3
+        1
       );
     });
 

@@ -143,6 +143,7 @@ export class RuleConfirmationInteractionHandler {
         role_id: ruleToRemove.role_id,
         role_name: ruleToRemove.role_name,
         channel_name: ruleToRemove.channel_name,
+        ...ruleToRemove,
         slug: ruleToRemove.slug,
         attribute_key: ruleToRemove.attribute_key,
         attribute_value: ruleToRemove.attribute_value,

@@ -21,7 +21,7 @@ export interface SetupHelpContent {
 
 export const SETUP_HELP_CONTENT: SetupHelpContent = {
   title: '🔧 Verification Setup Help',
-  description: 'Complete guide to setting up and managing Ethscription verification rules for your server.',
+  description: 'Complete guide to setting up and managing collection verification rules for your server.',
   color: 0xc3ff00, // Bright yellow for visibility
   footer: 'Need more help? Check the docs or ask in support channels',
   fields: [
@@ -34,6 +34,16 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• **Attribute**: Trait filtering (optional)\n' +
              '• **Min Items**: Minimum holdings required\n' +
              '**Example**: `/setup add-rule #verify @Holder misprint-mingos attribute_key=Type attribute_value=Stork 1`\n\n',
+      inline: false
+    },
+    {
+      name: '🖼️ NFT collections',
+      value: 'Use `/setup add-rule` with **asset_type: NFT** and **contract_address: 0x…** (Ethereum mainnet).\n' +
+             '• **ERC-721**: Any token in the collection, or one specific **token_ids** value\n' +
+             '• **ERC-1155**: Checks IDs **0–99** by default; set **token_ids** to a list or range such as `1,5,20-30` (up to 1,000 IDs)\n' +
+             '• **Min Items**: Total tokens/copies across verified wallets\n' +
+             '• **Collection Name**: Optional label; detected when available\n' +
+             'Leave Ethscriptions slug and trait options empty for NFT rules.',
       inline: false
     },
     {

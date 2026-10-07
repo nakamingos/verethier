@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { DbService } from './db.service';
-import { DataService } from './data.service';
+import { VerificationEngine } from './verification-engine.service';
 import { DiscordVerificationService } from './discord-verification.service';
-import { DiscordService } from './discord.service';
-import { UserAddressService } from './user-address.service';
 import { EnvironmentConfig } from '@/config/environment.config';
 
 /**
@@ -24,10 +22,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
 export class DynamicRoleService {
   constructor(
     private readonly dbSvc: DbService,
-    private readonly dataSvc: DataService,
+    private readonly verificationEngine: VerificationEngine,
     private readonly discordVerificationSvc: DiscordVerificationService,
-    private readonly discordSvc: DiscordService,
-    private readonly userAddressService: UserAddressService,
   ) {
     Logger.log(`🔄 DynamicRoleService initialized with CRON schedule: ${EnvironmentConfig.DYNAMIC_ROLE_CRON}`);
   }
@@ -159,61 +155,15 @@ export class DynamicRoleService {
    * Verify if a user still qualifies for their assigned role
    */
   private async verifyUserStillQualifies(assignment: any): Promise<boolean> {
-    try {
-      Logger.debug(`Checking assignment: user=${assignment.user_id}, role=${assignment.role_id}, rule_id=${assignment.rule_id}`);
-      
-      // If no rule_id, we can't verify ownership criteria, so be conservative and keep the role
-      if (!assignment.rule_id) {
-        Logger.log(`⚠️ Assignment ${assignment.id} has no rule_id, keeping role conservatively`);
-        return true;
-      }
-
-      // Get the rule details
-      const rule = await this.dbSvc.getRuleById(assignment.rule_id);
-      if (!rule) {
-        Logger.warn(`Rule ${assignment.rule_id} not found, revoking assignment`);
-        return false;
-      }
-
-      Logger.debug(`Rule found: slug=${rule.slug}, attr=${rule.attribute_key}=${rule.attribute_value}, min_items=${rule.min_items}`);
-
-      // Get all verified addresses for this user
-      const userAddresses = await this.userAddressService.getUserAddresses(assignment.user_id);
-      if (!userAddresses || userAddresses.length === 0) {
-        Logger.log(`⚠️ No verified addresses found for user ${assignment.user_id}, revoking role`);
-        return false;
-      }
-
-      // Debug: log the exact parameters being checked
-      Logger.log(`🔍 Checking asset ownership for assignment ${assignment.id}:`);
-      Logger.log(`   - Addresses: ${userAddresses.join(', ')}`);
-      Logger.log(`   - Rule ID: ${assignment.rule_id}`);
-      Logger.log(`   - Collection (slug): ${rule.slug}`);
-      Logger.log(`   - Attribute: ${rule.attribute_key}=${rule.attribute_value}`);
-      Logger.log(`   - Min required: ${rule.min_items || 1}`);
-
-      // Check asset ownership across ALL addresses with WALLET STACKING
-      // Passes all addresses to data service to aggregate holdings
-      const totalMatchingAssets = await this.dataSvc.checkAssetOwnershipWithCriteria(
-        userAddresses, // Pass all addresses for stacking
-        rule.slug,
-        rule.attribute_key,
-        rule.attribute_value,
-        rule.min_items || 1
-      );
-
-      const requiredMinItems = rule.min_items || 1;
-      const stillQualifies = totalMatchingAssets >= requiredMinItems;
-
-      Logger.log(`🔍 User ${assignment.user_id} total assets across ${userAddresses.length} wallet(s): ${totalMatchingAssets}/${requiredMinItems} - ${stillQualifies ? 'QUALIFIED ✅' : 'NOT QUALIFIED ❌'}`);
-      
-      return stillQualifies;
-      
-    } catch (error) {
-      Logger.error(`Error checking qualification:`, error.message);
-      // In case of API errors, be conservative and don't revoke
-      return true;
-    }
+    const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id);
+    await this.dbSvc.saveRoleCheckDetails(assignment.id, {
+      ...(assignment.verification_data || {}),
+      last_check_status: result.status,
+      matched_rule_ids: result.results.filter(check => check.isValid).map(check => check.ruleId),
+      rule_checks: result.results,
+    });
+    if (result.status === 'unavailable') throw new Error('Ownership check unavailable; retaining existing role.');
+    return result.status === 'passed';
   }
 
   /**

@@ -31,6 +31,13 @@ describe('UserAddressService', () => {
     jest.clearAllMocks();
   });
 
+  it('distinguishes an empty wallet list from a failed database read', async () => {
+    mockSupabaseClient.order.mockResolvedValueOnce({ data: [], error: null });
+    expect(await service.getUserAddresses('user')).toEqual([]);
+    mockSupabaseClient.order.mockResolvedValueOnce({ data: null, error: new Error('Database unavailable') });
+    await expect(service.getUserAddresses('user')).rejects.toThrow('Database unavailable');
+  });
+
   it('transfers an address that is already linked to another user', async () => {
     mockSupabaseClient.order.mockResolvedValueOnce({
       data: [

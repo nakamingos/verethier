@@ -1,3 +1,6 @@
+import { VerificationEngine } from '../src/services/verification-engine.service';
+import { AssetOwnershipService } from '../src/services/asset-ownership.service';
+import { NftOwnershipService } from '../src/services/nft-ownership.service';
 /**
  * DynamicRoleService Unit Tests
  * 
@@ -59,6 +62,11 @@ describe('DynamicRoleService', () => {
     const mockDbServiceValue = {
       getActiveRoleAssignments: jest.fn(),
       getRuleById: jest.fn(),
+      getRoleMappings: jest.fn().mockImplementation(async () => {
+        const rule = await mockDbServiceValue.getRuleById('rule123');
+        return rule ? [{ ...rule, role_id: 'role123' }] : [];
+      }),
+      saveRoleCheckDetails: jest.fn(),
       updateRoleAssignmentStatus: jest.fn(),
       updateLastVerified: jest.fn(),
       getUserActiveAssignments: jest.fn(),
@@ -87,6 +95,9 @@ describe('DynamicRoleService', () => {
 
     module = await Test.createTestingModule({
       providers: [
+        VerificationEngine,
+        AssetOwnershipService,
+        { provide: NftOwnershipService, useValue: { count: jest.fn() } },
         DynamicRoleService,
         { provide: DbService, useValue: mockDbServiceValue },
         { provide: DataService, useValue: mockDataServiceValue },
@@ -190,8 +201,8 @@ describe('DynamicRoleService', () => {
 
       await service.performScheduledReverification();
 
-      expect(mockDbService.updateLastVerified).toHaveBeenCalledTimes(2); // Both assignments processed
-      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('2 verified, 0 revoked, 0 errors'));
+      expect(mockDbService.updateLastVerified).toHaveBeenCalledTimes(1); // Failed checks do not advance success timestamps
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('1 verified, 0 revoked, 1 errors'));
     });
 
     it('should handle empty assignments list', async () => {
@@ -276,10 +287,10 @@ describe('DynamicRoleService', () => {
 
       const result = await service.reverifyUser('user123');
 
-      expect(result.verified).toBe(1); // Processing continues despite error
+      expect(result.verified).toBe(0); // Unavailable checks retain roles without recording success
       expect(result.revoked).toBe(0);
       expect(Logger.error).toHaveBeenCalledWith(
-        'Error checking qualification:',
+        'Error during manual re-verification:',
         'Rule fetch failed'
       );
     });
@@ -326,7 +337,7 @@ describe('DynamicRoleService', () => {
       await service.reverifyRule('rule123');
 
       expect(Logger.error).toHaveBeenCalledWith(
-        'Error checking qualification:',
+        'Error re-verifying rule assignment:',
         'Rule not found'
       );
     });
@@ -356,7 +367,7 @@ describe('DynamicRoleService', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        2
+        1
       );
       expect(mockDbService.updateLastVerified).toHaveBeenCalledWith('assignment123');
     });
@@ -383,9 +394,7 @@ describe('DynamicRoleService', () => {
 
       await service.performScheduledReverification();
 
-      expect(Logger.warn).toHaveBeenCalledWith(
-        'Rule rule123 not found, revoking assignment'
-      );
+      expect(mockDbService.saveRoleCheckDetails).toHaveBeenCalledWith('assignment123', expect.objectContaining({ last_check_status: 'failed' }));
       expect(mockDiscordVerificationService.removeUserRole).toHaveBeenCalled();
     });
 
@@ -399,11 +408,8 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDiscordVerificationService.removeUserRole).not.toHaveBeenCalled();
-      expect(mockDbService.updateLastVerified).toHaveBeenCalledWith('assignment123');
-      expect(Logger.error).toHaveBeenCalledWith(
-        'Error checking qualification:',
-        'API timeout'
-      );
+      expect(mockDbService.updateLastVerified).not.toHaveBeenCalled();
+      expect(mockDbService.saveRoleCheckDetails).toHaveBeenCalledWith('assignment123', expect.objectContaining({ last_check_status: 'unavailable' }));
     });
 
     it('should handle default min_items', async () => {
@@ -521,9 +527,9 @@ describe('DynamicRoleService', () => {
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
         ['address123'],
-        undefined,
-        undefined,
-        undefined,
+        'ALL',
+        'ALL',
+        'ALL',
         1 // Default value for undefined min_items
       );
     });
@@ -546,7 +552,7 @@ describe('DynamicRoleService', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        2
+        1
       );
       
       mockUserAddressService.getUserAddresses.mockResolvedValue(['address123']);
@@ -604,11 +610,8 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDiscordVerificationService.removeUserRole).not.toHaveBeenCalled();
-      expect(mockDbService.updateLastVerified).toHaveBeenCalledWith('assignment123');
-      expect(Logger.error).toHaveBeenCalledWith(
-        'Error checking qualification:',
-        'Network timeout'
-      );
+      expect(mockDbService.updateLastVerified).not.toHaveBeenCalled();
+      expect(mockDbService.saveRoleCheckDetails).toHaveBeenCalledWith('assignment123', expect.objectContaining({ last_check_status: 'unavailable' }));
     });
 
     it('should handle null or undefined assignment data', async () => {
