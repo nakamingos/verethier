@@ -1,3 +1,4 @@
+import { nftRuleScope } from '@/utils/nft-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, TextChannel, Role, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
@@ -229,7 +230,10 @@ export class DuplicateRuleConfirmationInteractionHandler {
     const fields = [];
     
     // Collection
-    if (rule.slug) {
+    if (rule.asset_type === 'nft') {
+      fields.push({ name: '**Collection**', value: nftRuleScope(rule), inline: false });
+      fields.push({ name: '**Contract**', value: rule.contract_address, inline: false });
+    } else if (rule.slug) {
       fields.push({
         name: '**Collection**',
         value: rule.slug,
@@ -238,7 +242,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (rule.attribute_key && rule.attribute_value) {
+    if (rule.asset_type !== 'nft' && rule.attribute_key && rule.attribute_value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;

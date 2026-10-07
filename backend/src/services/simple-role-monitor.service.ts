@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
-import { DataService } from './data.service';
 import { DiscordVerificationService } from './discord-verification.service';
 import { VerificationEngine } from './verification-engine.service';
 import { UserAddressService } from './user-address.service';
@@ -38,7 +37,6 @@ import { UserAddressService } from './user-address.service';
 export class SimpleRoleMonitorService {
   constructor(
     private readonly dbSvc: DbService,
-    private readonly dataSvc: DataService,
     private readonly discordVerificationSvc: DiscordVerificationService,
     private readonly verificationEngine: VerificationEngine,
     private readonly userAddressService: UserAddressService,
@@ -106,44 +104,42 @@ export class SimpleRoleMonitorService {
       
       Logger.log(`🔍 Re-verifying ${userAddresses.length} wallet(s) for user ${userId}`);
 
-      // Check each rule against STACKED holdings across ALL wallets
-      for (const rule of rules) {
+      // Evaluate each Discord role once, with OR semantics across its rules.
+      const checked = await this.verificationEngine.verifyUserBulk(userId, rules.map(rule => rule.id), userAddresses[0], rules);
+      const roleIds = [...new Set([...rules.map(rule => rule.role_id), ...userRoles.filter(role => role.status === 'active').map(role => role.role_id)])];
+      for (const roleId of roleIds) {
         try {
-          // Check holdings across ALL wallets simultaneously (wallet stacking)
-          const matchingAssets = await this.dataSvc.checkAssetOwnershipWithCriteria(
-            userAddresses, // Pass all addresses for stacking
-            rule.slug,
-            rule.attribute_key,
-            rule.attribute_value,
-            rule.min_items || 1
-          );
-
-          const requiredMinItems = rule.min_items || 1;
-          const currentlyQualifies = matchingAssets >= requiredMinItems;
-          
-          Logger.debug(`Rule ${rule.id}: ${matchingAssets} assets across ${userAddresses.length} wallet(s), ${currentlyQualifies ? 'qualifies' : 'does not qualify'}`);
-          
-          // Check if user currently has this role
-          const hasRole = await this.checkUserHasRole(userId, serverId, rule.role_id);
-          
-          if (currentlyQualifies && !hasRole) {
-            // User should have role but doesn't - grant it (use first address for logging)
-            await this.grantRole(userId, serverId, rule, userAddresses[0]);
-            result.verified.push(rule.role_name || rule.role_id);
-            
-          } else if (!currentlyQualifies && hasRole) {
-            // User has role but shouldn't - revoke it
-            await this.revokeRole(userId, serverId, rule.role_id);
-            result.revoked.push(rule.role_name || rule.role_id);
-            
-          } else if (currentlyQualifies && hasRole) {
-            // User has role and should have it - no action needed
-            result.verified.push(rule.role_name || rule.role_id);
+          const checks = checked.results.filter(check => check.rule?.role_id === roleId || rules.some(rule => rule.role_id === roleId && rule.id === check.ruleId));
+          const passing = checks.find(check => check.isValid);
+          const unavailable = checks.some(check => check.status === 'unavailable' || check.error);
+          const checkDetails = {
+            last_check_status: passing ? 'passed' : unavailable ? 'unavailable' : 'failed',
+            matched_rule_ids: checks.filter(check => check.isValid).map(check => check.ruleId),
+            rule_checks: checks,
+          };
+          const assignments = userRoles.filter(role => role.role_id === roleId && role.status === 'active');
+          for (const assignment of assignments) {
+            await this.dbSvc.saveRoleCheckDetails(assignment.id, {
+              ...(assignment.verification_data || {}),
+              ...checkDetails,
+            });
           }
-          
+          if (!passing && unavailable) {
+            result.errors.push(`Role ${roleId}: ownership check unavailable; retained existing role`);
+            continue;
+          }
+          const hasRole = await this.checkUserHasRole(userId, serverId, roleId);
+          const roleName = rules.find(rule => rule.role_id === roleId)?.role_name || roleId;
+          if (passing) {
+            if (!hasRole) await this.grantRole(userId, serverId, passing.rule, userAddresses[0], checkDetails);
+            for (const assignment of assignments) await this.dbSvc.updateLastVerified(assignment.id);
+            result.verified.push(roleName);
+          } else if (hasRole) {
+            await this.revokeRole(userId, serverId, roleId);
+            result.revoked.push(roleName);
+          }
         } catch (error) {
-          Logger.error(`Error checking rule ${rule.id}:`, error.message);
-          result.errors.push(`Rule ${rule.id}: ${error.message}`);
+          result.errors.push(`Role ${roleId}: ${error.message}`);
         }
       }
 
@@ -232,10 +228,9 @@ export class SimpleRoleMonitorService {
   /**
    * Grant a role to a user
    */
-  private async grantRole(userId: string, serverId: string, rule: any, address: string): Promise<void> {
+  private async grantRole(userId: string, serverId: string, rule: any, address: string, verificationData?: any): Promise<void> {
     try {
-      const roleResult = await this.discordVerificationSvc.addUserRole(userId, rule.role_id, serverId, 'reverification', rule.id.toString());
-      await this.dbSvc.logUserRole(userId, serverId, rule.role_id, null, null, rule.role_name);
+      const roleResult = await this.discordVerificationSvc.addUserRole(userId, rule.role_id, serverId, 'reverification', rule.id.toString(), verificationData);
       
       if (roleResult.wasAlreadyAssigned) {
         Logger.log(`✅ User ${userId} already had role ${rule.role_name || rule.role_id} (reverification)`);

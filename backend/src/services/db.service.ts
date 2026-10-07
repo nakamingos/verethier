@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { CONSTANTS } from '@/constants';
 import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
-import { VerifierRole } from '@/models/verifier-role.interface';
+import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 
 /**
  * Database Service
@@ -129,6 +129,21 @@ export class DbService {
   }
 
   // New methods for v2:
+
+  private filterRuleAsset(query: any, slug: string, assetFields?: NftRuleFields): any {
+    if (assetFields?.asset_type !== 'nft') return query.eq('asset_type', 'ethscription').eq('slug', slug);
+    query = query.eq('asset_type', 'nft').eq('chain_id', assetFields.chain_id)
+      .eq('contract_address', assetFields.contract_address).eq('token_standard', assetFields.token_standard);
+    return assetFields.token_ids === null
+      ? query.is('token_ids', null)
+      : query.eq('token_ids', `{${assetFields.token_ids.join(',')}}`);
+  }
+
+  async saveRoleCheckDetails(assignmentId: string, details: any): Promise<void> {
+    const { error } = await this.supabase.from('verifier_user_roles')
+      .update({ verification_data: details }).eq('id', assignmentId);
+    if (error) throw error;
+  }
   
   /**
    * Check if a rule with the same criteria already exists for a different role
@@ -140,7 +155,8 @@ export class DbService {
     attributeKey: string,
     attributeValue: string,
     minItems: number,
-    excludeRoleId?: string
+    excludeRoleId?: string,
+    assetFields?: NftRuleFields
   ): Promise<any> {
     // Use the same defaults as addRoleMapping for consistent comparison
     const finalSlug = slug || 'ALL';
@@ -153,10 +169,11 @@ export class DbService {
       .select('*')
       .eq('server_id', serverId)
       .eq('channel_id', channelId)
-      .eq('slug', finalSlug)
       .eq('attribute_key', finalAttrKey)
       .eq('attribute_value', finalAttrVal)
       .eq('min_items', finalMinItems);
+
+    query = this.filterRuleAsset(query, finalSlug, assetFields);
 
     // Exclude the current role if we're checking for updates
     if (excludeRoleId) {
@@ -183,7 +200,8 @@ export class DbService {
     roleName: string,
     attrKey: string,
     attrVal: string,
-    minItems: number
+    minItems: number,
+    assetFields?: NftRuleFields
   ): Promise<any> {
     // Use meaningful defaults instead of NULLs for better database constraints
     const finalSlug = slug || 'ALL';
@@ -198,12 +216,13 @@ export class DbService {
         server_name: serverName,
         channel_id: channelId,
         channel_name: channelName,
-        slug: finalSlug,
+        slug: assetFields?.asset_type === 'nft' ? null : finalSlug,
         role_id: roleId,
         role_name: roleName,
         attribute_key: finalAttrKey,
         attribute_value: finalAttrVal,
-        min_items: finalMinItems
+        min_items: finalMinItems,
+        ...(assetFields?.asset_type === 'nft' ? assetFields : {})
       })
       .select()
       .single();
@@ -465,7 +484,8 @@ export class DbService {
     attributeKey: string,
     attributeValue: string,
     minItems: number,
-    roleId: string
+    roleId: string,
+    assetFields?: NftRuleFields
   ): Promise<any> {
     // Use the same defaults as addRoleMapping for consistent comparison
     const finalSlug = slug || 'ALL';
@@ -473,16 +493,18 @@ export class DbService {
     const finalAttrVal = attributeValue || 'ALL';
     const finalMinItems = minItems != null ? minItems : 1;
 
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from('verifier_rules')
       .select('*')
       .eq('server_id', serverId)
       .eq('channel_id', channelId)
-      .eq('slug', finalSlug)
       .eq('attribute_key', finalAttrKey)
       .eq('attribute_value', finalAttrVal)
       .eq('min_items', finalMinItems)
       .eq('role_id', roleId);
+
+    query = this.filterRuleAsset(query, finalSlug, assetFields);
+    const { data, error } = await query;
 
     if (error) {
       Logger.error('Error checking for exact duplicate rules:', error);
@@ -760,7 +782,7 @@ export class DbService {
       // First, check if there's an existing record for this user/server/role combination
       const { data: existingRecord, error: selectError } = await this.supabase
         .from('verifier_user_roles')
-        .select('id, status')
+        .select('id, status, verification_data')
         .eq('user_id', assignment.userId)
         .eq('server_id', assignment.serverId)
         .eq('role_id', assignment.roleId)
@@ -785,7 +807,7 @@ export class DbService {
               user_name: assignment.userName || '',
               server_name: assignment.serverName || '',
               role_name: assignment.roleName || '',
-              verification_data: assignment.verificationData || {},
+              verification_data: { ...(existingRecord.verification_data || {}), ...(assignment.verificationData || {}) },
               updated_at: new Date().toISOString()
             })
             .eq('id', existingRecord.id)
@@ -810,7 +832,7 @@ export class DbService {
               user_name: assignment.userName || '',
               server_name: assignment.serverName || '',
               role_name: assignment.roleName || '',
-              verification_data: assignment.verificationData || {},
+              verification_data: { ...(existingRecord.verification_data || {}), ...(assignment.verificationData || {}) },
               updated_at: new Date().toISOString()
             })
             .eq('id', existingRecord.id)
@@ -959,7 +981,12 @@ export class DbService {
           attribute_key: removedRule.attribute_key,
           attribute_value: removedRule.attribute_value,
           min_items: removedRule.min_items,
-          created_at: removedRule.created_at
+          created_at: removedRule.created_at,
+          ...(removedRule.asset_type === 'nft' ? {
+            asset_type: removedRule.asset_type, chain_id: removedRule.chain_id,
+            contract_address: removedRule.contract_address, token_standard: removedRule.token_standard,
+            token_ids: removedRule.token_ids, collection_name: removedRule.collection_name,
+          } : {})
         })
         .select()
         .single();

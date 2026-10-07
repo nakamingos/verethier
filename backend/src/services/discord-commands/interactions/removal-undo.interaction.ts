@@ -1,3 +1,4 @@
+import { nftRuleScope, nftRuleCriteria } from '@/utils/nft-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ButtonInteraction, ChatInputCommandInteraction, ComponentType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -380,7 +381,8 @@ export class RemovalUndoInteractionHandler {
         const slug = rule.slug || 'ALL';
         const minItems = rule.min_items || 1;
         
-        const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const criteria = rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
         description += ruleInfo + '\n\n';
       });
     }
@@ -428,6 +430,11 @@ export class RemovalUndoInteractionHandler {
    * Creates detailed rule information fields for consistent display
    */
   private createRuleInfoFields(ruleData: any): any[] {
+    if (ruleData.asset_type === 'nft') return [
+      { name: '**Collection**', value: nftRuleScope(ruleData), inline: false },
+      { name: '**Contract**', value: ruleData.contract_address, inline: false },
+      { name: '**Min Items**', value: String(ruleData.min_items || 1), inline: true },
+    ];
     return [
       {
         name: '**Collection**',

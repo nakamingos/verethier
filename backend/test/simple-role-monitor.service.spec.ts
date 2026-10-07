@@ -1,3 +1,5 @@
+import { AssetOwnershipService } from '../src/services/asset-ownership.service';
+import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SimpleRoleMonitorService } from '../src/services/simple-role-monitor.service';
 import { DbService } from '../src/services/db.service';
@@ -21,6 +23,9 @@ describe('SimpleRoleMonitorService', () => {
       checkEnhancedTrackingExists: jest.fn(),
       getRoleAssignmentStats: jest.fn(),
       getRoleMappings: jest.fn(),
+      getRuleById: jest.fn().mockImplementation(async id => (await mockDbService.getRoleMappings()).find(rule => rule.id === id)),
+      saveRoleCheckDetails: jest.fn(),
+      updateLastVerified: jest.fn(),
       addServerToUser: jest.fn(),
       logUserRole: jest.fn(),
     };
@@ -47,11 +52,13 @@ describe('SimpleRoleMonitorService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        AssetOwnershipService,
+        { provide: NftOwnershipService, useValue: { count: jest.fn() } },
         SimpleRoleMonitorService,
         { provide: DbService, useValue: mockDbService },
         { provide: DataService, useValue: mockDataService },
         { provide: DiscordVerificationService, useValue: mockDiscordVerificationService },
-        { provide: VerificationEngine, useValue: mockVerificationEngine },
+        VerificationEngine,
         { provide: UserAddressService, useValue: mockUserAddressService },
       ],
     }).compile();
@@ -209,7 +216,7 @@ describe('SimpleRoleMonitorService', () => {
       expect(result.verified).toContain('role1');
       expect(result.revoked).toHaveLength(0);
       expect(result.errors).toHaveLength(0);
-      expect(discordVerificationService.addUserRole).toHaveBeenCalledWith('user1', 'role1', 'server1', 'reverification', 'rule-1');
+      expect(discordVerificationService.addUserRole).toHaveBeenCalledWith('user1', 'role1', 'server1', 'reverification', 'rule-1', expect.objectContaining({ matched_rule_ids: ['rule-1'], last_check_status: 'passed' }));
     });
   });
 

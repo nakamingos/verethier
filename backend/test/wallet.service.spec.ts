@@ -9,6 +9,7 @@ import { recoverTypedDataAddress } from 'viem';
 
 // Mock viem functions
 jest.mock('viem', () => ({
+  ...jest.requireActual('viem'),
   recoverTypedDataAddress: jest.fn(),
 }));
 

@@ -19,6 +19,7 @@ export class EnvironmentConfig {
   public static readonly DATA_SUPABASE_ANON_KEY = process.env.DATA_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
   public static readonly DB_SUPABASE_URL = process.env.DB_SUPABASE_URL;
   public static readonly DB_SUPABASE_KEY = process.env.DB_SUPABASE_KEY || process.env.SUPABASE_KEY;
+  public static readonly RPC_URL = process.env.RPC_URL;
   
   // Application Configuration
   public static readonly BASE_URL = process.env.BASE_URL;

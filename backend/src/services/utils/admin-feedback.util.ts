@@ -1,3 +1,4 @@
+import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { EmbedBuilder, Colors } from 'discord.js';
 import { VerificationRule } from '@/models/verification-rule.interface';
 
@@ -153,6 +154,7 @@ export class AdminFeedback {
     }
     
     result += `**Role:** <@&${rule.role_id}>\n`;
+    if (rule.asset_type === 'nft') return result + `**Collection:** ${nftRuleCriteria(rule)}\n**Contract:** ${rule.contract_address}`;
     result += `**Collection:** ${rule.slug}\n`;
     result += `**Attribute:** ${formatAttribute(rule.attribute_key, rule.attribute_value)}\n`;
     result += `**Min Items:** ${rule.min_items}`;

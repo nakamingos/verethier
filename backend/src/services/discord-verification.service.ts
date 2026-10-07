@@ -1,3 +1,7 @@
+import { AssetOwnershipService } from './asset-ownership.service';
+import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
+import { NftCheckContext } from './nft-ownership.service';
+import { nftRuleScope, serializeAssetCount } from '@/utils/nft-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags } from 'discord.js';
 import dotenv from 'dotenv';
@@ -17,12 +21,12 @@ type VerificationRoleResult = {
   roleName: string;
   wasAlreadyAssigned: boolean;
   ruleId?: string | null;
-  matchingCount?: number;
+  matchingCount?: AssetCount;
 };
 
 type RuleMatchSummary = {
   ruleId: string;
-  matchingCount?: number;
+  matchingCount?: AssetCount;
 };
 
 type GroupedVerificationRoleResult = {
@@ -30,7 +34,7 @@ type GroupedVerificationRoleResult = {
   roleName: string;
   wasAlreadyAssigned: boolean;
   matchedRules: RuleMatchSummary[];
-  fallbackMatchingCount?: number;
+  fallbackMatchingCount?: AssetCount;
 };
 
 type RoleRequirementGroup = {
@@ -39,7 +43,7 @@ type RoleRequirementGroup = {
   matchedRules: RuleMatchSummary[];
 };
 
-type VerificationDisplayRule = {
+type VerificationDisplayRule = NftRuleFields & {
   id: number;
   role_id: string;
   role_name?: string | null;
@@ -97,7 +101,8 @@ export class DiscordVerificationService {
     private readonly dbSvc: DbService,
     private readonly nonceSvc: NonceService,
     private readonly dataSvc: DataService,
-    private readonly userAddressService: UserAddressService
+    private readonly userAddressService: UserAddressService,
+    private readonly ownershipSvc: AssetOwnershipService
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {
@@ -196,7 +201,7 @@ export class DiscordVerificationService {
   }
 
   private formatCollectionLabel(
-    rule: {
+    rule: NftRuleFields & {
       slug?: string | null;
       attribute_key?: string | null;
       attribute_value?: string | null;
@@ -217,7 +222,7 @@ export class DiscordVerificationService {
   }
 
   private getCollectionLabels(
-    rule: {
+    rule: NftRuleFields & {
       slug?: string | null;
       attribute_key?: string | null;
       attribute_value?: string | null;
@@ -274,7 +279,7 @@ export class DiscordVerificationService {
   }
 
   private formatRoleRequirement(
-    rule: {
+    rule: NftRuleFields & {
       slug?: string | null;
       min_items?: number | null;
       attribute_key?: string | null;
@@ -283,12 +288,17 @@ export class DiscordVerificationService {
     collectionNames: Record<string, CollectionDisplayName> = {},
     options: {
       style?: 'requirement' | 'holding';
-      matchingCount?: number;
+      matchingCount?: AssetCount;
     } = {}
   ): string {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
+    if (rule.asset_type === 'nft') {
+      const scope = nftRuleScope(rule);
+      return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
+        : `Own ${minItems}+ from ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
+    }
     const collectionLabel = this.formatCollectionLabel(rule, collectionNames);
     const slugCount = this.parseRuleSlugs(rule.slug).length;
     const hasAttributeKey =
@@ -501,7 +511,8 @@ export class DiscordVerificationService {
     roleId: string,
     guildId: string,
     nonce: string,
-    ruleId?: string
+    ruleId?: string,
+    verificationData?: any
   ): Promise<VerificationRoleResult> {
     if (!this.client) throw new Error('Discord bot not initialized');
 
@@ -538,6 +549,7 @@ export class DiscordVerificationService {
         userName: member.displayName || member.user.username,
         serverName: guild.name,
         roleName: role.name,
+        ...(verificationData ? { verificationData } : {}),
         expiresInHours: undefined // No expiration by default
       });
     } catch (error) {
@@ -944,15 +956,10 @@ export class DiscordVerificationService {
         : [...userAddresses, normalizedAddress];
 
       const remainingRules = [];
+      const context: NftCheckContext = { checks: new Map() };
       for (const rule of unassignedRules) {
         try {
-          const matchingCount = await this.dataSvc.checkAssetOwnershipWithCriteria(
-            addressesToCheck,
-            rule.slug || 'ALL',
-            rule.attribute_key || 'ALL',
-            rule.attribute_value || 'ALL',
-            1
-          );
+          const matchingCount = serializeAssetCount(await this.ownershipSvc.count(rule, addressesToCheck, context));
 
           remainingRules.push({
             ...rule,
@@ -1045,9 +1052,9 @@ export class DiscordVerificationService {
   }
 
   private getMatchedRulesForRole(
-    role: { roleId: string; matchedRules: RuleMatchSummary[]; fallbackMatchingCount?: number },
+    role: { roleId: string; matchedRules: RuleMatchSummary[]; fallbackMatchingCount?: AssetCount },
     allRules: VerificationDisplayRule[]
-  ): Array<{ rule: VerificationDisplayRule; matchingCount?: number }> {
+  ): Array<{ rule: VerificationDisplayRule; matchingCount?: AssetCount }> {
     if (role.matchedRules.length > 0) {
       const rulesById = new Map(allRules.map(rule => [rule.id.toString(), rule]));
       const matchedRules = role.matchedRules.flatMap(match => {
@@ -1096,7 +1103,7 @@ export class DiscordVerificationService {
   }
 
   private groupRulesByRole(
-    rules: Array<VerificationDisplayRule & { matchingCount?: number }>
+    rules: Array<VerificationDisplayRule & { matchingCount?: AssetCount }>
   ): RoleRequirementGroup[] {
     const groupedRoles = new Map<string, RoleRequirementGroup>();
 
@@ -1201,13 +1208,13 @@ export class DiscordVerificationService {
   }
 
   private formatCombinedCollectionRequirement(
-    matchedRules: Array<{ rule: VerificationDisplayRule; matchingCount?: number }>,
+    matchedRules: Array<{ rule: VerificationDisplayRule; matchingCount?: AssetCount }>,
     collectionNames: Record<string, CollectionDisplayName>,
     style: 'requirement' | 'holding'
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => rule.asset_type !== 'nft' && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }
@@ -1231,7 +1238,7 @@ export class DiscordVerificationService {
       return null;
     }
 
-    const totalMatchingCount = matchingCounts.reduce((sum, count) => sum + (count as number), 0);
+    const totalMatchingCount = matchingCounts.reduce<number>((sum, count) => sum + (count as number), 0);
     const requiredCount = requiredCounts[0];
     const combinedLabel = collectionLabels.join('\u00A0\u2228 ');
 

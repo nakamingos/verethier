@@ -16,6 +16,8 @@ import { DbService } from '../../db.service';
 import { DiscordMessageService } from '../../discord-message.service';
 import { DiscordService } from '../../discord.service';
 import { DataService } from '../../data.service';
+import { NftOwnershipService } from '../../nft-ownership.service';
+import { NftRuleFields } from '@/models/verifier-role.interface';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
 import { validateRuleInputParams, formatAttribute } from '../utils/rule-validation.util';
@@ -45,6 +47,7 @@ export class AddRuleHandler {
     @Inject(forwardRef(() => DiscordService))
     private readonly discordSvc: DiscordService,
     private readonly dataSvc: DataService,
+    private readonly nftSvc: NftOwnershipService,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler
   ) {}
@@ -62,7 +65,7 @@ export class AddRuleHandler {
         return; // Error already handled
       }
 
-      const { channel, roleName, slug, attributeKey, attributeValue, minItems } = params;
+      const { channel, roleName, slug, attributeKey, attributeValue, minItems, assetFields } = params;
 
       // Find or create the role
       const roleResult = await findOrCreateRole(interaction, roleName);
@@ -73,7 +76,7 @@ export class AddRuleHandler {
       const { role, wasNewlyCreated } = roleResult;
 
       // Check for duplicate rules
-      if (!(await this.checkForDuplicateRules(interaction, channel, role, slug, attributeKey, attributeValue, minItems, wasNewlyCreated))) {
+      if (!(await this.checkForDuplicateRules(interaction, channel, role, slug, attributeKey, attributeValue, minItems, wasNewlyCreated, assetFields))) {
         return; // Duplicate found and handled
       }
 
@@ -85,6 +88,7 @@ export class AddRuleHandler {
         attributeKey,
         attributeValue,
         minItems,
+        assetFields,
         wasNewlyCreated
       });
 
@@ -112,18 +116,48 @@ export class AddRuleHandler {
     attributeKey: string;
     attributeValue: string;
     minItems: number;
+    assetFields?: NftRuleFields;
   } | null> {
     const channel = interaction.options.getChannel('channel') as TextChannel;
     const roleName = interaction.options.getString('role');
     let slug = interaction.options.getString('slug') || 'ALL';
     const attributeKey = interaction.options.getString('attribute_key') || 'ALL';
     const attributeValue = interaction.options.getString('attribute_value') || 'ALL';
-    const minItems = interaction.options.getInteger('min_items') || 1;
+    const minItems = interaction.options.getInteger('min_items') ?? 1;
 
     if (!channel || !roleName) {
       await interaction.editReply({
         content: AdminFeedback.simple('Channel and role are required.', true)
       });
+      return null;
+    }
+
+    if (!Number.isSafeInteger(minItems) || minItems < 1) {
+      await interaction.editReply({ content: AdminFeedback.simple('Minimum items must be a positive whole number.', true) });
+      return null;
+    }
+    const assetType = interaction.options.getString('asset_type') || 'ethscription';
+    const contract = interaction.options.getString('contract_address');
+    const tokenIds = interaction.options.getString('token_ids');
+    const name = interaction.options.getString('collection_name');
+    if (assetType === 'nft') {
+      if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL') {
+        await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug and attribute options empty.', true) });
+        return null;
+      }
+      try {
+        const assetFields = await this.nftSvc.prepareRule(contract, tokenIds, name);
+        if (assetFields.token_standard === 'erc721' && assetFields.token_ids && minItems !== 1) {
+          throw new Error('A specific ERC-721 token rule requires min_items:1.');
+        }
+        return { channel, roleName, slug, attributeKey, attributeValue, minItems, assetFields };
+      } catch (error) {
+        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the NFT contract. Please try again.', true) });
+        return null;
+      }
+    }
+    if (assetType !== 'ethscription' || contract || tokenIds != null || name != null) {
+      await interaction.editReply({ content: AdminFeedback.simple('Select asset_type:NFT to use contract_address, token_ids, or collection_name.', true) });
       return null;
     }
 
@@ -182,7 +216,8 @@ export class AddRuleHandler {
     attributeKey: string,
     attributeValue: string,
     minItems: number,
-    wasNewlyCreated: boolean = false
+    wasNewlyCreated: boolean = false,
+    assetFields?: NftRuleFields
   ): Promise<boolean> {
     // Check for exact duplicate rules first (same role + same criteria)
     const exactDuplicate = await this.dbSvc.checkForExactDuplicateRule(
@@ -192,7 +227,8 @@ export class AddRuleHandler {
       attributeKey,
       attributeValue,
       minItems,
-      role.id
+      role.id,
+      assetFields
     );
 
     if (exactDuplicate) {
@@ -223,7 +259,8 @@ export class AddRuleHandler {
       attributeKey,
       attributeValue,
       minItems,
-      role.id // Exclude the same role (not really duplicate if same role)
+      role.id, // Exclude the same role
+      assetFields
     );
 
     if (existingRule) {
@@ -238,6 +275,7 @@ export class AddRuleHandler {
           attributeKey,
           attributeValue,
           minItems,
+          assetFields,
           wasNewlyCreated
         }
       );
@@ -264,6 +302,7 @@ export class AddRuleHandler {
           attributeKey,
           attributeValue,
           minItems,
+          assetFields,
           wasNewlyCreated
         }
       );
@@ -286,6 +325,7 @@ export class AddRuleHandler {
       attributeKey: string;
       attributeValue: string;
       minItems: number;
+      assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
   ): Promise<void> {
@@ -294,6 +334,7 @@ export class AddRuleHandler {
     
     // Create rule objects for consistent formatting
     const existingRuleFormatted = {
+      ...existingRule,
       role_id: existingRule.role_id,
       slug: existingRule.slug,
       attribute_key: existingRule.attribute_key,
@@ -306,7 +347,8 @@ export class AddRuleHandler {
       slug: newRuleData.slug,
       attribute_key: newRuleData.attributeKey,
       attribute_value: newRuleData.attributeValue,
-      min_items: newRuleData.minItems
+      min_items: newRuleData.minItems,
+      ...newRuleData.assetFields
     };
 
     const embed = AdminFeedback.warning(
@@ -377,6 +419,7 @@ export class AddRuleHandler {
       attributeKey: string;
       attributeValue: string;
       minItems: number;
+      assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
   ): Promise<void> {
@@ -385,7 +428,8 @@ export class AddRuleHandler {
       slug: newRuleData.slug,
       attribute_key: newRuleData.attributeKey,
       attribute_value: newRuleData.attributeValue,
-      min_items: newRuleData.minItems
+      min_items: newRuleData.minItems,
+      ...newRuleData.assetFields
     };
 
     const embed = AdminFeedback.warning(
@@ -455,6 +499,7 @@ export class AddRuleHandler {
       attributeKey: string;
       attributeValue: string;
       minItems: number;
+      assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
   ): void {
@@ -496,7 +541,8 @@ export class AddRuleHandler {
             slug: newRuleData.slug,
             attribute_key: newRuleData.attributeKey,
             attribute_value: newRuleData.attributeValue,
-            min_items: newRuleData.minItems
+            min_items: newRuleData.minItems,
+            ...newRuleData.assetFields
           };
           const ruleInfoFields = this.duplicateRuleConfirmationHandler.createRuleInfoFields(cancelledRuleFormatted);
 
@@ -565,6 +611,7 @@ export class AddRuleHandler {
       attributeKey: string;
       attributeValue: string;
       minItems: number;
+      assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     },
     isDuplicateConfirmed: boolean = false,
@@ -590,7 +637,8 @@ export class AddRuleHandler {
         role.name,
         attributeKey,
         attributeValue,
-        minItems
+        minItems,
+        ruleData.assetFields
       );
     } catch (error) {
       this.logger.error('Error creating rule:', error);
@@ -643,7 +691,8 @@ export class AddRuleHandler {
         slug: slug,
         attribute_key: attributeKey,
         attribute_value: attributeValue,
-        min_items: minItems
+        min_items: minItems,
+        ...ruleData.assetFields
       });
       embed.addFields(ruleInfoFields);
 
@@ -768,7 +817,8 @@ export class AddRuleHandler {
         slug: slug,
         attribute_key: attributeKey,
         attribute_value: attributeValue,
-        min_items: minItems
+        min_items: minItems,
+        ...newRule
       });
       embed.addFields(ruleInfoFields);
 
@@ -860,7 +910,8 @@ export class AddRuleHandler {
       slug: ruleData.slug,
       attribute_key: ruleData.attributeKey,
       attribute_value: ruleData.attributeValue,
-      min_items: ruleData.minItems
+      min_items: ruleData.minItems,
+      ...ruleData.assetFields
     };
     const ruleInfoFields = this.duplicateRuleConfirmationHandler.createRuleInfoFields(cancelledRuleFormatted);
 
@@ -914,7 +965,8 @@ export class AddRuleHandler {
       ruleData.attributeKey,
       ruleData.attributeValue,
       ruleData.minItems,
-      ruleData.role.id // Exclude the same role
+      ruleData.role.id, // Exclude the same role
+      ruleData.assetFields
     );
 
     if (existingRule) {

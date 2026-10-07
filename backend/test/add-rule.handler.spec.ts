@@ -1,3 +1,4 @@
+import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddRuleHandler } from '../src/services/discord-commands/handlers/add-rule.handler';
 import { DbService } from '../src/services/db.service';
@@ -8,6 +9,8 @@ import { RuleConfirmationInteractionHandler } from '../src/services/discord-comm
 import { DuplicateRuleConfirmationInteractionHandler } from '../src/services/discord-commands/interactions/duplicate-rule-confirmation.interaction';
 import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/interactions/removal-undo.interaction';
 import { ChannelType } from 'discord.js';
+
+const mockNftService = { prepareRule: jest.fn() };
 
 const mockDbService = {
   checkForExactDuplicateRule: jest.fn(),
@@ -106,6 +109,7 @@ describe('AddRuleHandler', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AddRuleHandler,
+        { provide: NftOwnershipService, useValue: mockNftService },
         { provide: DbService, useValue: mockDbService },
         { provide: DiscordMessageService, useValue: mockDiscordMessageService },
         { provide: DiscordService, useValue: mockDiscordService },
@@ -378,4 +382,47 @@ describe('AddRuleHandler', () => {
       });
     });
   });
+  describe('NFT setup', () => {
+    const fields = { asset_type: 'nft', chain_id: 1, contract_address: '0x1111111111111111111111111111111111111111', token_standard: 'erc1155', token_ids: ['0', '1'], collection_name: 'Example' };
+    function interactionFor(options = {}, minItems = 1) {
+      const role = { id: 'role-id', name: 'Holder', editable: true };
+      const inputs = { role: 'Holder', asset_type: 'nft', contract_address: fields.contract_address, ...options };
+      return {
+        id: 'nft-setup', guild: { id: 'guild-id', name: 'Guild', roles: { cache: { find: jest.fn().mockReturnValue(role) } } },
+        user: { id: 'admin', tag: 'admin' },
+        options: { getChannel: jest.fn().mockReturnValue({ id: 'channel-id', name: 'verify', type: ChannelType.GuildText }), getString: jest.fn(key => inputs[key] ?? null), getInteger: jest.fn().mockReturnValue(minItems) },
+        deferReply: jest.fn(), editReply: jest.fn(), followUp: jest.fn(),
+      } as any;
+    }
+    it('saves NFT criteria using the existing command and confirmation flow', async () => {
+      mockNftService.prepareRule.mockResolvedValue(fields);
+      mockDbService.checkForExactDuplicateRule.mockResolvedValue(null);
+      mockDbService.checkForDuplicateRule.mockResolvedValue(null);
+      mockDbService.getRulesByChannel.mockResolvedValue([]);
+      mockDbService.addRoleMapping.mockResolvedValue({ id: 10, ...fields });
+      mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
+      const interaction = interactionFor({ token_ids: '0-1', collection_name: 'Example' }, 2);
+      await handler.handle(interaction);
+      expect(mockNftService.prepareRule).toHaveBeenCalledWith(fields.contract_address, '0-1', 'Example');
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+      expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalledWith('guild-id', 'channel-id', 'ALL', 'ALL', 'ALL', 2, 'role-id', fields);
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', 'ALL', 'role-id', 'Holder', 'ALL', 'ALL', 2, fields);
+      expect(mockDuplicateRuleConfirmationHandler.createRuleInfoFields).toHaveBeenCalledWith(expect.objectContaining(fields));
+      expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalled();
+    });
+    it.each([{ slug: 'example' }, { attribute_key: 'Color' }, { contract_address: null }])('rejects missing contract or mixed criteria: %s', async options => {
+      const interaction = interactionFor(options);
+      await handler.handle(interaction);
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('NFT rules require contract_address') });
+    });
+    it('rejects quantity greater than one for a specific ERC-721 ID', async () => {
+      mockNftService.prepareRule.mockResolvedValue({ ...fields, token_standard: 'erc721', token_ids: ['0'] });
+      const interaction = interactionFor({ token_ids: '0' }, 2);
+      await handler.handle(interaction);
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('requires min_items:1') });
+    });
+  });
+
 });

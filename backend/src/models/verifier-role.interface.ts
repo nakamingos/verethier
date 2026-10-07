@@ -1,4 +1,15 @@
-export interface VerifierRole {
+export type AssetCount = number | string;
+
+export interface NftRuleFields {
+  asset_type?: 'ethscription' | 'nft';
+  chain_id?: number;
+  contract_address?: string | null;
+  token_standard?: 'erc721' | 'erc1155' | null;
+  token_ids?: string[] | null;
+  collection_name?: string | null;
+}
+
+export interface VerifierRole extends NftRuleFields {
   id: number;
   server_id: string;
   server_name: string;

@@ -1,3 +1,5 @@
+import { NftRuleFields } from './verifier-role.interface';
+
 /**
  * VerificationRule interface
  * 
@@ -13,7 +15,7 @@
  * This is a flexible partial interface that supports both complete rule objects
  * from the database and temporary rule objects used during matching operations.
  */
-export interface VerificationRule {
+export interface VerificationRule extends NftRuleFields {
   role_id: string;                        // Discord role ID to assign
   slug: string;                           // Collection slug ('ALL' for any collection)
   attribute_key: string;                  // Asset attribute key to match ('ALL' for any)

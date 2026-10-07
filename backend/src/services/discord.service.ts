@@ -202,6 +202,8 @@ export class DiscordService implements OnModuleInit {
           const focusedOption = interaction.options.getFocused(true);
           if (focusedOption.name === 'role') {
             await this.handleRoleAutocomplete(interaction);
+          } else if (interaction.options.getString('asset_type') === 'nft') {
+            await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
             await this.handleSlugAutocomplete(interaction);
           } else if (focusedOption.name === 'attribute_key') {
@@ -451,10 +453,14 @@ export class DiscordService implements OnModuleInit {
             .setDescription('Add a new verification rule')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
+            .addStringOption(option => option.setName('asset_type').setDescription('Collection type (default: Ethscriptions)').addChoices({ name: 'Ethscriptions', value: 'ethscription' }, { name: 'NFT', value: 'nft' }))
+            .addStringOption(option => option.setName('contract_address').setDescription('Ethereum mainnet NFT contract address (requires asset_type:NFT)'))
+            .addStringOption(option => option.setName('token_ids').setDescription('NFT token ID, list, or range; ERC-1155 defaults to 0-99'))
+            .addStringOption(option => option.setName('collection_name').setDescription('Optional NFT collection name override').setMaxLength(100))
             .addStringOption(option => option.setName('slug').setDescription('Asset slug (leave empty for ALL collections)').setAutocomplete(true))
             .addStringOption(option => option.setName('attribute_key').setDescription('Attribute key (leave empty for ALL attributes)').setAutocomplete(true))
             .addStringOption(option => option.setName('attribute_value').setDescription('Attribute value (leave empty for ALL values)').setAutocomplete(true))
-            .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)'))
+            .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)').setMinValue(1))
         )
         .addSubcommand(sc =>
           sc.setName('remove-rule')

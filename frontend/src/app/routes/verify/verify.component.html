@@ -64,7 +64,9 @@
         <div class="content">
           <div class="title">Verify Ownership.</div>
           <div class="sub">
-            Sign a message with your wallet to check your Ethscriptions collection for eligible roles in the <span class="pink">{{ data.discordName }}</span> Server.
+            Sign a message with your wallet to check your collection for eligible roles in the <span class="pink">{{ data.discordName }}</span> Server.
+            <br />
+            Verification may take up to a minute.
             @if (state.connectedAddress) {
               <br />
               Connected wallet: <span class="pink">{{ formatAddress(state.connectedAddress) }}</span>
