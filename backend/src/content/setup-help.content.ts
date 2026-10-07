@@ -38,7 +38,8 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🖼️ NFT collections',
-      value: 'Use `/setup add-rule` with **asset_type: NFT** and **contract_address: 0x…** (Ethereum mainnet).\n' +
+      value: 'Use `/setup add-rule` with **asset_type: NFT** and **contract_address: 0x…**.\n' +
+             '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
              '• **ERC-721**: Any token in the collection, or one specific **token_ids** value\n' +
              '• **ERC-1155**: Checks IDs **0–99** by default; set **token_ids** to a list or range such as `1,5,20-30` (up to 1,000 IDs)\n' +
              '• **Min Items**: Total tokens/copies across verified wallets\n' +

@@ -1,6 +1,6 @@
 # Verethier
 
-Discord-based wallet verification for Ethscriptions communities.
+Discord-based wallet verification for Ethscriptions and NFT communities.
 
 Verethier is split into two deployable apps:
 - `backend/`: a NestJS API and Discord bot
@@ -10,6 +10,7 @@ Verethier is split into two deployable apps:
 
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
+- ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
 - Wallet stacking across multiple verified addresses
 - Dynamic role re-verification and revocation
 - Rich Discord verification result messages
@@ -78,6 +79,15 @@ npx supabase db reset
 
 - Backend runtime config is documented in [backend/env.example](backend/env.example) and [backend/.env.production.example](backend/.env.production.example).
 - Frontend API/RPC settings live in [env.ts](frontend/src/env/env.ts) and [env.dev.ts](frontend/src/env/env.dev.ts).
+- NFT checks use the backend's `RPC_URL` for Ethereum and `ROBINHOOD_RPC_URL` for Robinhood. Both require full HTTP(S) URLs for their respective mainnets.
+
+For a Robinhood NFT rule, use the existing setup command:
+
+```text
+/setup add-rule channel:#verify role:Holder asset_type:NFT network:Robinhood contract_address:0x…
+```
+
+Omitting `network` defaults NFT rules to Ethereum. Wallet verification uses the existing signing flow; the backend checks the verified address on the rule's network. ERC-1155 rules still check IDs 0–99 by default, or the configured token ID list/range.
 
 ## Testing
 

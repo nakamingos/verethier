@@ -11,6 +11,7 @@ import { VerificationService } from '@/services/verification.service';
 import { CacheService } from '@/services/cache.service';
 import { CONSTANTS } from '@/constants';
 import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
+import { NFT_NETWORKS } from '@/utils/nft-network.util';
 
 /**
  * Discord Bot Service
@@ -454,7 +455,8 @@ export class DiscordService implements OnModuleInit {
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
             .addStringOption(option => option.setName('asset_type').setDescription('Collection type (default: Ethscriptions)').addChoices({ name: 'Ethscriptions', value: 'ethscription' }, { name: 'NFT', value: 'nft' }))
-            .addStringOption(option => option.setName('contract_address').setDescription('Ethereum mainnet NFT contract address (requires asset_type:NFT)'))
+            .addStringOption(option => option.setName('network').setDescription('NFT network (default: Ethereum)').addChoices(...NFT_NETWORKS.map(({ name, value }) => ({ name, value }))))
+            .addStringOption(option => option.setName('contract_address').setDescription('NFT contract address on the selected network (requires asset_type:NFT)'))
             .addStringOption(option => option.setName('token_ids').setDescription('NFT token ID, list, or range; ERC-1155 defaults to 0-99'))
             .addStringOption(option => option.setName('collection_name').setDescription('Optional NFT collection name override').setMaxLength(100))
             .addStringOption(option => option.setName('slug').setDescription('Asset slug (leave empty for ALL collections)').setAutocomplete(true))

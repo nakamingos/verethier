@@ -18,6 +18,7 @@ import { DiscordService } from '../../discord.service';
 import { DataService } from '../../data.service';
 import { NftOwnershipService } from '../../nft-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
+import { getNftNetworkId } from '@/utils/nft-network.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
 import { validateRuleInputParams, formatAttribute } from '../utils/rule-validation.util';
@@ -140,13 +141,14 @@ export class AddRuleHandler {
     const contract = interaction.options.getString('contract_address');
     const tokenIds = interaction.options.getString('token_ids');
     const name = interaction.options.getString('collection_name');
+    const network = interaction.options.getString('network');
     if (assetType === 'nft') {
       if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL') {
         await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug and attribute options empty.', true) });
         return null;
       }
       try {
-        const assetFields = await this.nftSvc.prepareRule(contract, tokenIds, name);
+        const assetFields = await this.nftSvc.prepareRule(contract, tokenIds, name, getNftNetworkId(network || 'ethereum'));
         if (assetFields.token_standard === 'erc721' && assetFields.token_ids && minItems !== 1) {
           throw new Error('A specific ERC-721 token rule requires min_items:1.');
         }
@@ -156,8 +158,8 @@ export class AddRuleHandler {
         return null;
       }
     }
-    if (assetType !== 'ethscription' || contract || tokenIds != null || name != null) {
-      await interaction.editReply({ content: AdminFeedback.simple('Select asset_type:NFT to use contract_address, token_ids, or collection_name.', true) });
+    if (assetType !== 'ethscription' || contract || tokenIds != null || name != null || network != null) {
+      await interaction.editReply({ content: AdminFeedback.simple('Select asset_type:NFT to use network, contract_address, token_ids, or collection_name.', true) });
       return null;
     }
 

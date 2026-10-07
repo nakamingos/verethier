@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -51,8 +52,9 @@ try:
     else:
         raise RuntimeError("Disposable PostgreSQL did not become ready")
     migrations = root / "supabase/migrations"
+    initial_nft_migration = migrations / "20261006223000_add_nft_verification_rules.sql"
     for path in sorted(migrations.glob("*.sql")):
-        if path.name.startswith("20261006"):
+        if path.name >= initial_nft_migration.name:
             continue
         sql(path.read_text())
     sql("""
@@ -75,13 +77,42 @@ try:
         run("docker", "exec", container, "pg_restore", "-U", "postgres", "--exit-on-error", "--schema=public",
             "--no-owner", "--no-privileges", "-d", "verethier_restore_check", "/tmp/before-nft.dump")
         assert snapshot("verethier_restore_check") == before, "Backup restore changed existing data"
-    sql((migrations / "20261006223000_add_nft_verification_rules.sql").read_text())
+    sql(initial_nft_migration.read_text())
     assert snapshot(upgraded=True) == before, "NFT migration changed existing rules, wallets or assignments"
     assert sql("SELECT asset_type || ':' || chain_id FROM verifier_rules WHERE id=1;") == "ethscription:1"
     sql((root / "test/nft-migration.sql").read_text())
+    sql("""
+      INSERT INTO verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids, collection_name)
+        VALUES ('existing-nft', 'holder', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc1155', ARRAY['0', '1'], 'Existing collection');
+    """)
+    before_robinhood = snapshot()
+    sql((migrations / "20261007033000_add_robinhood_nft_rules.sql").read_text())
+    assert snapshot() == before_robinhood, "Robinhood migration changed existing rules, wallets or assignments"
+    sql((root / "test/robinhood-nft-migration.sql").read_text())
+    with tempfile.TemporaryDirectory(prefix="verethier-nft-backup-") as directory:
+        backup = Path(directory)
+        (backup / "roles.sql").write_text("")
+        for kind, option in [("schema", "--schema-only"), ("data", "--data-only")]:
+            dump = run(
+                "docker", "exec", container, "pg_dump", "-U", "postgres", "--schema=public",
+                "--quote-all-identifiers", "--no-owner", "--no-privileges", "--no-publications", option, "postgres").stdout
+            # Match Supabase CLI's schema dump, which omits creation of the existing public schema.
+            if kind == "schema":
+                dump = dump.replace(b'CREATE SCHEMA "public";\n', b'')
+            (backup / f"{kind}.sql").write_bytes(dump)
+        try:
+            run(sys.executable, str(root / "test/check-backup.py"), str(backup))
+        except RuntimeError:
+            # This backup contains only the dummy rows above, so diagnostics are safe to show.
+            log = backup / "restore-test-error.log"
+            if log.exists():
+                raise RuntimeError(log.read_text())
+            raise
     print("PASS: existing rules, wallets and role assignments preserved")
     print("PASS: public app schema restored from custom-format backup with identical test data")
     print("PASS: NFT constraints and duplicate indexes, including 1,000 IDs")
+    print("PASS: Robinhood migration preserves Ethscriptions and Ethereum NFT rules; network constraints and duplicate indexes work")
+    print("PASS: SQL backup checker also restores a database with existing NFT columns and Ethereum NFT rules")
 except Exception:
     logs = run("docker", "logs", container)
     print((logs.stdout + logs.stderr).decode()[-5000:])
