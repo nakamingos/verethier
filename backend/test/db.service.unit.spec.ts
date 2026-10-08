@@ -83,6 +83,24 @@ describe('DbService (Unit Tests)', () => {
     });
   });
 
+  describe('Optional NFT metadata cache', () => {
+    it('falls back to provider metadata when cache reads fail', async () => {
+      mockSupabaseClient.gte.mockResolvedValueOnce({ error: { message: 'permission denied' } });
+      expect(await service.getCachedNftMetadata(1, 'contract', ['1'], new Date().toISOString())).toEqual([]);
+      mockSupabaseClient.gte.mockRejectedValueOnce(new Error('network failure'));
+      expect(await service.getCachedNftMetadata(1, 'contract', ['1'], new Date().toISOString())).toEqual([]);
+    });
+    it('does not fail verification when cache writes fail', async () => {
+      const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      mockSupabaseClient.upsert.mockResolvedValueOnce({ error: { message: 'permission denied' } });
+      await expect(service.cacheNftMetadata([])).resolves.toBeUndefined();
+      mockSupabaseClient.upsert.mockRejectedValueOnce(new Error('network failure'));
+      await expect(service.cacheNftMetadata([])).resolves.toBeUndefined();
+      expect(warning).toHaveBeenCalledTimes(2);
+      warning.mockRestore();
+    });
+  });
+
   describe('addUpdateServer', () => {
     it('should successfully add/update a server', async () => {
       const mockResult = {

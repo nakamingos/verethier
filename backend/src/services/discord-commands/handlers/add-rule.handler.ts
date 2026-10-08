@@ -20,6 +20,7 @@ import { NftOwnershipService } from '../../nft-ownership.service';
 import { OrdinalsOwnershipService } from '../../ordinals-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { getNftNetworkId } from '@/utils/nft-network.util';
+import { nftTrait } from '@/utils/nft-trait.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
 import { validateRuleInputParams, formatAttribute } from '../utils/rule-validation.util';
@@ -159,16 +160,18 @@ export class AddRuleHandler {
       }
     }
     if (assetType === 'nft') {
-      if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL') {
-        await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug and attribute options empty.', true) });
+      if (!contract || slug !== 'ALL') {
+        await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug empty.', true) });
         return null;
       }
       try {
+        const trait = nftTrait({ attribute_key: attributeKey, attribute_value: attributeValue });
         const assetFields = await this.nftSvc.prepareRule(contract, tokenIds, name, getNftNetworkId(network || 'ethereum'));
         if (assetFields.token_standard === 'erc721' && assetFields.token_ids && minItems !== 1) {
           throw new Error('A specific ERC-721 token rule requires min_items:1.');
         }
-        return { channel, roleName, slug, attributeKey, attributeValue, minItems, assetFields };
+        await this.nftSvc.validateTraits({ ...assetFields, attribute_key: trait.key, attribute_value: trait.value });
+        return { channel, roleName, slug, attributeKey: trait.key, attributeValue: trait.value, minItems, assetFields };
       } catch (error) {
         await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the NFT contract. Please try again.', true) });
         return null;

@@ -1,6 +1,6 @@
-"""Restore the bot's SQL backup and rehearse its NFT, L2 and Ordinals migrations.
+"""Restore the bot's SQL backup and rehearse its NFT, L2, Ordinals and trait migrations.
 
-Run from the repository root: python3 backend/test/check-backup.py backup [ordinal-sql-file]
+Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file]
 Requires Docker and the cached Supabase Postgres image. No remote connections.
 Supabase-managed auth/storage tables are outside this application-table check.
 """
@@ -16,6 +16,7 @@ import time
 root = Path(__file__).resolve().parents[2]
 backup = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "backup"
 ordinal_sql = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "backend/supabase/migrations/20261008010000_add_ordinals_verification.sql"
+trait_sql = Path(sys.argv[3]) if len(sys.argv) > 3 else root / "backend/supabase/migrations/20261008020000_add_nft_trait_verification.sql"
 container = f"verethier-backup-check-{os.getpid()}"
 image = "public.ecr.aws/supabase/postgres:17.6.1.132"
 database = "verethier_backup_check"
@@ -46,7 +47,7 @@ def fingerprint(table, upgraded=False, ordinal_upgraded=False):
         row += " - ARRAY['asset_type','chain_id','contract_address','token_standard','token_ids','collection_name']"
     if ordinal_upgraded and table == "user_wallets":
         row += " - 'wallet_type'"
-    return hashlib.sha256(sql(f"SELECT COALESCE(jsonb_agg({row} ORDER BY t.id), '[]'::jsonb) FROM public.\"{table}\" t;").encode()).hexdigest()
+    return hashlib.sha256(sql(f"SELECT COALESCE(jsonb_agg({row} ORDER BY ({row})::text), '[]'::jsonb) FROM public.\"{table}\" t;").encode()).hexdigest()
 
 
 files = {name: (backup / f"{name}.sql").read_text() for name in ["roles", "schema", "data"]}
@@ -134,6 +135,27 @@ try:
         print("PASS: backup already includes the Ordinals wallet schema")
     sql((root / "backend/test/ordinals-migration.sql").read_text())
     print("PASS: Bitcoin wallet and Ordinals rule constraints and duplicate guards")
+    has_traits = sql("SELECT to_regclass('public.nft_token_metadata') IS NOT NULL;").strip() == "t"
+    if not has_traits:
+        before_traits = {table: fingerprint(table) for table in tables}
+        if len(sys.argv) > 3:
+            # Only in this disposable database, recreate the linked migration history.
+            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
+              INSERT INTO supabase_migrations.schema_migrations (version)
+                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000')
+                ON CONFLICT DO NOTHING;""")
+        sql(trait_sql.read_text())
+        for table in tables:
+            if fingerprint(table) != before_traits[table]:
+                raise RuntimeError(f"NFT trait migration changed existing data in {table}")
+        print("PASS: NFT trait migration succeeds and preserves every existing application value")
+    sql((root / "backend/test/nft-traits-migration.sql").read_text())
+    print("PASS: NFT trait rules, duplicate guards, uint256 cache IDs and cache permissions")
+    sql((root / "backend/test/nft-migration.sql").read_text())
+    sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
+    print("PASS: existing ERC-721, ERC-1155 and Robinhood rule constraints")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")

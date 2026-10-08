@@ -21,6 +21,7 @@ export class EnvironmentConfig {
   public static readonly DB_SUPABASE_KEY = process.env.DB_SUPABASE_KEY || process.env.SUPABASE_KEY;
   public static readonly RPC_URL = process.env.RPC_URL;
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
+  public static readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
   public static readonly XVERSE_API_KEY = process.env.XVERSE_API_KEY;
   
   // Application Configuration

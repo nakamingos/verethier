@@ -9,6 +9,7 @@ import { NonceService } from '../src/services/nonce.service';
 import { DataService } from '../src/services/data.service';
 import { CacheService } from '../src/services/cache.service';
 import { Logger } from '@nestjs/common';
+import { NftMetadataService } from '../src/services/nft-metadata.service';
 
 // Mock Discord.js client and related objects
 const mockUser = { id: 'user123', tag: 'TestBot#1234' };
@@ -125,6 +126,7 @@ const mockCacheService = {
   getAllAttributeValues: jest.fn().mockResolvedValue([]),
   cacheAllCollectionData: jest.fn().mockResolvedValue(undefined),
 };
+const mockNftMetadataService = { suggestions: jest.fn() };
 
 describe('DiscordService - Enhanced Tests', () => {
   let service: DiscordService;
@@ -157,10 +159,12 @@ describe('DiscordService - Enhanced Tests', () => {
         { provide: VerificationService, useValue: mockVerificationService },
         { provide: DataService, useValue: mockDataService },
         { provide: CacheService, useValue: mockCacheService },
+        { provide: NftMetadataService, useValue: mockNftMetadataService },
       ],
     }).compile();
     service = module.get<DiscordService>(DiscordService);
     jest.clearAllMocks();
+    mockNftMetadataService.suggestions.mockReset().mockResolvedValue(['Color', 'Hat']);
     
     // Set up client for tests that need it
     (service as any).client = mockClient;
@@ -526,6 +530,40 @@ describe('DiscordService - Enhanced Tests', () => {
       const mockChannel = { id: 'channelId' } as any;
       await service.findExistingVerificationMessage(mockChannel);
       expect(mockDiscordMessageService.findExistingVerificationMessage).toHaveBeenCalledWith(mockChannel);
+    });
+  });
+
+  describe('NFT attribute autocomplete', () => {
+    const contract = '0x1111111111111111111111111111111111111111';
+    function interaction(name = 'attribute_key', value = '', options = {}) {
+      const fields = { contract_address: contract, network: 'robinhood', ...options };
+      return { options: { getFocused: () => ({ name, value }), getString: key => fields[key] ?? null }, respond: jest.fn().mockResolvedValue(undefined) } as any;
+    }
+    it('uses the selected NFT network and contract', async () => {
+      const input = interaction();
+      await service.handleNftAttributeAutocomplete(input);
+      expect(mockNftMetadataService.suggestions).toHaveBeenCalledWith({ chain_id: 4663, contract_address: contract }, undefined);
+      expect(input.respond).toHaveBeenCalledWith([{ name: 'Color', value: 'Color' }, { name: 'Hat', value: 'Hat' }]);
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+    });
+    it('suggests values for a selected key and preserves manually typed values', async () => {
+      mockNftMetadataService.suggestions.mockResolvedValue(['Red', 'Blue']);
+      const input = interaction('attribute_value', 'Purple', { attribute_key: 'Color' });
+      await service.handleNftAttributeAutocomplete(input);
+      expect(mockNftMetadataService.suggestions).toHaveBeenCalledWith({ chain_id: 4663, contract_address: contract }, 'Color');
+      expect(input.respond).toHaveBeenCalledWith([{ name: 'Purple', value: 'Purple' }]);
+    });
+    it('retains manual entry if Alchemy fails', async () => {
+      mockNftMetadataService.suggestions.mockRejectedValue(new Error('unavailable'));
+      const input = interaction('attribute_key', 'Color');
+      await service.handleNftAttributeAutocomplete(input);
+      expect(input.respond).toHaveBeenCalledWith([{ name: 'Color', value: 'Color' }]);
+    });
+    it('limits suggestions to 25', async () => {
+      mockNftMetadataService.suggestions.mockResolvedValue(Array.from({ length: 30 }, (_, i) => `Trait${i}`));
+      const input = interaction();
+      await service.handleNftAttributeAutocomplete(input);
+      expect(input.respond.mock.calls[0][0]).toHaveLength(25);
     });
   });
 

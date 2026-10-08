@@ -11,7 +11,7 @@ import { DuplicateRuleConfirmationInteractionHandler } from '../src/services/dis
 import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/interactions/removal-undo.interaction';
 import { ChannelType } from 'discord.js';
 
-const mockNftService = { prepareRule: jest.fn() };
+const mockNftService = { prepareRule: jest.fn(), validateTraits: jest.fn() };
 const mockOrdinalsService = { prepareRule: jest.fn() };
 
 const mockDbService = {
@@ -124,6 +124,7 @@ describe('AddRuleHandler', () => {
 
     handler = module.get<AddRuleHandler>(AddRuleHandler);
     jest.clearAllMocks();
+    mockNftService.validateTraits.mockReset().mockResolvedValue(undefined);
     
     // Setup default mock return values
     mockDataService.getAllSlugs.mockResolvedValue(['test-collection', 'another-collection', 'example-slug']);
@@ -484,7 +485,7 @@ describe('AddRuleHandler', () => {
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select asset_type:NFT to use network') });
     });
-    it.each([{ slug: 'example' }, { attribute_key: 'Color' }, { contract_address: null }])('rejects missing contract or mixed criteria: %s', async options => {
+    it.each([{ slug: 'example' }, { contract_address: null }])('rejects missing contract or mixed criteria: %s', async options => {
       const interaction = interactionFor(options);
       await handler.handle(interaction);
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
@@ -496,6 +497,39 @@ describe('AddRuleHandler', () => {
       await handler.handle(interaction);
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('requires min_items:1') });
+    });
+    it('normalizes trait inputs and carries them through duplicate checks and saving', async () => {
+      mockNftService.prepareRule.mockResolvedValue(fields);
+      mockDbService.checkForExactDuplicateRule.mockResolvedValue(null);
+      mockDbService.checkForDuplicateRule.mockResolvedValue(null);
+      mockDbService.getRulesByChannel.mockResolvedValue([]);
+      mockDbService.addRoleMapping.mockResolvedValue({ id: 11, ...fields, attribute_key: 'Color', attribute_value: 'Red' });
+      mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
+      await handler.handle(interactionFor({ attribute_key: ' Color ', attribute_value: ' Red ' }, 3));
+      expect(mockNftService.validateTraits).toHaveBeenCalledWith({ ...fields, attribute_key: 'Color', attribute_value: 'Red' });
+      expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalledWith('guild-id', 'channel-id', 'ALL', 'Color', 'Red', 3, 'role-id', fields);
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', 'ALL', 'role-id', 'Holder', 'Color', 'Red', 3, fields);
+      expect(mockDuplicateRuleConfirmationHandler.createRuleInfoFields).toHaveBeenCalledWith(expect.objectContaining({ attribute_key: 'Color', attribute_value: 'Red' }));
+    });
+    it('allows a trait key with any value', async () => {
+      mockNftService.prepareRule.mockResolvedValue(fields);
+      const result = await (handler as any).validateInputParams(interactionFor({ attribute_key: 'Color' }));
+      expect(result).toMatchObject({ attributeKey: 'Color', attributeValue: 'ALL' });
+    });
+    it('requires a key before a value', async () => {
+      const interaction = interactionFor({ attribute_value: 'Red' });
+      await handler.handle(interaction);
+      expect(mockNftService.prepareRule).not.toHaveBeenCalled();
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select an attribute_key') });
+    });
+    it('does not save a trait rule when metadata access is unavailable', async () => {
+      mockNftService.prepareRule.mockResolvedValue(fields);
+      mockNftService.validateTraits.mockRejectedValue(new Error('NFT trait verification is temporarily unavailable. Please try again.'));
+      const interaction = interactionFor({ attribute_key: 'Color', attribute_value: 'Red' });
+      await handler.handle(interaction);
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('temporarily unavailable') });
     });
   });
 

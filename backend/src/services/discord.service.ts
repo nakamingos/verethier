@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, forwardRef, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef, OnModuleInit, Optional } from '@nestjs/common';
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, CacheType, ChannelType, ChatInputCommandInteraction, Client, EmbedBuilder, Events, GatewayIntentBits, GuildTextBasedChannel, InteractionResponse, MessageFlags, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, AutocompleteInteraction } from 'discord.js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NonceService } from '@/services/nonce.service';
@@ -11,7 +11,8 @@ import { VerificationService } from '@/services/verification.service';
 import { CacheService } from '@/services/cache.service';
 import { CONSTANTS } from '@/constants';
 import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
-import { NFT_NETWORKS } from '@/utils/nft-network.util';
+import { NFT_NETWORKS, getNftNetworkId } from '@/utils/nft-network.util';
+import { NftMetadataService } from '@/services/nft-metadata.service';
 
 /**
  * Discord Bot Service
@@ -71,6 +72,7 @@ export class DiscordService implements OnModuleInit {
     private readonly verificationSvc: VerificationService,
     private readonly dataSvc: DataService,
     private readonly cacheSvc: CacheService,
+    @Optional() private readonly nftMetadataSvc?: NftMetadataService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -203,6 +205,8 @@ export class DiscordService implements OnModuleInit {
           const focusedOption = interaction.options.getFocused(true);
           if (focusedOption.name === 'role') {
             await this.handleRoleAutocomplete(interaction);
+          } else if (interaction.options.getString('asset_type') === 'nft' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
+            await this.handleNftAttributeAutocomplete(interaction);
           } else if (['nft', 'ordinal'].includes(interaction.options.getString('asset_type'))) {
             await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
@@ -762,6 +766,25 @@ export class DiscordService implements OnModuleInit {
         { name: 'Error loading attributes', value: 'ALL' }
       ]);
     }
+  }
+
+  async handleNftAttributeAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+    const input = interaction.options.getFocused(true);
+    const typed = String(input.value).trim();
+    let suggestions: string[] = [];
+    try {
+      const contract = interaction.options.getString('contract_address')?.toLowerCase();
+      const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
+      if (this.nftMetadataSvc && /^0x[0-9a-f]{40}$/.test(contract || '') && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
+        suggestions = await Promise.race([
+          this.nftMetadataSvc.suggestions({ chain_id: getNftNetworkId(interaction.options.getString('network') || 'ethereum'), contract_address: contract }, key),
+          this.timeoutPromise(1500, []),
+        ]);
+      }
+    } catch { /* Manual entry is available when metadata suggestions are unavailable. */ }
+    const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
+    if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
+    await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));
   }
 
   /**
