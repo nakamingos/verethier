@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, EMPTY, of } from 'rxjs';
+import { BehaviorSubject, EMPTY, firstValueFrom } from 'rxjs';
 import { VerifyComponent } from './verify.component';
 import { WalletService } from '../../services/wallet.service';
 import { BitcoinWalletService } from '../../services/bitcoin-wallet.service';
@@ -15,14 +15,16 @@ describe('Verification page wallet choice', () => {
   let http: HttpTestingController;
   let ethereum: any;
   let bitcoin: any;
+  let routeParams: BehaviorSubject<{ data: string }>;
   beforeEach(async () => {
     ethereum = { connectedState$: EMPTY, connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
     bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
       connect: jasmine.createSpy().and.callFake(async () => bitcoin.address$.next(address)),
       syncConnectedAccount: jasmine.createSpy().and.resolveTo(address), signMessage: jasmine.createSpy().and.resolveTo({ address, signature: 'btc-signature' }) };
     const encoded = btoa(JSON.stringify(['user', 'User', '', 'guild', 'Guild', '', 'role', 'Holder', 'nonce', expiry]));
+    routeParams = new BehaviorSubject({ data: encoded });
     await TestBed.configureTestingModule({ imports: [VerifyComponent], providers: [provideHttpClient(), provideHttpClientTesting(),
-      { provide: ActivatedRoute, useValue: { params: of({ data: encoded }) } }],
+      { provide: ActivatedRoute, useValue: { params: routeParams } }],
     }).overrideComponent(VerifyComponent, { set: { providers: [{ provide: WalletService, useValue: ethereum }, { provide: BitcoinWalletService, useValue: bitcoin }] } }).compileComponents();
     http = TestBed.inject(HttpTestingController);
   });
@@ -104,5 +106,63 @@ describe('Verification page wallet choice', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('return to Discord');
     expect(bitcoin.connect).not.toHaveBeenCalled();
+  });
+
+  async function shortLinkPage(walletType: 'evm' | 'bitcoin') {
+    const nonce = 'a'.repeat(64);
+    const trustedData = { ...data, nonce, userTag: '🍕 User', discordName: '🍕 Comrades' };
+    routeParams.next({ data: nonce });
+    const fixture = TestBed.createComponent(VerifyComponent);
+    fixture.detectChanges();
+    const request = http.expectOne(request => request.url.endsWith('/verification-context'));
+    expect(request.request.body).toEqual({ nonce });
+    request.flush({ walletTypes: [walletType], expiry, data: trustedData });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(trustedData.discordName);
+    const resolvedData = await firstValueFrom(fixture.componentInstance.routeData$);
+    expect(resolvedData).toEqual(trustedData);
+    return { fixture, resolvedData: resolvedData! };
+  }
+
+  it('signs and submits the saved Ethereum identity after resolving a short link', async () => {
+    const { fixture, resolvedData } = await shortLinkPage('evm');
+    const component = fixture.componentInstance;
+    component.state$.next({ ...component.state$.value, walletConnected: true });
+    const pending = component.verify(resolvedData);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(ethereum.signTypedMessage).toHaveBeenCalledWith(jasmine.objectContaining({ message: {
+      UserID: resolvedData.userId, UserTag: resolvedData.userTag, ServerID: resolvedData.discordId,
+      ServerName: resolvedData.discordName, Nonce: resolvedData.nonce, Expiry: resolvedData.expiry,
+    } }));
+    const verify = http.expectOne(request => request.url.endsWith('/verify-signature'));
+    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'evm', address: '0x' + '1'.repeat(40) });
+    verify.flush({ assignedRoles: ['holder'] });
+    await pending;
+    expect(component.state$.value.messageVerified).toBeTrue();
+  });
+
+  it('uses the saved Discord IDs and token for the Xverse challenge and proof', async () => {
+    const { fixture, resolvedData } = await shortLinkPage('bitcoin');
+    const component = fixture.componentInstance;
+    await component.connect();
+    const pending = component.verify(resolvedData);
+    await Promise.resolve();
+    const challenge = http.expectOne(request => request.url.endsWith('/bitcoin-challenge'));
+    expect(challenge.request.body).toEqual({ userId: resolvedData.userId, discordId: resolvedData.discordId, nonce: resolvedData.nonce, address });
+    challenge.flush({ address, message: 'trusted server message', expiry });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const verify = http.expectOne(request => request.url.endsWith('/verify-signature'));
+    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'bitcoin', address });
+    verify.flush({ assignedRoles: ['holder'] });
+    await pending;
+    expect(component.state$.value.messageVerified).toBeTrue();
+  });
+
+  it('shows an inactive link if the short-link response is missing its Discord context', () => {
+    routeParams.next({ data: 'a'.repeat(64) });
+    const fixture = page(['bitcoin']);
+    expect(fixture.nativeElement.textContent).toContain('return to Discord');
+    expect(bitcoin.connect).not.toHaveBeenCalled();
+    expect(ethereum.signTypedMessage).not.toHaveBeenCalled();
   });
 });

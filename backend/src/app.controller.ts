@@ -7,7 +7,7 @@ import { VerifySignatureDto } from './dtos/verify-signature.dto';
 import { DecodedData } from './models/app.interface';
 import { SecurityUtil } from './utils/security.util';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
-import { BitcoinChallengeDto, WalletContextDto } from './dtos/wallet-context.dto';
+import { BitcoinChallengeDto, VerificationContextDto } from './dtos/wallet-context.dto';
 
 /**
  * AppController
@@ -152,7 +152,7 @@ export class AppController {
   }
 
   @Post('verification-context')
-  async verificationContext(@Body() body: WalletContextDto) {
+  async verificationContext(@Body() body: VerificationContextDto) {
     try { return await this.bitcoinSvc.getContext(body.userId, body.discordId, body.nonce); }
     catch { throw new HttpException('This verification link is no longer active. Please return to Discord and request a new one.', HttpStatus.BAD_REQUEST); }
   }

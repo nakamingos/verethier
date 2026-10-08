@@ -387,7 +387,7 @@ export class DiscordVerificationService {
    * This method initiates the verification flow when a user clicks a verification button:
    * 1. Validates the Discord context (guild, channel, role)
    * 2. Creates a secure nonce linked to the message/channel
-   * 3. Generates an encoded verification payload
+   * 3. Stores the display details with the nonce to keep the verification URL short
    * 4. Provides a verification link for the user to complete wallet signing
    * 
    * @param interaction - The Discord button interaction triggered by the user
@@ -442,25 +442,17 @@ export class DiscordVerificationService {
         interaction.user.id,
         interaction.guild.id,
         interaction.message.id,
-        channel.id
+        channel.id,
+        {
+          userTag: interaction.user.tag,
+          avatar: interaction.user.avatarURL() || '',
+          discordName: interaction.guild.name,
+          discordIcon: interaction.guild.iconURL() || '',
+        }
       );
-      
-      // Encode the payload
-      const payloadArr = [
-        interaction.user.id,
-        interaction.user.tag,
-        interaction.user.avatarURL(),
-        interaction.guild.id,
-        interaction.guild.name,
-        interaction.guild.iconURL(),
-        role.id,
-        role.name,
-        nonce,
-        expiry,
-      ];
-      
-      const encoded = Buffer.from(JSON.stringify(payloadArr)).toString('base64');
-      const url = `${process.env.BASE_URL}/verify/${encoded}`;
+
+      // Keep Discord's button URL short; display details live in the nonce cache.
+      const url = `${process.env.BASE_URL}/verify/${nonce}`;
 
       // Reply to the interaction
       await interaction.editReply({

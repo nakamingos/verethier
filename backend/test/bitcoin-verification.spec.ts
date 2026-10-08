@@ -5,6 +5,8 @@ import { BitcoinSignatureService } from '../src/services/bitcoin-signature.servi
 import { WalletService } from '../src/services/wallet.service';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { normalizeBitcoinAddress } from '../src/utils/wallet-address.util';
+import { BitcoinChallengeDto, VerificationContextDto } from '../src/dtos/wallet-context.dto';
+import { validate } from 'class-validator';
 import vectors from './fixtures/bip322-taproot.json';
 
 const vector = vectors.valid[0];
@@ -102,6 +104,55 @@ describe('Bitcoin wallet proof', () => {
     db.getRulesByChannel.mockResolvedValue([{ asset_type: 'ethscription' }]);
     await expect(signatures.createChallenge('user', 'guild', nonce, vector.address)).rejects.toThrow('does not support Ordinals');
     expect(db.getRulesByChannel).toHaveBeenCalledWith('guild', 'channel');
+  });
+
+  it('resolves a short link to the saved Discord details and supports either wallet family', async () => {
+    const display = { userTag: '🍕 User', avatar: 'https://example.test/avatar', discordName: '🍕 Comrades', discordIcon: '' };
+    const nonce = await nonces.createNonce('user', 'guild', 'message', 'channel', display);
+    for (const [asset_type, walletType] of [['ordinal', 'bitcoin'], ['nft', 'evm']]) {
+      db.getRulesByChannel.mockResolvedValue([{ asset_type }]);
+      const context = await signatures.getContext(undefined, undefined, nonce);
+      expect(context.walletTypes).toEqual([walletType]);
+      expect(context.data).toEqual({ ...display, address: '', userId: 'user', discordId: 'guild', nonce, expiry: context.expiry });
+    }
+    expect(db.getRulesByChannel).toHaveBeenCalledWith('guild', 'channel');
+  });
+
+  it('keeps legacy context requests working without saved display details', async () => {
+    const nonce = await nonces.createNonce('user', 'guild', 'message', 'channel');
+    const context = await signatures.getContext('user', 'guild', nonce);
+    expect(context.walletTypes).toEqual(['bitcoin']);
+    expect(context.data).toBeUndefined();
+  });
+
+  it('rejects invalid, replaced, consumed and expired short links before reading rules', async () => {
+    await expect(signatures.getContext(undefined, undefined, 'unknown')).rejects.toThrow('Invalid or expired nonce');
+    const replaced = await nonces.createNonce('user', 'guild', 'message', 'channel');
+    const consumed = await nonces.createNonce('user', 'guild', 'message', 'channel');
+    await expect(signatures.getContext(undefined, undefined, replaced)).rejects.toThrow('Invalid or expired nonce');
+    await nonces.consumeNonce('user', 'guild', consumed);
+    await expect(signatures.getContext(undefined, undefined, consumed)).rejects.toThrow('Invalid or expired nonce');
+    const expired = await nonces.createNonce('user', 'guild', 'message', 'channel');
+    const context = await nonces.getActiveNonce('user', 'guild', expired);
+    jest.spyOn(Date, 'now').mockReturnValue(context.expiry * 1000);
+    await expect(signatures.getContext(undefined, undefined, expired)).rejects.toThrow('Invalid or expired nonce');
+    expect(db.getRulesByChannel).not.toHaveBeenCalled();
+    expect(db.getRoleMappings).not.toHaveBeenCalled();
+  });
+
+  it.each([['other', 'guild'], ['user', 'other'], ['user', undefined], [undefined, 'guild']])(
+    'rejects incorrect or incomplete IDs in a context request: %s, %s', async (userId, guildId) => {
+      const nonce = await nonces.createNonce('user', 'guild', 'message', 'channel');
+      await expect(signatures.getContext(userId, guildId, nonce)).rejects.toThrow('Invalid or expired nonce');
+      expect(db.getRulesByChannel).not.toHaveBeenCalled();
+    }
+  );
+
+  it('allows a nonce-only context DTO but keeps both Discord IDs required for Bitcoin challenges', async () => {
+    expect(await validate(Object.assign(new VerificationContextDto(), { nonce: 'a'.repeat(64) }))).toHaveLength(0);
+    const errors = await validate(Object.assign(new BitcoinChallengeDto(), { nonce: 'a'.repeat(64), address: vector.address }));
+    expect(errors.map(error => error.property).sort()).toEqual(['discordId', 'userId']);
+    expect((await validate(new VerificationContextDto())).map(error => error.property)).toContain('nonce');
   });
 
   it('links only the signed Bitcoin address and rechecks the previous Discord owner on transfer', async () => {
