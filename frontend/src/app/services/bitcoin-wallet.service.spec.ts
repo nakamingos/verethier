@@ -14,11 +14,12 @@ describe('Xverse Ordinals wallet', () => {
     request = spyOn<any>(service, 'callWallet');
   });
 
-  it('connects the Ordinals address and requests only that purpose', async () => {
+  it('requests connection permission for only the mainnet Ordinals address', async () => {
     request.and.resolveTo(connected());
     await service.connect();
     expect(service.address$.value).toBe(ordinalAddress);
-    expect(request).toHaveBeenCalledWith('getAddresses', jasmine.objectContaining({ purposes: ['ordinals'] }));
+    expect(request).toHaveBeenCalledWith('wallet_connect', jasmine.objectContaining({ addresses: ['ordinals'], network: 'Mainnet' }));
+    expect(request.calls.all().some(call => call.args[0] === 'getAddresses')).toBeFalse();
   });
 
   it('rejects a payment-only response and Bitcoin testnet', async () => {
@@ -44,18 +45,55 @@ describe('Xverse Ordinals wallet', () => {
     expect(service.address$.value).toBeNull();
   });
 
+  it('reads the address-array response after connection without requesting another approval', async () => {
+    request.and.resolveTo(connected());
+    await service.connect();
+    request.and.resolveTo({ status: 'success', result: connected().result.addresses });
+    expect(await service.syncConnectedAccount()).toBe(ordinalAddress);
+    expect(request.calls.mostRecent().args).toEqual(['getAddresses', jasmine.objectContaining({ purposes: ['ordinals'] })]);
+    expect(request.calls.all().filter(call => call.args[0] === 'wallet_connect').length).toBe(1);
+  });
+
+  it('rejects a non-mainnet address-array response and clears the connection', async () => {
+    request.and.resolveTo(connected());
+    await service.connect();
+    request.and.resolveTo({ status: 'success', result: [{ purpose: 'ordinals', address: ordinalAddress, network: 'Testnet' }] });
+    await expectAsync(service.syncConnectedAccount()).toBeRejectedWithError(/Bitcoin mainnet/);
+    expect(service.address$.value).toBeNull();
+  });
+
+  it('asks to reconnect when Xverse revokes account read permission', async () => {
+    request.and.resolveTo(connected());
+    await service.connect();
+    request.and.resolveTo({ status: 'error', error: { code: -32002, message: 'Access denied' } });
+    await expectAsync(service.syncConnectedAccount()).toBeRejectedWithError(/Click Connect and approve/);
+    expect(service.address$.value).toBeNull();
+  });
+
+  it('shows the provider error without describing a wallet failure as cancellation', async () => {
+    request.and.resolveTo({ status: 'error', error: { code: -32603, message: 'Wallet is locked' } });
+    await expectAsync(service.connect()).toBeRejectedWithError('Wallet connection failed. Wallet is locked');
+    expect(service.address$.value).toBeNull();
+  });
+
+  it('asks to update Xverse when the connection method is unsupported', async () => {
+    request.and.resolveTo({ status: 'error', error: { code: -32601, message: 'Unsupported' } });
+    await expectAsync(service.connect()).toBeRejectedWithError(/Update Xverse/);
+    expect(service.address$.value).toBeNull();
+  });
+
   it('signs the exact server message using BIP322 and checks the account again', async () => {
-    request.and.callFake(async method => method === 'getAddresses' ? connected() : {
+    request.and.callFake(async method => method !== 'signMessage' ? connected() : {
       status: 'success', result: { signature: 'signature', address: ordinalAddress, protocol: 'BIP322' },
     });
     await service.connect();
     expect(await service.signMessage(ordinalAddress, 'server challenge')).toEqual({ address: ordinalAddress, signature: 'signature' });
     expect(request).toHaveBeenCalledWith('signMessage', { address: ordinalAddress, message: 'server challenge', protocol: 'BIP322' });
-    expect(request.calls.all().filter(call => call.args[0] === 'getAddresses').length).toBe(3);
+    expect(request.calls.all().filter(call => call.args[0] === 'getAddresses').length).toBe(2);
   });
 
   it('rejects a signing response for a different address', async () => {
-    request.and.callFake(async method => method === 'getAddresses' ? connected() : {
+    request.and.callFake(async method => method !== 'signMessage' ? connected() : {
       status: 'success', result: { signature: 'signature', address: anotherAddress, protocol: 'BIP322' },
     });
     await service.connect();
@@ -65,7 +103,7 @@ describe('Xverse Ordinals wallet', () => {
   it('rejects an account change while signing', async () => {
     let switched = false;
     request.and.callFake(async method => {
-      if (method === 'getAddresses') return connected(switched ? anotherAddress : ordinalAddress);
+      if (method !== 'signMessage') return connected(switched ? anotherAddress : ordinalAddress);
       switched = true;
       return { status: 'success', result: { signature: 'signature', address: ordinalAddress, protocol: 'BIP322' } };
     });
@@ -88,15 +126,27 @@ describe('Xverse provider selection', () => {
 
   it('uses the named Xverse provider through the real SDK even with another Bitcoin provider installed', async () => {
     const other = jasmine.createSpy('other wallet');
-    const xverse = jasmine.createSpy('Xverse').and.callFake(async method => method === 'getInfo'
-      ? { jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'Unsupported' } }
-      : { jsonrpc: '2.0', id: 1, result: connected().result });
+    let permissionGranted = false;
+    const xverse = jasmine.createSpy('Xverse').and.callFake(async method => {
+      if (method === 'getInfo') return { jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'Unsupported' } };
+      if (method === 'wallet_connect') {
+        permissionGranted = true;
+        return { jsonrpc: '2.0', id: 1, result: connected().result };
+      }
+      if (!permissionGranted) return { jsonrpc: '2.0', id: 1, error: { code: -32002, message: 'Access denied' } };
+      if (method === 'signMessage') return { jsonrpc: '2.0', id: 1, result: { address: ordinalAddress, signature: 'signature', protocol: 'BIP322' } };
+      return { jsonrpc: '2.0', id: 1, result: connected().result.addresses };
+    });
     (window as any).BitcoinProvider = { request: other };
     (window as any).XverseProviders = { BitcoinProvider: { request: xverse } };
     const service = new BitcoinWalletService();
     await service.connect();
     expect(service.address$.value).toBe(ordinalAddress);
+    expect(xverse).toHaveBeenCalledWith('wallet_connect', jasmine.objectContaining({ addresses: ['ordinals'], network: 'Mainnet' }));
+    expect(await service.syncConnectedAccount()).toBe(ordinalAddress);
     expect(xverse).toHaveBeenCalledWith('getAddresses', jasmine.objectContaining({ purposes: ['ordinals'] }));
+    expect(await service.signMessage(ordinalAddress, 'server challenge')).toEqual({ signature: 'signature', address: ordinalAddress });
+    expect(xverse.calls.all().filter(call => call.args[0] === 'wallet_connect').length).toBe(1);
     expect(other).not.toHaveBeenCalled();
   });
 
