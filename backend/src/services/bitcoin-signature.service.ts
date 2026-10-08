@@ -10,8 +10,10 @@ import { NonceData, NonceService } from './nonce.service';
 export class BitcoinSignatureService {
   constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService) {}
 
-  async getContext(userId: string, guildId: string, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number }> {
-    const context = await this.nonceSvc.getActiveNonce(userId, guildId, nonce);
+  async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; data?: DecodedData }> {
+    const context = userId !== undefined || guildId !== undefined
+      ? await this.nonceSvc.getActiveNonce(userId, guildId, nonce)
+      : await this.nonceSvc.getActiveNonceByToken(nonce);
     const rules = context.channelId
       ? await this.dbSvc.getRulesByChannel(context.guildId, context.channelId)
       : await this.dbSvc.getRoleMappings(context.guildId);
@@ -19,7 +21,18 @@ export class BitcoinSignatureService {
     const walletTypes: WalletType[] = [];
     if (rules.some(rule => rule.asset_type !== 'ordinal')) walletTypes.push('evm');
     if (rules.some(rule => rule.asset_type === 'ordinal')) walletTypes.push('bitcoin');
-    return { walletTypes, expiry: context.expiry };
+    return {
+      walletTypes,
+      expiry: context.expiry,
+      ...(context.verificationData ? { data: {
+        ...context.verificationData,
+        address: '',
+        userId: context.userId,
+        discordId: context.guildId,
+        nonce: context.nonce,
+        expiry: context.expiry,
+      } } : {}),
+    };
   }
 
   async createChallenge(userId: string, guildId: string, nonce: string, address: string) {

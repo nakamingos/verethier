@@ -65,16 +65,21 @@ export class VerifyComponent {
     public bitcoinWalletSvc: BitcoinWalletService
   ) {
 
-    // Decode data from route
+    // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
       map((params: any) => this.decodeData(params.data)),
-      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number }>(env.apiUrl + '/verification-context', {
-        userId: data.userId, discordId: data.discordId, nonce: data.nonce,
+      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number; data?: DecodedData }>(env.apiUrl + '/verification-context', {
+        ...(data.userId !== undefined ? { userId: data.userId } : {}),
+        ...(data.discordId !== undefined ? { discordId: data.discordId } : {}),
+        nonce: data.nonce,
       }).pipe(map(context => {
         if (!context.walletTypes?.length) throw new Error('No supported wallets for this verification channel.');
+        const resolvedData = { ...data, ...context.data, expiry: context.expiry };
+        if (!resolvedData.userId || !resolvedData.discordId || !resolvedData.nonce
+          || !resolvedData.userTag || !resolvedData.discordName) throw new Error('Missing verification context.');
         this.setState({ walletTypes: context.walletTypes });
         this.selectWallet(context.walletTypes[0]);
-        return { ...data, expiry: context.expiry };
+        return resolvedData as DecodedData;
       }))),
       catchError((err) => {
         // Only log detailed errors in development (check for localhost)
@@ -112,7 +117,8 @@ export class VerifyComponent {
    * @returns The decoded data object.
    * @throws Error if the decoding or parsing fails.
    */
-  decodeData(data: string): DecodedData {
+  decodeData(data: string): Partial<DecodedData> {
+    if (/^[a-f0-9]{64}$/.test(data)) return { nonce: data };
     const decodedData = atob(data);
     if (!decodedData) throw new Error('Failed to decode data');
 

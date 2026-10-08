@@ -27,6 +27,12 @@ export interface NonceData {
   messageId?: string;
   channelId?: string;
   expiry?: number;
+  verificationData?: {
+    userTag: string;
+    avatar: string;
+    discordName: string;
+    discordIcon: string;
+  };
   bitcoinChallenge?: { address: string; message: string };
 }
 
@@ -89,10 +95,12 @@ export class NonceService {
     userId: string,
     guildId: string,
     messageId?: string, 
-    channelId?: string
+    channelId?: string,
+    verificationData?: NonceData['verificationData']
   ): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
     const data: NonceData = { userId, guildId, nonce, messageId, channelId,
+      ...(verificationData ? { verificationData } : {}),
       expiry: Math.floor((Date.now() + NONCE_EXPIRY) / 1000) };
     await this.cache.set(this.getCacheKey(nonce), data, NONCE_EXPIRY);
     await this.cache.set(
@@ -179,6 +187,12 @@ export class NonceService {
     const data = await this.cache.get<NonceData>(this.getCacheKey(nonce));
     if (!data) throw new Error('Invalid or expired nonce.');
     return data;
+  }
+
+  async getActiveNonceByToken(nonce: string): Promise<NonceData> {
+    const data = await this.cache.get<NonceData>(this.getCacheKey(nonce));
+    if (!data) throw new Error('Invalid or expired nonce.');
+    return this.getActiveNonce(data.userId, data.guildId, nonce);
   }
 
   async saveBitcoinChallenge(userId: string, guildId: string, nonce: string, challenge: { address: string; message: string }): Promise<void> {

@@ -192,7 +192,8 @@ describe('DiscordVerificationService', () => {
         'user-id',
         'guild-id',
         'message-id',
-        'channel-id'
+        'channel-id',
+        { userTag: 'testuser#1234', avatar: 'avatar-url', discordName: 'Test Guild', discordIcon: 'https://example.com/icon.png' }
       );
       expect(mockInteraction.editReply).toHaveBeenCalledWith({
         embeds: expect.arrayContaining([
@@ -204,6 +205,36 @@ describe('DiscordVerificationService', () => {
         ]),
         components: expect.any(Array)
       });
+    });
+
+    it('keeps the button URL within Discord limits with long Unicode names and image URLs', async () => {
+      const nonce = 'a'.repeat(64);
+      const originalBaseUrl = process.env.BASE_URL;
+      const interaction = {
+        ...mockInteraction,
+        guild: { ...mockInteraction.guild, name: '🍕'.repeat(100), iconURL: () => 'https://cdn.discordapp.com/icons/' + 'i'.repeat(150) },
+        user: { ...mockInteraction.user, tag: '🍕'.repeat(32), avatarURL: () => 'https://cdn.discordapp.com/avatars/' + 'a'.repeat(150) },
+        editReply: jest.fn(),
+      };
+      mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'role-id' }]);
+      mockNonceService.createNonce.mockResolvedValue(nonce);
+      process.env.BASE_URL = 'https://verethier.nomorelabs.xyz';
+      try {
+        await service.requestVerification(interaction as any);
+        const reply = interaction.editReply.mock.calls[0][0];
+        const url = reply.components[0].toJSON().components[0].url;
+        expect(url).toBe(`${process.env.BASE_URL}/verify/${nonce}`);
+        expect(url.length).toBeLessThanOrEqual(512);
+        expect(mockNonceService.createNonce).toHaveBeenCalledWith('user-id', 'guild-id', 'message-id', 'channel-id', {
+          userTag: interaction.user.tag,
+          avatar: interaction.user.avatarURL(),
+          discordName: interaction.guild.name,
+          discordIcon: interaction.guild.iconURL(),
+        });
+      } finally {
+        if (originalBaseUrl === undefined) delete process.env.BASE_URL;
+        else process.env.BASE_URL = originalBaseUrl;
+      }
     });
 
     it('should retire the previous verification link when a newer one is requested in the same channel', async () => {
