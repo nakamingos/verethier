@@ -19,27 +19,27 @@ BEGIN
   END IF;
 
   SELECT array_agg(id::text ORDER BY id) INTO ids FROM generate_series(0, 999) AS id;
-  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids)
-    VALUES ('nft-test', '1155', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc1155', ids);
+  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '1155', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc1155', ids, 'verify', 'ALL', 'ALL', 1);
   BEGIN
-    INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids)
-      VALUES ('nft-test', '1155', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc1155', ids);
+    INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '1155', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc1155', ids, 'verify', 'ALL', 'ALL', 1);
     RAISE EXCEPTION 'Duplicate ERC-1155 rule was accepted';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
 
-  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard)
-    VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721');
+  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721', 'verify', 'ALL', 'ALL', 1);
   BEGIN
-    INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard)
-      VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721');
+    INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721', 'verify', 'ALL', 'ALL', 1);
     RAISE EXCEPTION 'Duplicate ERC-721 collection rule was accepted';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
-  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids)
-    VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721', ARRAY['0']);
-  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids)
-    VALUES ('nft-test', '721', NULL, 'nft', '0x2222222222222222222222222222222222222222', 'erc721', ARRAY[max_id]);
+  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '721', NULL, 'nft', '0x1111111111111111111111111111111111111111', 'erc721', ARRAY['0'], 'verify', 'ALL', 'ALL', 1);
+  INSERT INTO public.verifier_rules (server_id, role_id, slug, asset_type, contract_address, token_standard, token_ids, channel_id, attribute_key, attribute_value, min_items)
+      VALUES ('nft-test', '721', NULL, 'nft', '0x2222222222222222222222222222222222222222', 'erc721', ARRAY[max_id], 'verify', 'ALL', 'ALL', 1);
 
   BEGIN
     UPDATE public.verifier_rules SET token_standard = NULL WHERE server_id = 'nft-test';

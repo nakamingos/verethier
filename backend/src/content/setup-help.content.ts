@@ -44,7 +44,8 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• **ERC-1155**: Checks IDs **0–99** by default; set **token_ids** to a list or range such as `1,5,20-30` (up to 1,000 IDs)\n' +
              '• **Min Items**: Total tokens/copies across verified wallets\n' +
              '• **Collection Name**: Optional label; detected when available\n' +
-             'Leave Ethscriptions slug and trait options empty for NFT rules.',
+             '• **Attributes**: Optional trait key/value; min items counts matching tokens/copies. Requires Alchemy NFT metadata access.\n' +
+             'Leave the Ethscriptions slug empty for NFT rules.',
       inline: false
     },
     {

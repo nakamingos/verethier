@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { CONSTANTS } from '@/constants';
 import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
+import { NftMetadataRow } from '@/utils/nft-trait.util';
 
 /**
  * Database Service
@@ -36,6 +37,24 @@ export class DbService {
   constructor(
     @Inject('SUPABASE_CLIENT') private readonly supabase: SupabaseClient
   ) {}
+
+  async getCachedNftMetadata(chainId: number, contract: string, ids: string[], since: string): Promise<NftMetadataRow[]> {
+    // The cache is optional; provider metadata can still be read if it is unavailable.
+    try {
+      const { data, error } = await this.supabase.from('nft_token_metadata')
+        .select('chain_id,contract_address,token_id,attributes,fetched_at')
+        .eq('chain_id', chainId).eq('contract_address', contract).in('token_id', ids).gte('fetched_at', since);
+      return error ? [] : data || [];
+    } catch { return []; }
+  }
+
+  async cacheNftMetadata(rows: NftMetadataRow[]): Promise<void> {
+    try {
+      const { error } = await this.supabase.from('nft_token_metadata')
+        .upsert(rows, { onConflict: 'chain_id,contract_address,token_id' });
+      if (error) this.logger.warn('NFT metadata cache could not be updated.');
+    } catch { this.logger.warn('NFT metadata cache could not be updated.'); }
+  }
 
   /**
    * Adds or updates a Discord server in the database.

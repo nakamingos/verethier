@@ -90,6 +90,8 @@ For a Robinhood NFT rule, use the existing setup command:
 
 Omitting `network` defaults NFT rules to Ethereum. Wallet verification uses the existing signing flow; the backend checks the verified address on the rule's network. ERC-1155 rules still check IDs 0–99 by default, or the configured token ID list/range.
 
+NFT rules also support the existing `attribute_key` and `attribute_value` options. For example, `attribute_key:Color attribute_value:Red min_items:2` counts two matching NFTs or ERC-1155 copies. Traits use Alchemy metadata through the existing backend RPC keys; see [NFT trait configuration](backend/README.md#nft-trait-rules).
+
 For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the collection's Xverse slug:
 
 ```text

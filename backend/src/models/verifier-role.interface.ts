@@ -7,6 +7,8 @@ export interface NftRuleFields {
   token_standard?: 'erc721' | 'erc1155' | null;
   token_ids?: string[] | null;
   collection_name?: string | null;
+  attribute_key?: string | null;
+  attribute_value?: string | null;
 }
 
 export interface VerifierRole extends NftRuleFields {
