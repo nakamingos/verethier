@@ -1,4 +1,5 @@
 import { nftRuleScope } from '@/utils/nft-rule.util';
+import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, TextChannel, Role, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
@@ -233,6 +234,8 @@ export class DuplicateRuleConfirmationInteractionHandler {
     if (rule.asset_type === 'nft') {
       fields.push({ name: '**Collection**', value: nftRuleScope(rule), inline: false });
       fields.push({ name: '**Contract**', value: rule.contract_address, inline: false });
+    } else if (rule.asset_type === 'ordinal') {
+      fields.push({ name: '**Collection**', value: ordinalRuleScope(rule), inline: false });
     } else if (rule.slug) {
       fields.push({
         name: '**Collection**',
@@ -242,7 +245,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (rule.asset_type !== 'nft' && rule.attribute_key && rule.attribute_value) {
+    if (!['nft', 'ordinal'].includes(rule.asset_type) && rule.attribute_key && rule.attribute_value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;

@@ -8,6 +8,7 @@ import { DbService }     from './db.service';
 import { VerificationService } from './verification.service';
 import { DecodedData }   from '@/models/app.interface';
 import { matchRule }   from './utils/match-rule.util';
+import { NftCheckContext } from './nft-ownership.service';
 
 /**
  * VerifyService
@@ -46,9 +47,11 @@ export class VerifyService {
     // Verify the wallet signature and extract the signing address
     const walletVerification = await this.walletSvc.verifySignature(payload, signature);
     const { address, walletOwnershipTransferred } = walletVerification;
+    const ownershipContext: NftCheckContext = { checks: new Map() };
     
     // Get the message data associated with the nonce for message-based verification
-    const { messageId, channelId } = await this.nonceSvc.getNonceData(payload.userId, payload.nonce);
+    const { messageId, channelId } = walletVerification.nonceContext
+      || await this.nonceSvc.getNonceData(payload.userId, payload.nonce);
     
     // Invalidate the nonce after retrieving the data to prevent replay attacks
     await this.nonceSvc.invalidateNonce(payload.nonce);
@@ -76,7 +79,7 @@ export class VerifyService {
       
       // Use the unified verification engine to verify the user against all rules
       const ruleIds = rules.map(rule => rule.id);
-      const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address);
+      const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext);
       const { validRules, matchingAssetCounts } = verificationResult;
       
       const roleResults = [];
@@ -144,7 +147,8 @@ export class VerifyService {
           payload.discordId,
           payload.nonce,
           roleResults,
-          address // Pass the address for role recommendations
+          address,
+          ownershipContext // Reuse ownership reads for role recommendations.
         );
       } catch (error) {
         Logger.error('Failed to send verification complete message:', error);
@@ -178,7 +182,7 @@ export class VerifyService {
     
     // Use unified verification engine to check all rules
     const ruleIds = rules.map(rule => rule.id);
-    const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address);
+    const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext);
     const { validRules, matchingAssetCounts } = verificationResult;
     
     if (validRules.length === 0) {
@@ -230,7 +234,8 @@ export class VerifyService {
         payload.discordId,
         payload.nonce,
         roleResults,
-        address // Pass the address for role recommendations
+        address,
+        ownershipContext // Reuse ownership reads for role recommendations.
       );
     } catch (error) {
       Logger.error('Failed to send verification complete message:', error);

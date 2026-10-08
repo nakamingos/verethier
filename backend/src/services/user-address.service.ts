@@ -1,10 +1,12 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { normalizeWalletAddress, WalletType } from '@/utils/wallet-address.util';
 
 interface UserWallet {
   id: number;
   user_id: string;
   address: string;
+  wallet_type?: WalletType;
   user_name: string | null;
   created_at: string;
   last_verified_at: string;
@@ -38,18 +40,19 @@ export class UserAddressService {
   /**
    * Get all addresses for a specific user
    */
-  async getUserAddresses(userId: string): Promise<string[]> {
+  async getUserAddresses(userId: string, walletType?: WalletType): Promise<string[]> {
     try {
       // Log sensitive operations only in development
       if (process.env.NODE_ENV === 'development') {
         this.logger.debug(`Getting addresses for user: ${userId}`);
       }
       
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('user_wallets')
         .select('address')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('user_id', userId);
+      if (walletType) query = query.eq('wallet_type', walletType);
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         this.logger.error(`Error fetching addresses for user ${userId}:`, error);
@@ -72,9 +75,9 @@ export class UserAddressService {
    * If the address is already linked to a different user, ownership is moved
    * to the newly verified user instead of being rejected.
    */
-  async addUserAddress(userId: string, address: string, userName?: string | null): Promise<AddAddressResult> {
+  async addUserAddress(userId: string, address: string, userName?: string | null, walletType: WalletType = 'evm'): Promise<AddAddressResult> {
     try {
-      const normalizedAddress = address.toLowerCase();
+      const normalizedAddress = normalizeWalletAddress(address, walletType);
       // Log user address operations only in development
       if (process.env.NODE_ENV === 'development') {
         this.logger.debug(`Adding address ${normalizedAddress} for user: ${userId}${userName ? ` (${userName})` : ''}`);
@@ -103,6 +106,7 @@ export class UserAddressService {
         .insert({
           user_id: userId,
           address: normalizedAddress,
+          wallet_type: walletType,
           user_name: userName || null,
           created_at: new Date().toISOString(),
           last_verified_at: new Date().toISOString()

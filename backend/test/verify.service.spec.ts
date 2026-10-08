@@ -186,14 +186,16 @@ describe('VerifyService', () => {
     expect(mockNonceService.getNonceData).toHaveBeenCalledWith('user123', 'nonce123');
     expect(mockNonceService.invalidateNonce).toHaveBeenCalledWith('nonce123');
     expect(mockVerificationService.getRulesForChannel).toHaveBeenCalledWith('guild123', 'ch-456');
-    expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc');
+    const ownershipContext = mockVerificationService.verifyUserBulk.mock.calls[0][3];
+    expect(ownershipContext.checks).toBeInstanceOf(Map);
+    expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc', ownershipContext);
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [{
       roleId: 'test-role-id',
       roleName: 'Test Role',
       wasAlreadyAssigned: false,
       matchingCount: 2
-    }], '0xabc');
+    }], '0xabc', ownershipContext);
     expect(result.message).toContain('message-based');
     expect(result.assignedRoles).toEqual(['test-role-id']);
     expect(result.walletOwnershipTransferred).toBe(true);
@@ -247,7 +249,7 @@ describe('VerifyService', () => {
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [
       { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 5 },
       { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 3 }
-    ], '0xabc');
+    ], '0xabc', mockVerificationService.verifyUserBulk.mock.calls[0][3]);
     expect(result.assignedRoles).toEqual(['test-role-id', 'test-role-id']);
   });
 

@@ -1,4 +1,5 @@
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
+import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddRuleHandler } from '../src/services/discord-commands/handlers/add-rule.handler';
 import { DbService } from '../src/services/db.service';
@@ -11,6 +12,7 @@ import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/
 import { ChannelType } from 'discord.js';
 
 const mockNftService = { prepareRule: jest.fn() };
+const mockOrdinalsService = { prepareRule: jest.fn() };
 
 const mockDbService = {
   checkForExactDuplicateRule: jest.fn(),
@@ -110,6 +112,7 @@ describe('AddRuleHandler', () => {
       providers: [
         AddRuleHandler,
         { provide: NftOwnershipService, useValue: mockNftService },
+        { provide: OrdinalsOwnershipService, useValue: mockOrdinalsService },
         { provide: DbService, useValue: mockDbService },
         { provide: DiscordMessageService, useValue: mockDiscordMessageService },
         { provide: DiscordService, useValue: mockDiscordService },
@@ -380,6 +383,56 @@ describe('AddRuleHandler', () => {
         attributeValue: 'ALL',
         minItems: 1
       });
+    });
+  });
+  describe('Ordinals setup', () => {
+    const fields = { asset_type: 'ordinal', slug: 'pizza-comrades', chain_id: null, collection_name: 'Pizza Comrades',
+      contract_address: null, token_standard: null, token_ids: null };
+    function interactionFor(options = {}) {
+      const inputs = { role: 'Holder', asset_type: 'ordinal', slug: 'pizza-comrades', ...options };
+      return {
+        id: 'ordinal-setup', guild: { id: 'guild-id', name: 'Guild', roles: {
+          cache: { find: jest.fn().mockReturnValue({ id: 'role-id', name: 'Holder', editable: true }) }, create: jest.fn(),
+        } }, user: { id: 'admin', tag: 'admin' },
+        options: { getChannel: jest.fn().mockReturnValue({ id: 'channel-id', name: 'verify', type: ChannelType.GuildText }),
+          getString: jest.fn(key => inputs[key] ?? null), getInteger: jest.fn().mockReturnValue(10) },
+        deferReply: jest.fn(), editReply: jest.fn(), followUp: jest.fn(),
+      } as any;
+    }
+    it('uses the existing rule, duplicate and undo flow with the provider collection name', async () => {
+      mockOrdinalsService.prepareRule.mockResolvedValue(fields);
+      mockDbService.checkForExactDuplicateRule.mockResolvedValue(null);
+      mockDbService.checkForDuplicateRule.mockResolvedValue(null);
+      mockDbService.getRulesByChannel.mockResolvedValue([]);
+      mockDbService.addRoleMapping.mockResolvedValue({ id: 11, ...fields });
+      mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
+      await handler.handle(interactionFor());
+      expect(mockOrdinalsService.prepareRule).toHaveBeenCalledWith('pizza-comrades');
+      expect(mockNftService.prepareRule).not.toHaveBeenCalled();
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+      expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalledWith('guild-id', 'channel-id', 'pizza-comrades', 'ALL', 'ALL', 10, 'role-id', fields);
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', 'pizza-comrades', 'role-id', 'Holder', 'ALL', 'ALL', 10, fields);
+      expect(mockDuplicateRuleConfirmationHandler.createRuleInfoFields).toHaveBeenCalledWith(expect.objectContaining(fields));
+      expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalled();
+    });
+    it.each([{ attribute_key: 'Hat' }, { attribute_value: 'Red' }, { network: 'ethereum' },
+      { token_ids: '1' }, { collection_name: 'Custom' }, { contract_address: '0x' + '1'.repeat(40) }])(
+      'rejects unsupported options before creating a role or checking the provider: %s', async options => {
+        const interaction = interactionFor(options);
+        interaction.guild.roles.cache.find.mockReturnValue(null);
+        await handler.handle(interaction);
+        expect(mockOrdinalsService.prepareRule).not.toHaveBeenCalled();
+        expect(interaction.guild.roles.create).not.toHaveBeenCalled();
+        expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+        expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('trait verification is not supported yet') });
+      });
+    it('reports unknown collections before creating roles or saving rules', async () => {
+      mockOrdinalsService.prepareRule.mockRejectedValue(new Error('This collection was not found on Xverse. Check its collection slug.'));
+      const interaction = interactionFor({ slug: 'unknown' });
+      await handler.handle(interaction);
+      expect(interaction.guild.roles.create).not.toHaveBeenCalled();
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('not found on Xverse') });
     });
   });
   describe('NFT setup', () => {

@@ -4,6 +4,7 @@ import { DbService } from './db.service';
 import { VerificationEngine } from './verification-engine.service';
 import { DiscordVerificationService } from './discord-verification.service';
 import { EnvironmentConfig } from '@/config/environment.config';
+import { NftCheckContext } from './nft-ownership.service';
 
 /**
  * DynamicRoleService
@@ -43,6 +44,7 @@ export class DynamicRoleService {
       let verifiedCount = 0;
       let revokedCount = 0;
       let errorCount = 0;
+      const context: NftCheckContext = { checks: new Map() };
 
       // Process in batches to avoid rate limits
       const batchSize = 10;
@@ -57,7 +59,7 @@ export class DynamicRoleService {
           }
           
           try {
-            const stillQualifies = await this.verifyUserStillQualifies(assignment);
+            const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
             
             if (stillQualifies) {
               await this.updateLastVerified(assignment.id);
@@ -96,10 +98,11 @@ export class DynamicRoleService {
     const userAssignments = await this.getUserActiveAssignments(userId);
     let verified = 0;
     let revoked = 0;
+    const context: NftCheckContext = { checks: new Map() };
 
     for (const assignment of userAssignments) {
       try {
-        const stillQualifies = await this.verifyUserStillQualifies(assignment);
+        const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
         
         if (stillQualifies) {
           await this.updateLastVerified(assignment.id);
@@ -124,10 +127,11 @@ export class DynamicRoleService {
     Logger.log(`🔍 Re-verifying all assignments for rule ${ruleId}`);
     
     const ruleAssignments = await this.getRuleActiveAssignments(ruleId);
+    const context: NftCheckContext = { checks: new Map() };
     
     for (const assignment of ruleAssignments) {
       try {
-        const stillQualifies = await this.verifyUserStillQualifies(assignment);
+        const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
         
         if (!stillQualifies) {
           await this.revokeRole(assignment);
@@ -154,8 +158,8 @@ export class DynamicRoleService {
   /**
    * Verify if a user still qualifies for their assigned role
    */
-  private async verifyUserStillQualifies(assignment: any): Promise<boolean> {
-    const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id);
+  private async verifyUserStillQualifies(assignment: any, context?: NftCheckContext): Promise<boolean> {
+    const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id, context);
     await this.dbSvc.saveRoleCheckDetails(assignment.id, {
       ...(assignment.verification_data || {}),
       last_check_status: result.status,

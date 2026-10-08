@@ -447,6 +447,23 @@ describe('DbService (Unit Tests)', () => {
       }));
     });
   });
+  describe('Ordinals rules', () => {
+    const fields = { asset_type: 'ordinal' as const, chain_id: null, contract_address: null, token_standard: null, token_ids: null, collection_name: 'Pizza Comrades' };
+    it('persists collection/count criteria with no EVM chain and restores them on undo', async () => {
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
+      await service.addRoleMapping('server', 'Server', 'channel', 'verify', 'pizza-comrades', 'role', 'Holder', 'ALL', 'ALL', 10, fields);
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ ...fields, slug: 'pizza-comrades', min_items: 10 }));
+      await service.restoreRuleWithOriginalId({ id: 1, server_id: 'server', channel_id: 'channel', role_id: 'role', slug: 'pizza-comrades', min_items: 10, attribute_key: 'ALL', attribute_value: 'ALL', ...fields });
+      expect(mockSupabaseClient.insert).toHaveBeenLastCalledWith(expect.objectContaining({ id: 1, slug: 'pizza-comrades', min_items: 10, ...fields }));
+    });
+    it('keeps duplicate checks separate from Ethscriptions with the same slug', async () => {
+      mockSupabaseClient.maybeSingle.mockResolvedValue({ data: null, error: null });
+      await service.checkForExactDuplicateRule('server', 'channel', 'pizza-comrades', 'ALL', 'ALL', 10, 'role', fields);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('asset_type', 'ordinal');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('slug', 'pizza-comrades');
+      expect(mockSupabaseClient.eq).not.toHaveBeenCalledWith('asset_type', 'ethscription');
+    });
+  });
   describe('NFT rules', () => {
     const fields = { asset_type: 'nft' as const, chain_id: 1, contract_address: '0x1111111111111111111111111111111111111111', token_standard: 'erc1155' as const, token_ids: ['0', '500'], collection_name: 'Example' };
     it('writes NFT fields with a null Ethscriptions slug', async () => {

@@ -3,6 +3,7 @@ import { Cache } from 'cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
 import dotenv from 'dotenv';
 import { CONSTANTS } from '@/constants';
+import { randomBytes } from 'crypto';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +26,8 @@ export interface NonceData {
   nonce: string;
   messageId?: string;
   channelId?: string;
+  expiry?: number;
+  bitcoinChallenge?: { address: string; message: string };
 }
 
 /**
@@ -49,6 +52,7 @@ export interface NonceData {
  */
 @Injectable()
 export class NonceService {
+  private readonly lockedNonces = new Set<string>();
 
   constructor(
     @Inject(CACHE_MANAGER) private cache: Cache
@@ -87,8 +91,9 @@ export class NonceService {
     messageId?: string, 
     channelId?: string
   ): Promise<string> {
-    const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const data: NonceData = { userId, guildId, nonce, messageId, channelId };
+    const nonce = randomBytes(32).toString('hex');
+    const data: NonceData = { userId, guildId, nonce, messageId, channelId,
+      expiry: Math.floor((Date.now() + NONCE_EXPIRY) / 1000) };
     await this.cache.set(this.getCacheKey(nonce), data, NONCE_EXPIRY);
     await this.cache.set(
       this.getLatestNonceKey(userId, guildId, channelId),
@@ -124,7 +129,8 @@ export class NonceService {
     nonce: string
   ): Promise<boolean> {
     const data = await this.cache.get<NonceData>(this.getCacheKey(nonce));
-    if (!data || data.nonce !== nonce || data.userId !== userId || data.guildId !== guildId) {
+    if (!data || data.nonce !== nonce || data.userId !== userId || data.guildId !== guildId
+      || (data.expiry !== undefined && data.expiry * 1000 <= Date.now())) {
       return false;
     }
 
@@ -166,5 +172,37 @@ export class NonceService {
     }
 
     await this.cache.del(this.getCacheKey(nonce));
+  }
+
+  async getActiveNonce(userId: string, guildId: string, nonce: string): Promise<NonceData> {
+    if (!(await this.validateNonce(userId, guildId, nonce))) throw new Error('Invalid or expired nonce.');
+    const data = await this.cache.get<NonceData>(this.getCacheKey(nonce));
+    if (!data) throw new Error('Invalid or expired nonce.');
+    return data;
+  }
+
+  async saveBitcoinChallenge(userId: string, guildId: string, nonce: string, challenge: { address: string; message: string }): Promise<void> {
+    await this.withNonceLock(nonce, async () => {
+      const data = await this.getActiveNonce(userId, guildId, nonce);
+      const ttl = (data.expiry || 0) * 1000 - Date.now();
+      if (ttl <= 0) throw new Error('Invalid or expired nonce.');
+      await this.cache.set(this.getCacheKey(nonce), { ...data, bitcoinChallenge: challenge }, ttl);
+    });
+  }
+
+  async consumeNonce(userId: string, guildId: string, nonce: string): Promise<NonceData> {
+    return this.withNonceLock(nonce, async () => {
+      const data = await this.getActiveNonce(userId, guildId, nonce);
+      await this.invalidateNonce(nonce);
+      return data;
+    });
+  }
+
+  private async withNonceLock<T>(nonce: string, operation: () => Promise<T>): Promise<T> {
+    // The existing nonce cache is local to this bot instance. Reserve before any await.
+    if (this.lockedNonces.has(nonce)) throw new Error('Invalid or expired nonce.');
+    this.lockedNonces.add(nonce);
+    try { return await operation(); }
+    finally { this.lockedNonces.delete(nonce); }
   }
 }

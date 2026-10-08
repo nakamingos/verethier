@@ -9,7 +9,7 @@ import { IsString, IsNotEmpty, IsObject, IsOptional, IsNumber } from 'class-vali
  * 
  * Contains:
  * - data: Decoded JWT payload with user, server, and verification details
- * - signature: EIP-712 signature from the user's wallet
+ * - signature: EIP-712 or Bitcoin BIP-322 signature from the user's wallet
  * 
  * The verification system automatically handles all verification rules
  * transparently without requiring different API structures.
@@ -31,13 +31,14 @@ export class VerifySignatureDto {
     nonce?: string;
     expiry?: number;
     address?: string;
+    walletType?: 'evm' | 'bitcoin';
     // Allow additional fields for forward compatibility
     [key: string]: any;
   };
 
   /**
-   * The EIP-712 signature from the user's wallet.
-   * Used to verify the user controls the claimed Ethereum address.
+   * The EIP-712 or BIP-322 signature from the user's wallet.
+   * Used to verify control of the claimed address.
    */
   @IsString()
   @IsNotEmpty()

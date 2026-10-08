@@ -1,8 +1,8 @@
 export type AssetCount = number | string;
 
 export interface NftRuleFields {
-  asset_type?: 'ethscription' | 'nft';
-  chain_id?: number;
+  asset_type?: 'ethscription' | 'nft' | 'ordinal';
+  chain_id?: number | null;
   contract_address?: string | null;
   token_standard?: 'erc721' | 'erc1155' | null;
   token_ids?: string[] | null;

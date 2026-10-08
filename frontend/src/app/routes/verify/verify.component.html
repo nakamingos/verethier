@@ -32,6 +32,12 @@
 
   @if ((state$ | async); as state) {
     <div class="steps-wrapper">
+      @if (state.walletTypes.length > 1 && !state.messageVerified) {
+        <div class="wallet-choice" role="group" aria-label="Wallet type">
+          <button type="button" [attr.aria-pressed]="state.walletType === 'evm'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('evm')">Ethereum</button>
+          <button type="button" [attr.aria-pressed]="state.walletType === 'bitcoin'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin')">Bitcoin · Xverse</button>
+        </div>
+      }
 
       <div
         class="step-1 step"
@@ -43,12 +49,15 @@
         </div>
 
         <div class="content">
-          <div class="title">Connect your wallet</div>
+          <div class="title">{{ state.walletType === 'bitcoin' ? 'Connect your Xverse wallet' : 'Connect your wallet' }}</div>
+          @if (state.walletType === 'bitcoin') {
+            <div class="sub">Use your Bitcoin mainnet Ordinals address.</div>
+          }
           @if (state.connectedAddress) {
             <div class="sub">Connected: <span class="pink">{{ formatAddress(state.connectedAddress) }}</span></div>
           }
           <div class="actions">
-            <button (click)="walletSvc.connect()">{{ state.walletConnected ? 'Connected' : 'Connect' }}</button>
+            <button (click)="connect()" [disabled]="state.walletConnecting">{{ state.walletConnecting ? 'Connecting...' : state.walletConnected ? 'Connected' : 'Connect' }}</button>
           </div>
         </div>
       </div>
@@ -75,7 +84,7 @@
           <div class="actions">
             <button 
               (click)="verify(data)"
-              [disabled]="state.messageSigning || state.verificationSubmitting || state.messageVerified">
+              [disabled]="!state.walletConnected || state.messageSigning || state.verificationSubmitting || state.messageVerified">
               @if (state.messageSigning) {
                 Signing...
               } @else if (state.verificationSubmitting) {
@@ -109,6 +118,11 @@
         [innerText]="error">
       </div>
     }
+  }
+}
+@else {
+  @if ((state$ | async)?.errorMessage; as error) {
+    <div class="error-message" [innerText]="error"></div>
   }
 }
 

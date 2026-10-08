@@ -1,6 +1,6 @@
 # Verethier
 
-Discord-based wallet verification for Ethscriptions and NFT communities.
+Discord-based wallet verification for Ethscriptions, NFTs and Bitcoin Ordinals communities.
 
 Verethier is split into two deployable apps:
 - `backend/`: a NestJS API and Discord bot
@@ -11,6 +11,7 @@ Verethier is split into two deployable apps:
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
+- Bitcoin mainnet Ordinals collection/count rules using Xverse wallet signatures and API ownership checks
 - Wallet stacking across multiple verified addresses
 - Dynamic role re-verification and revocation
 - Rich Discord verification result messages
@@ -89,14 +90,30 @@ For a Robinhood NFT rule, use the existing setup command:
 
 Omitting `network` defaults NFT rules to Ethereum. Wallet verification uses the existing signing flow; the backend checks the verified address on the rule's network. ERC-1155 rules still check IDs 0–99 by default, or the configured token ID list/range.
 
+For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the collection's Xverse slug:
+
+```text
+/setup add-rule channel:#verify role:Holder asset_type:Ordinals slug:pizza-comrades min_items:10
+```
+
+The collection name comes from Xverse. Bitcoin mainnet is implicit; connect the Xverse Ordinals address (`bc1p…`). Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum or Bitcoin within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. This release supports collection ownership and quantity; trait options are rejected.
+
 ## Testing
 
 ```bash
 cd backend
-yarn test
+yarn test --runInBand --testPathIgnorePatterns=live_test
 
 cd ../frontend
 yarn test --watch=false --browsers=ChromeHeadless
+```
+
+An optional, read-only provider smoke test uses the local backend key and API credits:
+
+```bash
+cd backend
+yarn build
+node test/check-ordinals-live.cjs
 ```
 
 ## Deployment Notes
@@ -105,6 +122,7 @@ yarn test --watch=false --browsers=ChromeHeadless
 - The frontend is built output plus static serving: `yarn build` then `yarn start`.
 - On Railway, prefer `Railpack` for both services.
 - The frontend `start` script serves `dist/frontend/browser` and expects a build to exist first.
+- For Ordinals, back up the application database and apply `20261008010000_add_ordinals_verification.sql` before deploying the updated apps. Set `XVERSE_API_KEY` on the Railway backend; `BASE_URL` must be the verification page's origin. Use Node.js 20.19+ for Bitcoin signature verification. No Bitcoin RPC URL or frontend API key is needed.
 
 ## Docs
 
