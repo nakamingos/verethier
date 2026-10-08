@@ -1,4 +1,5 @@
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
+import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatInputCommandInteraction, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ButtonInteraction } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -212,7 +213,7 @@ export class ListRulesHandler {
     }
 
     try {
-      if (rule.asset_type === 'nft') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${nftRuleCriteria(rule)}`;
+      if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);
       let slug = rule.slug || 'ALL';
       // Format multi-slug display with spaces after commas for readability

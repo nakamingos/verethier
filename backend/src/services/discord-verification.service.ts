@@ -2,6 +2,8 @@ import { AssetOwnershipService } from './asset-ownership.service';
 import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
 import { NftCheckContext } from './nft-ownership.service';
 import { nftRuleScope, serializeAssetCount } from '@/utils/nft-rule.util';
+import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
+import { EnvironmentConfig } from '@/config/environment.config';
 import { Injectable, Logger } from '@nestjs/common';
 import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags } from 'discord.js';
 import dotenv from 'dotenv';
@@ -13,7 +15,7 @@ import { UserAddressService } from './user-address.service';
 // Load environment variables
 dotenv.config();
 
-const EXPIRY = Number(process.env.NONCE_EXPIRY);
+const EXPIRY = EnvironmentConfig.NONCE_EXPIRY;
 const REPLACED_LINK_NOTICE_TTL_MS = 10_000;
 
 type VerificationRoleResult = {
@@ -260,10 +262,10 @@ export class DiscordVerificationService {
   }
 
   private async getCollectionNamesForRules(
-    rules: Array<{ slug?: string | null }>
+    rules: Array<{ slug?: string | null; asset_type?: string }>
   ): Promise<Record<string, CollectionDisplayName>> {
     const uniqueSlugs = Array.from(new Set(
-      rules.flatMap(rule => this.parseRuleSlugs(rule.slug))
+      rules.filter(rule => rule.asset_type !== 'ordinal').flatMap(rule => this.parseRuleSlugs(rule.slug))
     ));
 
     if (uniqueSlugs.length === 0) {
@@ -294,8 +296,8 @@ export class DiscordVerificationService {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
-    if (rule.asset_type === 'nft') {
-      const scope = nftRuleScope(rule);
+    if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
+      const scope = rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
         : `Own ${minItems}+ from ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
     }
@@ -465,7 +467,7 @@ export class DiscordVerificationService {
         embeds: [
           new EmbedBuilder()
             .setTitle('Wallet Verification')
-            .setDescription(`Verify your identity using your EVM wallet by clicking the unique link below. This link is personal and expires <t:${expiry}:R>.`)
+            .setDescription(`Verify your wallet by clicking the unique link below. This link is personal and expires <t:${expiry}:R>.`)
             .setColor('#00FF00')
         ],
         components: [
@@ -613,7 +615,8 @@ export class DiscordVerificationService {
     guildId: string,
     nonce: string,
     roleResults: VerificationRoleResult[],
-    userAddress?: string
+    userAddress?: string,
+    ownershipContext?: NftCheckContext
   ): Promise<void> {
     if (!this.client) throw new Error('Discord bot not initialized');
 
@@ -656,7 +659,7 @@ export class DiscordVerificationService {
       if (userAddress && storedInteraction?.user?.id) {
         try {
           const assignedRoleIds = groupedRoleResults.map(r => r.roleId);
-          const potentialRoles = await this.analyzePotentialRoles(guildId, storedInteraction.user.id, assignedRoleIds, userAddress);
+          const potentialRoles = await this.analyzePotentialRoles(guildId, storedInteraction.user.id, assignedRoleIds, userAddress, ownershipContext);
 
           if (potentialRoles.length > 0) {
             description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames)).join('\n')}`;
@@ -911,7 +914,8 @@ export class DiscordVerificationService {
     guildId: string, 
     userId: string,
     assignedRoleIds: string[],
-    address: string
+    address: string,
+    ownershipContext?: NftCheckContext
   ): Promise<RoleRequirementGroup[]> {
     if (!this.client) {
       Logger.error('analyzePotentialRoles: Discord client not initialized');
@@ -956,7 +960,7 @@ export class DiscordVerificationService {
         : [...userAddresses, normalizedAddress];
 
       const remainingRules = [];
-      const context: NftCheckContext = { checks: new Map() };
+      const context: NftCheckContext = ownershipContext || { checks: new Map() };
       for (const rule of unassignedRules) {
         try {
           const matchingCount = serializeAssetCount(await this.ownershipSvc.count(rule, addressesToCheck, context));
@@ -1214,7 +1218,7 @@ export class DiscordVerificationService {
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => rule.asset_type !== 'nft' && this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => !['nft', 'ordinal'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }

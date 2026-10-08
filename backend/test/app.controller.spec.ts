@@ -153,6 +153,23 @@ describe('AppController', () => {
       );
     });
 
+    it('passes the Bitcoin wallet family to verification without changing the request shape', async () => {
+      mockVerifyService.verifySignatureFlow.mockResolvedValue({ assignedRoles: [] });
+      await controller.verify({ ...validRequestBody, data: { ...validRequestBody.data, walletType: 'bitcoin' } });
+      expect(mockVerifyService.verifySignatureFlow).toHaveBeenCalledWith({ ...expectedDecodedData, walletType: 'bitcoin' }, validRequestBody.signature);
+    });
+
+    it.each(['Invalid Bitcoin signature. Please sign again with your Xverse Ordinals address.',
+      'Invalid Bitcoin verification challenge.', 'Collection verification is temporarily unavailable. Please try again.'])(
+      'keeps a helpful verification error in production: %s', async message => {
+        const previousEnvironment = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        try {
+          mockVerifyService.verifySignatureFlow.mockRejectedValue(new Error(message));
+          await expect(controller.verify(validRequestBody)).rejects.toMatchObject({ status: 400, response: message });
+        } finally { process.env.NODE_ENV = previousEnvironment; }
+      });
+
     it('should handle missing optional fields gracefully', async () => {
       const requestWithMissingFields: VerifySignatureDto = {
         data: {

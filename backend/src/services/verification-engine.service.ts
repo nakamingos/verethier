@@ -3,6 +3,7 @@ import { DbService } from './db.service';
 import { AssetOwnershipService } from './asset-ownership.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { nftRuleLabel, serializeAssetCount } from '@/utils/nft-rule.util';
+import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { UserAddressService } from './user-address.service';
 import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 
@@ -115,7 +116,7 @@ export class VerificationEngine {
         rule,
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
           minItems: requiredCount,
@@ -149,12 +150,13 @@ export class VerificationEngine {
     userId: string,
     ruleIds: (string | number)[],
     address: string,
-    loadedRules?: VerifierRole[]
+    loadedRules?: VerifierRole[],
+    sharedContext?: NftCheckContext
   ): Promise<BulkVerificationResult> {
     Logger.debug(`VerificationEngine: Starting bulk verification for user ${userId} with ${ruleIds.length} rules`);
     
     // Process all verifications in parallel for better performance
-    const context: NftCheckContext = { checks: new Map() };
+    const context: NftCheckContext = sharedContext || { checks: new Map() };
     const verificationPromises = ruleIds.map(ruleId =>
       this.verifyUser(userId, ruleId, address, context, loadedRules?.find(rule => rule.id.toString() === ruleId.toString()))
     );
@@ -317,12 +319,12 @@ export class VerificationEngine {
    * @param ruleId - Rule ID (string or number)
    * @returns Promise<VerifierRole | null>
    */
-  async evaluateRole(userId: string, serverId: string, roleId: string): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
+  async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
     const rules = (await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
     if (!rules.length) return { status: 'failed', results: [] };
     const addresses = await this.userAddressService.getUserAddresses(userId);
     if (!addresses.length) return { status: 'failed', results: [] };
-    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), addresses[0], rules);
+    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), addresses[0], rules, context);
     return {
       status: checked.results.some(result => result.isValid) ? 'passed'
         : checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',

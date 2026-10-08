@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger, Optional } from '@nestjs/common';
 
 import { AppService } from './app.service';
 import { CONSTANTS } from './constants';
@@ -6,6 +6,8 @@ import { VerifyService } from './services/verify.service';
 import { VerifySignatureDto } from './dtos/verify-signature.dto';
 import { DecodedData } from './models/app.interface';
 import { SecurityUtil } from './utils/security.util';
+import { BitcoinSignatureService } from './services/bitcoin-signature.service';
+import { BitcoinChallengeDto, WalletContextDto } from './dtos/wallet-context.dto';
 
 /**
  * AppController
@@ -20,7 +22,8 @@ import { SecurityUtil } from './utils/security.util';
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly verifySvc: VerifyService
+    private readonly verifySvc: VerifyService,
+    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService
   ) {}
 
   /**
@@ -73,6 +76,7 @@ export class AppController {
       // Transform DTO data to match expected DecodedData interface
       const decodedData = {
         address: body.data.address || '',
+        ...(body.data.walletType !== undefined ? { walletType: body.data.walletType } : {}),
         userId: body.data.userId || '',
         userTag: body.data.userTag || '',
         avatar: body.data.avatar || '',
@@ -120,6 +124,9 @@ export class AppController {
         'No verification rules found',
         'This verification link has expired',
         'Invalid signature',
+        'Invalid Bitcoin signature',
+        'Invalid Bitcoin verification challenge',
+        'Collection verification is temporarily unavailable',
         'Signature verification failed',
         CONSTANTS.ERRORS.WALLET_ADDRESS_ALREADY_VERIFIED
       ];
@@ -141,6 +148,20 @@ export class AppController {
         'Verification failed. Please try again.',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  @Post('verification-context')
+  async verificationContext(@Body() body: WalletContextDto) {
+    try { return await this.bitcoinSvc.getContext(body.userId, body.discordId, body.nonce); }
+    catch { throw new HttpException('This verification link is no longer active. Please return to Discord and request a new one.', HttpStatus.BAD_REQUEST); }
+  }
+
+  @Post('bitcoin-challenge')
+  async bitcoinChallenge(@Body() body: BitcoinChallengeDto) {
+    try { return await this.bitcoinSvc.createChallenge(body.userId, body.discordId, body.nonce, body.address); }
+    catch (error) {
+      throw new HttpException(error.message?.startsWith('Use ') ? error.message : 'Could not create the Bitcoin verification message. Please return to Discord and request a new link.', HttpStatus.BAD_REQUEST);
     }
   }
 }

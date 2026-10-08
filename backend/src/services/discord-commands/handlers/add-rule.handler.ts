@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { 
   ChatInputCommandInteraction, 
   TextChannel, 
@@ -17,6 +17,7 @@ import { DiscordMessageService } from '../../discord-message.service';
 import { DiscordService } from '../../discord.service';
 import { DataService } from '../../data.service';
 import { NftOwnershipService } from '../../nft-ownership.service';
+import { OrdinalsOwnershipService } from '../../ordinals-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { getNftNetworkId } from '@/utils/nft-network.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
@@ -50,7 +51,8 @@ export class AddRuleHandler {
     private readonly dataSvc: DataService,
     private readonly nftSvc: NftOwnershipService,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
-    private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler
+    private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
+    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService
   ) {}
 
   /**
@@ -142,6 +144,20 @@ export class AddRuleHandler {
     const tokenIds = interaction.options.getString('token_ids');
     const name = interaction.options.getString('collection_name');
     const network = interaction.options.getString('network');
+    if (assetType === 'ordinal') {
+      if (attributeKey !== 'ALL' || attributeValue !== 'ALL' || contract || tokenIds != null || name != null || network != null) {
+        await interaction.editReply({ content: AdminFeedback.simple('Ordinals rules use slug and min_items. Leave NFT options and attributes empty; trait verification is not supported yet.', true) });
+        return null;
+      }
+      try {
+        if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
+        const assetFields = await this.ordinalsSvc.prepareRule(slug);
+        return { channel, roleName, slug: assetFields.slug, attributeKey, attributeValue, minItems, assetFields };
+      } catch (error) {
+        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the Ordinals collection. Please try again.', true) });
+        return null;
+      }
+    }
     if (assetType === 'nft') {
       if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL') {
         await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug and attribute options empty.', true) });

@@ -1,17 +1,21 @@
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { Component } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
-import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap, switchMap, shareReplay } from 'rxjs';
 
 import { WalletService } from '@/services/wallet.service';
+import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
 
 import { DecodedData } from '@/models/app.interface';
 
 import { env } from 'src/env/env';
 
 interface State {
+  walletType: 'evm' | 'bitcoin';
+  walletTypes: Array<'evm' | 'bitcoin'>;
   walletConnecting: boolean;
   walletConnected: boolean;
   connectedAddress: string | null;
@@ -30,7 +34,8 @@ interface State {
         NgTemplateOutlet
     ],
     providers: [
-        WalletService
+        WalletService,
+        BitcoinWalletService
     ],
     templateUrl: './verify.component.html',
     styleUrl: './verify.component.scss'
@@ -40,6 +45,8 @@ export class VerifyComponent {
   routeData$!: Observable<DecodedData | null>;
 
   state$: BehaviorSubject<State> = new BehaviorSubject<State>({
+    walletType: 'evm',
+    walletTypes: ['evm'],
     walletConnecting: false,
     walletConnected: false,
     connectedAddress: null,
@@ -54,32 +61,49 @@ export class VerifyComponent {
   constructor(
     private route: ActivatedRoute,
     public walletSvc: WalletService,
-    private http: HttpClient
+    private http: HttpClient,
+    public bitcoinWalletSvc: BitcoinWalletService
   ) {
 
     // Decode data from route
     this.routeData$ = this.route.params.pipe(
       map((params: any) => this.decodeData(params.data)),
+      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number }>(env.apiUrl + '/verification-context', {
+        userId: data.userId, discordId: data.discordId, nonce: data.nonce,
+      }).pipe(map(context => {
+        if (!context.walletTypes?.length) throw new Error('No supported wallets for this verification channel.');
+        this.setState({ walletTypes: context.walletTypes });
+        this.selectWallet(context.walletTypes[0]);
+        return { ...data, expiry: context.expiry };
+      }))),
       catchError((err) => {
         // Only log detailed errors in development (check for localhost)
         if (window.location.hostname === 'localhost') {
           // Error already handled by UI feedback
         }
-        this.setState({ errorMessage: 'Failed to decode data' });
+        this.setState({ errorMessage: 'This verification link is no longer active. Please return to Discord and request a new one.' });
         return of(null);
       }),
+      shareReplay({ bufferSize: 1, refCount: true }),
     );
 
     // Set connected state to local state
     this.walletSvc.connectedState$.pipe(
       tap((account) => {
+        if (this.state$.value.walletType !== 'evm') return;
         this.setState({
           walletConnecting: account.isConnecting,
           walletConnected: account.isConnected,
           connectedAddress: account.isConnected ? account.address || null : null,
         });
-      })
+      }),
+      takeUntilDestroyed(),
     ).subscribe();
+    this.bitcoinWalletSvc.address$.pipe(takeUntilDestroyed()).subscribe(address => {
+      if (this.state$.value.walletType === 'bitcoin') {
+        this.setState({ walletConnected: !!address, connectedAddress: address });
+      }
+    });
   }
 
   /**
@@ -119,6 +143,8 @@ export class VerifyComponent {
    * @returns A Promise that resolves to void.
    */
   async verify(data: DecodedData): Promise<void> {
+    if (!this.state$.value.walletConnected || this.state$.value.messageSigning
+      || this.state$.value.verificationSubmitting || this.state$.value.messageVerified) return;
 
     // Check if verification has expired
     const expiry = new Date(data.expiry * 1000).getTime();
@@ -170,7 +196,19 @@ export class VerifyComponent {
         primaryType: 'Verification',
       };
 
-      const { signature, address } = await this.walletSvc.signTypedMessage(typedData);
+      let proof: { signature: string; address: string };
+      let verificationData = { ...data, walletType: this.state$.value.walletType };
+      if (verificationData.walletType === 'bitcoin') {
+        const address = await this.bitcoinWalletSvc.syncConnectedAccount();
+        const challenge = await firstValueFrom(this.http.post<{ address: string; message: string; expiry: number }>(env.apiUrl + '/bitcoin-challenge', {
+          userId: data.userId, discordId: data.discordId, nonce: data.nonce, address,
+        }));
+        proof = await this.bitcoinWalletSvc.signMessage(challenge.address, challenge.message);
+        verificationData = { ...verificationData, expiry: challenge.expiry };
+      } else {
+        proof = await this.walletSvc.signTypedMessage(typedData);
+      }
+      const { signature, address } = proof;
       
       if (!signature) {
         return this.setState({
@@ -193,7 +231,7 @@ export class VerifyComponent {
       await firstValueFrom(
         this.http.post(env.apiUrl + '/verify-signature', {
           data: {
-            ...data,
+            ...verificationData,
             address
           },
           signature
@@ -258,7 +296,9 @@ export class VerifyComponent {
       );
     } catch (error) {
       // Handle wallet signing errors
-      const errorMessage = error instanceof Error ? error.message : 'Failed to sign message with wallet';
+      const responseError = error instanceof HttpErrorResponse ? error.error : null;
+      const errorMessage = typeof responseError === 'string' ? responseError : responseError?.message
+        || (error instanceof Error ? error.message : 'Failed to sign message with wallet');
       this.setState({ 
         messageSigning: false,
         verificationSubmitting: false,
@@ -281,6 +321,28 @@ export class VerifyComponent {
       ...this.state$.value,
       ...state
     });
+  }
+
+  selectWallet(walletType: 'evm' | 'bitcoin'): void {
+    if (!this.state$.value.walletTypes.includes(walletType)) return;
+    this.bitcoinWalletSvc.disconnect();
+    void this.walletSvc.disconnectWeb3();
+    this.setState({ walletType, walletConnecting: false, walletConnected: false, connectedAddress: null,
+      messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
+      successMessage: null, errorMessage: null });
+  }
+
+  async connect(): Promise<void> {
+    if (this.state$.value.walletConnecting || this.state$.value.messageSigning || this.state$.value.verificationSubmitting) return;
+    this.setState({ walletConnecting: true, errorMessage: null });
+    try {
+      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect();
+      else await this.walletSvc.connect();
+    } catch (error) {
+      this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not connect your wallet.' });
+    } finally {
+      this.setState({ walletConnecting: false });
+    }
   }
 
   formatAddress(address: string | null): string {

@@ -89,6 +89,13 @@ try:
     sql((migrations / "20261007033000_add_robinhood_nft_rules.sql").read_text())
     assert snapshot() == before_robinhood, "Robinhood migration changed existing rules, wallets or assignments"
     sql((root / "test/robinhood-nft-migration.sql").read_text())
+    before_ordinals = snapshot()
+    sql((migrations / "20261008010000_add_ordinals_verification.sql").read_text())
+    after_ordinals = snapshot()
+    for wallet in after_ordinals["wallets"]:
+        assert wallet.pop("wallet_type") == "evm", "Existing wallet was not classified as EVM"
+    assert after_ordinals == before_ordinals, "Ordinals migration changed existing application records"
+    sql((root / "test/ordinals-migration.sql").read_text())
     with tempfile.TemporaryDirectory(prefix="verethier-nft-backup-") as directory:
         backup = Path(directory)
         (backup / "roles.sql").write_text("")
@@ -112,6 +119,7 @@ try:
     print("PASS: public app schema restored from custom-format backup with identical test data")
     print("PASS: NFT constraints and duplicate indexes, including 1,000 IDs")
     print("PASS: Robinhood migration preserves Ethscriptions and Ethereum NFT rules; network constraints and duplicate indexes work")
+    print("PASS: Ordinals migration preserves existing records and adds Bitcoin wallets, quantity rules and duplicate guards")
     print("PASS: SQL backup checker also restores a database with existing NFT columns and Ethereum NFT rules")
 except Exception:
     logs = run("docker", "logs", container)

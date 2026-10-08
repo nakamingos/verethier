@@ -4,8 +4,10 @@ module.exports = {
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   testMatch: ['**/test/**/*.spec.(ts|js)'],
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest',
+    '^.+\\.(ts|tsx|js)$': ['ts-jest', { tsconfig: { allowJs: true } }],
   },
+  // bip322-js 4 uses Noble's ESM modules; transform their JS for the CommonJS test runner.
+  transformIgnorePatterns: ['node_modules/(?!(@noble/(curves|hashes)|bip322-js)/)'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },

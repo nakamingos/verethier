@@ -48,6 +48,15 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       inline: false
     },
     {
+      name: '₿ Ordinals collections',
+      value: 'Use `/setup add-rule` with **asset_type: Ordinals**, **slug: pizza-comrades**, and **min_items: 1**.\n' +
+             '• **Wallet**: Xverse on Bitcoin mainnet\n' +
+             '• **Collection**: One collection slug, validated through Xverse\n' +
+             '• **Min Items**: Required number of inscriptions across verified Bitcoin wallets\n' +
+             'Leave NFT network/contract options and attributes empty. Trait verification is not supported yet.',
+      inline: false
+    },
+    {
       name: '🗑️ `/setup remove-rule`',
       value: '**Remove existing verification rules**\n' +
              '• **Rule ID**: Single ID (e.g., `5`) or multiple (`1,2,3`)\n' +

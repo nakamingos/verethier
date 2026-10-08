@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { recoverTypedDataAddress } from 'viem';
 
 import { DynamicRoleService } from '@/services/dynamic-role.service';
@@ -6,6 +6,7 @@ import { NonceService } from '@/services/nonce.service';
 import { UserAddressService } from '@/services/user-address.service';
 import { DiscordService } from '@/services/discord.service';
 import { DecodedData } from '@/models/app.interface';
+import { BitcoinSignatureService } from './bitcoin-signature.service';
 
 /**
  * WalletService
@@ -27,7 +28,8 @@ export class WalletService {
     private nonceSvc: NonceService,
     private userAddressService: UserAddressService,
     private discordService: DiscordService,
-    private dynamicRoleService: DynamicRoleService
+    private dynamicRoleService: DynamicRoleService,
+    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService
   ) {}
   
   /**
@@ -48,7 +50,9 @@ export class WalletService {
   async verifySignature(
     data: DecodedData,
     signature: string
-  ): Promise<{ address: string; walletOwnershipTransferred: boolean }> {
+  ): Promise<{ address: string; walletOwnershipTransferred: boolean; nonceContext?: { channelId?: string; messageId?: string } }> {
+    if (data.walletType === 'bitcoin') return this.verifyBitcoinSignature(data, signature);
+    if (data.walletType && data.walletType !== 'evm') throw new Error('Invalid wallet type.');
 
     // Debug logging to investigate signature verification issues
     Logger.debug('=== WALLET SERVICE DEBUG ===');
@@ -184,5 +188,24 @@ export class WalletService {
           error
         );
       });
+  }
+
+  private async verifyBitcoinSignature(data: DecodedData, signature: string) {
+    if (!this.bitcoinSvc) throw new Error('Bitcoin verification is not configured.');
+    const { address, context } = await this.bitcoinSvc.verify(data, signature);
+    let userName: string | null = null;
+    try {
+      const user = await this.discordService.getUser(data.userId);
+      userName = user?.globalName || user?.username || null;
+    } catch { /* Username is optional display information. */ }
+    const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'bitcoin');
+    if (!result.success) throw new Error('Could not save the Bitcoin wallet verification. Please try again from Discord.');
+    if (result.wasTransferred && result.previousUserId) {
+      this.schedulePreviousOwnerReverification(result.previousUserId, data.userId, address);
+    }
+    return {
+      address, walletOwnershipTransferred: result.wasTransferred === true,
+      nonceContext: { channelId: context.channelId, messageId: context.messageId },
+    };
   }
 }

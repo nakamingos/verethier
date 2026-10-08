@@ -5,6 +5,7 @@ import { DiscordVerificationService } from './discord-verification.service';
 import { VerificationEngine, VerificationResult, BulkVerificationResult } from './verification-engine.service';
 import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 import { DecodedData } from '@/models/app.interface';
+import { NftCheckContext } from './nft-ownership.service';
 
 /**
  * VerificationService
@@ -54,8 +55,10 @@ export class VerificationService {
   async verifyUserBulk(
     userId: string,
     ruleIds: (string | number)[],
-    address: string
+    address: string,
+    context?: NftCheckContext
   ): Promise<BulkVerificationResult> {
+    if (context) return this.verificationEngine.verifyUserBulk(userId, ruleIds, address, undefined, context);
     return await this.verificationEngine.verifyUserBulk(userId, ruleIds, address);
   }
 

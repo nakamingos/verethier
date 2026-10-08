@@ -131,6 +131,7 @@ export class DbService {
   // New methods for v2:
 
   private filterRuleAsset(query: any, slug: string, assetFields?: NftRuleFields): any {
+    if (assetFields?.asset_type === 'ordinal') return query.eq('asset_type', 'ordinal').eq('slug', slug);
     if (assetFields?.asset_type !== 'nft') return query.eq('asset_type', 'ethscription').eq('slug', slug);
     query = query.eq('asset_type', 'nft').eq('chain_id', assetFields.chain_id)
       .eq('contract_address', assetFields.contract_address).eq('token_standard', assetFields.token_standard);
@@ -222,7 +223,7 @@ export class DbService {
         attribute_key: finalAttrKey,
         attribute_value: finalAttrVal,
         min_items: finalMinItems,
-        ...(assetFields?.asset_type === 'nft' ? assetFields : {})
+        ...(assetFields?.asset_type === 'nft' || assetFields?.asset_type === 'ordinal' ? assetFields : {})
       })
       .select()
       .single();
@@ -982,7 +983,7 @@ export class DbService {
           attribute_value: removedRule.attribute_value,
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
-          ...(removedRule.asset_type === 'nft' ? {
+          ...(removedRule.asset_type === 'nft' || removedRule.asset_type === 'ordinal' ? {
             asset_type: removedRule.asset_type, chain_id: removedRule.chain_id,
             contract_address: removedRule.contract_address, token_standard: removedRule.token_standard,
             token_ids: removedRule.token_ids, collection_name: removedRule.collection_name,

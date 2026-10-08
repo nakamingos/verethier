@@ -1,0 +1,66 @@
+{
+  "source": "https://github.com/bitcoin/bips/tree/master/bip-0322",
+  "license": "CC0-1.0",
+  "valid": [
+    {
+      "address": "bc1pss0zhytly75awhm6x2hhvd5lnzv3vssgrf9axfheq8ldyzn88ges79fler",
+      "message": "No prefix fallback",
+      "signatures": [
+        "AUCJYOwOjxYAvatTAGYaVlNXBVyFuc4MwNQkOuK2tl8xhfKDONd0NjfYyNSYcRqeCp8hsAnCEPHAVEkO9h6vbQ/R"
+      ],
+      "test_private_key": "KyrSGCFPhqZMjCe5fNTYddiLMp4tMj4gLKuJ26TsB2rvr1VJGPbt"
+    },
+    {
+      "address": "bc1pcquvhrqv0q68t4m0hfq6tpn006qrskyc7yrqnp2uyrf2emg3wynsdjyk38",
+      "message": "PURVOQ544B6HUATVBJZN5EZJUU",
+      "signatures": [
+        "smpAUB6B2Rbupzua8LTQIF06516wzl+cwKy1be8RgoiW0riyXdKwe6GTz/5Hnb37m67pJwIKCh+D5jDueG6KpvYpmu8"
+      ],
+      "test_private_key": "L5XqN6ckPPsDiTbRxcsthwiWpDBfWLo4uquUEydsPt8rSMoTpqpc"
+    }
+  ],
+  "invalid": [
+    {
+      "description": "incorrect prefix type",
+      "address": "bc1pyrgrm6cu6n54jrvkdjd9rvyd3xfyu84s2623awu2srn6mxhscwpsm5644w",
+      "message": "incorrect prefix",
+      "signature": "fulAUDZwFXUp+adN+/UZj5dVrGAbB3zKs1Vcalz5fCF9srxS63eSWNGvH1NYbrBkPt1BJDUyWUz9zgUxfc63/QheT6M"
+    },
+    {
+      "description": "wrong message for p2tr simple signature",
+      "address": "bc1pcquvhrqv0q68t4m0hfq6tpn006qrskyc7yrqnp2uyrf2emg3wynsdjyk38",
+      "message": "56VM6YK6Y76XTBXNPITF232EPX",
+      "signature": "smpAUB6B2Rbupzua8LTQIF06516wzl+cwKy1be8RgoiW0riyXdKwe6GTz/5Hnb37m67pJwIKCh+D5jDueG6KpvYpmu8"
+    },
+    {
+      "description": "wrong signer for p2tr simple signature",
+      "address": "bc1pltvk000nd54v3hrrcn7lsffdra72hphpm40rhzf9hn8arqkgermq2p9029",
+      "message": "PURVOQ544B6HUATVBJZN5EZJUU",
+      "signature": "smpAUB6B2Rbupzua8LTQIF06516wzl+cwKy1be8RgoiW0riyXdKwe6GTz/5Hnb37m67pJwIKCh+D5jDueG6KpvYpmu8"
+    },
+    {
+      "description": "wrong message for p2tr full signature",
+      "address": "bc1pve87s3l2levjmhetzr2f9xvep3y266xty0hnefmyv8tkxc3e4qssll2kdu",
+      "message": "P2RQWD264CW7Z5ZSSSDRW2JEDB",
+      "signature": "fulAgAAAAABAROFPNY6Zt8hFK0YQq5Wb6wk/CnUYEPtQ0HTHDyzNROrAAAAAADgBwAAAQAAAAAAAAAAAWoBQNRdLOo5XZY0SBqAsLZNr/z3Bqrmo3OxVn7e4tD/OOD4H9U/L1unq5Nmdz+S1w7SHtt46bFwnd8xnRVan8BofFfgBwAA"
+    },
+    {
+      "description": "wrong signer for p2tr full signature",
+      "address": "bc1py2f3exluva2yqa877qnsj3vk4lm8yatw0up4fhrx04hf8ns87weswck94p",
+      "message": "XQMVC3YR6AOGZIHLSUQ2NSSBI2",
+      "signature": "fulAgAAAAABAROFPNY6Zt8hFK0YQq5Wb6wk/CnUYEPtQ0HTHDyzNROrAAAAAADgBwAAAQAAAAAAAAAAAWoBQNRdLOo5XZY0SBqAsLZNr/z3Bqrmo3OxVn7e4tD/OOD4H9U/L1unq5Nmdz+S1w7SHtt46bFwnd8xnRVan8BofFfgBwAA"
+    },
+    {
+      "description": "wrong message for p2tr-time-lock full signature",
+      "address": "bc1p6vffkx7vcyezrjq7pg9qqdjv7vmtanfhk8ukwsn4syejwmarmhxqp0rw5x",
+      "message": "ATGH7VC42BMKAAJAMBG3KNGQGR",
+      "signature": "fulAgAAAAABAaza7/ukfX9ZdxCUvK7CPJgADDdPdF7ikXVKWctd5EHrAAAAAADgBwAAAQAAAAAAAAAAAWoEQPvuT0enYGwsab2lsPZU0U3OcRkGng+o/PAt4QU2lc8hG7lTUmflkt0To+eoipv2vptf0TlGOBCsKU5xE3kXKcMAS2MgrYfXhOkh0CvwuJpB+O3tal2ECfO0v7k1/A4PTlGcQiBnAuAHsnUgJjLn4tl5ytgC8CNTyITXmg4rx9ctxPedwRMPEBvfoUBorCHBJjLn4tl5ytgC8CNTyITXmg4rx9ctxPedwRMPEBvfoUDgBwAA"
+    },
+    {
+      "description": "wrong signer for p2tr-time-lock full signature",
+      "address": "bc1pfncmfyycsv5zpnrzy3hj7qna989kymm2ekps7ph2mwwyftjy3d6s2esen0",
+      "message": "AY2VOQOXYI5CN2EHZKLOX7ZI37",
+      "signature": "fulAgAAAAABAaza7/ukfX9ZdxCUvK7CPJgADDdPdF7ikXVKWctd5EHrAAAAAADgBwAAAQAAAAAAAAAAAWoEQPvuT0enYGwsab2lsPZU0U3OcRkGng+o/PAt4QU2lc8hG7lTUmflkt0To+eoipv2vptf0TlGOBCsKU5xE3kXKcMAS2MgrYfXhOkh0CvwuJpB+O3tal2ECfO0v7k1/A4PTlGcQiBnAuAHsnUgJjLn4tl5ytgC8CNTyITXmg4rx9ctxPedwRMPEBvfoUBorCHBJjLn4tl5ytgC8CNTyITXmg4rx9ctxPedwRMPEBvfoUDgBwAA"
+    }
+  ]
+}

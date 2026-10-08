@@ -14,6 +14,8 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  ordinalSummaries?: Map<string, Promise<Map<string, bigint>>>;
+  ordinalIds?: Map<string, Promise<Set<string>>>;
   blocks?: Map<number, Promise<bigint>>;
   checks: Map<string, Promise<bigint>>;
 }

@@ -73,6 +73,20 @@
   position: relative;
   height: 14rem;
 
+  .wallet-choice {
+    display: flex;
+    gap: 1rem;
+    position: absolute;
+    top: -4rem;
+    left: 7rem;
+
+    button {
+      font-size: 1rem;
+      opacity: .65;
+      &[aria-pressed='true'] { opacity: 1; }
+    }
+  }
+
   .step {
     position: absolute;
     top: 0;
