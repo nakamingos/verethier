@@ -30,7 +30,7 @@ describe('Alchemy NFT metadata', () => {
     expect(await service.attributes(rule, ['1'])).toEqual(new Map([['1', attributes]]));
     expect(new URL(request.mock.calls[0][0]).host).toBe('eth-mainnet.g.alchemy.com');
     expect(request.mock.calls[0][0]).toContain('/nft/v3/local-test-key/');
-    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({ tokens: [{ contractAddress: contract, tokenId: '1', tokenType: 'ERC721' }] });
+    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({ tokens: [{ contractAddress: contract, tokenId: '1', tokenType: 'ERC721' }], refreshCache: true });
     expect(db.cacheNftMetadata).toHaveBeenCalledWith([expect.objectContaining({ chain_id: 1, contract_address: contract, token_id: '1', attributes })]);
     respond([token('1')]);
     await service.attributes({ ...rule, chain_id: 4663 }, ['1']);
@@ -94,6 +94,41 @@ describe('Alchemy NFT metadata', () => {
     db.getCachedNftMetadata.mockResolvedValue([{ chain_id: 1, contract_address: contract, token_id: id, attributes: [] }]);
     expect(await service.attributes(rule, [id, id])).toEqual(new Map([[id, []]]));
     expect(request).not.toHaveBeenCalled();
+  });
+  it('uses fresh embedded traits instead of stale Alchemy or database metadata', async () => {
+    const current = [{ trait_type: 'Eyewear', value: 'Nerd Glasses' }];
+    const stale = [{ trait_type: 'Eyewear', value: 'Horned Rim Glasses' }];
+    db.getCachedNftMetadata.mockResolvedValue([{ chain_id: 4663, contract_address: contract, token_id: '50', attributes: stale }]);
+    const readUri = jest.fn().mockResolvedValue(`data:application/json;base64,${Buffer.from(JSON.stringify({ attributes: current })).toString('base64')}`);
+    const robinhood = { ...rule, chain_id: 4663 };
+    expect(await service.attributes(robinhood, ['50'], readUri)).toEqual(new Map([['50', current]]));
+    expect(db.getCachedNftMetadata).not.toHaveBeenCalled();
+    expect(db.cacheNftMetadata).toHaveBeenCalledWith([expect.objectContaining({ token_id: '50', attributes: current })]);
+    expect(request).not.toHaveBeenCalled();
+    // The next verification reads the current URI even within the ten-minute cache window.
+    readUri.mockResolvedValue(`data:application/json,${encodeURIComponent(JSON.stringify({ attributes: stale }))}`);
+    expect(await service.attributes(robinhood, ['50'], readUri)).toEqual(new Map([['50', stale]]));
+  });
+  it('fetches hosted metadata only for tokens without embedded JSON', async () => {
+    const readUri = jest.fn(async id => id === '1'
+      ? `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify({ attributes: [] }))}`
+      : 'ipfs://example/2.json');
+    respond({ nfts: [token('2')] });
+    expect(await service.attributes(rule, ['1', '2'], readUri)).toEqual(new Map([['1', []], ['2', attributes]]));
+    expect(db.getCachedNftMetadata).toHaveBeenCalledWith(1, contract, ['2'], expect.any(String));
+    expect(JSON.parse(request.mock.calls[0][1].body).tokens).toEqual([{ contractAddress: contract, tokenId: '2', tokenType: 'ERC721' }]);
+  });
+  it.each([
+    'data:application/json;base64,@@@',
+    'data:application/json,%7Bbroken',
+    'data:application/json,%FF',
+    `data:application/json,${encodeURIComponent(JSON.stringify({ attributes: {} }))}`,
+    `data:application/json,${'x'.repeat(4 * 1024 * 1024)}`,
+  ])('refuses unreadable embedded JSON without using stale cached traits', async uri => {
+    db.getCachedNftMetadata.mockResolvedValue([{ chain_id: 1, contract_address: contract, token_id: '1', attributes }]);
+    await expect(service.attributes(rule, ['1'], async () => uri)).rejects.toThrow('temporarily unavailable');
+    expect(request).not.toHaveBeenCalled();
+    expect(db.getCachedNftMetadata).not.toHaveBeenCalled();
   });
   it('batches metadata requests and deduplicates IDs', async () => {
     const ids = Array.from({ length: 101 }, (_, i) => String(i));

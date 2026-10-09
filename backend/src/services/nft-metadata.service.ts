@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { getNftNetwork } from '@/utils/nft-network.util';
-import { NftAttributes, NftMetadataRow, nftTokenId, parseNftAttributes } from '@/utils/nft-trait.util';
+import { NftAttributes, NftMetadataRow, nftTokenId, parseNftAttributes, parseInlineNftAttributes } from '@/utils/nft-trait.util';
 import { DbService } from './db.service';
 
 const UNAVAILABLE = 'NFT trait verification is temporarily unavailable. Please try again.';
@@ -63,25 +63,43 @@ export class NftMetadataService {
     throw new Error(UNAVAILABLE);
   }
 
-  async attributes(rule: NftRuleFields, ids: string[]): Promise<Map<string, NftAttributes>> {
+  async attributes(rule: NftRuleFields, ids: string[], readUri?: (id: string) => Promise<string | null>): Promise<Map<string, NftAttributes>> {
     const result = new Map<string, NftAttributes>();
     const uniqueIds = [...new Set(ids.map(nftTokenId))];
     for (let offset = 0; offset < uniqueIds.length; offset += 50) {
       const batch = uniqueIds.slice(offset, offset + 50);
-      const rows = await this.dbSvc.getCachedNftMetadata(rule.chain_id, rule.contract_address, batch, new Date(Date.now() - CACHE_TTL).toISOString());
+      const fresh: NftMetadataRow[] = [];
+      if (readUri) {
+        // Embedded traits can change on-chain; read them at the ownership block on every run.
+        const inline = await Promise.all(batch.map(async id => {
+          const uri = await readUri(id);
+          try { return { id, attributes: parseInlineNftAttributes(uri) }; }
+          catch { throw new Error(UNAVAILABLE); }
+        }));
+        for (const { id, attributes } of inline) {
+          if (attributes === null) continue;
+          result.set(id, attributes);
+          fresh.push({ chain_id: rule.chain_id, contract_address: rule.contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
+        }
+      }
+      const hosted = batch.filter(id => !result.has(id));
+      if (fresh.length) await this.dbSvc.cacheNftMetadata(fresh);
+      if (!hosted.length) continue;
+      const rows = await this.dbSvc.getCachedNftMetadata(rule.chain_id, rule.contract_address, hosted, new Date(Date.now() - CACHE_TTL).toISOString());
       for (const row of rows) {
-        if (row.chain_id !== rule.chain_id || row.contract_address !== rule.contract_address || !batch.includes(row.token_id)) continue;
+        if (row.chain_id !== rule.chain_id || row.contract_address !== rule.contract_address || !hosted.includes(row.token_id)) continue;
         try { result.set(row.token_id, parseNftAttributes(row.attributes)); } catch { /* Refresh malformed cache entries. */ }
       }
-      const missing = batch.filter(id => !result.has(id));
+      const missing = hosted.filter(id => !result.has(id));
       if (!missing.length) continue;
       const data = await this.request(rule.chain_id, 'getNFTMetadataBatch', {
         tokens: missing.map(tokenId => ({ contractAddress: rule.contract_address, tokenId, tokenType: rule.token_standard === 'erc721' ? 'ERC721' : 'ERC1155' })),
         tokenUriTimeoutInMs: 5000,
+        refreshCache: true,
       });
       const tokens = Array.isArray(data) ? data : data?.nfts;
       if (!Array.isArray(tokens) || tokens.length !== missing.length) throw new Error(UNAVAILABLE);
-      const fresh: NftMetadataRow[] = [];
+      const providerRows: NftMetadataRow[] = [];
       for (const token of tokens) {
         this.checkToken(token, rule);
         const id = nftTokenId(token.tokenId);
@@ -90,9 +108,9 @@ export class NftMetadataService {
         try { attributes = parseNftAttributes(token.raw?.metadata?.attributes); }
         catch { throw new Error(UNAVAILABLE); }
         result.set(id, attributes);
-        fresh.push({ chain_id: rule.chain_id, contract_address: rule.contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
+        providerRows.push({ chain_id: rule.chain_id, contract_address: rule.contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
       }
-      await this.dbSvc.cacheNftMetadata(fresh);
+      await this.dbSvc.cacheNftMetadata(providerRows);
     }
     return result;
   }

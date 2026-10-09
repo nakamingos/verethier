@@ -1,4 +1,4 @@
-import { BaseError, ContractFunctionRevertedError, parseAbi } from 'viem';
+import { BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, parseAbi } from 'viem';
 import { NftOwnershipService, NftCheckContext } from '../src/services/nft-ownership.service';
 import { NftMetadataService } from '../src/services/nft-metadata.service';
 import { NftRuleFields } from '../src/models/verifier-role.interface';
@@ -7,6 +7,7 @@ import { nftRuleCriteria } from '../src/utils/nft-rule.util';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { DynamicRoleService } from '../src/services/dynamic-role.service';
+import { DbService } from '../src/services/db.service';
 
 const contract = '0x1111111111111111111111111111111111111111';
 const wallet = '0x2222222222222222222222222222222222222222';
@@ -45,6 +46,73 @@ describe('NFT trait metadata parsing', () => {
   });
 });
 
+describe('Fresh on-chain NFT traits', () => {
+  let service: NftOwnershipService;
+  let metadata: NftMetadataService;
+  let rpc: { getChainId: jest.Mock; getBlockNumber: jest.Mock; readContract: jest.Mock };
+  let db: { getCachedNftMetadata: jest.Mock; cacheNftMetadata: jest.Mock };
+  const current = [{ trait_type: 'Eyewear', value: 'Nerd Glasses' }];
+  const stale = [{ trait_type: 'Eyewear', value: 'Horned Rim Glasses' }];
+  const funkSeats: NftRuleFields = {
+    ...rule, chain_id: 4663, contract_address: '0x0e9dece4465a2e897701c703e6ad5b247b232d2f', attribute_key: 'Eyewear', attribute_value: 'Nerd Glasses',
+  };
+  beforeEach(() => {
+    db = { getCachedNftMetadata: jest.fn().mockResolvedValue([{ chain_id: 4663, contract_address: funkSeats.contract_address, token_id: '50', attributes: stale }]), cacheNftMetadata: jest.fn().mockResolvedValue(undefined) };
+    metadata = new NftMetadataService(db as unknown as DbService);
+    jest.spyOn(metadata, 'ownedIds').mockResolvedValue(['50']);
+    service = new NftOwnershipService(metadata);
+    rpc = { getChainId: jest.fn().mockResolvedValue(4663), getBlockNumber: jest.fn().mockResolvedValue(789n), readContract: jest.fn() };
+    rpc.readContract.mockImplementation(async ({ functionName }) => {
+      if (functionName === 'balanceOf') return 1n;
+      if (functionName === 'ownerOf') return wallet;
+      if (functionName === 'balanceOfBatch') return [3n];
+      return `data:application/json;base64,${Buffer.from(JSON.stringify({ attributes: current })).toString('base64')}`;
+    });
+    jest.spyOn(service as any, 'getClient').mockReturnValue(rpc);
+  });
+  it('counts the evolved FunkSeats #50 trait at the same block as ownership', async () => {
+    expect(await service.count(funkSeats, [wallet])).toBe(1n);
+    expect(rpc.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'tokenURI', args: [50n], blockNumber: 789n }));
+    rpc.readContract.mock.calls.forEach(([call]) => expect(call.blockNumber).toBe(789n));
+    expect(db.getCachedNftMetadata).not.toHaveBeenCalled();
+  });
+  it('shares fresh metadata across trait rules within the same verification', async () => {
+    const context: NftCheckContext = { checks: new Map() };
+    expect(await Promise.all([
+      service.count(funkSeats, [wallet], context), service.count({ ...funkSeats, attribute_value: 'Horned Rim Glasses' }, [wallet], context),
+    ])).toEqual([1n, 0n]);
+    expect(rpc.readContract.mock.calls.filter(([call]) => call.functionName === 'tokenURI')).toHaveLength(1);
+  });
+  it('reads ERC-1155 uri metadata and counts matching copies', async () => {
+    expect(await service.count({ ...funkSeats, token_standard: 'erc1155', token_ids: ['50'] }, [wallet])).toBe(3n);
+    expect(rpc.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'uri', args: [50n], blockNumber: 789n }));
+  });
+  it('does not add metadata RPC calls to quantity-only verification', async () => {
+    expect(await service.count({ ...funkSeats, attribute_key: 'ALL', attribute_value: 'ALL' }, [wallet])).toBe(1n);
+    expect(rpc.readContract).toHaveBeenCalledTimes(1);
+    expect(rpc.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'balanceOf' }));
+  });
+  it.each(['reverted', 'zero-data'])('uses Alchemy/cache when the optional metadata extension is unavailable: %s', async type => {
+    const abi = parseAbi(['function tokenURI(uint256 tokenId) view returns (string)']);
+    const cause = type === 'reverted' ? new ContractFunctionRevertedError({ abi, functionName: 'tokenURI' })
+      : new ContractFunctionZeroDataError({ functionName: 'tokenURI' });
+    rpc.readContract.mockImplementation(async ({ functionName }) => {
+      if (functionName === 'tokenURI') throw new BaseError('URI unavailable', { cause });
+      return functionName === 'balanceOf' ? 1n : wallet;
+    });
+    expect(await service.count({ ...funkSeats, attribute_value: 'Horned Rim Glasses' }, [wallet])).toBe(1n);
+    expect(db.getCachedNftMetadata).toHaveBeenCalledTimes(1);
+  });
+  it('propagates RPC metadata failures instead of falling back to a stale positive trait', async () => {
+    rpc.readContract.mockImplementation(async ({ functionName }) => {
+      if (functionName === 'tokenURI') throw new BaseError('RPC timeout');
+      return functionName === 'balanceOf' ? 1n : wallet;
+    });
+    await expect(service.count({ ...funkSeats, attribute_value: 'Horned Rim Glasses' }, [wallet])).rejects.toThrow('RPC timeout');
+    expect(db.getCachedNftMetadata).not.toHaveBeenCalled();
+  });
+});
+
 describe('NFT trait ownership', () => {
   let service: NftOwnershipService;
   let rpc: { getChainId: jest.Mock; getBlockNumber: jest.Mock; readContract: jest.Mock };
@@ -59,7 +127,7 @@ describe('NFT trait ownership', () => {
   it('counts only matching ERC-721s at one RPC block', async () => {
     expect(await service.count(rule, [wallet])).toBe(1n);
     expect(metadata.ownedIds).toHaveBeenCalledWith(rule, wallet);
-    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2']);
+    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2'], expect.any(Function));
     rpc.readContract.mock.calls.forEach(([call]) => expect(call.blockNumber).toBe(123n));
   });
   it('shares token discovery, metadata and ownership across different traits in a run', async () => {
@@ -80,7 +148,7 @@ describe('NFT trait ownership', () => {
       ? args[0] === wallet ? 1n : 2n : args[0] === 1n ? wallet : other);
     expect(await service.count(rule, [wallet, wallet.toUpperCase(), other])).toBe(2n);
     expect(metadata.ownedIds).toHaveBeenCalledTimes(2);
-    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2', '3']);
+    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2', '3'], expect.any(Function));
   });
   it('refuses a partial ERC-721 inventory instead of returning a lower count', async () => {
     metadata.ownedIds.mockResolvedValue(['1']);
@@ -99,7 +167,7 @@ describe('NFT trait ownership', () => {
     expect(await service.count({ ...rule, token_ids: ['1'] }, [wallet])).toBe(1n);
     expect(metadata.ownedIds).not.toHaveBeenCalled();
     expect(rpc.readContract).toHaveBeenCalledTimes(1);
-    expect(metadata.attributes).toHaveBeenCalledWith(expect.anything(), ['1']);
+    expect(metadata.attributes).toHaveBeenCalledWith(expect.anything(), ['1'], expect.any(Function));
   });
   it('does not fetch metadata for tokens the wallet no longer owns', async () => {
     rpc.readContract.mockResolvedValue(other);
@@ -123,7 +191,7 @@ describe('NFT trait ownership', () => {
     rpc.readContract.mockImplementation(async ({ args }) => args[0].map((owner, index) => args[1][index] === 1n ? owner === wallet ? 3n : 4n : args[1][index] === 2n ? 10n : 0n));
     const erc1155 = { ...rule, token_standard: 'erc1155' as const, token_ids: ['1', '2', '500'] };
     expect(await service.count(erc1155, [wallet, other, wallet])).toBe(7n);
-    expect(metadata.attributes).toHaveBeenCalledWith(erc1155, ['1', '2']);
+    expect(metadata.attributes).toHaveBeenCalledWith(erc1155, ['1', '2'], expect.any(Function));
     expect(metadata.ownedIds).not.toHaveBeenCalled();
   });
   it('refuses incomplete ERC-1155 balance batches', async () => {
