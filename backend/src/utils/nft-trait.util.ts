@@ -43,3 +43,19 @@ export function parseNftAttributes(value: unknown): NftAttributes {
     return [{ trait_type: attribute.trait_type.trim(), value: String(attribute.value).trim() }];
   });
 }
+
+export function parseInlineNftAttributes(uri: string | null): NftAttributes | null {
+  if (!uri || !/^data:application\/json(?:;|,)/i.test(uri)) return null;
+  if (uri.length > 4 * 1024 * 1024) throw new Error('NFT inline metadata is too large.');
+  const comma = uri.indexOf(',');
+  if (comma < 0) throw new Error('NFT inline metadata is unreadable.');
+  const header = uri.slice(0, comma);
+  const payload = decodeURIComponent(uri.slice(comma + 1));
+  let json = payload;
+  if (/;base64(?:;|$)/i.test(header)) {
+    const encoded = payload.replace(/\s/g, '');
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) throw new Error('NFT inline metadata is unreadable.');
+    json = Buffer.from(encoded, 'base64').toString('utf8');
+  }
+  return parseNftAttributes(JSON.parse(json)?.attributes);
+}

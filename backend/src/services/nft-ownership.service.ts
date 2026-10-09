@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { Address, BaseError, ContractFunctionRevertedError, PublicClient, createPublicClient, http, parseAbi } from 'viem';
+import { Address, BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, PublicClient, createPublicClient, http, parseAbi } from 'viem';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { NFT_BATCH_SIZE, nftRuleLabel, parseTokenIds } from '@/utils/nft-rule.util';
@@ -12,6 +12,8 @@ const ABI = parseAbi([
   'function name() view returns (string)',
   'function balanceOf(address owner) view returns (uint256)',
   'function ownerOf(uint256 tokenId) view returns (address)',
+  'function tokenURI(uint256 tokenId) view returns (string)',
+  'function uri(uint256 tokenId) view returns (string)',
   'function balanceOfBatch(address[] accounts, uint256[] ids) view returns (uint256[])',
 ]);
 
@@ -129,7 +131,10 @@ export class NftOwnershipService {
     if (!owned.size) return 0n;
     context.nftMetadata ||= new Map();
     const metadataScope = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, [...owned.keys()].sort()]);
-    if (!context.nftMetadata.has(metadataScope)) context.nftMetadata.set(metadataScope, this.metadataSvc.attributes(rule, [...owned.keys()]));
+    if (!context.nftMetadata.has(metadataScope)) {
+      context.nftMetadata.set(metadataScope, this.blockNumber(rule.chain_id, context).then(blockNumber =>
+        this.metadataSvc.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber))));
+    }
     const attributes = await context.nftMetadata.get(metadataScope);
     let count = 0n;
     for (const [id, copies] of owned) {
@@ -137,6 +142,22 @@ export class NftOwnershipService {
       if (matchesNftTrait(attributes.get(id), rule)) count += copies;
     }
     return count;
+  }
+
+  private async metadataUri(rule: NftRuleFields, id: string, blockNumber: bigint): Promise<string | null> {
+    try {
+      return await this.getClient(rule.chain_id).readContract({
+        address: rule.contract_address as Address, abi: ABI, blockNumber,
+        functionName: rule.token_standard === 'erc721' ? 'tokenURI' : 'uri', args: [BigInt(id)],
+      });
+    } catch (error) {
+      // The metadata URI extension is optional. Transport failures still make the check unavailable.
+      if (error instanceof BaseError) {
+        const cause = error.walk(cause => cause instanceof ContractFunctionRevertedError || cause instanceof ContractFunctionZeroDataError);
+        if (cause instanceof ContractFunctionRevertedError || cause instanceof ContractFunctionZeroDataError) return null;
+      }
+      throw error;
+    }
   }
 
   private async readOwnedTokens(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<Map<string, bigint>> {
