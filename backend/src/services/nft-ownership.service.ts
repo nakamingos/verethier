@@ -6,6 +6,7 @@ import { NFT_BATCH_SIZE, nftRuleLabel, parseTokenIds } from '@/utils/nft-rule.ut
 import { getNftNetwork } from '@/utils/nft-network.util';
 import { NftAttributes, matchesNftTrait, nftTrait } from '@/utils/nft-trait.util';
 import { NftMetadataService } from './nft-metadata.service';
+import { OrdinalCollectionSnapshot } from '@/models/ordinal-collection.interface';
 
 const ABI = parseAbi([
   'function supportsInterface(bytes4 interfaceId) view returns (bool)',
@@ -20,6 +21,7 @@ const ABI = parseAbi([
 export interface NftCheckContext {
   ordinalSummaries?: Map<string, Promise<Map<string, bigint>>>;
   ordinalIds?: Map<string, Promise<Set<string>>>;
+  ordinalCollections?: Map<string, Promise<OrdinalCollectionSnapshot>>;
   blocks?: Map<number, Promise<bigint>>;
   nftOwnedTokens?: Map<string, Promise<Map<string, bigint>>>;
   nftMetadata?: Map<string, Promise<Map<string, NftAttributes>>>;

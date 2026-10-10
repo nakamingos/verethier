@@ -4814,7 +4814,7 @@ which@^2.0.1:
   dependencies:
     isexe "^2.0.0"
 
-wif@^5.0.0:
+wif@5.0.0, wif@^5.0.0:
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/wif/-/wif-5.0.0.tgz#445e44b8f62e155144d1c970c01ca2ba3979cc3f"
   integrity sha512-iFzrC/9ne740qFbNjTZ2FciSRJlHIXoxqk/Y5EnE08QOXu1WjJyCCswwDTYbohAOEnlCtLaAAQBhyaLRFh2hMA==

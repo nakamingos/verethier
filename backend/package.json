@@ -16,7 +16,9 @@
     "test:watch": "jest --silent --watch",
     "test:coverage": "jest --silent --coverage",
     "test:verbose": "jest --verbose",
-    "test:debug": "jest --verbose --no-cache"
+    "test:debug": "jest --verbose --no-cache",
+    "ordnet:wallet": "node scripts/ordnet-wallet.cjs",
+    "ordnet:check": "node scripts/check-ordnet.cjs"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^2.2.2",
@@ -36,7 +38,8 @@
     "helmet": "^8.1.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",
-    "viem": "^2.10.1"
+    "viem": "^2.10.1",
+    "wif": "5.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^9.0.0",

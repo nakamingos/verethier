@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { ordinalCollectionId } from '@/utils/ordinal-rule.util';
 import { NftCheckContext } from './nft-ownership.service';
+import { OrdnetOwnershipService } from './ordnet-ownership.service';
 
 const API_URL = 'https://api.secretkeylabs.io';
 const PAGE_LIMIT = 25;
@@ -16,8 +17,18 @@ export class OrdinalsOwnershipService {
   private requestTail: Promise<unknown> = Promise.resolve();
   private readonly collections = new Map<string, { expires: number; data: { id: string; name: string } }>();
 
+  constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService) {}
+
+  private provider(): 'xverse' | 'ordnet' {
+    const provider = EnvironmentConfig.ORDINALS_PROVIDER;
+    if (provider !== 'xverse' && provider !== 'ordnet') throw new Error('ORDINALS_PROVIDER must be xverse or ordnet.');
+    if (provider === 'ordnet' && !this.ordnet) throw new Error('ord.net verification is not configured.');
+    return provider;
+  }
+
   async prepareRule(slug: string): Promise<NftRuleFields & { slug: string }> {
-    const collection = await this.getCollection(ordinalCollectionId(slug));
+    const id = ordinalCollectionId(slug);
+    const collection = this.provider() === 'ordnet' ? await this.ordnet.prepareRule(id) : await this.getCollection(id);
     return {
       asset_type: 'ordinal', slug: collection.id, chain_id: null,
       collection_name: collection.name, contract_address: null, token_standard: null, token_ids: null,
@@ -32,8 +43,10 @@ export class OrdinalsOwnershipService {
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return 0n;
     const run = context || { checks: new Map() };
-    const key = JSON.stringify(['ordinal', collectionId, addresses]);
-    if (!run.checks.has(key)) run.checks.set(key, this.readCount(collectionId, addresses, run));
+    const provider = this.provider();
+    const key = JSON.stringify(['ordinal', provider, collectionId, addresses]);
+    if (!run.checks.has(key)) run.checks.set(key, provider === 'ordnet'
+      ? this.ordnet.count(collectionId, addresses, run) : this.readCount(collectionId, addresses, run));
     return run.checks.get(key);
   }
 
