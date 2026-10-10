@@ -23,6 +23,12 @@ export class EnvironmentConfig {
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
   public static readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
   public static readonly XVERSE_API_KEY = process.env.XVERSE_API_KEY;
+  public static readonly ORDINALS_PROVIDER = process.env.ORDINALS_PROVIDER?.trim().toLowerCase() || 'xverse';
+  public static readonly ORDNET_SESSION_TOKEN = process.env.ORDNET_SESSION_TOKEN;
+  public static readonly ORDNET_ORDINALS_ADDRESS = process.env.ORDNET_ORDINALS_ADDRESS;
+  public static readonly ORDNET_PAYMENT_ADDRESS = process.env.ORDNET_PAYMENT_ADDRESS;
+  public static readonly ORDNET_ORDINALS_WIF = process.env.ORDNET_ORDINALS_WIF;
+  public static readonly ORDNET_PAYMENT_WIF = process.env.ORDNET_PAYMENT_WIF;
   
   // Application Configuration
   public static readonly BASE_URL = process.env.BASE_URL;

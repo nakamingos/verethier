@@ -27,6 +27,8 @@ import { AssetOwnershipService } from './services/asset-ownership.service';
 import { NftOwnershipService } from './services/nft-ownership.service';
 import { NftMetadataService } from './services/nft-metadata.service';
 import { OrdinalsOwnershipService } from './services/ordinals-ownership.service';
+import { OrdnetApiService } from './services/ordnet-api.service';
+import { OrdnetOwnershipService } from './services/ordnet-ownership.service';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { VerifyService } from './services/verify.service';
 import { VerificationService } from './services/verification.service';
@@ -149,6 +151,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
     NftOwnershipService,
     NftMetadataService,
     OrdinalsOwnershipService,
+    OrdnetApiService,
+    OrdnetOwnershipService,
     BitcoinSignatureService,
     UserAddressService,         // Multi-wallet address management
 

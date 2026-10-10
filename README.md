@@ -11,7 +11,7 @@ Verethier is split into two deployable apps:
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
-- Bitcoin mainnet Ordinals collection/count rules using Xverse wallet signatures and API ownership checks
+- Bitcoin mainnet Ordinals collection/count rules using Xverse wallet signatures and Xverse or ord.net API ownership checks
 - Wallet stacking across multiple verified addresses
 - Dynamic role re-verification and revocation
 - Rich Discord verification result messages
@@ -99,6 +99,8 @@ For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the coll
 ```
 
 The collection name comes from Xverse. Bitcoin mainnet is implicit; connect the Xverse Ordinals address (`bc1p…`). Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum or Bitcoin within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. This release supports collection ownership and quantity; trait options are rejected.
+
+Xverse remains the default API provider. The experimental ord.net provider uses the same verification UI and rules; set `ORDINALS_PROVIDER=ordnet` on the backend to select it. A dedicated API wallet can renew its one-hour sessions automatically. The provider-check command also reports inscription traits for evaluating future Ordinals trait rules. See [ord.net setup and testing](backend/README.md#ordnet-provider-experiment). No database migration is required for switching providers.
 
 ## Testing
 
