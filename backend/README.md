@@ -1,4 +1,4 @@
-# Verethier Backend
+# Bouncer Backend
 
 NestJS API and Discord bot for wallet verification, rule evaluation, and role assignment.
 

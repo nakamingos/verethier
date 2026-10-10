@@ -22,7 +22,7 @@ export interface SetupHelpContent {
 export const SETUP_HELP_CONTENT: SetupHelpContent = {
   title: '🔧 Verification Setup Help',
   description: 'Complete guide to setting up and managing collection verification rules for your server.',
-  color: 0xc3ff00, // Bright yellow for visibility
+  color: 0x00FF73, // Bouncer green
   footer: 'Need more help? Check the docs or ask in support channels',
   fields: [
     {

@@ -14,7 +14,7 @@ function createWallet() {
   const ordinalsAddress = Address.convertPubKeyIntoAddress(publicKey, 'p2tr').mainnet;
   const paymentAddress = Address.convertPubKeyIntoAddress(publicKey, 'p2wpkh').mainnet;
   for (const address of [ordinalsAddress, paymentAddress]) {
-    const message = 'Verethier ord.net test wallet configuration';
+    const message = 'Bouncer ord.net test wallet configuration';
     if (!Verifier.verifySignature(address, message, Signer.sign(privateWif, address, message))) throw new Error('Wallet signing self-check failed.');
   }
   return { ordinalsAddress, paymentAddress, privateWif };

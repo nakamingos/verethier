@@ -65,7 +65,7 @@ export class OrdnetApiService {
       // Check that the supplied keys control these addresses before contacting the API.
       for (const [address, wif] of [[ordinalsAddress, ordinalsWif], [paymentAddress, paymentWif]]) {
         if (!/^[KL][1-9A-HJ-NP-Za-km-z]{51}$/.test(wif)
-          || !Verifier.verifySignature(address, 'Verethier ord.net API wallet configuration', Signer.sign(wif, address, 'Verethier ord.net API wallet configuration'))) throw new Error();
+          || !Verifier.verifySignature(address, 'Bouncer ord.net API wallet configuration', Signer.sign(wif, address, 'Bouncer ord.net API wallet configuration'))) throw new Error();
       }
     } catch { throw new Error('Invalid ord.net API wallet configuration. Check the mainnet addresses and their compressed WIF keys.'); }
 

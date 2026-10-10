@@ -91,7 +91,7 @@ export class WalletService {
     const typedData = {
       types,
       domain: {
-        name: 'verethier',
+        name: 'Bouncer',
         version: '1',
         chainId: 1,
       },
@@ -103,18 +103,22 @@ export class WalletService {
     let address: string | null = null;
 
     try {
-      const recoveredAddress = await recoverTypedDataAddress({
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: 'Verification',
-        message: typedData.message,
-        signature: signature as `0x${string}`
-      });
+      // Allow already-open verification pages to finish signing under the previous name.
+      for (const name of [typedData.domain.name, 'verethier']) {
+        const recoveredAddress = await recoverTypedDataAddress({
+          domain: { ...typedData.domain, name },
+          types: typedData.types,
+          primaryType: 'Verification',
+          message: typedData.message,
+          signature: signature as `0x${string}`
+        });
 
-      Logger.debug('Recovered address:', recoveredAddress);
+        Logger.debug('Recovered address:', recoveredAddress);
 
-      if (recoveredAddress === data.address) {
-        address = recoveredAddress;
+        if (recoveredAddress === data.address) {
+          address = recoveredAddress;
+          break;
+        }
       }
     } catch (error) {
       const recoveryError = error instanceof Error ? error : new Error('Signature recovery failed');

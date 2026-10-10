@@ -185,7 +185,7 @@ describe('DiscordMessageService', () => {
         embeds: expect.arrayContaining([
           expect.objectContaining({
             data: expect.objectContaining({
-              title: 'Request Verification'
+              title: 'Bouncer · Wallet Verification'
             })
           })
         ]),

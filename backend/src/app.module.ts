@@ -45,7 +45,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
 /**
  * AppModule - Main application module
  * 
- * Central module configuration for the Verethier Discord bot backend.
+ * Central module configuration for the Bouncer Discord bot backend.
  * Configures all services, middleware, and global application settings.
  * 
  * Key Configurations:
@@ -102,7 +102,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
             },
             global: {
               headers: {
-                'x-application-name': 'verethier-backend',
+                'x-application-name': 'bouncer-backend',
               },
             },
           }

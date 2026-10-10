@@ -23,10 +23,10 @@ import { env } from '@/../env/env';
 const projectId = 'd183619f342281fd3f3ff85716b6016a';
 
 const metadata = {
-  name: 'Ethereum Phunks',
-  description: '',
-  url: 'https://ethereumphunks.com',
-  icons: [],
+  name: 'Bouncer',
+  description: 'Verify your wallet. Get your roles.',
+  url: window.location.origin,
+  icons: [new URL('/assets/bouncer.svg', window.location.origin).href],
 };
 
 const themeVariables = {

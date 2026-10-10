@@ -66,7 +66,7 @@ Start with Bitcoin mainnet, collection ownership and minimum inscription counts.
 
    Add a backend Bitcoin signature verifier using `bip322-js`, tested against official valid/invalid vectors and signed server challenges. Accept supported prefixed and older unprefixed simple, single-key Taproot signatures; reject legacy and script-path proofs. A real Xverse wallet signing smoke test remains part of release validation. [BIP-322 specification](https://github.com/bitcoin/bips/blob/master/bip-0322.mediawiki)
 
-   The server builds the exact challenge with the app/domain, wallet family, address, Discord user/server/channel, cryptographic nonce and expiry. Verify against that saved challenge and consume it once before linking the wallet. Reuse the current nonce context and expiry flow, with cryptographic randomness and atomic consumption for the new proof path. Provider API authentication is handled separately by the backend; users sign a Verethier verification message.
+   The server builds the exact challenge with the app/domain, wallet family, address, Discord user/server/channel, cryptographic nonce and expiry. Verify against that saved challenge and consume it once before linking the wallet. Reuse the current nonce context and expiry flow, with cryptographic randomness and atomic consumption for the new proof path. Provider API authentication is handled separately by the backend; users sign a Bouncer verification message.
 
 4. Extend the existing database tables.
 

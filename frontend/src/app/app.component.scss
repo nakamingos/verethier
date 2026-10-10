@@ -6,11 +6,23 @@
   margin: 0 auto;
 }
 
-h1 {
-
+main {
+  padding: 0 1.5rem;
 }
 
-main {
+.brand-header {
+  padding-top: 4rem;
+  font-family: 'Retro Computer', sans-serif;
+  text-align: center;
 
-  padding: 0 1.5rem;
+  h1 {
+    font-size: 3rem;
+    line-height: 1.2;
+  }
+
+  p {
+    margin: 1rem 0 0;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
 }

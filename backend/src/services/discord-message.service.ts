@@ -87,9 +87,9 @@ export class DiscordMessageService {
    */
   async createVerificationMessage(channel: GuildTextBasedChannel): Promise<string> {
     const verifyEmbed = new EmbedBuilder()
-      .setTitle('Request Verification')
-      .setDescription('Click the button below to initiate the verification process.')
-      .setColor('#c3ff00');
+      .setTitle('Bouncer · Wallet Verification')
+      .setDescription('Verify your wallet. Get your roles. Click the button below to get started.')
+      .setColor('#00FF73');
       
     const verifyButton = new ActionRowBuilder<ButtonBuilder>()
       .setComponents(

@@ -60,7 +60,7 @@ describe('Bitcoin wallet proof', () => {
   it('builds the signed challenge from trusted nonce context and consumes it once', async () => {
     const { data, signature, challenge } = await proof();
     expect(data.nonce).toMatch(/^[0-9a-f]{64}$/);
-    for (const value of ['https://verify.example.test', vector.address, 'Discord user: user', 'Discord server: guild', 'Discord channel: channel', data.nonce]) {
+    for (const value of ['Bouncer wallet verification', 'https://verify.example.test', vector.address, 'Discord user: user', 'Discord server: guild', 'Discord channel: channel', data.nonce]) {
       expect(challenge.message).toContain(value);
     }
     expect((await signatures.verify(data, signature)).context.channelId).toBe('channel');

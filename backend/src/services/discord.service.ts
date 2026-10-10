@@ -955,7 +955,7 @@ export class DiscordService implements OnModuleInit {
         const embed = new EmbedBuilder()
           .setTitle(`Role Assignment Audit Log`)
           .setDescription(`**Server:** ${interaction.guild?.name || 'Unknown'}`)
-          .setColor(0xc3ff00)
+          .setColor(0x00FF73)
           .setTimestamp();
 
         Logger.debug(`Created base embed for ${auditEntries?.length || 0} entries`);

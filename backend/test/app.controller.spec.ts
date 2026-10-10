@@ -81,8 +81,8 @@ describe('AppController', () => {
   describe('getInfo', () => {
     it('should return application information', () => {
       const expectedInfo = {
-        name: 'Verethier Backend',
-        description: 'NestJS-based Discord bot for Ethscriptions-based role verification',
+        name: 'Bouncer Backend',
+        description: 'Discord wallet verification for Ethscriptions, NFTs and Bitcoin Ordinals',
         architecture: 'Unified verification engine with channel-based verification',
         features: [
           'EIP-712 signature verification',

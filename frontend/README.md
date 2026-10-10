@@ -1,4 +1,4 @@
-# Verethier Frontend
+# Bouncer Frontend
 
 Angular verification app for Discord users following `/verify/:data` links.
 
