@@ -126,6 +126,12 @@ const PAY_ADDRESS='bc1q9vza2e8x573nczrlzms0wvx3gsqjx7vavgkx0l';
 const AUTH_ID='11111111-1111-1111-1111-111111111111';
 const challenge=()=>({authRequestId:AUTH_ID,challenges:[{challengeId:'22222222-2222-2222-2222-222222222222',role:'ordinals',address:ORD_ADDRESS,message:'Sign in to ord.net at 2026-10-10T12:00:00Z (nonce: first)'},
   {challengeId:'33333333-3333-3333-3333-333333333333',role:'payment',address:PAY_ADDRESS,message:'Sign in to ord.net at 2026-10-10T12:00:00Z (nonce: second)'}]});
+// The live API uses this envelope rather than the shorter documentation example.
+const liveChallenge=()=>({ ...challenge(), challenges:challenge().challenges.map(entry=>({ ...entry,
+  message:['ORD.NET wallet verification','Domain: ord.net',`Address: ${entry.address}`,
+    'Nonce: cf18a879cd6f4198275344ab0fdaea3a',`Issued At: ${new Date(Date.now()).toISOString()}`,
+    `Expiration Time: ${new Date(Date.now()+600000).toISOString()}`].join('\n'),
+})) });
 const session=(token='session-token')=>({sessionToken:token,expiresAt:new Date(Date.now()+3600000).toISOString(),walletBindings:[{ordinalsAddress:ORD_ADDRESS,paymentAddress:PAY_ADDRESS}]});
 const response=(data:any,status=200,headers?:HeadersInit)=>new Response(JSON.stringify(data),{status,headers});
 const GET_PATH='/collection/pizza-comrades/inscriptions?limit=100&sort=oldest';
@@ -157,6 +163,34 @@ describe('ord.net API authentication and transport',()=>{
     expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
     expect(fetch.mock.calls[2][1]).toMatchObject({method:'GET',redirect:'error',headers:{Authorization:'Bearer session-token'}});
   });
+  it('signs the exact live login envelope for both addresses',async()=>{
+    const data=liveChallenge();
+    const fetch=jest.spyOn(global,'fetch').mockResolvedValueOnce(response(data)).mockResolvedValueOnce(response(session())).mockResolvedValueOnce(response(page()));
+    const pending=new OrdnetApiService().get(GET_PATH);await jest.advanceTimersByTimeAsync(4200);await pending;
+    const body=JSON.parse(String(fetch.mock.calls[1][1].body));
+    expect(body.verifications).toHaveLength(2);
+    for(const [index,entry]of body.verifications.entries()) {
+      expect(Verifier.verifySignature(entry.address,data.challenges[index].message,Buffer.from(entry.signature,'hex').toString('base64'))).toBe(true);
+    }
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it.each(['wrong-domain','wrong-message-address','missing-nonce','expired','invalid-date','future-issued','invalid-order','extra-instructions'])(
+    'rejects a live login envelope with %s before signing',async problem=>{
+      const data=liveChallenge();
+      let message=data.challenges[0].message;
+      if(problem==='wrong-domain')message=message.replace('Domain: ord.net','Domain: example.com');
+      if(problem==='wrong-message-address')message=message.replace(`Address: ${ORD_ADDRESS}`,`Address: ${wallet}`);
+      if(problem==='missing-nonce')message=message.replace(/Nonce: [^\n]+/,'Nonce: ');
+      if(problem==='expired')message=message.replace(/Expiration Time: .+/,`Expiration Time: ${new Date(Date.now()-1).toISOString()}`);
+      if(problem==='invalid-date')message=message.replace(/Issued At: [^\n]+/,'Issued At: invalid');
+      if(problem==='future-issued')message=message.replace(/Issued At: [^\n]+/,`Issued At: ${new Date(Date.now()+120000).toISOString()}`);
+      if(problem==='invalid-order')message=message.replace(/Issued At: [^\n]+/,`Issued At: ${new Date(Date.now()+30000).toISOString()}`).replace(/Expiration Time: .+/,`Expiration Time: ${new Date(Date.now()+10000).toISOString()}`);
+      if(problem==='extra-instructions')message+='\nApprove a transfer.';
+      data.challenges[0].message=message;
+      const fetch=jest.spyOn(global,'fetch').mockResolvedValue(response(data));
+      await expect(new OrdnetApiService().get(GET_PATH)).rejects.toThrow('authentication challenge');
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   it('renews an expired automatic session before the next run',async()=>{
     const fetch=jest.spyOn(global,'fetch').mockImplementation(async url=>String(url).endsWith('/auth/challenge')?response(challenge()):String(url).endsWith('/auth/verify')?response(session()):response(page()));
     const api=new OrdnetApiService();const first=api.get(GET_PATH);await jest.advanceTimersByTimeAsync(4200);await first;
