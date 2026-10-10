@@ -77,8 +77,7 @@ export class OrdnetApiService {
     const verifications = challenge.challenges.map(entry => {
       const address = entry?.role === 'ordinals' ? ordinalsAddress : entry?.role === 'payment' ? paymentAddress : undefined;
       if (!address || entry.address !== address || !UUID.test(entry.challengeId) || challengeIds.has(entry.challengeId)
-        || typeof entry.message !== 'string' || entry.message.length > 8192
-        || !entry.message.startsWith('Sign in to ord.net at ')) throw new Error('Invalid ord.net wallet authentication challenge.');
+        || !this.isLoginMessage(entry.message, address)) throw new Error('Invalid ord.net wallet authentication challenge.');
       challengeIds.add(entry.challengeId);
       signedAddresses.add(address);
       try {
@@ -94,6 +93,21 @@ export class OrdnetApiService {
       || !Array.isArray(data.walletBindings) || !data.walletBindings.some(binding => binding.ordinalsAddress === ordinalsAddress && binding.paymentAddress === paymentAddress)) throw new Error(UNAVAILABLE);
     this.session = { token: data.sessionToken, expires: Math.min(expires, Date.now() + 3600000) };
     return this.session.token;
+  }
+
+  private isLoginMessage(message: unknown, address: string): message is string {
+    if (typeof message !== 'string' || !message.length || message.length > 8192) return false;
+    // Retain the format shown in the public docs while validating the live API's login envelope.
+    if (message.startsWith('Sign in to ord.net at ')) return true;
+    const lines = message.split(/\r?\n/);
+    if (lines.length !== 6 || lines[0] !== 'ORD.NET wallet verification'
+      || lines[1] !== 'Domain: ord.net' || lines[2] !== `Address: ${address}`
+      || !/^Nonce: [0-9a-f]{32,128}$/i.test(lines[3])
+      || !lines[4].startsWith('Issued At: ') || !lines[5].startsWith('Expiration Time: ')) return false;
+    const issued = Date.parse(lines[4].slice('Issued At: '.length));
+    const expires = Date.parse(lines[5].slice('Expiration Time: '.length));
+    return Number.isFinite(issued) && Number.isFinite(expires)
+      && issued <= Date.now() + 60000 && expires > Date.now() && expires > issued;
   }
 
   private signingAddress(value: string): string {
