@@ -1,8 +1,10 @@
-# Verethier
+# Bouncer
+
+**Verify your wallet. Get your roles.**
 
 Discord-based wallet verification for Ethscriptions, NFTs and Bitcoin Ordinals communities.
 
-Verethier is split into two deployable apps:
+Bouncer is split into two deployable apps:
 - `backend/`: a NestJS API and Discord bot
 - `frontend/`: an Angular verification app used by Discord users when they follow a verify link
 

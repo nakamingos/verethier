@@ -6,6 +6,7 @@ import { UserAddressService } from '../src/services/user-address.service';
 import { DiscordService } from '../src/services/discord.service';
 import { DecodedData } from '../src/models/app.interface';
 import { recoverTypedDataAddress } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 // Mock viem functions
 jest.mock('viem', () => ({
@@ -117,7 +118,7 @@ describe('WalletService', () => {
       // Verify that the unified EIP-712 structure is used (without legacy fields)
       expect(mockRecoverTypedDataAddress).toHaveBeenCalledWith({
         domain: {
-          name: 'verethier',
+          name: 'Bouncer',
           version: '1',
           chainId: 1,
         },
@@ -142,6 +143,33 @@ describe('WalletService', () => {
         },
         signature: 'sig',
       });
+    });
+
+    it.each(['Bouncer', 'verethier', 'unrelated-app'])('checks a real signature from the %s domain', async name => {
+      const account = privateKeyToAccount(('0x' + '1'.repeat(64)) as `0x${string}`);
+      const data = { ...baseData, address: account.address };
+      const signature = await account.signTypedData({
+        domain: { name, version: '1', chainId: 1 },
+        types: { Verification: [
+          { name: 'UserID', type: 'string' }, { name: 'UserTag', type: 'string' },
+          { name: 'ServerID', type: 'string' }, { name: 'ServerName', type: 'string' },
+          { name: 'Nonce', type: 'string' }, { name: 'Expiry', type: 'uint256' },
+        ] },
+        primaryType: 'Verification',
+        message: { UserID: data.userId, UserTag: data.userTag, ServerID: data.discordId,
+          ServerName: data.discordName, Nonce: data.nonce, Expiry: BigInt(data.expiry) },
+      });
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockImplementation(jest.requireActual('viem').recoverTypedDataAddress);
+
+      if (name === 'unrelated-app') {
+        await expect(service.verifySignature(data, signature)).rejects.toThrow('Invalid signature.');
+        expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+      } else {
+        await expect(service.verifySignature(data, signature)).resolves.toEqual({
+          address: account.address, walletOwnershipTransferred: false,
+        });
+      }
     });
 
     it('handles verification with minimal data', async () => {

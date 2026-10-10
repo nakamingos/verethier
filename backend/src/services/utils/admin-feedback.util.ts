@@ -8,7 +8,7 @@ import { VerificationRule } from '@/models/verification-rule.interface';
  * Color scheme:
  * - Green (0x00FF00): Success messages
  * - Red (0xFF0000): Error messages  
- * - Lime (0xC3FF00): Neutral/info messages
+ * - Bouncer green (0x00FF73): Neutral/info messages
  * - Orange (0xFFA500): Warning messages
  */
 export class AdminFeedback {
@@ -67,7 +67,7 @@ export class AdminFeedback {
    */
   static info(title: string, description?: string, fields?: Array<{name: string, value: string, inline?: boolean}>): EmbedBuilder {
     const embed = new EmbedBuilder()
-      .setColor(0xC3FF00) // Lime
+      .setColor(0x00FF73) // Bouncer green
       .setTitle(`📋 ${title}`);
     
     if (description) {

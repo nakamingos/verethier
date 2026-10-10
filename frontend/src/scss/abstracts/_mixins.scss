@@ -68,7 +68,7 @@
 @mixin scrollbars() {
   /* Firefox */
   scrollbar-width: auto;
-  scrollbar-color: #ff03b4 #c2ff02;
+  scrollbar-color: #ff03b4 #00ff73;
   -webkit-overflow-scrolling: touch;
 
   /* Chrome, Edge, and Safari */
@@ -77,7 +77,7 @@
   }
 
   &::-webkit-scrollbar-track {
-    background: #c2ff02;
+    background: #00ff73;
   }
 
   &::-webkit-scrollbar-thumb {

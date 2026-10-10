@@ -146,7 +146,7 @@ describe('AdminFeedback', () => {
       const embed = AdminFeedback.info('Server Information', 'This server has 5 verification rules.');
 
       const embedData = embed.toJSON();
-      expect(embedData.color).toBe(0xC3FF00); // Lime
+      expect(embedData.color).toBe(0x00FF73); // Bouncer green
       expect(embedData.title).toBe('📋 Server Information');
       expect(embedData.description).toBe('This server has 5 verification rules.');
     });
@@ -355,7 +355,7 @@ describe('AdminFeedback', () => {
 
       expect(successEmbed.toJSON().color).toBe(0x00FF00); // Green
       expect(errorEmbed.toJSON().color).toBe(0xFF0000);   // Red
-      expect(infoEmbed.toJSON().color).toBe(0xC3FF00);    // Lime
+      expect(infoEmbed.toJSON().color).toBe(0x00FF73);   // Bouncer green
       expect(warningEmbed.toJSON().color).toBe(0xFFA500);  // Orange
     });
 

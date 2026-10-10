@@ -130,7 +130,9 @@ describe('Verification page wallet choice', () => {
     component.state$.next({ ...component.state$.value, walletConnected: true });
     const pending = component.verify(resolvedData);
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(ethereum.signTypedMessage).toHaveBeenCalledWith(jasmine.objectContaining({ message: {
+    expect(ethereum.signTypedMessage).toHaveBeenCalledWith(jasmine.objectContaining({ domain: {
+      name: 'Bouncer', version: '1', chainId: 1,
+    }, message: {
       UserID: resolvedData.userId, UserTag: resolvedData.userTag, ServerID: resolvedData.discordId,
       ServerName: resolvedData.discordName, Nonce: resolvedData.nonce, Expiry: resolvedData.expiry,
     } }));

@@ -47,7 +47,7 @@ export class BitcoinSignatureService {
       domain = url.origin;
     } catch { throw new Error('Bitcoin verification is not configured. Set BASE_URL on the backend.'); }
     const message = [
-      'Verethier wallet verification', '',
+      'Bouncer wallet verification', '',
       `Domain: ${domain}`, 'Wallet: Bitcoin mainnet · Ordinals', `Address: ${normalizedAddress}`,
       `Discord user: ${context.userId}`, `Discord server: ${context.guildId}`,
       `Discord channel: ${context.channelId || 'server'}`, `Nonce: ${context.nonce}`,
