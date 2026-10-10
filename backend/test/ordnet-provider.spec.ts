@@ -69,17 +69,22 @@ describe('ord.net ownership provider',()=>{
     await expect(service.count('pizza-comrades',[wallet],run)).resolves.toBe(2n);
     expect(get).toHaveBeenCalledTimes(1);
   });
+  it('accepts the live card payload with empty supplemental memberships and the matching collection slug',async()=>{
+    get.mockResolvedValue(page([{...item(1),collections:[]},{...item(2),collections:[]}]));
+    await expect(service.count('pizza-comrades',[wallet],context())).resolves.toBe(2n);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
   it('treats unknown ownership as unavailable, including when other known items already meet the minimum',async()=>{
     get.mockResolvedValue(page([item(1),item(2,null)]));
-    await expect(new OrdinalsOwnershipService(service).count(rule,[wallet])).rejects.toThrow('unavailable');
+    await expect(new OrdinalsOwnershipService(service).count(rule,[wallet])).rejects.toThrow('collection pizza-comrades contains an unknown owner');
   });
-  it.each(['missing-owner','bad-owner','wrong-id','wrong-collection','missing-membership','invalid-id','too-many-items','bad-page-size','missing-next-cursor','unexpected-final-cursor','empty-next-page'])('rejects %s data instead of returning a partial count',async problem=>{
+  it.each(['missing-owner','bad-owner','wrong-id','wrong-collection','invalid-membership','invalid-id','too-many-items','bad-page-size','missing-next-cursor','unexpected-final-cursor','empty-next-page'])('rejects %s data instead of returning a partial count',async problem=>{
     const data:any=page([item(1)]);
     if(problem==='missing-owner')delete data.items[0].owner;
     if(problem==='bad-owner')data.items[0].owner='not-an-address';
     if(problem==='wrong-id')data.items[0].id=item(2).id;
     if(problem==='wrong-collection')data.items[0].collection='other';
-    if(problem==='missing-membership')data.items[0].collections=[];
+    if(problem==='invalid-membership')data.items[0].collections=undefined;
     if(problem==='invalid-id')data.items[0].inscriptionId=data.items[0].id='bad';
     if(problem==='too-many-items')data.items=Array.from({length:101},(_,i)=>item(i));
     if(problem==='bad-page-size')data.pagination.pageSize=0;
@@ -239,6 +244,35 @@ describe('ord.net API authentication and transport',()=>{
     const api=new OrdnetApiService();const first=api.get(GET_PATH);const rejection=expect(first).rejects.toThrow('0.001 BTC');
     await jest.advanceTimersByTimeAsync(2100);await rejection;
     const second=api.get(GET_PATH);await jest.advanceTimersByTimeAsync(6300);await second;expect(fetch).toHaveBeenCalledTimes(5);
+  });
+  it.each([401,503])('identifies auth/verify HTTP %s without exposing response contents or keys',async status=>{
+    const fetch=jest.spyOn(global,'fetch').mockResolvedValueOnce(response(challenge()))
+      .mockResolvedValueOnce(response({error:'private-response-details'},status));
+    const pending=new OrdnetApiService().get(GET_PATH);
+    const rejection=expect(pending).rejects.toThrow(`POST /auth/verify: HTTP ${status}`);
+    await jest.advanceTimersByTimeAsync(2100);await rejection;
+    const error=await pending.catch(e=>e);
+    expect(error.message).not.toContain('private-response-details');expect(error.message).not.toContain(TEST_WIF);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('identifies an invalid session response without exposing its token',async()=>{
+    const fetch=jest.spyOn(global,'fetch').mockResolvedValueOnce(response(challenge()))
+      .mockResolvedValueOnce(response({...session('private-token'),walletBindings:[]}));
+    const pending=new OrdnetApiService().get(GET_PATH);
+    const rejection=expect(pending).rejects.toThrow('auth/verify returned an invalid session or wallet binding');
+    await jest.advanceTimersByTimeAsync(2100);await rejection;
+    expect((await pending.catch(e=>e)).message).not.toContain('private-token');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('identifies failed collection reads after retries without exposing query cursors or response contents',async()=>{
+    jest.replaceProperty(EnvironmentConfig,'ORDNET_SESSION_TOKEN','manual-token');
+    const fetch=jest.spyOn(global,'fetch').mockResolvedValue(response({error:'private-response-details'},503));
+    const pending=new OrdnetApiService().get(GET_PATH+'&cursor=private-cursor');
+    const rejection=expect(pending).rejects.toThrow('GET /collection/pizza-comrades/inscriptions: HTTP 503 after 3 attempts');
+    await jest.advanceTimersByTimeAsync(6500);await rejection;
+    const error=await pending.catch(e=>e);
+    for(const secret of ['private-cursor','private-response-details','manual-token'])expect(error.message).not.toContain(secret);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
   it('paces provider calls and honors rate-limit retryAfterMs',async()=>{
     jest.replaceProperty(EnvironmentConfig,'ORDNET_SESSION_TOKEN','manual-token');

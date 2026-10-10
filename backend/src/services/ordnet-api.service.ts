@@ -3,10 +3,10 @@ import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { Signer, Verifier, Address } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
+import { OrdnetUnavailableError } from '@/utils/ordnet-error.util';
 
 const API_URL = 'https://ord.net/api/v1';
 const REQUEST_GAP = 2100; // ord.net permits 30 trading reads per profile per minute.
-const UNAVAILABLE = 'Ordinals verification is temporarily unavailable. Please try again.';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validToken = (value: unknown): value is string => typeof value === 'string' && /^[\x21-\x7e]{1,4096}$/.test(value);
 
@@ -31,10 +31,10 @@ export class OrdnetApiService {
           throw new Error('ord.net session token is invalid or expired. Update ORDNET_SESSION_TOKEN, or configure an automatic API wallet.');
         }
         if (this.session?.token === token) this.session = undefined;
-        if (attempt === 1) throw new Error(UNAVAILABLE);
+        if (attempt === 1) throw new OrdnetUnavailableError('read session rejected after automatic renewal');
       }
     }
-    throw new Error(UNAVAILABLE);
+    throw new OrdnetUnavailableError('read session could not be established');
   }
 
   private async getToken(): Promise<string> {
@@ -71,7 +71,7 @@ export class OrdnetApiService {
 
     const challenge = await this.request('/auth/challenge', { body: { ordinalsAddress, paymentAddress } });
     if (!UUID.test(challenge?.authRequestId) || !Array.isArray(challenge.challenges)
-      || challenge.challenges.length < 1 || challenge.challenges.length > 2) throw new Error(UNAVAILABLE);
+      || challenge.challenges.length < 1 || challenge.challenges.length > 2) throw new OrdnetUnavailableError('auth/challenge returned an invalid response');
     const signedAddresses = new Set<string>();
     const challengeIds = new Set<string>();
     const verifications = challenge.challenges.map(entry => {
@@ -90,7 +90,7 @@ export class OrdnetApiService {
     const data = await this.request('/auth/verify', { body: { authRequestId: challenge.authRequestId, verifications } });
     const expires = Date.parse(data?.expiresAt);
     if (!validToken(data?.sessionToken) || !Number.isFinite(expires) || expires <= Date.now() + 30000
-      || !Array.isArray(data.walletBindings) || !data.walletBindings.some(binding => binding.ordinalsAddress === ordinalsAddress && binding.paymentAddress === paymentAddress)) throw new Error(UNAVAILABLE);
+      || !Array.isArray(data.walletBindings) || !data.walletBindings.some(binding => binding.ordinalsAddress === ordinalsAddress && binding.paymentAddress === paymentAddress)) throw new OrdnetUnavailableError('auth/verify returned an invalid session or wallet binding');
     this.session = { token: data.sessionToken, expires: Math.min(expires, Date.now() + 3600000) };
     return this.session.token;
   }
@@ -119,9 +119,11 @@ export class OrdnetApiService {
 
   private request(path: string, options: { token?: string; body?: object }): Promise<any> {
     const queuedAt = Date.now();
+    const route = `${options.body ? 'POST' : 'GET'} ${path.split('?')[0]}`;
     const result = this.requestTail.then(async () => {
-      if (Date.now() - queuedAt > 45000) throw new Error(UNAVAILABLE);
+      if (Date.now() - queuedAt > 45000) throw new OrdnetUnavailableError(`${route}: request queue exceeded 45 seconds`);
       const attempts = options.body ? 1 : 3; // Failed auth flows must start with a fresh challenge.
+      let failure = 'network request failed';
       for (let attempt = 0; attempt < attempts; attempt++) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
@@ -135,27 +137,29 @@ export class OrdnetApiService {
             signal: controller.signal, redirect: 'error',
           });
           if (response.ok) return await response.json();
+          failure = `HTTP ${response.status}`;
           if (response.status === 401 && !options.body) throw new OrdnetUnauthorized();
           if (response.status === 403 && options.body) throw new Error('ord.net rejected the API wallet. Its payment address must hold at least 0.001 BTC confirmed and be eligible for API access.');
           if (response.status === 404 && !options.body) throw new Error('This collection was not found on ord.net. Check its collection slug.');
-          if (options.body || (response.status !== 429 && response.status < 500)) throw new Error(UNAVAILABLE);
+          if (options.body || (response.status !== 429 && response.status < 500)) throw new OrdnetUnavailableError(`${route}: ${failure}`);
           if (response.status === 429) {
             const body = await response.json().catch(() => ({}));
             const seconds = Number(response.headers.get('retry-after'));
             const delay = Math.max(Number.isFinite(seconds) ? seconds * 1000 : 0,
               Number.isSafeInteger(body?.retryAfterMs) ? body.retryAfterMs : 0);
             // Do not retry early when the provider asks for a wait beyond this request's budget.
-            if (delay > 15000) throw new Error(UNAVAILABLE);
+            if (delay > 15000) throw new OrdnetUnavailableError(`${route}: rate limit requires ${Math.ceil(delay / 1000)} seconds before retry`);
             retryDelay = Math.max(retryDelay, delay);
           }
         } catch (error) {
-          if (error instanceof OrdnetUnauthorized || error.message === UNAVAILABLE
+          if (error instanceof OrdnetUnauthorized || error instanceof OrdnetUnavailableError
             || error.message?.startsWith('ord.net rejected') || error.message?.includes('not found on ord.net')) throw error;
-          if (attempt === attempts - 1) throw new Error(UNAVAILABLE);
+          failure = error?.name === 'AbortError' ? 'request timed out' : error?.name === 'SyntaxError' ? 'invalid JSON response' : 'network request failed';
+          if (attempt === attempts - 1) throw new OrdnetUnavailableError(`${route}: ${failure}`);
         } finally { clearTimeout(timeout); }
         if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-      throw new Error(UNAVAILABLE);
+      throw new OrdnetUnavailableError(`${route}: ${failure} after ${attempts} attempts`);
     });
     this.requestTail = result.catch(() => undefined).then(() => new Promise(resolve => setTimeout(resolve, REQUEST_GAP)));
     return result;
