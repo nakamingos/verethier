@@ -78,11 +78,19 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🔄 `/setup recover-verification`',
-      value: '**Fix broken verification setups**\n' +
-             '• Recreates verification messages\n' +
-             '• Updates orphaned rules\n' +
-             '• Use when verification buttons stop working\n' +
-             '**Example**: `/setup recover-verification #verify`\n\n',
+      value: '**Recreate a missing verification message**\n' +
+             '• Uses all existing rules in the channel\n' +
+             '• Keeps rules and assigned roles intact\n' +
+             '**Example**: `/setup recover-verification channel:#verify`\n\n',
+      inline: false
+    },
+    {
+      name: '✨ `/setup refresh-verification`',
+      value: '**Update a verification message to the current style**\n' +
+             '• Updates the existing message, preserving its link and pins\n' +
+             '• Set **new_message:true** to post another; existing messages keep working\n' +
+             '• All verification messages use the channel\'s existing rules\n' +
+             '**Example**: `/setup refresh-verification channel:#verify`\n\n',
       inline: false
     },
     {

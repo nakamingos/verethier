@@ -66,6 +66,12 @@ Notes:
 - `DATA_*` and `DB_*` can point at separate Supabase projects.
 - `DYNAMIC_ROLE_CRON` accepts either the named presets in [environment.config.ts](src/config/environment.config.ts) or a raw cron expression.
 
+## Verification Messages
+
+Use `/setup refresh-verification channel:#verify` to update an existing verification message to the current Bouncer style without changing its link, pins, or position. The bot looks for its verification button in the latest 100 messages, then in pinned messages. If it cannot find a message or cannot read/edit it, it reports the problem without automatically posting a replacement.
+
+Add `new_message:true` to post a new message while leaving existing messages working. All verification messages in that channel use its existing rules; this does not change rules, linked wallets, or assigned roles. `/setup recover-verification channel:#verify` remains available to recreate missing messages. These commands require Administrator permissions, and no database migration is needed.
+
 ## NFT Trait Rules
 
 Use `/setup add-rule` with `asset_type:NFT`, the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.

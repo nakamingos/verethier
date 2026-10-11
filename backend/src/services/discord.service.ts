@@ -193,6 +193,7 @@ export class DiscordService implements OnModuleInit {
    * - remove-rule: Delete existing rules
    * - list-rules: Display all rules
    * - recover-verification: Recover verification messages
+   * - refresh-verification: Update or repost verification messages
    * - help: Show comprehensive setup help and usage guide
    * 
    * @returns Promise that resolves when slash commands are registered and handlers are set up
@@ -252,6 +253,7 @@ export class DiscordService implements OnModuleInit {
    * - 'remove-rule': Deletes existing verification rules  
    * - 'list-rules': Displays all verification rules for the channel
    * - 'recover-verification': Recovers lost verification messages
+   * - 'refresh-verification': Updates or reposts verification messages
    * - 'help': Shows comprehensive help and usage information
    * 
    * Includes comprehensive error handling to ensure users receive feedback
@@ -281,6 +283,8 @@ export class DiscordService implements OnModuleInit {
         await this.discordCommandsSvc.handleListRules(interaction);
       } else if (sub === 'recover-verification') {
         await this.discordCommandsSvc.handleRecoverVerification(interaction);
+      } else if (sub === 'refresh-verification') {
+        await this.discordCommandsSvc.handleRefreshVerification(interaction);
       } else if (sub === 'audit-log') {
         await this.handleAuditLog(interaction);
       } else if (sub === 'help') {
@@ -483,8 +487,14 @@ export class DiscordService implements OnModuleInit {
         )
         .addSubcommand(sc =>
           sc.setName('recover-verification')
-            .setDescription('Recover verification setup for a channel (creates new message, updates orphaned rules)')
-            .addChannelOption(option => option.setName('channel').setDescription('Channel to recover verification for').setRequired(true))
+            .setDescription('Recreate a missing verification message using the channel\'s existing rules')
+            .addChannelOption(option => option.setName('channel').setDescription('Channel to recover verification for').addChannelTypes(ChannelType.GuildText).setRequired(true))
+        )
+        .addSubcommand(sc =>
+          sc.setName('refresh-verification')
+            .setDescription('Update the verification message to the current style, or post a new one')
+            .addChannelOption(option => option.setName('channel').setDescription('Verification channel').addChannelTypes(ChannelType.GuildText).setRequired(true))
+            .addBooleanOption(option => option.setName('new_message').setDescription('Post a new message and keep existing messages working (default: update in place)'))
         )
         .addSubcommand(sc =>
           sc.setName('help')
