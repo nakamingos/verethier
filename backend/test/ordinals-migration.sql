@@ -44,7 +44,7 @@ BEGIN
     $q$UPDATE public.verifier_rules SET slug = 'ALL' WHERE asset_type = 'ordinal'$q$,
     $q$UPDATE public.verifier_rules SET slug = NULL WHERE asset_type = 'ordinal'$q$,
     $q$UPDATE public.verifier_rules SET slug = 'pizza-comrades,other' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET attribute_key = 'Hat' WHERE asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET attribute_key = '' WHERE asset_type = 'ordinal'$q$,
     $q$UPDATE public.verifier_rules SET attribute_value = 'Red' WHERE asset_type = 'ordinal'$q$,
     $q$UPDATE public.verifier_rules SET min_items = 0 WHERE asset_type = 'ordinal'$q$,
     $q$UPDATE public.verifier_rules SET token_ids = ARRAY['1'] WHERE asset_type = 'ordinal'$q$,

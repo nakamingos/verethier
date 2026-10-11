@@ -9,6 +9,10 @@ export class AssetOwnershipService {
   constructor(private readonly dataSvc: DataService, private readonly nftSvc: NftOwnershipService,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService) {}
 
+  checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
+    if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
+  }
+
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
     if (rule.asset_type === 'ordinal') {
       if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');

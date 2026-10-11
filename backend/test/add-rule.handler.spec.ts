@@ -12,7 +12,7 @@ import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/
 import { ChannelType } from 'discord.js';
 
 const mockNftService = { prepareRule: jest.fn(), validateTraits: jest.fn() };
-const mockOrdinalsService = { prepareRule: jest.fn() };
+const mockOrdinalsService = { prepareRule: jest.fn(), prepareTraitSnapshot: jest.fn() };
 
 const mockDbService = {
   checkForExactDuplicateRule: jest.fn(),
@@ -416,7 +416,7 @@ describe('AddRuleHandler', () => {
       expect(mockDuplicateRuleConfirmationHandler.createRuleInfoFields).toHaveBeenCalledWith(expect.objectContaining(fields));
       expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalled();
     });
-    it.each([{ attribute_key: 'Hat' }, { attribute_value: 'Red' }, { network: 'ethereum' },
+    it.each([{ network: 'ethereum' },
       { token_ids: '1' }, { collection_name: 'Custom' }, { contract_address: '0x' + '1'.repeat(40) }])(
       'rejects unsupported options before creating a role or checking the provider: %s', async options => {
         const interaction = interactionFor(options);
@@ -425,8 +425,36 @@ describe('AddRuleHandler', () => {
         expect(mockOrdinalsService.prepareRule).not.toHaveBeenCalled();
         expect(interaction.guild.roles.create).not.toHaveBeenCalled();
         expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
-        expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('trait verification is not supported yet') });
+        expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Leave NFT network and contract options empty') });
       });
+    it('normalizes traits and saves the full snapshot through the existing rule flow', async () => {
+      const snapshot = { inscription_ids: ['a'.repeat(64) + 'i0'], criteria_hash: 'b'.repeat(64), fetched_at: new Date().toISOString() };
+      mockOrdinalsService.prepareRule.mockResolvedValue({ ...fields });
+      mockOrdinalsService.prepareTraitSnapshot.mockResolvedValue(snapshot);
+      mockDbService.checkForExactDuplicateRule.mockResolvedValue(null);
+      mockDbService.checkForDuplicateRule.mockResolvedValue(null);
+      mockDbService.getRulesByChannel.mockResolvedValue([]);
+      mockDbService.addRoleMapping.mockResolvedValue({ id: 11, ...fields, ordinal_trait_snapshot: snapshot });
+      mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
+      await handler.handle(interactionFor({ attribute_key: ' Hat ', attribute_value: ' Red ' }));
+      expect(mockOrdinalsService.prepareTraitSnapshot).toHaveBeenCalledWith({ ...fields, attribute_key: 'Hat', attribute_value: 'Red' });
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', 'pizza-comrades', 'role-id', 'Holder', 'Hat', 'Red', 10, { ...fields, ordinal_trait_snapshot: snapshot });
+    });
+    it('rejects a value without a key before creating a role', async () => {
+      const interaction = interactionFor({ attribute_value: 'Red' });
+      await handler.handle(interaction);
+      expect(mockOrdinalsService.prepareRule).not.toHaveBeenCalled();
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select an attribute_key') });
+    });
+    it('does not create a trait rule after a failed or incomplete snapshot scan', async () => {
+      mockOrdinalsService.prepareRule.mockResolvedValue({ ...fields });
+      mockOrdinalsService.prepareTraitSnapshot.mockRejectedValue(new Error('Ordinals trait verification is temporarily unavailable.'));
+      const interaction = interactionFor({ attribute_key: 'Hat' });
+      await handler.handle(interaction);
+      expect(interaction.guild.roles.create).not.toHaveBeenCalled();
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+    });
     it('reports unknown collections before creating roles or saving rules', async () => {
       mockOrdinalsService.prepareRule.mockRejectedValue(new Error('This collection was not found on Xverse. Check its collection slug.'));
       const interaction = interactionFor({ slug: 'unknown' });

@@ -77,10 +77,10 @@ describe('Ordinals ownership counts', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects incomplete inscription pages and unsupported traits', async () => {
+  it('rejects incomplete inscription pages and incomplete trait fallback data', async () => {
     request.mockResolvedValue({ collectionId: 'pizza-comrades', limit: 25, offset: 0, total: 2, inscriptions: [inscription(1)] });
     await expect(service.count(rule, [wallet, secondWallet])).rejects.toThrow('unavailable');
-    await expect(service.count({ ...rule, attribute_key: 'Hat' }, [wallet])).rejects.toThrow('quantity only');
+    await expect(service.count({ ...rule, attribute_key: 'Hat' }, [wallet])).rejects.toThrow('unavailable');
   });
 
   it('routes mixed wallets to the matching asset provider and keeps OR behavior across rules', async () => {

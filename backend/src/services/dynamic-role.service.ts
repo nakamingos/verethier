@@ -44,7 +44,7 @@ export class DynamicRoleService {
       let verifiedCount = 0;
       let revokedCount = 0;
       let errorCount = 0;
-      const context: NftCheckContext = { checks: new Map() };
+      const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
 
       // Process in batches to avoid rate limits
       const batchSize = 10;
@@ -127,7 +127,7 @@ export class DynamicRoleService {
     Logger.log(`🔍 Re-verifying all assignments for rule ${ruleId}`);
     
     const ruleAssignments = await this.getRuleActiveAssignments(ruleId);
-    const context: NftCheckContext = { checks: new Map() };
+    const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
     
     for (const assignment of ruleAssignments) {
       try {

@@ -26,6 +26,7 @@ describe('ord.net ownership provider',()=>{
   beforeEach(()=>{
     get=jest.fn();service=new OrdnetOwnershipService({get} as any);
     jest.replaceProperty(EnvironmentConfig,'ORDINALS_PROVIDER','ordnet');
+    jest.replaceProperty(EnvironmentConfig,'XVERSE_API_KEY',undefined);
   });
   afterEach(()=>jest.restoreAllMocks());
 
@@ -115,9 +116,8 @@ describe('ord.net ownership provider',()=>{
     expect(discord.removeUserRole).not.toHaveBeenCalled();expect(db.updateLastVerified).not.toHaveBeenCalled();
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith('assignment',expect.objectContaining({last_check_status:'unavailable'}));
   });
-  it('rejects provider typos and keeps unsupported trait rules rejected',async()=>{
+  it('rejects provider typos before calling either provider',async()=>{
     const facade=new OrdinalsOwnershipService(service);
-    await expect(facade.count({...rule,attribute_key:'Background'},[wallet])).rejects.toThrow('quantity only');
     jest.replaceProperty(EnvironmentConfig,'ORDINALS_PROVIDER','ord-net');
     await expect(facade.count(rule,[wallet])).rejects.toThrow('ORDINALS_PROVIDER must be');
     expect(get).not.toHaveBeenCalled();

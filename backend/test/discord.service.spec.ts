@@ -10,6 +10,7 @@ import { DataService } from '../src/services/data.service';
 import { CacheService } from '../src/services/cache.service';
 import { Logger } from '@nestjs/common';
 import { NftMetadataService } from '../src/services/nft-metadata.service';
+import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 
 // Mock Discord.js client and related objects
 const mockUser = { id: 'user123', tag: 'TestBot#1234' };
@@ -127,6 +128,7 @@ const mockCacheService = {
   cacheAllCollectionData: jest.fn().mockResolvedValue(undefined),
 };
 const mockNftMetadataService = { suggestions: jest.fn() };
+const mockOrdinalsService = { suggestions: jest.fn() };
 
 describe('DiscordService - Enhanced Tests', () => {
   let service: DiscordService;
@@ -160,11 +162,13 @@ describe('DiscordService - Enhanced Tests', () => {
         { provide: DataService, useValue: mockDataService },
         { provide: CacheService, useValue: mockCacheService },
         { provide: NftMetadataService, useValue: mockNftMetadataService },
+        { provide: OrdinalsOwnershipService, useValue: mockOrdinalsService },
       ],
     }).compile();
     service = module.get<DiscordService>(DiscordService);
     jest.clearAllMocks();
     mockNftMetadataService.suggestions.mockReset().mockResolvedValue(['Color', 'Hat']);
+    mockOrdinalsService.suggestions.mockReset().mockResolvedValue(['Background', 'Hat']);
     
     // Set up client for tests that need it
     (service as any).client = mockClient;
@@ -564,6 +568,38 @@ describe('DiscordService - Enhanced Tests', () => {
       const input = interaction();
       await service.handleNftAttributeAutocomplete(input);
       expect(input.respond.mock.calls[0][0]).toHaveLength(25);
+    });
+  });
+
+  describe('Ordinals attribute autocomplete', () => {
+    function interaction(name = 'attribute_key', value = '', options = {}) {
+      const fields = { slug: 'yonder', asset_type: 'ordinal', ...options };
+      return { options: { getFocused: () => ({ name, value }), getString: key => fields[key] ?? null }, respond: jest.fn().mockResolvedValue(undefined) } as any;
+    }
+    it('uses the selected collection and preserves manually typed values', async () => {
+      mockOrdinalsService.suggestions.mockResolvedValue(['Blue', 'Red']);
+      const input = interaction('attribute_value', 'Purple', { attribute_key: 'Background' });
+      await service.handleOrdinalAttributeAutocomplete(input);
+      expect(mockOrdinalsService.suggestions).toHaveBeenCalledWith('yonder', 'Background');
+      expect(input.respond).toHaveBeenCalledWith([{ name: 'Purple', value: 'Purple' }]);
+      expect(mockNftMetadataService.suggestions).not.toHaveBeenCalled();
+    });
+    it('preserves manual entry when ord.net fails', async () => {
+      mockOrdinalsService.suggestions.mockRejectedValue(new Error('unavailable'));
+      const input = interaction('attribute_key', 'Hat');
+      await service.handleOrdinalAttributeAutocomplete(input);
+      expect(input.respond).toHaveBeenCalledWith([{ name: 'Hat', value: 'Hat' }]);
+    });
+    it('responds within the autocomplete deadline when the provider stalls', async () => {
+      jest.useFakeTimers();
+      try {
+        mockOrdinalsService.suggestions.mockImplementation(() => new Promise(() => undefined));
+        const input = interaction('attribute_key', 'Hat');
+        const pending = service.handleOrdinalAttributeAutocomplete(input);
+        await jest.advanceTimersByTimeAsync(1500);
+        await pending;
+        expect(input.respond).toHaveBeenCalledWith([{ name: 'Hat', value: 'Hat' }]);
+      } finally { jest.useRealTimers(); }
     });
   });
 

@@ -13,7 +13,7 @@ Bouncer is split into two deployable apps:
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
-- Bitcoin mainnet Ordinals collection/count rules using Xverse wallet signatures and Xverse or ord.net API ownership checks
+- Bitcoin mainnet Ordinals quantity and trait rules using Xverse wallet signatures, ord.net traits, and Xverse ownership fallback
 - Wallet stacking across multiple verified addresses
 - Dynamic role re-verification and revocation
 - Rich Discord verification result messages
@@ -100,9 +100,9 @@ For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the coll
 /setup add-rule channel:#verify role:Holder asset_type:Ordinals slug:pizza-comrades min_items:10
 ```
 
-The collection name comes from Xverse. Bitcoin mainnet is implicit; connect the Xverse Ordinals address (`bc1p…`). Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum or Bitcoin within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. This release supports collection ownership and quantity; trait options are rejected.
+The collection label comes from the configured provider. Bitcoin mainnet is implicit; connect the Xverse Ordinals address (`bc1p…`). Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum or Bitcoin within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. Add `attribute_key` and optionally `attribute_value` for a trait rule; `min_items` counts matching inscriptions. Trait setup requires ord.net and saves the collection's complete matching ID list on the rule.
 
-Xverse remains the default API provider. The experimental ord.net provider uses the same verification UI and rules; set `ORDINALS_PROVIDER=ordnet` on the backend to select it. A dedicated API wallet can renew its one-hour sessions automatically. The provider-check command also reports inscription traits for evaluating future Ordinals trait rules. See [ord.net setup and testing](backend/README.md#ordnet-provider-experiment). No database migration is required for switching providers.
+Xverse remains the default API provider. Set `ORDINALS_PROVIDER=ordnet` for live traits and automatic Xverse fallback when ord.net is unavailable; retain `XVERSE_API_KEY` on the backend. A dedicated API wallet can renew its one-hour sessions automatically. Valid trait snapshots last 24 hours and are combined with fresh ownership checks. Uncertain checks retain existing roles; a complete collection count below a trait rule's minimum can still prove ineligibility. Apply `20261011010000_add_ordinal_trait_snapshots.sql` before deploying this feature. See [ord.net setup and testing](backend/README.md#ordnet-provider-experiment).
 
 ## Testing
 

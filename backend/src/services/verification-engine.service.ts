@@ -6,6 +6,7 @@ import { nftRuleLabel, serializeAssetCount } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { UserAddressService } from './user-address.service';
 import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
+import { OrdinalCheckDetails } from '@/models/ordinal-collection.interface';
 
 /**
  * VerificationEngine - Verification logic processor
@@ -66,6 +67,9 @@ export class VerificationEngine {
     context?: NftCheckContext,
     loadedRule?: VerifierRole
   ): Promise<VerificationResult> {
+    const run: NftCheckContext = context || { checks: new Map() };
+    let checkedRule: VerifierRole | undefined;
+    let checkedAddresses: string[] = [];
     try {
       Logger.debug(`VerificationEngine: Starting verification for user ${userId} with rule ${ruleId} and address ${address}`);
       
@@ -80,6 +84,7 @@ export class VerificationEngine {
           address
         };
       }
+      checkedRule = rule;
 
       // Get ALL wallet addresses for this user (for wallet stacking)
       const userAddresses = await this.userAddressService.getUserAddresses(userId);
@@ -89,6 +94,7 @@ export class VerificationEngine {
       const addressesToCheck = userAddresses.includes(address.toLowerCase()) 
         ? userAddresses 
         : [...userAddresses, address.toLowerCase()];
+      checkedAddresses = addressesToCheck;
       
       if (addressesToCheck.length !== userAddresses.length) {
         Logger.warn(`Address ${address} not found in getUserAddresses for user ${userId}, adding it manually to prevent race condition`);
@@ -99,7 +105,7 @@ export class VerificationEngine {
       // Apply verification logic - now checks across ALL user's wallets
       Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
       
-      const count = await this.ownershipSvc.count(rule, addressesToCheck, context);
+      const count = await this.ownershipSvc.count(rule, addressesToCheck, run);
       const assetCount = serializeAssetCount(count);
 
       const requiredCount = rule.min_items || 1;
@@ -107,13 +113,16 @@ export class VerificationEngine {
       
       Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredCount}`);
       
+      // Rule snapshots belong only on verifier_rules, never in member check JSON.
+      const { ordinal_trait_snapshot, ...resultRule } = rule;
       return {
         isValid,
         status: isValid ? 'passed' : 'failed',
         userId,
         ruleId,
         address,
-        rule,
+        rule: resultRule,
+        ownershipDetails: this.ownershipSvc.checkDetails?.(rule, addressesToCheck, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
           collection: rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
@@ -126,9 +135,14 @@ export class VerificationEngine {
 
     } catch (error) {
       Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error);
+      let ownershipDetails: OrdinalCheckDetails | undefined;
+      try {
+        if (checkedRule) ownershipDetails = this.ownershipSvc.checkDetails?.(checkedRule, checkedAddresses, run);
+      } catch { /* Invalid configuration must still return an unavailable check. */ }
       return {
         isValid: false,
         status: 'unavailable',
+        ownershipDetails,
         error: error.message || 'Unknown verification error',
         userId,
         ruleId,
@@ -360,6 +374,7 @@ export class VerificationEngine {
  * @property verificationDetails - Detailed breakdown of verification criteria and results (optional)
  */
 export interface VerificationResult {
+  ownershipDetails?: OrdinalCheckDetails;
   isValid: boolean;
   status?: 'passed' | 'failed' | 'unavailable';
   userId: string;

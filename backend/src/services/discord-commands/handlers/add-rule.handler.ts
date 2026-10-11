@@ -21,6 +21,7 @@ import { OrdinalsOwnershipService } from '../../ordinals-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { getNftNetworkId } from '@/utils/nft-network.util';
 import { nftTrait } from '@/utils/nft-trait.util';
+import { ordinalTrait } from '@/utils/ordinal-rule.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
 import { validateRuleInputParams, formatAttribute } from '../utils/rule-validation.util';
@@ -146,14 +147,18 @@ export class AddRuleHandler {
     const name = interaction.options.getString('collection_name');
     const network = interaction.options.getString('network');
     if (assetType === 'ordinal') {
-      if (attributeKey !== 'ALL' || attributeValue !== 'ALL' || contract || tokenIds != null || name != null || network != null) {
-        await interaction.editReply({ content: AdminFeedback.simple('Ordinals rules use slug and min_items. Leave NFT options and attributes empty; trait verification is not supported yet.', true) });
+      if (contract || tokenIds != null || name != null || network != null) {
+        await interaction.editReply({ content: AdminFeedback.simple('Ordinals rules use slug, optional attributes, and min_items. Leave NFT network and contract options empty.', true) });
         return null;
       }
       try {
         if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
+        const trait = ordinalTrait({ attribute_key: attributeKey, attribute_value: attributeValue });
         const assetFields = await this.ordinalsSvc.prepareRule(slug);
-        return { channel, roleName, slug: assetFields.slug, attributeKey, attributeValue, minItems, assetFields };
+        if (trait.enabled) assetFields.ordinal_trait_snapshot = await this.ordinalsSvc.prepareTraitSnapshot({
+          ...assetFields, attribute_key: trait.key, attribute_value: trait.value,
+        });
+        return { channel, roleName, slug: assetFields.slug, attributeKey: trait.key, attributeValue: trait.value, minItems, assetFields };
       } catch (error) {
         await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the Ordinals collection. Please try again.', true) });
         return null;
