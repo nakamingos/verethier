@@ -14,6 +14,8 @@ import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
 import { NFT_NETWORKS, getNftNetworkId } from '@/utils/nft-network.util';
 import { NftMetadataService } from '@/services/nft-metadata.service';
 import { OrdinalsOwnershipService } from '@/services/ordinals-ownership.service';
+import { ruleCommandAssetType } from '@/utils/rule-command.util';
+import { normalizeRoleName } from './discord-commands/utils/role-management.util';
 
 /**
  * Discord Bot Service
@@ -189,11 +191,10 @@ export class DiscordService implements OnModuleInit {
    *   - Button interactions for user verification requests
    * 
    * The '/setup' command includes subcommands for:
-   * - add-rule: Create new verification rules
+   * - add-nft-rule, add-ordinals-rule, add-ethscription-rule: Create verification rules
    * - remove-rule: Delete existing rules
    * - list-rules: Display all rules
-   * - recover-verification: Recover verification messages
-   * - refresh-verification: Update or repost verification messages
+   * - verification: Refresh, create, or recover verification messages
    * - help: Show comprehensive setup help and usage guide
    * 
    * @returns Promise that resolves when slash commands are registered and handlers are set up
@@ -204,15 +205,22 @@ export class DiscordService implements OnModuleInit {
     this.client.on('interactionCreate', async (interaction) => {
       // Handle autocomplete interactions for role and slug selection
       if (interaction.isAutocomplete()) {
-        if (interaction.commandName === 'setup' && interaction.options.getSubcommand() === 'add-rule') {
+        if (interaction.commandName !== 'setup') return;
+        const subcommand = interaction.options.getSubcommand();
+        const assetType = ruleCommandAssetType(subcommand);
+        if (!assetType) {
+          await interaction.respond([]);
+          return;
+        }
+        if (interaction.commandName === 'setup' && assetType) {
           const focusedOption = interaction.options.getFocused(true);
           if (focusedOption.name === 'role') {
             await this.handleRoleAutocomplete(interaction);
-          } else if (interaction.options.getString('asset_type') === 'nft' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
+          } else if (assetType === 'nft' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
             await this.handleNftAttributeAutocomplete(interaction);
-          } else if (interaction.options.getString('asset_type') === 'ordinal' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
+          } else if (assetType === 'ordinal' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
             await this.handleOrdinalAttributeAutocomplete(interaction);
-          } else if (['nft', 'ordinal'].includes(interaction.options.getString('asset_type'))) {
+          } else if (['nft', 'ordinal'].includes(assetType)) {
             await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
             await this.handleSlugAutocomplete(interaction);
@@ -249,11 +257,10 @@ export class DiscordService implements OnModuleInit {
    * Handles Discord slash command interactions for the '/setup' command.
    * 
    * Routes subcommands to their respective handlers in the DiscordCommandsService:
-   * - 'add-rule': Creates new verification rules
+   * - 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule': Create verification rules
    * - 'remove-rule': Deletes existing verification rules  
    * - 'list-rules': Displays all verification rules for the channel
-   * - 'recover-verification': Recovers lost verification messages
-   * - 'refresh-verification': Updates or reposts verification messages
+   * - 'verification': Refreshes, creates, or recovers verification messages
    * - 'help': Shows comprehensive help and usage information
    * 
    * Includes comprehensive error handling to ensure users receive feedback
@@ -274,21 +281,25 @@ export class DiscordService implements OnModuleInit {
       }
 
       const sub = interaction.options.getSubcommand();
+      const assetType = ruleCommandAssetType(sub);
       
-      if (sub === 'add-rule') {
-        await this.discordCommandsSvc.handleAddRule(interaction);
+      if (assetType) {
+        await this.discordCommandsSvc.handleAddRule(interaction, assetType);
       } else if (sub === 'remove-rule') {
         await this.discordCommandsSvc.handleRemoveRule(interaction);
       } else if (sub === 'list-rules') {
         await this.discordCommandsSvc.handleListRules(interaction);
-      } else if (sub === 'recover-verification') {
-        await this.discordCommandsSvc.handleRecoverVerification(interaction);
-      } else if (sub === 'refresh-verification') {
-        await this.discordCommandsSvc.handleRefreshVerification(interaction);
+      } else if (sub === 'verification') {
+        await this.discordCommandsSvc.handleVerification(interaction);
       } else if (sub === 'audit-log') {
         await this.handleAuditLog(interaction);
       } else if (sub === 'help') {
         await this.handleSetupHelp(interaction);
+      } else {
+        await interaction.reply({
+          content: 'This setup command is no longer available. Please select a current command from `/setup`. If you still see the old commands, reload Discord.',
+          flags: MessageFlags.Ephemeral
+        });
       }
     } catch (error) {
       Logger.error('Error in handleSetup:', error);
@@ -462,16 +473,38 @@ export class DiscordService implements OnModuleInit {
         .setDescription('Setup the bot for the first time or manage rules')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // 🔒 ADMIN ONLY
         .addSubcommand(sc =>
-          sc.setName('add-rule')
-            .setDescription('Add a new verification rule')
+          sc.setName('add-nft-rule')
+            .setDescription('Add an NFT collection or token verification rule')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
-            .addStringOption(option => option.setName('asset_type').setDescription('Collection type (default: Ethscriptions)').addChoices({ name: 'Ethscriptions', value: 'ethscription' }, { name: 'NFT', value: 'nft' }, { name: 'Ordinals', value: 'ordinal' }))
+            .addStringOption(option => option.setName('contract_address').setDescription('NFT contract address on the selected network').setRequired(true))
             .addStringOption(option => option.setName('network').setDescription('NFT network (default: Ethereum)').addChoices(...NFT_NETWORKS.map(({ name, value }) => ({ name, value }))))
-            .addStringOption(option => option.setName('contract_address').setDescription('NFT contract address on the selected network (requires asset_type:NFT)'))
             .addStringOption(option => option.setName('token_ids').setDescription('NFT token ID, list, or range; ERC-1155 defaults to 0-99'))
             .addStringOption(option => option.setName('collection_name').setDescription('Optional NFT collection name override').setMaxLength(100))
-            .addStringOption(option => option.setName('slug').setDescription('Collection slug (required for Ordinals; Ethscriptions defaults to ALL)').setAutocomplete(true))
+            .addStringOption(option => option.setName('attribute_key').setDescription('Attribute key (leave empty for ALL attributes)').setAutocomplete(true))
+            .addStringOption(option => option.setName('attribute_value').setDescription('Attribute value (leave empty for ALL values)').setAutocomplete(true))
+            .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)').setMinValue(1))
+        )
+        .addSubcommand(sc =>
+          sc.setName('add-ordinals-rule')
+            .setDescription('Add a Bitcoin Ordinals collection, ID, or number verification rule')
+            .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
+            .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
+            .addStringOption(option => option.setName('slug').setDescription('Collection slug; leave empty for specific inscription IDs or numbers'))
+            .addStringOption(option => option.setName('inscription_ids').setDescription('Full inscription ID or comma-separated IDs; leave slug empty').setMaxLength(6000))
+            .addStringOption(option => option.setName('inscription_numbers').setDescription('Global inscription numbers or inclusive ranges, e.g. 12345,100000-100999').setMaxLength(6000))
+            .addStringOption(option => option.setName('attribute_key').setDescription('Collection attribute key (leave empty for ALL attributes)').setAutocomplete(true))
+            .addStringOption(option => option.setName('attribute_value').setDescription('Collection attribute value (leave empty for ALL values)').setAutocomplete(true))
+            .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)').setMinValue(1))
+        )
+        .addSubcommand(sc =>
+          sc.setName('add-ethscription-rule')
+            .setDescription('Add an Ethscriptions collection, ID, or number verification rule')
+            .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
+            .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
+            .addStringOption(option => option.setName('slug').setDescription('Collection slug (default: ALL); leave empty for specific IDs or numbers').setAutocomplete(true))
+            .addStringOption(option => option.setName('inscription_ids').setDescription('Full 0x transaction hash or comma-separated hashes; leave slug empty').setMaxLength(6000))
+            .addStringOption(option => option.setName('inscription_numbers').setDescription('Global ethscription numbers or inclusive ranges, e.g. 12345,100000-100999').setMaxLength(6000))
             .addStringOption(option => option.setName('attribute_key').setDescription('Attribute key (leave empty for ALL attributes)').setAutocomplete(true))
             .addStringOption(option => option.setName('attribute_value').setDescription('Attribute value (leave empty for ALL values)').setAutocomplete(true))
             .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)').setMinValue(1))
@@ -483,18 +516,22 @@ export class DiscordService implements OnModuleInit {
         )
         .addSubcommand(sc =>
           sc.setName('list-rules')
-            .setDescription('List all verification rules')
+            .setDescription('List verification rules, optionally filtered by asset type')
+            .addStringOption(option => option.setName('asset_type').setDescription('Show only this asset type (default: all)').addChoices(
+              { name: 'NFT', value: 'nft' },
+              { name: 'Ordinals', value: 'ordinal' },
+              { name: 'Ethscriptions', value: 'ethscription' }
+            ))
         )
         .addSubcommand(sc =>
-          sc.setName('recover-verification')
-            .setDescription('Recreate a missing verification message using the channel\'s existing rules')
-            .addChannelOption(option => option.setName('channel').setDescription('Channel to recover verification for').addChannelTypes(ChannelType.GuildText).setRequired(true))
-        )
-        .addSubcommand(sc =>
-          sc.setName('refresh-verification')
-            .setDescription('Update the verification message to the current style, or post a new one')
+          sc.setName('verification')
+            .setDescription('Refresh, create, or recover the channel\'s verification message')
             .addChannelOption(option => option.setName('channel').setDescription('Verification channel').addChannelTypes(ChannelType.GuildText).setRequired(true))
-            .addBooleanOption(option => option.setName('new_message').setDescription('Post a new message and keep existing messages working (default: update in place)'))
+            .addStringOption(option => option.setName('action').setDescription('What to do with the verification message').setRequired(true).addChoices(
+              { name: 'Refresh existing', value: 'refresh' },
+              { name: 'Create new', value: 'new' },
+              { name: 'Recover missing', value: 'recover' }
+            ))
         )
         .addSubcommand(sc =>
           sc.setName('help')
@@ -594,7 +631,7 @@ export class DiscordService implements OnModuleInit {
   }
 
   /**
-   * Handles role autocomplete for the add-rule command.
+   * Handles role autocomplete for the rule creation commands.
    * @param interaction - The autocomplete interaction.
    */
   async handleRoleAutocomplete(interaction: any): Promise<void> {
@@ -606,7 +643,7 @@ export class DiscordService implements OnModuleInit {
         return;
       }
 
-      const focusedValue = interaction.options.getFocused(); // Keep original casing
+      const focusedValue = normalizeRoleName(interaction.options.getFocused()); // Keep original casing
       const focusedValueLower = focusedValue.toLowerCase(); // Use for filtering only
       const guild = interaction.guild;
       
@@ -657,7 +694,7 @@ export class DiscordService implements OnModuleInit {
       // and no role with that name already exists
       if (choices.length < 25 && focusedValue.length > 0 && !existingRoleWithName) {
         choices.push({
-          name: `💡 Create new role: "${focusedValue}"`, // Use original casing in display
+          name: focusedValue, // The selected display text is also a valid role name.
           value: focusedValue // Use original casing as value
         });
       }
@@ -671,7 +708,7 @@ export class DiscordService implements OnModuleInit {
   }
 
   /**
-   * Handles slug autocomplete for the add-rule command.
+   * Handles slug autocomplete for Ethscriptions rules.
    * Only allows selection of existing slugs from the marketplace database.
    * @param interaction - The autocomplete interaction.
    */
@@ -713,7 +750,7 @@ export class DiscordService implements OnModuleInit {
   }
 
   /**
-   * Handles attribute key autocomplete for the add-rule command.
+   * Handles attribute key autocomplete for Ethscriptions rules.
    * Only shows attribute keys if a slug has been selected.
    * @param interaction - The autocomplete interaction.
    */

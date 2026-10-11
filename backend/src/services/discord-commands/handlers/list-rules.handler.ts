@@ -1,18 +1,25 @@
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
+import { VerifierRole } from '@/models/verifier-role.interface';
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatInputCommandInteraction, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ButtonInteraction } from 'discord.js';
 import { DbService } from '../../db.service';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { formatAttribute } from '../utils/rule-validation.util';
 
+type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
+const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
+  nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
+};
+
 /**
  * List Rules Command Handler
  * 
  * Handles the complete flow for listing verification rules with pagination:
  * - Retrieval of all server rules
- * - Filtering and sorting by rule ID
- * - Paginated display with navigation buttons (20 rules per page)
+ * - Optional asset type filtering and sorting by rule ID
+ * - Paginated display with navigation buttons (up to 20 rules per page)
  * - Proper handling of empty rule sets
  */
 @Injectable()
@@ -21,7 +28,7 @@ export class ListRulesHandler {
   private readonly RULES_PER_PAGE = 20;
 
   // Simple in-memory cache for pagination data
-  private paginationCache = new Map<string, any[]>();
+  private paginationCache = new Map<string, { rules: any[]; assetType: RuleAssetType | null }>();
 
   constructor(
     private readonly dbSvc: DbService
@@ -34,6 +41,7 @@ export class ListRulesHandler {
     try {
       // Defer the reply early to prevent timeout
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const assetType = interaction.options.getString('asset_type') as RuleAssetType | null;
       
       this.logger.log(`Fetching rules for server: ${interaction.guild.id}`);
       
@@ -42,22 +50,24 @@ export class ListRulesHandler {
       
       this.logger.log(`Found ${allRules?.length || 0} total rules`);
       
-      const rules = this.filterAndSortRules(allRules);
+      const rules = this.filterAndSortRules(allRules, assetType);
       
       this.logger.log(`Filtered to ${rules?.length || 0} rules`);
 
       if (rules.length === 0) {
         await interaction.editReply({
-          embeds: [AdminFeedback.info('Verification Rules', 'No verification rules found.')]
+          embeds: [AdminFeedback.info('Verification Rules', assetType
+            ? `No verification rules found for ${ASSET_TYPE_LABELS[assetType]}.`
+            : 'No verification rules found.')]
         });
         return;
       }
 
       // Store rules in cache for pagination
-      this.storeRulesForPagination(interaction.user.id, rules);
+      this.storeRulesForPagination(interaction.user.id, interaction.id, rules, assetType);
       
       // Show first page
-      await this.showRulesPage(interaction, rules, 0, false);
+      await this.showRulesPage(interaction, rules, 0, false, assetType);
 
     } catch (error) {
       this.logger.error('Error in handleListRules:');
@@ -87,10 +97,11 @@ export class ListRulesHandler {
   async handlePaginationButton(interaction: ButtonInteraction): Promise<void> {
     const customId = interaction.customId;
     const userId = interaction.user.id;
+    const [, , direction, currentPageStr, listId] = customId.split('-');
 
     // Get stored rules data
-    const allRules = this.paginationCache.get(userId);
-    if (!allRules) {
+    const cached = this.paginationCache.get(`${userId}:${listId}`);
+    if (!cached) {
       await interaction.reply({
         content: '❌ Pagination data expired. Please run the command again.',
         ephemeral: true
@@ -98,8 +109,6 @@ export class ListRulesHandler {
       return;
     }
 
-    // Extract page info from button ID
-    const [, , direction, currentPageStr] = customId.split('-');
     const currentPage = parseInt(currentPageStr);
     
     let newPage;
@@ -110,7 +119,7 @@ export class ListRulesHandler {
     }
 
     // Show the new page
-    await this.showRulesPage(interaction, allRules, newPage, true);
+    await this.showRulesPage(interaction, cached.rules, newPage, true, cached.assetType, listId);
   }
 
   /**
@@ -120,12 +129,29 @@ export class ListRulesHandler {
     interaction: ChatInputCommandInteraction | ButtonInteraction, 
     allRules: any[], 
     page: number, 
-    isUpdate: boolean = false
+    isUpdate: boolean = false,
+    assetType: RuleAssetType | null = null,
+    listId: string = interaction.id
   ): Promise<void> {
-    const totalPages = Math.ceil(allRules.length / this.RULES_PER_PAGE);
-    const startIndex = page * this.RULES_PER_PAGE;
-    const endIndex = Math.min(startIndex + this.RULES_PER_PAGE, allRules.length);
-    const rulesForPage = allRules.slice(startIndex, endIndex);
+    const pages: any[][] = [];
+    let current: any[] = [];
+    let length = 0;
+    for (const rule of allRules) {
+      const rowLength = this.formatSingleRule(rule).length;
+      if (current.length && (current.length === this.RULES_PER_PAGE || length + 2 + rowLength > 4096)) {
+        pages.push(current);
+        current = [];
+        length = 0;
+      }
+      length += (current.length ? 2 : 0) + rowLength;
+      current.push(rule);
+    }
+    if (current.length) pages.push(current);
+    const totalPages = pages.length;
+    page = Math.max(0, Math.min(page, totalPages - 1));
+    const rulesForPage = pages[page] || [];
+    const startIndex = pages.slice(0, page).reduce((total, rules) => total + rules.length, 0);
+    const endIndex = startIndex + rulesForPage.length;
 
     this.logger.log(`Showing page ${page + 1}/${totalPages} (rules ${startIndex + 1}-${endIndex} of ${allRules.length})`);
 
@@ -137,7 +163,7 @@ export class ListRulesHandler {
     // Previous button (disabled on first page)
     buttons.push(
       new ButtonBuilder()
-        .setCustomId(`list-rules-prev-${page}`)
+        .setCustomId(`list-rules-prev-${page}-${listId}`)
         .setLabel('◀ Previous')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page === 0)
@@ -146,7 +172,7 @@ export class ListRulesHandler {
     // Next button (disabled on last page) 
     buttons.push(
       new ButtonBuilder()
-        .setCustomId(`list-rules-next-${page}`)
+        .setCustomId(`list-rules-next-${page}-${listId}`)
         .setLabel('Next ▶')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page >= totalPages - 1)
@@ -154,7 +180,7 @@ export class ListRulesHandler {
 
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
 
-    const title = `Verification Rules (Page ${page + 1}/${totalPages})`;
+    const title = `${assetType ? ASSET_TYPE_LABELS[assetType] + ' ' : ''}Verification Rules (Page ${page + 1}/${totalPages})`;
     const footer = `Showing ${rulesForPage.length} of ${allRules.length} total rules`;
 
     const embed = AdminFeedback.info(title, description)
@@ -176,12 +202,14 @@ export class ListRulesHandler {
   /**
    * Store rules data for pagination
    */
-  private storeRulesForPagination(userId: string, rules: any[]): void {
-    this.paginationCache.set(userId, rules);
+  private storeRulesForPagination(userId: string, listId: string, rules: any[], assetType: RuleAssetType | null): void {
+    // Keep separate results when an administrator opens multiple filtered lists.
+    const cacheKey = `${userId}:${listId}`;
+    this.paginationCache.set(cacheKey, { rules, assetType });
     
     // Clear cache after 5 minutes to prevent memory leaks
     const timeout = setTimeout(() => {
-      this.paginationCache.delete(userId);
+      this.paginationCache.delete(cacheKey);
     }, 5 * 60 * 1000);
 
     // Don't keep the process alive just to evict cached pagination data.
@@ -189,11 +217,12 @@ export class ListRulesHandler {
   }
 
   /**
-   * Filters out system rules and sorts by rule ID
+   * Filters out system rules, applies the optional asset type, and sorts by rule ID
    */
-  private filterAndSortRules(allRules: any[]): any[] {
+  private filterAndSortRules(allRules: any[], assetType: RuleAssetType | null): any[] {
     return allRules
       .filter(rule => rule.server_id !== '000000000000000000')
+      .filter(rule => !assetType || (rule.asset_type ?? 'ethscription') === assetType)
       .sort((a, b) => a.id - b.id); // Sort by Rule ID in ascending order
   }
 
@@ -213,6 +242,7 @@ export class ListRulesHandler {
     }
 
     try {
+      if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);
       let slug = rule.slug || 'ALL';

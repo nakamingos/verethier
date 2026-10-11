@@ -1,5 +1,6 @@
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { EmbedBuilder, Colors } from 'discord.js';
 import { VerificationRule } from '@/models/verification-rule.interface';
 
@@ -156,6 +157,7 @@ export class AdminFeedback {
     
     result += `**Role:** <@&${rule.role_id}>\n`;
     if (rule.asset_type === 'nft') return result + `**Collection:** ${nftRuleCriteria(rule)}\n**Contract:** ${rule.contract_address}`;
+    if (rule.inscription_criteria) return result + `**Inscriptions:** ${inscriptionRuleScope(rule)} · min ${rule.min_items || 1}`;
     if (rule.asset_type === 'ordinal') return result + `**Collection:** ${ordinalRuleCriteria(rule)}`;
     result += `**Collection:** ${rule.slug}\n`;
     result += `**Attribute:** ${formatAttribute(rule.attribute_key, rule.attribute_value)}\n`;
@@ -171,7 +173,7 @@ export class AdminFeedback {
     const title = channelName ? `Verification Rules for #${channelName}` : 'Verification Rules';
     
     if (rules.length === 0) {
-      return AdminFeedback.info(title, 'No verification rules found for this channel.\nUse `/setup add-rule` to create your first rule!');
+      return AdminFeedback.info(title, 'No verification rules found for this channel.\nUse `/setup add-nft-rule`, `/setup add-ordinals-rule`, or `/setup add-ethscription-rule` to create your first rule.');
     }
 
     const description = rules.map((rule, index) => {

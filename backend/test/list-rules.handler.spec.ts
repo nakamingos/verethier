@@ -3,6 +3,7 @@ import { ListRulesHandler } from '../src/services/discord-commands/handlers/list
 import { DbService } from '../src/services/db.service';
 import { AdminFeedback } from '../src/services/utils/admin-feedback.util';
 import { formatAttribute } from '../src/services/discord-commands/utils/rule-validation.util';
+import { ButtonInteraction } from 'discord.js';
 
 describe('ListRulesHandler', () => {
   let handler: ListRulesHandler;
@@ -33,9 +34,11 @@ describe('ListRulesHandler', () => {
 
     // Create mock interaction
     mockInteraction = {
+      id: '123456789012345678',
       guild: {
         id: 'test-guild-id',
       },
+      options: { getString: jest.fn().mockReturnValue(null) },
       deferReply: jest.fn(),
       editReply: jest.fn(),
       reply: jest.fn(),
@@ -63,6 +66,80 @@ describe('ListRulesHandler', () => {
   });
 
   describe('handle', () => {
+    it.each([
+      [null, [1, 2, 3, 4, 5, 6, 7], 'Verification Rules'],
+      ['nft', [3, 4], 'NFT Verification Rules'],
+      ['ordinal', [5, 6], 'Ordinals Verification Rules'],
+      ['ethscription', [1, 2, 7], 'Ethscriptions Verification Rules']
+    ])('lists the correct rules for asset filter %s', async (assetType, expectedIds, title) => {
+      const base = { server_id: 'test-guild-id', channel_id: 'channel', role_id: 'role', slug: 'collection',
+        attribute_key: 'ALL', attribute_value: 'ALL', min_items: 1 };
+      const rules = [
+        { ...base, id: 1 }, // Legacy Ethscription rule without asset_type
+        { ...base, id: 2, asset_type: 'ethscription' },
+        { ...base, id: 3, asset_type: 'nft', chain_id: 1, slug: null },
+        { ...base, id: 4, asset_type: 'nft', chain_id: 4663, slug: null },
+        { ...base, id: 5, asset_type: 'ordinal' },
+        { ...base, id: 6, asset_type: 'ordinal', slug: null,
+          inscription_criteria: { kind: 'numbers', ranges: [[1, 10]] } },
+        { ...base, id: 7, asset_type: 'ethscription', slug: null,
+          inscription_criteria: { kind: 'ids', ids: ['0x' + 'a'.repeat(64)] } },
+        { ...base, id: 99, asset_type: 'nft', server_id: '000000000000000000' }
+      ];
+      mockDbService.getRoleMappings.mockResolvedValue(rules.reverse() as any);
+      mockInteraction.options.getString.mockReturnValue(assetType);
+      await handler.handle(mockInteraction);
+
+      expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('test-guild-id');
+      expect(mockInteraction.options.getString).toHaveBeenCalledWith('asset_type');
+      const embed = getLastEditReplyPayload().embeds[0].toJSON();
+      expect(embed.title).toBe(`📋 ${title} (Page 1/1)`);
+      expect([...embed.description.matchAll(/ID: (\d+) \| Channel/g)].map(match => Number(match[1]))).toEqual(expectedIds);
+      expect(embed.footer.text).toBe(`Showing ${expectedIds.length} of ${expectedIds.length} total rules`);
+    });
+
+    it('reports no matches for the chosen asset type without showing unrelated rules', async () => {
+      mockDbService.getRoleMappings.mockResolvedValue([{ id: 1, server_id: 'test-guild-id', asset_type: 'ethscription' }] as any);
+      mockInteraction.options.getString.mockReturnValue('ordinal');
+      await handler.handle(mockInteraction);
+      expect(mockInteraction.editReply).toHaveBeenCalledWith({
+        embeds: [AdminFeedback.info('Verification Rules', 'No verification rules found for Ordinals.')]
+      });
+    });
+
+    it('keeps each list\'s asset filter, label, and totals when navigating pages', async () => {
+      const nftRules = Array.from({ length: 25 }, (_, index) => ({ id: index + 1,
+        server_id: 'test-guild-id', channel_id: 'channel', role_id: 'role', asset_type: 'nft', chain_id: 1 }));
+      mockDbService.getRoleMappings.mockResolvedValue([
+        ...nftRules,
+        { id: 99, server_id: 'test-guild-id', asset_type: 'ordinal', slug: 'yonder' }
+      ] as any);
+      mockInteraction.options.getString.mockReturnValue('nft');
+      await handler.handle(mockInteraction);
+      const first = getLastEditReplyPayload();
+      const button = Object.assign(Object.create(ButtonInteraction.prototype), {
+        customId: first.components[0].toJSON().components[1].custom_id,
+        user: mockInteraction.user,
+        update: jest.fn(), reply: jest.fn()
+      });
+
+      // Opening another asset's list must not change the first list's pagination.
+      await handler.handle({ ...mockInteraction, id: '123456789012345679',
+        options: { getString: jest.fn().mockReturnValue('ordinal') } });
+      await handler.handlePaginationButton(button);
+      const second = button.update.mock.calls.at(-1)[0].embeds[0].toJSON();
+      expect(second.title).toBe('📋 NFT Verification Rules (Page 2/2)');
+      expect(second.footer.text).toBe('Showing 5 of 25 total rules');
+      expect([...second.description.matchAll(/ID: (\d+) \| Channel/g)].map(match => Number(match[1]))).toEqual([21, 22, 23, 24, 25]);
+
+      button.customId = button.update.mock.calls.at(-1)[0].components[0].toJSON().components[0].custom_id;
+      await handler.handlePaginationButton(button);
+      const previous = button.update.mock.calls.at(-1)[0].embeds[0].toJSON();
+      expect(previous.title).toBe('📋 NFT Verification Rules (Page 1/2)');
+      expect(previous.footer.text).toBe('Showing 20 of 25 total rules');
+      expect([...previous.description.matchAll(/ID: (\d+) \| Channel/g)].map(match => Number(match[1]))).toEqual(nftRules.slice(0, 20).map(rule => rule.id));
+    });
+
     it('should handle empty rules list', async () => {
       mockDbService.getRoleMappings.mockResolvedValue([]);
 
@@ -74,6 +151,26 @@ describe('ListRulesHandler', () => {
       expect(mockInteraction.editReply).toHaveBeenCalledWith({
         embeds: [AdminFeedback.info('Verification Rules', 'No verification rules found.')],
       });
+    });
+
+    it('paginates long inscription lists without dropping rules or exceeding Discord limits', async () => {
+      const rules = Array.from({ length: 20 }, (_, i) => ({ id: i + 1, server_id: 'guild', channel_id: 'channel', role_id: 'role',
+        asset_type: 'ordinal', slug: null, attribute_key: 'ALL', attribute_value: 'ALL', min_items: 1,
+        inscription_criteria: { kind: 'ids', ids: Array.from({ length: 5 }, (_, n) => 'a'.repeat(64) + 'i' + n) } }));
+      mockDbService.getRoleMappings.mockResolvedValue(rules);
+      await handler.handle(mockInteraction);
+      const first = getLastEditReplyPayload();
+      expect(first.embeds[0].toJSON().description.length).toBeLessThanOrEqual(4096);
+      expect(first.components[0].toJSON().components[1].disabled).toBe(false);
+      const totalPages = Number(first.embeds[0].toJSON().title.match(/\/(\d+)/)[1]);
+      const shown: number[] = [];
+      for (let page = 0; page < totalPages; page++) {
+        await (handler as any).showRulesPage(mockInteraction, rules, page);
+        const description = getLastEditReplyPayload().embeds[0].toJSON().description;
+        expect(description.length).toBeLessThanOrEqual(4096);
+        shown.push(...[...description.matchAll(/ID: (\d+) \| Channel/g)].map(match => Number(match[1])));
+      }
+      expect(shown).toEqual(rules.map(rule => rule.id));
     });
 
     it('should handle single rule', async () => {

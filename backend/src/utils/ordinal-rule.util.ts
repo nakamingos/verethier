@@ -1,4 +1,5 @@
 import { VerifierRole } from '@/models/verifier-role.interface';
+import { inscriptionCriteria, inscriptionRuleScope } from './inscription-rule.util';
 import { createHash } from 'node:crypto';
 import { OrdinalCollectionSnapshot, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
 
@@ -58,6 +59,7 @@ export function ordinalCollectionId(value: string): string {
 }
 
 export function ordinalRuleScope(rule: Partial<VerifierRole>): string {
+  if (inscriptionCriteria(rule)) return inscriptionRuleScope(rule);
   const trait = ordinalTrait(rule);
   const attribute = trait.enabled ? ` · ${trait.key}${trait.value === 'ALL' ? ' (any value)' : '=' + trait.value}` : '';
   return `${rule.collection_name || rule.slug || 'Ordinals collection'} · Bitcoin · Ordinals${attribute}`;

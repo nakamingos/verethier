@@ -68,13 +68,19 @@ Notes:
 
 ## Verification Messages
 
-Use `/setup refresh-verification channel:#verify` to update an existing verification message to the current Bouncer style without changing its link, pins, or position. The bot looks for its verification button in the latest 100 messages, then in pinned messages. If it cannot find a message or cannot read/edit it, it reports the problem without automatically posting a replacement.
+Use `/setup verification` with a required `channel` and `action`:
 
-Add `new_message:true` to post a new message while leaving existing messages working. All verification messages in that channel use its existing rules; this does not change rules, linked wallets, or assigned roles. `/setup recover-verification channel:#verify` remains available to recreate missing messages. These commands require Administrator permissions, and no database migration is needed.
+- **Refresh existing** (`action:refresh`): Update the current message to the Bouncer style while preserving its link, pins, and position.
+- **Create new** (`action:new`): Post another message while leaving existing messages working.
+- **Recover missing** (`action:recover`): Post a message only if the bot cannot find one already in the channel.
+
+For example: `/setup verification channel:#verify action:refresh`. Refresh and recovery look for the bot's verification button in the latest 100 messages, then in pinned messages. Read or edit failures are reported without automatically posting a replacement.
+
+All messages use the channel's existing rules. These actions require Administrator permissions and do not change rules, linked wallets, or assigned roles. This command cleanup needs no database migration.
 
 ## NFT Trait Rules
 
-Use `/setup add-rule` with `asset_type:NFT`, the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.
+Use `/setup add-nft-rule` with the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.
 
 Ethereum and Robinhood rules use their existing `RPC_URL` and `ROBINHOOD_RPC_URL`. When these are full Alchemy URLs, the backend reuses their keys for Alchemy's NFT API. Other RPC providers need the optional `ALCHEMY_API_KEY`; enable the required networks for that key. Autocomplete samples the first 100 collection tokens and supports manual entry for other traits. The collection must have readable `attributes` metadata in Alchemy.
 
@@ -84,9 +90,23 @@ For each owned token, verification reads ERC-721 `tokenURI` or ERC-1155 `uri` at
 
 The `nft_token_metadata` table caches hosted attributes for ten minutes by network, contract, and token ID, and records fresh embedded attributes for reference. Use a backend Supabase service-role key for cache access; verification falls back to Alchemy if the cache is unavailable. Ownership is checked fresh on every run. Missing metadata or incomplete ownership results produce an unavailable check and preserve existing roles during re-verification.
 
+## Specific Inscription Rules
+
+`/setup add-ordinals-rule` and `/setup add-ethscription-rule` support exact IDs, lists of IDs, global inscription numbers and inclusive number ranges. Set one of `inscription_ids` or `inscription_numbers`, with optional `min_items`. Leave `slug` and attributes empty. IDs and numbers are separate inputs; they cannot be combined in one rule. Overlapping ranges and duplicate IDs are normalized so each asset counts once across linked wallets. Historical negative Ordinals numbers are accepted (`-10--1`); Ethscription numbers must be nonnegative.
+
+Ordinals selections use Xverse's inscription batch lookup (25 IDs per request) or paginated wallet inventory. They require `XVERSE_API_KEY` even when `ORDINALS_PROVIDER=ordnet`, whose documented ownership routes are collection-scoped. Quantity and trait collection rules continue through the selected provider.
+
+Ethscription selections use the free [public Ethscriptions API](https://api-docs.ethscriptions.com/reference), including assets absent from the marketplace database. Exact hashes use its `transaction_hash[]` batch filter (50 per request); number rules read a wallet's complete direct and escrow inventories, then compare global `ethscription_number` values. The existing marketplace address and previous-owner policy are retained. Collection and trait Ethscription rules continue querying the existing data Supabase.
+
+Selections are stored only on `verifier_rules.inscription_criteria` as `{ "kind": "ids", "ids": [...] }` or `{ "kind": "numbers", "ranges": [[start, end], ...] }`. Ranges stay compact, and these administrator selections do not expire. Member check records omit the selection list and keep rule IDs, count, status and a bounded display summary. No collection metadata import or new member table is needed.
+
+Apply `20261011020000_add_inscription_selection_rules.sql` after backing up the application database, then deploy the backend and refresh slash commands (restart registers them). The migration preserves existing rules, wallets, assignments and trait snapshots. No frontend change or new environment variable is required.
+
+Inputs accept up to 1,000 entries within Discord's 6,000-character option limit. Number checks are capped at 1,000 owned inscriptions per wallet (including escrow for Ethscriptions), with bounded pagination and request timeouts. Larger or incomplete inventories produce an unavailable check instead of an incorrect count. Ownership is fetched fresh for every verification/recheck; overlapping ID batches and number inventories are shared only within that run. API errors, missing selected IDs and malformed/partial pages preserve existing roles; a complete non-match allows removal. Run `yarn test --runInBand test/inscription-rules.spec.ts test/ethscriptions-ownership.spec.ts` and `python3 test/check-nft-migration.py` for the ownership and disposable database checks.
+
 ## ord.net Provider Experiment
 
-`ORDINALS_PROVIDER=xverse` is the default. Set it to `ordnet` to use ord.net for live Ordinals quantity and trait rules, with automatic Xverse fallback when ord.net cannot finish a check. Keep `XVERSE_API_KEY` configured for fallback. Discord still uses `/setup add-rule`, and members still connect and sign with Xverse. Existing rules and stored collection names remain in the database; new ord.net rules use the canonical slug as their label because its public API does not document a collection display-name endpoint. Confirm that your collection slugs resolve on ord.net before switching the backend. Trait rules require migration `20261011010000_add_ordinal_trait_snapshots.sql`; changing providers alone does not require a migration.
+`ORDINALS_PROVIDER=xverse` is the default. Set it to `ordnet` to use ord.net for live Ordinals quantity and trait rules, with automatic Xverse fallback when ord.net cannot finish a check. Keep `XVERSE_API_KEY` configured for fallback. Discord uses `/setup add-ordinals-rule`, and members still connect and sign with Xverse. Existing rules and stored collection names remain in the database; new ord.net rules use the canonical slug as their label because its public API does not document a collection display-name endpoint. Confirm that your collection slugs resolve on ord.net before switching the backend. Trait rules require migration `20261011010000_add_ordinal_trait_snapshots.sql`; changing providers alone does not require a migration.
 
 The public ord.net API is wallet-authenticated: the API wallet's payment address needs at least **0.001 BTC (100,000 sats) confirmed**, and sessions last one hour. This is the bot's dedicated API wallet, not a requirement for members' wallets. The backend signs new BIP-322 login challenges, shares concurrent renewals, and renews before expiration or after a rejected session. Sessions stay in memory. Only collection reads and the two authentication routes are used.
 
@@ -116,7 +136,7 @@ Sources: [authentication](https://developers.ord.net/reference/authentication/),
 
 ### Ordinals trait rules
 
-Use the existing `attribute_key`, `attribute_value`, and `min_items` options. Matching is case-insensitive; leave the value empty or use `ALL` to match any value for that key. Autocomplete samples ord.net traits and reuses complete scans, while typed entries remain available when suggestions time out. Rule creation validates a complete collection scan before saving the rule.
+Use the existing `attribute_key`, `attribute_value`, and `min_items` options. Matching is case-insensitive; leave the value empty or use `ALL` to match any value for that key. Autocomplete starts with the first page of ord.net traits and fills its cache from the remaining pages in the background, including rare values. For Pizza Comrades, the first fill can take about a minute; re-open the field or type the exact value while it finishes. The distinct key/value menu stays in memory for 24 hours and is refreshed by complete verification scans, so cached autocomplete adds no API requests. A backend restart clears this menu. Ownership is still fetched fresh for each verification. Typed entries remain available when suggestions time out. Rule creation validates a complete collection scan before saving the rule.
 
 Each rule's nullable `ordinal_trait_snapshot` JSONB stores only the matching `inscription_ids`, `criteria_hash`, and `fetched_at`. Live ord.net scans refresh it once per rule per run; changed collection/trait criteria invalidate it. Member check details record provider and status without copying IDs or trait metadata. Snapshot persistence failure does not interrupt an otherwise successful live check.
 

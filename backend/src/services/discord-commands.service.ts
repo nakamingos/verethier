@@ -8,12 +8,13 @@ import { AdminFeedback } from './utils/admin-feedback.util';
 import { AddRuleHandler } from './discord-commands/handlers/add-rule.handler';
 import { RemoveRuleHandler } from './discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from './discord-commands/handlers/list-rules.handler';
-import { RecoverVerificationHandler } from './discord-commands/handlers/recover-verification.handler';
-import { RefreshVerificationHandler } from './discord-commands/handlers/refresh-verification.handler';
+import { VerificationMessageHandler } from './discord-commands/handlers/verification-message.handler';
 import { RemovalUndoInteractionHandler } from './discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from './discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from './discord-commands/interactions/rule-confirmation.interaction';
 import { DuplicateRuleConfirmationInteractionHandler } from './discord-commands/interactions/duplicate-rule-confirmation.interaction';
+import { RuleCreationAssetType } from '@/utils/rule-command.util';
+import { normalizeRoleName } from './discord-commands/utils/role-management.util';
 
 /**
  * DiscordCommandsService
@@ -57,17 +58,16 @@ export class DiscordCommandsService {
     private readonly addRuleHandler: AddRuleHandler,
     private readonly removeRuleHandler: RemoveRuleHandler,
     private readonly listRulesHandler: ListRulesHandler,
-    private readonly recoverVerificationHandler: RecoverVerificationHandler,
-    private readonly refreshVerificationHandler: RefreshVerificationHandler,
+    private readonly verificationMessageHandler: VerificationMessageHandler,
     private readonly removalUndoHandler: RemovalUndoInteractionHandler,
     private readonly restoreUndoHandler: RestoreUndoInteractionHandler,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler
   ) {}
 
-  async handleAddRule(interaction: ChatInputCommandInteraction): Promise<void> {
+  async handleAddRule(interaction: ChatInputCommandInteraction, assetType?: RuleCreationAssetType): Promise<void> {
     // Delegate to the specialized handler
-    return this.addRuleHandler.handle(interaction);
+    return assetType ? this.addRuleHandler.handle(interaction, assetType) : this.addRuleHandler.handle(interaction);
   }
 
   private async showDuplicateRuleWarning(
@@ -398,16 +398,8 @@ export class DiscordCommandsService {
     return this.listRulesHandler.handlePaginationButton(interaction);
   }
 
-  /**
-   * Recovers verification setup for a channel by creating a missing message.
-   */
-  async handleRecoverVerification(interaction: ChatInputCommandInteraction): Promise<void> {
-    // Delegate to the specialized handler
-    return this.recoverVerificationHandler.handle(interaction);
-  }
-
-  async handleRefreshVerification(interaction: ChatInputCommandInteraction): Promise<void> {
-    return this.refreshVerificationHandler.handle(interaction);
+  async handleVerification(interaction: ChatInputCommandInteraction): Promise<void> {
+    return this.verificationMessageHandler.handle(interaction);
   }
 
   /**
@@ -551,8 +543,7 @@ export class DiscordCommandsService {
     interaction: ChatInputCommandInteraction, 
     roleName: string
   ): Promise<{ role: Role; wasNewlyCreated: boolean } | null> {
-    // Strip @ prefix if present (users can enter @RoleName or RoleName)
-    const cleanRoleName = roleName.startsWith('@') ? roleName.slice(1) : roleName;
+    const cleanRoleName = normalizeRoleName(roleName);
     
     // Try to find existing role (including ones we can't manage)
     let role = interaction.guild.roles.cache.find(r => 

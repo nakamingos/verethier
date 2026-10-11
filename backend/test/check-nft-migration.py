@@ -6,6 +6,7 @@ Requires Docker and the cached Supabase Postgres image below; no remote access.
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -96,16 +97,30 @@ try:
         assert wallet.pop("wallet_type") == "evm", "Existing wallet was not classified as EVM"
     assert after_ordinals == before_ordinals, "Ordinals migration changed existing application records"
     sql((root / "test/ordinals-migration.sql").read_text())
+    sql((migrations / "20261008020000_add_nft_trait_verification.sql").read_text())
+    sql((root / "test/nft-traits-migration.sql").read_text())
+    sql((migrations / "20261011010000_add_ordinal_trait_snapshots.sql").read_text())
+    sql((root / "test/ordinal-traits-migration.sql").read_text())
+    before_selections = snapshot()
+    sql((migrations / "20261011020000_add_inscription_selection_rules.sql").read_text())
+    after_selections = snapshot()
+    for rule in after_selections["rules"]:
+        assert rule.pop("inscription_criteria") is None
+    assert after_selections == before_selections, "Inscription selection migration changed existing data"
+    sql((root / "test/inscription-selection-migration.sql").read_text())
     with tempfile.TemporaryDirectory(prefix="verethier-nft-backup-") as directory:
         backup = Path(directory)
         (backup / "roles.sql").write_text("")
         for kind, option in [("schema", "--schema-only"), ("data", "--data-only")]:
             dump = run(
                 "docker", "exec", container, "pg_dump", "-U", "postgres", "--schema=public",
-                "--quote-all-identifiers", "--no-owner", "--no-privileges", "--no-publications", option, "postgres").stdout
+                "--quote-all-identifiers", "--no-owner", "--no-publications", option, "postgres").stdout
             # Match Supabase CLI's schema dump, which omits creation of the existing public schema.
             if kind == "schema":
                 dump = dump.replace(b'CREATE SCHEMA "public";\n', b'')
+                # The Supabase image owns its managed roles' default privileges.
+                # Keep explicit app-table grants without restoring those defaults.
+                dump = re.sub(rb'^ALTER DEFAULT PRIVILEGES[^\n]*\n', b'', dump, flags=re.MULTILINE)
             (backup / f"{kind}.sql").write_bytes(dump)
         try:
             run(sys.executable, str(root / "test/check-backup.py"), str(backup))
@@ -120,6 +135,7 @@ try:
     print("PASS: NFT constraints and duplicate indexes, including 1,000 IDs")
     print("PASS: Robinhood migration preserves Ethscriptions and Ethereum NFT rules; network constraints and duplicate indexes work")
     print("PASS: Ordinals migration preserves existing records and adds Bitcoin wallets, quantity rules and duplicate guards")
+    print("PASS: inscription selection migration preserves existing data and enforces normalized IDs, ranges, minimums and duplicate guards")
     print("PASS: SQL backup checker also restores a database with existing NFT columns and Ethereum NFT rules")
 except Exception:
     logs = run("docker", "logs", container)

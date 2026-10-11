@@ -8,6 +8,13 @@ import { AppLogger } from '@/utils/app-logger.util';
  * Functions for finding, creating, and managing Discord roles
  */
 
+export function normalizeRoleName(roleName: string): string {
+  // Accept the old autocomplete label if it is submitted instead of its value.
+  const legacySuggestion = /^💡\uFE0F? Create new role: "([\s\S]*)"$/u.exec(roleName);
+  const name = legacySuggestion ? legacySuggestion[1] : roleName;
+  return name.startsWith('@') ? name.slice(1) : name;
+}
+
 /**
  * Finds an existing role or creates a new one
  * @returns Role and metadata if successful, null if there was an error (error already sent to user)
@@ -16,8 +23,7 @@ export async function findOrCreateRole(
   interaction: ChatInputCommandInteraction, 
   roleName: string
 ): Promise<{ role: Role; wasNewlyCreated: boolean } | null> {
-  // Strip @ prefix if present (users can enter @RoleName or RoleName)
-  const cleanRoleName = roleName.startsWith('@') ? roleName.slice(1) : roleName;
+  const cleanRoleName = normalizeRoleName(roleName);
   
   // Try to find existing role (including ones we can't manage)
   let role = interaction.guild.roles.cache.find(r => 

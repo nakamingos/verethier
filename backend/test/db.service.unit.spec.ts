@@ -482,6 +482,21 @@ describe('DbService (Unit Tests)', () => {
       expect(mockSupabaseClient.eq).not.toHaveBeenCalledWith('asset_type', 'ethscription');
     });
   });
+  describe('Specific inscription rules', () => {
+    it.each(['ordinal', 'ethscription'] as const)('persists, identifies duplicates, and restores %s criteria', async assetType => {
+      const criteria = { kind: 'numbers' as const, ranges: [[0, 99999]] as Array<[number, number]> };
+      const fields = { asset_type: assetType, chain_id: assetType === 'ordinal' ? null : 1, inscription_criteria: criteria };
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
+      await service.addRoleMapping('server', 'Server', 'channel', 'verify', null, 'role', 'Holder', 'ALL', 'ALL', 1, fields);
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ ...fields, slug: null }));
+      await service.checkForExactDuplicateRule('server', 'channel', null, 'ALL', 'ALL', 1, 'role', fields);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('asset_type', assetType);
+      expect(mockSupabaseClient.is).toHaveBeenCalledWith('slug', null);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('inscription_criteria', JSON.stringify(criteria));
+      await service.restoreRuleWithOriginalId({ id: 1, server_id: 'server', channel_id: 'channel', role_id: 'role', slug: null, ...fields });
+      expect(mockSupabaseClient.insert).toHaveBeenLastCalledWith(expect.objectContaining({ id: 1, slug: null, inscription_criteria: criteria }));
+    });
+  });
   describe('NFT rules', () => {
     const fields = { asset_type: 'nft' as const, chain_id: 1, contract_address: '0x1111111111111111111111111111111111111111', token_standard: 'erc1155' as const, token_ids: ['0', '500'], collection_name: 'Example' };
     it('writes NFT fields with a null Ethscriptions slug', async () => {

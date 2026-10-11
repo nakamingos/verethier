@@ -124,6 +124,113 @@ describe('ord.net ownership provider',()=>{
   });
 });
 
+describe('ord.net trait suggestions', () => {
+  let get: jest.Mock;
+  let service: OrdnetOwnershipService;
+  const category = (number: number, value: string) => ({ ...item(number), traits: [{ type: 'Category', value }] });
+  const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+
+  beforeEach(() => {
+    get = jest.fn();
+    service = new OrdnetOwnershipService({ get } as any);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns the first-page values promptly, then adds rare traits from later pages without duplicate scans', async () => {
+    let finish: (data: any) => void;
+    const later = new Promise(resolve => { finish = resolve; });
+    get.mockResolvedValueOnce(page(Array.from({ length: 100 }, (_, index) => category(index, 'Comrade')), 'next +/?'))
+      .mockReturnValueOnce(later);
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
+    expect(await service.suggestions('pizza-comrades')).toEqual(['Category']);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls[1][0]).toContain('cursor=next+%2B%2F%3F');
+
+    finish(page([category(100, 'Cosmic Oven-Lord')]));
+    await settle();
+    expect(await service.suggestions('pizza-comrades', 'category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a slow scan shared and starts cache expiration only after all pages finish', async () => {
+    let now = Date.now();
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+    let finish: (data: any) => void;
+    const later = new Promise(resolve => { finish = resolve; });
+    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later)
+      .mockResolvedValueOnce(page([category(3, 'Honorary')]));
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
+    now += 2 * 24 * 60 * 60 * 1000;
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
+    expect(get).toHaveBeenCalledTimes(2);
+    finish(page([category(2, 'Cosmic Oven-Lord')]));
+    await settle();
+    now += 24 * 60 * 60 * 1000 - 1;
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(2);
+    now += 2;
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Honorary']);
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it('reuses verification trait menus six hours later while still fetching fresh ownership', async () => {
+    const now = Date.now();
+    get.mockResolvedValueOnce(page([category(1, 'Cosmic Oven-Lord')]))
+      .mockResolvedValueOnce(page([{ ...category(1, 'Cosmic Oven-Lord'), owner: otherWallet }]));
+    expect(await service.count('pizza-comrades', [wallet], context())).toBe(1n);
+    jest.spyOn(Date, 'now').mockReturnValue(now + 6 * 60 * 60 * 1000);
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(await service.count('pizza-comrades', [wallet], context())).toBe(0n);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries after a later page fails instead of caching an incomplete sample permanently', async () => {
+    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next'))
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValueOnce(page([category(2, 'Cosmic Oven-Lord')]));
+    await service.suggestions('pizza-comrades', 'Category');
+    await settle();
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not replace a newer full-verification cache with an older suggestion scan', async () => {
+    let finish: (data: any) => void;
+    const later = new Promise(resolve => { finish = resolve; });
+    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later)
+      .mockResolvedValueOnce(page([category(1, 'Comrade'), category(3, 'Cosmic Oven-Lord')]));
+    await service.suggestions('pizza-comrades', 'Category');
+    await service.snapshot('pizza-comrades', context());
+    finish(page([category(2, 'Comrade')]));
+    await settle();
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it('retains searchable values beyond the old 500-value sample limit', async () => {
+    get.mockImplementation(async path => {
+      const cursor = new URLSearchParams(path.split('?')[1]).get('cursor');
+      const pageIndex = cursor ? Number(cursor) : 0;
+      return page(pageIndex < 5
+        ? Array.from({ length: 100 }, (_, index) => category(pageIndex * 100 + index, `Trait ${pageIndex * 100 + index}`))
+        : [category(500, 'Cosmic Oven-Lord')], pageIndex < 5 ? String(pageIndex + 1) : null);
+    });
+    await service.suggestions('pizza-comrades', 'Category');
+    await settle();
+    const values = await service.suggestions('pizza-comrades', 'Category');
+    expect(values).toHaveLength(501);
+    expect(values).toContain('Cosmic Oven-Lord');
+    expect(get).toHaveBeenCalledTimes(6);
+  });
+
+  it('clears a failed initial scan so the next autocomplete request can recover', async () => {
+    get.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce(page([category(1, 'Cosmic Oven-Lord')]));
+    await expect(service.suggestions('pizza-comrades', 'Category')).rejects.toThrow('unavailable');
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Cosmic Oven-Lord']);
+  });
+});
+
 // Public, unfunded example key from bip322-js documentation, used only against mock HTTP.
 const TEST_WIF='L3VFeEujGtevx9w18HD1fhRbCH67Az2dpCymeRE1SoPK6XQtaN2k';
 const ORD_ADDRESS='bc1ppv609nr0vr25u07u95waq5lucwfm6tde4nydujnu8npg4q75mr5sxq8lt3';

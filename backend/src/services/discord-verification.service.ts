@@ -3,6 +3,8 @@ import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
 import { NftCheckContext } from './nft-ownership.service';
 import { nftRuleScope, serializeAssetCount } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
+import { boundedEmbedDescription } from '@/utils/discord-embed.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { Injectable, Logger } from '@nestjs/common';
 import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags } from 'discord.js';
@@ -296,10 +298,10 @@ export class DiscordVerificationService {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
-    if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
-      const scope = rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
+    if (rule.inscription_criteria || rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
+      const scope = rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
-        : `Own ${minItems}+ from ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
+        : `Own ${minItems}+ ${rule.inscription_criteria ? 'matching' : 'from'} ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
     }
     const collectionLabel = this.formatCollectionLabel(rule, collectionNames);
     const slugCount = this.parseRuleSlugs(rule.slug).length;
@@ -671,7 +673,7 @@ export class DiscordVerificationService {
         embeds: [
           new EmbedBuilder()
             .setTitle('Verification Successful')
-            .setDescription(description)
+            .setDescription(boundedEmbedDescription(description))
             .setColor('#00FF00')
         ],
         components: [] // Remove the "Verify Now" button

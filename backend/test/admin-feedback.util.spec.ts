@@ -326,7 +326,7 @@ describe('AdminFeedback', () => {
 
       const embedData = embed.toJSON();
       expect(embedData.title).toBe('📋 Verification Rules');
-      expect(embedData.description).toBe('No verification rules found for this channel.\nUse `/setup add-rule` to create your first rule!');
+      expect(embedData.description).toBe('No verification rules found for this channel.\nUse `/setup add-nft-rule`, `/setup add-ordinals-rule`, or `/setup add-ethscription-rule` to create your first rule.');
     });
 
     it('should handle single rule without separator', () => {
@@ -451,7 +451,7 @@ describe('AdminFeedback', () => {
 
       const embedData = emptyListEmbed.toJSON();
       expect(embedData.description).toContain('No verification rules found');
-      expect(embedData.description).toContain('/setup add-rule');
+      expect(embedData.description).toContain('/setup add-ethscription-rule');
     });
   });
 

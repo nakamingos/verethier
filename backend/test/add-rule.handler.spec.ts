@@ -1,5 +1,6 @@
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
+import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddRuleHandler } from '../src/services/discord-commands/handlers/add-rule.handler';
 import { DbService } from '../src/services/db.service';
@@ -12,7 +13,8 @@ import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/
 import { ChannelType } from 'discord.js';
 
 const mockNftService = { prepareRule: jest.fn(), validateTraits: jest.fn() };
-const mockOrdinalsService = { prepareRule: jest.fn(), prepareTraitSnapshot: jest.fn() };
+const mockEthscriptionsService = { prepareInscriptionRule: jest.fn() };
+const mockOrdinalsService = { prepareRule: jest.fn(), prepareTraitSnapshot: jest.fn(), prepareInscriptionRule: jest.fn() };
 
 const mockDbService = {
   checkForExactDuplicateRule: jest.fn(),
@@ -113,6 +115,7 @@ describe('AddRuleHandler', () => {
         AddRuleHandler,
         { provide: NftOwnershipService, useValue: mockNftService },
         { provide: OrdinalsOwnershipService, useValue: mockOrdinalsService },
+        { provide: EthscriptionsOwnershipService, useValue: mockEthscriptionsService },
         { provide: DbService, useValue: mockDbService },
         { provide: DiscordMessageService, useValue: mockDiscordMessageService },
         { provide: DiscordService, useValue: mockDiscordService },
@@ -198,7 +201,10 @@ describe('AddRuleHandler', () => {
       expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalled();
     });
 
-    it('should handle role creation for new roles', async () => {
+    it.each([
+      ['New Role', 'New Role'],
+      ['💡 Create new role: "Cosmic Oven-Lord"', 'Cosmic Oven-Lord']
+    ])('creates and saves only the role name when submitted as %s', async (submittedName, roleName) => {
       const mockChannel = { id: 'channel-id', name: 'test-channel', type: ChannelType.GuildText };
       
       const mockInteraction = {
@@ -212,7 +218,7 @@ describe('AddRuleHandler', () => {
             },
             create: jest.fn().mockResolvedValue({
               id: 'new-role-id',
-              name: 'New Role',
+              name: roleName,
               editable: true
             })
           },
@@ -228,7 +234,7 @@ describe('AddRuleHandler', () => {
         options: {
           getChannel: jest.fn().mockReturnValue(mockChannel),
           getString: jest.fn((key: string) => {
-            if (key === 'role') return 'New Role';
+            if (key === 'role') return submittedName;
             if (key === 'slug') return 'test-collection';
             return null;
           }),
@@ -250,11 +256,15 @@ describe('AddRuleHandler', () => {
       await handler.handle(mockInteraction);
 
       expect(mockInteraction.guild.roles.create).toHaveBeenCalledWith({
-        name: 'New Role',
+        name: roleName,
         color: 'Blue',
         position: 4, // Bot's highest position (5) - 1
         reason: 'Auto-created for verification rule by test-user#1234'
       });
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith(
+        'guild-id', 'test-guild', 'channel-id', 'test-channel', 'test-collection',
+        'new-role-id', roleName, 'ALL', 'ALL', 1, undefined
+      );
       expect(mockInteraction.editReply).toHaveBeenCalledWith(
         expect.objectContaining({
           embeds: expect.arrayContaining([
@@ -385,6 +395,25 @@ describe('AddRuleHandler', () => {
         minItems: 1
       });
     });
+
+    it('keeps the Ethscriptions ALL default when selected by the command', async () => {
+      const channel = { id: 'channel-id', name: 'verify' };
+      const interaction = {
+        options: {
+          getChannel: jest.fn().mockReturnValue(channel),
+          getString: jest.fn(key => {
+            if (key === 'asset_type') throw new Error('No asset_type option on the new command');
+            return key === 'role' ? 'Holder' : null;
+          }),
+          getInteger: jest.fn().mockReturnValue(null)
+        },
+        editReply: jest.fn()
+      } as any;
+      expect(await (handler as any).validateInputParams(interaction, 'ethscription')).toEqual({
+        channel, roleName: 'Holder', slug: 'ALL', attributeKey: 'ALL', attributeValue: 'ALL', minItems: 1
+      });
+      expect(interaction.options.getString).not.toHaveBeenCalledWith('asset_type');
+    });
   });
   describe('Ordinals setup', () => {
     const fields = { asset_type: 'ordinal', slug: 'pizza-comrades', chain_id: null, collection_name: 'Pizza Comrades',
@@ -407,7 +436,9 @@ describe('AddRuleHandler', () => {
       mockDbService.getRulesByChannel.mockResolvedValue([]);
       mockDbService.addRoleMapping.mockResolvedValue({ id: 11, ...fields });
       mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
-      await handler.handle(interactionFor());
+      const interaction = interactionFor({ asset_type: null });
+      await handler.handle(interaction, 'ordinal');
+      expect(interaction.options.getString).not.toHaveBeenCalledWith('asset_type');
       expect(mockOrdinalsService.prepareRule).toHaveBeenCalledWith('pizza-comrades');
       expect(mockNftService.prepareRule).not.toHaveBeenCalled();
       expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
@@ -464,6 +495,59 @@ describe('AddRuleHandler', () => {
       expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('not found on Xverse') });
     });
   });
+  describe('Specific inscription setup', () => {
+    const id = 'a'.repeat(64) + 'i0';
+    const ethHash = '0x' + 'a'.repeat(64);
+    function interactionFor(options: Record<string, any> = {}) {
+      const inputs = { role: 'Special', asset_type: 'ordinal', inscription_ids: id, ...options };
+      return { id: 'specific-setup', guild: { id: 'guild-id', name: 'Guild', roles: {
+        cache: { find: jest.fn().mockReturnValue({ id: 'role-id', name: 'Special', editable: true }) }, create: jest.fn(),
+      } }, user: { id: 'admin', tag: 'admin' },
+      options: { getChannel: jest.fn().mockReturnValue({ id: 'channel-id', name: 'verify', type: ChannelType.GuildText }),
+        getString: jest.fn(key => inputs[key] ?? null), getInteger: jest.fn().mockReturnValue(1) },
+      deferReply: jest.fn(), editReply: jest.fn(), followUp: jest.fn() } as any;
+    }
+    it.each(['ordinal', 'ethscription'] as const)('saves %s selections through duplicate detection, confirmation, and undo', async assetType => {
+      const criteria = { kind: 'ids', ids: [assetType === 'ordinal' ? id : ethHash] };
+      const fields = { asset_type: assetType, slug: null, chain_id: assetType === 'ordinal' ? null : 1,
+        contract_address: null, token_standard: null, token_ids: null, collection_name: null, inscription_criteria: criteria };
+      const provider = assetType === 'ordinal' ? mockOrdinalsService : mockEthscriptionsService;
+      provider.prepareInscriptionRule.mockResolvedValue(fields);
+      mockDbService.checkForExactDuplicateRule.mockResolvedValue(null);
+      mockDbService.checkForDuplicateRule.mockResolvedValue(null);
+      mockDbService.getRulesByChannel.mockResolvedValue([]);
+      mockDbService.addRoleMapping.mockResolvedValue({ id: 12, ...fields });
+      mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
+      const interaction = interactionFor({ asset_type: null, inscription_ids: criteria.ids[0] });
+      await handler.handle(interaction, assetType);
+      expect(interaction.options.getString).not.toHaveBeenCalledWith('asset_type');
+      expect(provider.prepareInscriptionRule).toHaveBeenCalledWith(criteria.ids[0], null, 1);
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+      expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalledWith('guild-id', 'channel-id', null, 'ALL', 'ALL', 1, 'role-id', fields);
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', null, 'role-id', 'Special', 'ALL', 'ALL', 1, fields);
+      expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ruleId: 12, slug: null }));
+    });
+    it.each([{ slug: 'yonder' }, { attribute_key: 'Hat' }, { attribute_value: 'Pirate' }, { token_ids: '1' }, { network: 'ethereum' }])('rejects mixed selection criteria before creating roles: %s', async options => {
+      const interaction = interactionFor(options);
+      await handler.handle(interaction);
+      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
+      expect(mockOrdinalsService.prepareInscriptionRule).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Leave slug, attributes, and NFT options empty') });
+    });
+    it('rejects inscription options on NFT rules', async () => {
+      const interaction = interactionFor({ asset_type: 'nft' });
+      await handler.handle(interaction);
+      expect(mockNftService.prepareRule).not.toHaveBeenCalled();
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Use /setup add-ordinals-rule or /setup add-ethscription-rule') });
+    });
+    it.each(['ordinal', 'ethscription'] as const)('passes global %s number ranges through the existing setup flow', async assetType => {
+      const provider = assetType === 'ordinal' ? mockOrdinalsService : mockEthscriptionsService;
+      provider.prepareInscriptionRule.mockResolvedValue({ asset_type: assetType, slug: null, inscription_criteria: { kind: 'numbers', ranges: [[0, 99999]] } });
+      const result = await (handler as any).validateInputParams(interactionFor({ asset_type: null, inscription_ids: null, inscription_numbers: '0-99999' }), assetType);
+      expect(provider.prepareInscriptionRule).toHaveBeenCalledWith(null, '0-99999', 1);
+      expect(result.slug).toBeNull();
+    });
+  });
   describe('NFT setup', () => {
     const fields = { asset_type: 'nft', chain_id: 1, contract_address: '0x1111111111111111111111111111111111111111', token_standard: 'erc1155', token_ids: ['0', '1'], collection_name: 'Example' };
     function interactionFor(options = {}, minItems = 1) {
@@ -483,8 +567,9 @@ describe('AddRuleHandler', () => {
       mockDbService.getRulesByChannel.mockResolvedValue([]);
       mockDbService.addRoleMapping.mockResolvedValue({ id: 10, ...fields });
       mockDiscordMessageService.findExistingVerificationMessage.mockResolvedValue(true);
-      const interaction = interactionFor({ token_ids: '0-1', collection_name: 'Example' }, 2);
-      await handler.handle(interaction);
+      const interaction = interactionFor({ asset_type: null, token_ids: '0-1', collection_name: 'Example' }, 2);
+      await handler.handle(interaction, 'nft');
+      expect(interaction.options.getString).not.toHaveBeenCalledWith('asset_type');
       expect(mockNftService.prepareRule).toHaveBeenCalledWith(fields.contract_address, '0-1', 'Example', 1);
       expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
       expect(mockDbService.checkForExactDuplicateRule).toHaveBeenCalledWith('guild-id', 'channel-id', 'ALL', 'ALL', 'ALL', 2, 'role-id', fields);
@@ -511,7 +596,7 @@ describe('AddRuleHandler', () => {
       await handler.handle(interaction);
       expect(mockNftService.prepareRule).not.toHaveBeenCalled();
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
-      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select asset_type:NFT to use network') });
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Use /setup add-nft-rule for network') });
     });
     it.each([{ slug: 'example' }, { contract_address: null }])('rejects missing contract or mixed criteria: %s', async options => {
       const interaction = interactionFor(options);

@@ -26,36 +26,45 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
   footer: 'Need more help? Check the docs or ask in support channels',
   fields: [
     {
-      name: '📝 `/setup add-rule`',
+      name: '📝 `/setup add-ethscription-rule`',
       value: '**Create new verification rules**\n' +
              '• **Channel**: Where users will verify\n' +
              '• **Role**: Role to assign (existing or new)\n' +
              '• **Collection**: Specific collection slug or "ALL"\n' +
              '• **Attribute**: Trait filtering (optional)\n' +
              '• **Min Items**: Minimum holdings required\n' +
-             '**Example**: `/setup add-rule #verify @Holder misprint-mingos attribute_key=Type attribute_value=Stork 1`\n\n',
+             '**Example**: `/setup add-ethscription-rule channel:#verify role:Holder slug:misprint-mingos attribute_key:Type attribute_value:Stork`\n\n',
       inline: false
     },
     {
-      name: '🖼️ NFT collections',
-      value: 'Use `/setup add-rule` with **asset_type: NFT** and **contract_address: 0x…**.\n' +
+      name: '🖼️ `/setup add-nft-rule`',
+      value: 'Use **channel**, **role**, and **contract_address: 0x…**.\n' +
              '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
              '• **ERC-721**: Any token in the collection, or one specific **token_ids** value\n' +
              '• **ERC-1155**: Checks IDs **0–99** by default; set **token_ids** to a list or range such as `1,5,20-30` (up to 1,000 IDs)\n' +
              '• **Min Items**: Total tokens/copies across verified wallets\n' +
              '• **Collection Name**: Optional label; detected when available\n' +
              '• **Attributes**: Optional trait key/value; min items counts matching tokens/copies. Requires Alchemy NFT metadata access.\n' +
-             'Leave the Ethscriptions slug empty for NFT rules.',
+             'Contract address is required; the bot detects ERC-721 or ERC-1155.',
       inline: false
     },
     {
-      name: '₿ Ordinals collections',
-      value: 'Use `/setup add-rule` with **asset_type: Ordinals**, **slug: pizza-comrades**, and **min_items: 1**.\n' +
+      name: '₿ `/setup add-ordinals-rule`',
+      value: 'Use **channel**, **role**, **slug: pizza-comrades**, and **min_items: 1**.\n' +
              '• **Wallet**: Xverse on Bitcoin mainnet\n' +
              '• **Collection**: One collection slug, validated through the configured provider\n' +
              '• **Attributes**: Optional trait key/value, with suggestions or manual entry\n' +
              '• **Min Items**: Required number of matching inscriptions across verified Bitcoin wallets\n' +
-             'Leave NFT network/contract options empty. Trait setup uses ord.net; existing roles are retained when ownership cannot be checked.',
+             'Trait setup uses ord.net; existing roles are retained when ownership cannot be checked.',
+      inline: false
+    },
+    {
+      name: '🔎 Specific Ethscriptions or Ordinals',
+      value: 'Use `/setup add-ethscription-rule` or `/setup add-ordinals-rule`, leaving slug/attributes empty.\n' +
+             '• **inscription_ids**: One full ID or comma-separated IDs (Ethscriptions use `0x…`; Ordinals use `…i0`)\n' +
+             '• **inscription_numbers**: Global numbers or inclusive ranges, such as `12345,100000-100999`\n' +
+             '• Use one input. **min_items: 1** means any match; a list of 3 IDs with **min_items: 3** requires all 3.\n' +
+             'Ownership is checked fresh across linked wallets. Specific Ordinals use Xverse; specific Ethscriptions use the public Ethscriptions API.',
       inline: false
     },
     {
@@ -71,26 +80,21 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       name: '📋 `/setup list-rules`',
       value: '**View all verification rules**\n' +
              '• Shows rule IDs, channels, roles, and criteria\n' +
+             '• **Asset Type**: Optional NFT, Ordinals, or Ethscriptions filter; omit to show all\n' +
              '• Organized by channel for easy reading\n' +
              '• Use rule IDs for removal\n' +
-             '**Example**: `/setup list-rules`\n\n',
+             '**Example**: `/setup list-rules asset_type:Ordinals`\n\n',
       inline: false
     },
     {
-      name: '🔄 `/setup recover-verification`',
-      value: '**Recreate a missing verification message**\n' +
-             '• Uses all existing rules in the channel\n' +
-             '• Keeps rules and assigned roles intact\n' +
-             '**Example**: `/setup recover-verification channel:#verify`\n\n',
-      inline: false
-    },
-    {
-      name: '✨ `/setup refresh-verification`',
-      value: '**Update a verification message to the current style**\n' +
-             '• Updates the existing message, preserving its link and pins\n' +
-             '• Set **new_message:true** to post another; existing messages keep working\n' +
-             '• All verification messages use the channel\'s existing rules\n' +
-             '**Example**: `/setup refresh-verification channel:#verify`\n\n',
+      name: '✨ `/setup verification`',
+      value: '**Manage the channel\'s verification message**\n' +
+             '• **Channel** and **Action** are required\n' +
+             '• **Refresh existing**: Update the current message, preserving its link and pins\n' +
+             '• **Create new**: Post another message; existing messages keep working\n' +
+             '• **Recover missing**: Post only if no existing message is found\n' +
+             '• All messages use the channel\'s existing rules\n' +
+             '**Example**: `/setup verification channel:#verify action:refresh`\n\n',
       inline: false
     },
     {
@@ -119,7 +123,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     {
       name: '⚠️ **Common Issues & Solutions**',
       value: '**"Role hierarchy issue"** → Move bot role higher in server settings\n' +
-             '**"Verification not working"** → Use recover-verification command\n' +
+             '**"Verification message missing"** → Use `/setup verification` with `action:recover`\n' +
              '**"Duplicate role warning"** → Decide if intentional, bot will prevent conflicts\n' +
              '**"Rule not found"** → Check with list-rules first to confirm IDs\n' +
              '**"Permission denied"** → Ensure admin permissions for the user\n' +
@@ -146,9 +150,9 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🔧 **Workflow Example**',
-      value: '1. `/setup add-rule #verify @Holder misprint-mingos`\n' +
+      value: '1. `/setup add-ethscription-rule channel:#verify role:Holder slug:misprint-mingos`\n' +
              '2. `/setup list-rules` (to check what was created)\n' +
-             '3. `/setup add-rule #verify @RareHolder misprint-mingos attribute_value=Stork`\n' +
+             '3. `/setup add-ethscription-rule channel:#verify role:RareHolder slug:misprint-mingos attribute_key:Type attribute_value:Stork`\n' +
              '4. Test verification in the channel\n' +
              '5. Use `/setup remove-rule` if changes needed',
       inline: false

@@ -8,26 +8,41 @@ import { OrdnetApiService } from './ordnet-api.service';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 200;
+const TRAIT_MENU_TTL_MS = 24 * 60 * 60 * 1000;
+type TraitItem = { traits?: Array<{ type: string; value: string }> | null };
+type TraitSuggestions = Map<string, Set<string>>;
 
 @Injectable()
 export class OrdnetOwnershipService {
-  private readonly traitSuggestions = new Map<string, { expires: number; traits: Promise<Map<string, Set<string>>> }>();
+  private readonly traitSuggestions = new Map<string, { expires: number; traits: Promise<TraitSuggestions> }>();
   constructor(private readonly api: OrdnetApiService) {}
 
   async suggestions(slug: string, key?: string): Promise<string[]> {
     const id = ordinalCollectionId(slug);
     let cached = this.traitSuggestions.get(id);
     if (!cached || cached.expires <= Date.now()) {
-      const traits = this.api.get(`/collection/${id}/inscriptions?limit=${PAGE_LIMIT}&sort=oldest`).then(data => {
-        if (!Array.isArray(data?.items) || data.items.length > PAGE_LIMIT || data.items.some(item => item?.collection !== id)) {
-          throw new OrdnetUnavailableError('invalid trait suggestion response');
-        }
-        return this.suggestionMap(data.items);
+      const values: TraitSuggestions = new Map();
+      let firstPage: (traits: TraitSuggestions) => void;
+      let failed: (error: unknown) => void;
+      const traits = new Promise<TraitSuggestions>((resolve, reject) => {
+        firstPage = resolve;
+        failed = reject;
       });
       if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
-      cached = { expires: Date.now() + 300000, traits };
+      // Keep one shared scan alive while it fills the cache, even for large collections.
+      cached = { expires: Infinity, traits };
       this.traitSuggestions.set(id, cached);
-      traits.catch(() => { if (this.traitSuggestions.get(id) === cached) this.traitSuggestions.delete(id); });
+      const entry = cached;
+      // Return the first page promptly, then add rare values from the remaining pages.
+      void this.readCollection(id, items => {
+        this.suggestionMap(items, values);
+        firstPage(values);
+      }).then(() => {
+        if (this.traitSuggestions.get(id) === entry) entry.expires = Date.now() + TRAIT_MENU_TTL_MS;
+      }, error => {
+        if (this.traitSuggestions.get(id) === entry) this.traitSuggestions.delete(id);
+        failed(error);
+      });
     }
     const traits = await cached.traits;
     if (!key) return [...traits.keys()].sort((a, b) => a.localeCompare(b));
@@ -38,8 +53,7 @@ export class OrdnetOwnershipService {
     return [...values].sort((a, b) => a.localeCompare(b));
   }
 
-  private suggestionMap(items: Iterable<{ traits?: Array<{ type: string; value: string }> | null }>): Map<string, Set<string>> {
-    const result = new Map<string, Set<string>>();
+  private suggestionMap(items: Iterable<TraitItem>, result: TraitSuggestions = new Map()): TraitSuggestions {
     for (const item of items) for (const trait of item.traits || []) {
       if (typeof trait?.type !== 'string' || typeof trait.value !== 'string') continue;
       const key = trait.type.trim();
@@ -47,7 +61,7 @@ export class OrdnetOwnershipService {
       if (!key || !value || key.length > 100 || value.length > 100) continue;
       if (!result.has(key) && result.size < 100) result.set(key, new Set());
       const values = result.get(key);
-      if (values && values.size < 500) values.add(value);
+      if (values) values.add(value);
     }
     return result;
   }
@@ -82,7 +96,7 @@ export class OrdnetOwnershipService {
     return context.ordinalCollections.get(key);
   }
 
-  private async readCollection(id: string): Promise<OrdinalCollectionSnapshot> {
+  private async readCollection(id: string, onPage?: (items: TraitItem[]) => void): Promise<OrdinalCollectionSnapshot> {
     const fetchedAt = new Date().toISOString();
     const items: OrdinalCollectionSnapshot['items'] = new Map();
     const cursors = new Set<string>();
@@ -118,12 +132,16 @@ export class OrdnetOwnershipService {
       }
       if (!pagination.hasNext) {
         if (pagination.nextCursor !== null) throw new OrdnetUnavailableError(`collection ${id}: final page has an unexpected cursor`);
-        if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
-        this.traitSuggestions.set(id, { expires: Date.now() + 300000, traits: Promise.resolve(this.suggestionMap(items.values())) });
+        onPage?.(data.items);
+        if (!onPage) {
+          if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
+          this.traitSuggestions.set(id, { expires: Date.now() + TRAIT_MENU_TTL_MS, traits: Promise.resolve(this.suggestionMap(items.values())) });
+        }
         return { slug: id, items, fetched_at: fetchedAt };
       }
       if (!data.items.length || typeof pagination.nextCursor !== 'string' || !pagination.nextCursor
         || pagination.nextCursor.length > 4096 || cursors.has(pagination.nextCursor)) throw new OrdnetUnavailableError(`collection ${id}: empty continuing page or invalid/repeated cursor`);
+      onPage?.(data.items);
       cursor = pagination.nextCursor;
       cursors.add(cursor);
     }

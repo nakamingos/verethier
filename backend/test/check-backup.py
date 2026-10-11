@@ -1,6 +1,6 @@
-"""Restore the bot's SQL backup and rehearse its NFT, L2, Ordinals and trait migrations.
+"""Restore the bot's SQL backup and rehearse its verification migrations.
 
-Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file]
+Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file] [selection-sql-file]
 Requires Docker and the cached Supabase Postgres image. No remote connections.
 Supabase-managed auth/storage tables are outside this application-table check.
 """
@@ -18,6 +18,7 @@ backup = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "backup"
 ordinal_sql = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "backend/supabase/migrations/20261008010000_add_ordinals_verification.sql"
 trait_sql = Path(sys.argv[3]) if len(sys.argv) > 3 else root / "backend/supabase/migrations/20261008020000_add_nft_trait_verification.sql"
 ordinal_trait_sql = Path(sys.argv[4]) if len(sys.argv) > 4 else root / "backend/supabase/migrations/20261011010000_add_ordinal_trait_snapshots.sql"
+selection_sql = Path(sys.argv[5]) if len(sys.argv) > 5 else root / "backend/supabase/migrations/20261011020000_add_inscription_selection_rules.sql"
 container = f"verethier-backup-check-{os.getpid()}"
 image = "public.ecr.aws/supabase/postgres:17.6.1.132"
 database = "verethier_backup_check"
@@ -42,7 +43,7 @@ def sql(statement, target=database):
                input=statement.encode()).decode()
 
 
-def fingerprint(table, upgraded=False, ordinal_upgraded=False, ordinal_traits_upgraded=False):
+def fingerprint(table, upgraded=False, ordinal_upgraded=False, ordinal_traits_upgraded=False, selections_upgraded=False):
     row = "to_jsonb(t)"
     if upgraded and table == "verifier_rules":
         row += " - ARRAY['asset_type','chain_id','contract_address','token_standard','token_ids','collection_name']"
@@ -50,6 +51,8 @@ def fingerprint(table, upgraded=False, ordinal_upgraded=False, ordinal_traits_up
         row += " - 'wallet_type'"
     if ordinal_traits_upgraded and table == "verifier_rules":
         row += " - 'ordinal_trait_snapshot'"
+    if selections_upgraded and table == "verifier_rules":
+        row += " - 'inscription_criteria'"
     return hashlib.sha256(sql(f"SELECT COALESCE(jsonb_agg({row} ORDER BY ({row})::text), '[]'::jsonb) FROM public.\"{table}\" t;").encode()).hexdigest()
 
 
@@ -182,6 +185,29 @@ try:
     sql((root / "backend/test/nft-migration.sql").read_text())
     sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
     print("PASS: Ordinals trait criteria, snapshot storage, duplicate guards and existing NFT constraints")
+    has_selections = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='inscription_criteria';").strip() == "1"
+    if not has_selections:
+        before_selections = {table: fingerprint(table) for table in tables}
+        if len(sys.argv) > 5:
+            # Model hosted migration history only inside the disposable database
+            # to rehearse the exact guarded production transaction.
+            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
+              INSERT INTO supabase_migrations.schema_migrations (version)
+                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000'),
+                  ('20261008020000'), ('20261011010000')
+                ON CONFLICT DO NOTHING;""")
+        sql(selection_sql.read_text())
+        for table in tables:
+            if fingerprint(table, selections_upgraded=True) != before_selections[table]:
+                raise RuntimeError(f"Inscription selection migration changed existing data in {table}")
+        print("PASS: inscription selection migration preserves every existing application value")
+    sql((root / "backend/test/inscription-selection-migration.sql").read_text())
+    sql((root / "backend/test/ordinal-traits-migration.sql").read_text())
+    sql((root / "backend/test/nft-traits-migration.sql").read_text())
+    sql((root / "backend/test/nft-migration.sql").read_text())
+    print("PASS: global Ethscription and Ordinals selections, minimums, duplicate guards and existing NFT/trait constraints")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")

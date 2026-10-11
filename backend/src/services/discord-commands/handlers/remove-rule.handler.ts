@@ -1,4 +1,6 @@
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
+import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -302,7 +304,9 @@ export class RemoveRuleHandler {
         }
         const minItems = s.data.min_items || 1;
         
-        const criteria = s.data.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(s.data)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const criteria = s.data.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(s.data, 'compact')} | Min: ${minItems}`
+          : s.data.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(s.data)}`
+          : s.data.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(s.data)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${s.id} | Channel: <#${s.data.channel_id}> | Role: <@&${s.data.role_id}> | ${criteria}`;
         description += ruleInfo + '\n\n';
       });

@@ -96,8 +96,7 @@ const mockDiscordCommandsService = {
   handleAddRule: jest.fn(),
   handleRemoveRule: jest.fn(),
   handleListRules: jest.fn(),
-  handleRecoverVerification: jest.fn(),
-  handleRefreshVerification: jest.fn(),
+  handleVerification: jest.fn(),
 };
 
 const mockVerificationService = {
@@ -236,15 +235,67 @@ describe('DiscordService - Enhanced Tests', () => {
   });
 
   describe('Slash Commands Registration', () => {
-    it('registers refresh options with Administrator permissions and valid Discord payloads', async () => {
+    it('registers an optional asset-type filter for list-rules', async () => {
+      await service.registerSlashCommands();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const list = setup.options.find(option => option.name === 'list-rules');
+      expect(list.options).toHaveLength(1);
+      expect(list.options[0]).toEqual(expect.objectContaining({
+        name: 'asset_type',
+        choices: [
+          { name: 'NFT', value: 'nft' },
+          { name: 'Ordinals', value: 'ordinal' },
+          { name: 'Ethscriptions', value: 'ethscription' }
+        ]
+      }));
+      expect(list.options[0].required).not.toBe(true);
+    });
+
+    it('registers three focused rule commands with valid required options', async () => {
+      await service.registerSlashCommands();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const rules = setup.options.filter(option => option.name.startsWith('add-'));
+      expect(rules.map(rule => rule.name)).toEqual([
+        'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+      ]);
+      expect(rules.map(rule => rule.options.length)).toEqual([9, 8, 8]);
+      for (const rule of rules) {
+        expect(rule.options.slice(0, 2)).toEqual([
+          expect.objectContaining({ name: 'channel', required: true }),
+          expect.objectContaining({ name: 'role', required: true, autocomplete: true })
+        ]);
+        expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
+        for (const name of ['attribute_key', 'attribute_value']) {
+          expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+        }
+      }
+      const [nft, ordinals, ethscriptions] = rules;
+      expect(nft.options[2]).toEqual(expect.objectContaining({ name: 'contract_address', required: true }));
+      expect(nft.options.some(option => ['slug', 'inscription_ids', 'inscription_numbers'].includes(option.name))).toBe(false);
+      for (const rule of [ordinals, ethscriptions]) {
+        expect(rule.options.some(option => ['network', 'contract_address', 'token_ids', 'collection_name'].includes(option.name))).toBe(false);
+        for (const name of ['inscription_ids', 'inscription_numbers']) {
+          expect(rule.options.find(option => option.name === name).max_length).toBe(6000);
+        }
+      }
+      expect(ordinals.options.find(option => option.name === 'slug').autocomplete).not.toBe(true);
+      expect(ethscriptions.options.find(option => option.name === 'slug').autocomplete).toBe(true);
+    });
+
+    it('registers one verification command with required channel/action and Administrator permissions', async () => {
       await service.registerSlashCommands();
       const command = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
       const actual = jest.requireActual('discord.js');
       expect(command.default_member_permissions).toBe(actual.PermissionFlagsBits.Administrator.toString());
-      const refresh = command.options.find(option => option.name === 'refresh-verification');
-      expect(refresh.options).toEqual([
+      expect(command.options.some(option => ['recover-verification', 'refresh-verification'].includes(option.name))).toBe(false);
+      const verification = command.options.find(option => option.name === 'verification');
+      expect(verification.options).toEqual([
         expect.objectContaining({ name: 'channel', required: true, channel_types: [actual.ChannelType.GuildText] }),
-        expect.objectContaining({ name: 'new_message', type: actual.ApplicationCommandOptionType.Boolean })
+        expect.objectContaining({ name: 'action', required: true, type: actual.ApplicationCommandOptionType.String, choices: [
+          { name: 'Refresh existing', value: 'refresh' },
+          { name: 'Create new', value: 'new' },
+          { name: 'Recover missing', value: 'recover' }
+        ] })
       ]);
     });
 
@@ -390,9 +441,32 @@ describe('DiscordService - Enhanced Tests', () => {
   });
 
   describe('Command Handling', () => {
-    it('should handle add-rule command', async () => {
+    it.each([
+      ['add-nft-rule', 'nft'],
+      ['add-ordinals-rule', 'ordinal'],
+      ['add-ethscription-rule', 'ethscription']
+    ])('routes %s to the shared handler as %s and requires admin permission', async (command, assetType) => {
+      const interaction = {
+        options: { getSubcommand: () => command },
+        guild: { id: 'g' }, guildId: 'g',
+        user: { id: 'user123', tag: 'TestUser#1234' },
+        memberPermissions: { has: jest.fn().mockReturnValue(false) },
+        reply: jest.fn()
+      } as any;
+      await service.handleSetup(interaction);
+      expect(mockDiscordCommandsService.handleAddRule).not.toHaveBeenCalled();
+      expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+        content: expect.stringContaining('Access Denied'), flags: 64
+      }));
+
+      interaction.memberPermissions.has.mockReturnValue(true);
+      await service.handleSetup(interaction);
+      expect(mockDiscordCommandsService.handleAddRule).toHaveBeenCalledWith(interaction, assetType);
+    });
+
+    it.each(['add-rule', 'recover-verification', 'refresh-verification'])('rejects removed command %s without invoking a handler', async command => {
       const mockInteraction = {
-        options: { getSubcommand: () => 'add-rule' },
+        options: { getSubcommand: () => command },
         guild: { id: 'g' },
         guildId: 'g',
         user: { id: 'user123', tag: 'TestUser#1234' },
@@ -403,7 +477,10 @@ describe('DiscordService - Enhanced Tests', () => {
       } as any;
       
       await service.handleSetup(mockInteraction);
-      expect(mockDiscordCommandsService.handleAddRule).toHaveBeenCalledWith(mockInteraction);
+      expect(mockDiscordCommandsService.handleAddRule).not.toHaveBeenCalled();
+      expect(mockDiscordCommandsService.handleVerification).not.toHaveBeenCalled();
+      expect(mockInteraction.reply).toHaveBeenCalledWith({ content: expect.stringContaining('no longer available'), flags: 64 });
+      expect(mockInteraction.reply.mock.calls[0][0].content).toContain('reload Discord');
     });
 
     it('should handle remove-rule command', async () => {
@@ -438,46 +515,26 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockDiscordCommandsService.handleListRules).toHaveBeenCalledWith(mockInteraction);
     });
 
-    it('should handle recover-verification command', async () => {
-      const mockInteraction = {
-        options: { getSubcommand: () => 'recover-verification' },
-        guild: { id: 'g' },
-        guildId: 'g',
-        user: { id: 'user123', tag: 'TestUser#1234' },
-        deferred: false,
-        replied: false,
-        memberPermissions: { has: jest.fn().mockReturnValue(true) }, // Grant admin permissions
-        reply: jest.fn().mockResolvedValue(undefined)
-      } as any;
-      
-      await service.handleSetup(mockInteraction);
-      expect(mockDiscordCommandsService.handleRecoverVerification).toHaveBeenCalledWith(mockInteraction);
-    });
-
-    it.each([true, false])('allows refresh-verification only for administrators (admin: %s)', async admin => {
+    it.each([true, false])('allows verification only for administrators (admin: %s)', async admin => {
       const interaction = {
-        options: { getSubcommand: () => 'refresh-verification' },
-        guild: { id: 'g' },
-        guildId: 'g',
+        options: { getSubcommand: () => 'verification' },
+        guild: { id: 'g' }, guildId: 'g',
         user: { id: 'user123', tag: 'TestUser#1234' },
         memberPermissions: { has: jest.fn().mockReturnValue(admin) },
         reply: jest.fn()
       } as any;
       await service.handleSetup(interaction);
-      if (admin) {
-        expect(mockDiscordCommandsService.handleRefreshVerification).toHaveBeenCalledWith(interaction);
-      } else {
-        expect(mockDiscordCommandsService.handleRefreshVerification).not.toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-          content: expect.stringContaining('Access Denied'), flags: 64
-        }));
+      if (admin) expect(mockDiscordCommandsService.handleVerification).toHaveBeenCalledWith(interaction);
+      else {
+        expect(mockDiscordCommandsService.handleVerification).not.toHaveBeenCalled();
+        expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('Access Denied'), flags: 64 }));
       }
     });
 
     it('should handle setup errors when interaction is not deferred or replied', async () => {
       const loggerErrorSpy = jest.spyOn(Logger, 'error').mockImplementation();
       const mockInteraction = {
-        options: { getSubcommand: () => 'add-rule' },
+        options: { getSubcommand: () => 'add-ethscription-rule' },
         guild: { id: 'g' },
         deferred: false,
         replied: false,
@@ -499,7 +556,7 @@ describe('DiscordService - Enhanced Tests', () => {
     it('should handle setup errors when interaction is deferred', async () => {
       const loggerErrorSpy = jest.spyOn(Logger, 'error').mockImplementation();
       const mockInteraction = {
-        options: { getSubcommand: () => 'add-rule' },
+        options: { getSubcommand: () => 'add-ethscription-rule' },
         guild: { id: 'g' },
         deferred: true,
         replied: false,
@@ -519,7 +576,7 @@ describe('DiscordService - Enhanced Tests', () => {
     it('should handle setup errors when reply fails', async () => {
       const loggerErrorSpy = jest.spyOn(Logger, 'error').mockImplementation();
       const mockInteraction = {
-        options: { getSubcommand: () => 'add-rule' },
+        options: { getSubcommand: () => 'add-ethscription-rule' },
         guild: { id: 'g' },
         deferred: false,
         replied: false,
@@ -600,6 +657,24 @@ describe('DiscordService - Enhanced Tests', () => {
       const fields = { slug: 'yonder', asset_type: 'ordinal', ...options };
       return { options: { getFocused: () => ({ name, value }), getString: key => fields[key] ?? null }, respond: jest.fn().mockResolvedValue(undefined) } as any;
     }
+    it('shows and filters hyphenated Category values for Pizza Comrades', async () => {
+      mockOrdinalsService.suggestions.mockResolvedValue(['Comrade', 'Cosmic Oven-Lord', 'Honorary']);
+      const options = { slug: 'pizza-comrades', attribute_key: 'Category' };
+      const initial = interaction('attribute_value', '', options);
+      await service.handleOrdinalAttributeAutocomplete(initial);
+      expect(mockOrdinalsService.suggestions).toHaveBeenCalledWith('pizza-comrades', 'Category');
+      expect(initial.respond).toHaveBeenCalledWith([
+        { name: 'Comrade', value: 'Comrade' },
+        { name: 'Cosmic Oven-Lord', value: 'Cosmic Oven-Lord' },
+        { name: 'Honorary', value: 'Honorary' }
+      ]);
+      const search = interaction('attribute_value', 'oven-l', options);
+      await service.handleOrdinalAttributeAutocomplete(search);
+      expect(search.respond).toHaveBeenCalledWith([
+        { name: 'oven-l', value: 'oven-l' }, { name: 'Cosmic Oven-Lord', value: 'Cosmic Oven-Lord' }
+      ]);
+    });
+
     it('uses the selected collection and preserves manually typed values', async () => {
       mockOrdinalsService.suggestions.mockResolvedValue(['Blue', 'Red']);
       const input = interaction('attribute_value', 'Purple', { attribute_key: 'Background' });
@@ -673,7 +748,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockInteraction.respond).toHaveBeenCalledWith([
         { name: '@admin', value: 'admin' },
         { name: '@moderator', value: 'moderator' },
-        { name: '💡 Create new role: "mod"', value: 'mod' }
+        { name: 'mod', value: 'mod' }
       ]);
     });
 
@@ -712,7 +787,12 @@ describe('DiscordService - Enhanced Tests', () => {
       ]);
     });
 
-    it('should suggest creating new role when role does not exist', async () => {
+    it.each([
+      ['unique-role-name', 'unique-role-name'],
+      ['Cosmic Oven-Lord', 'Cosmic Oven-Lord'],
+      ['💡 Create new role: "Cosmic Oven-Lord"', 'Cosmic Oven-Lord'],
+      ['x'.repeat(100), 'x'.repeat(100)]
+    ])('uses the actual role name for both suggestion label and value: %s', async (focused, roleName) => {
       const mockGuild = {
         members: { me: { roles: { highest: { position: 5 } } } },
         roles: {
@@ -728,7 +808,7 @@ describe('DiscordService - Enhanced Tests', () => {
       const mockInteraction = {
         guild: mockGuild,
         options: {
-          getFocused: jest.fn().mockReturnValue('unique-role-name')
+          getFocused: jest.fn().mockReturnValue(focused)
         },
         respond: jest.fn()
       };
@@ -736,7 +816,7 @@ describe('DiscordService - Enhanced Tests', () => {
       await service.handleRoleAutocomplete(mockInteraction);
 
       expect(mockInteraction.respond).toHaveBeenCalledWith([
-        { name: '💡 Create new role: "unique-role-name"', value: 'unique-role-name' }
+        { name: roleName, value: roleName }
       ]);
     });
 
@@ -824,7 +904,7 @@ describe('DiscordService - Enhanced Tests', () => {
 
       const expectedChoices = [
         ...roles.slice(0, 24).map(role => ({ name: `@${role.name}`, value: role.name })),
-        { name: '💡 Create new role: "role"', value: 'role' }
+        { name: 'role', value: 'role' }
       ];
 
       expect(mockInteraction.respond).toHaveBeenCalledWith(expectedChoices);
@@ -860,12 +940,48 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockInteraction.respond).toHaveBeenCalledWith([
         { name: '@VIP', value: 'VIP' },
         { name: '@Member', value: 'Member' },
-        { name: '💡 Create new role: "test"', value: 'test' }
+        { name: 'test', value: 'test' }
       ]);
     });
   });
 
   describe('Event Handling', () => {
+    it.each([
+      ['add-nft-rule', 'role', 'handleRoleAutocomplete'],
+      ['add-ordinals-rule', 'role', 'handleRoleAutocomplete'],
+      ['add-ethscription-rule', 'role', 'handleRoleAutocomplete'],
+      ['add-nft-rule', 'attribute_key', 'handleNftAttributeAutocomplete'],
+      ['add-nft-rule', 'attribute_value', 'handleNftAttributeAutocomplete'],
+      ['add-ordinals-rule', 'attribute_key', 'handleOrdinalAttributeAutocomplete'],
+      ['add-ordinals-rule', 'attribute_value', 'handleOrdinalAttributeAutocomplete'],
+      ['add-ethscription-rule', 'slug', 'handleSlugAutocomplete'],
+      ['add-ethscription-rule', 'attribute_key', 'handleAttributeKeyAutocomplete'],
+      ['add-ethscription-rule', 'attribute_value', 'handleAttributeValueAutocomplete']
+    ] as const)('routes %s %s autocomplete without reading asset_type', async (command, focused, handler) => {
+      let interactionCallback: Function;
+      mockClient.on.mockImplementation((event, callback) => {
+        if (event === 'interactionCreate') interactionCallback = callback;
+      });
+      await service.createSlashCommands();
+      const interaction = {
+        isAutocomplete: () => true,
+        commandName: 'setup',
+        options: {
+          getSubcommand: () => command,
+          getFocused: () => ({ name: focused }),
+          getString: jest.fn(() => { throw new Error('Unexpected legacy option lookup'); })
+        }
+      };
+      const handlerSpy = jest.spyOn(service, handler).mockResolvedValue();
+      try {
+        await interactionCallback(interaction);
+        expect(handlerSpy).toHaveBeenCalledWith(interaction);
+        expect(interaction.options.getString).not.toHaveBeenCalled();
+      } finally {
+        handlerSpy.mockRestore();
+      }
+    });
+
     it('should handle interaction create events for autocomplete', async () => {
       let interactionCallback: Function;
       mockClient.on.mockImplementation((event, callback) => {
@@ -882,7 +998,8 @@ describe('DiscordService - Enhanced Tests', () => {
         isButton: () => false,
         commandName: 'setup',
         options: {
-          getSubcommand: () => 'add-rule',
+          getSubcommand: () => 'add-ethscription-rule',
+          getString: jest.fn().mockReturnValue(null),
           getFocused: jest.fn().mockReturnValue({ name: 'role' })
         }
       };
