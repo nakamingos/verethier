@@ -55,15 +55,6 @@ jest.mock('discord.js', () => {
     Routes: {
       applicationCommands: jest.fn().mockReturnValue('applications/123/commands')
     },
-    SlashCommandBuilder: jest.fn().mockImplementation(() => ({
-      setName: jest.fn().mockReturnThis(),
-      setDescription: jest.fn().mockReturnThis(),
-      setDefaultMemberPermissions: jest.fn().mockReturnThis(),
-      addSubcommand: jest.fn().mockReturnThis(),
-      addChannelOption: jest.fn().mockReturnThis(),
-      addStringOption: jest.fn().mockReturnThis(),
-      addIntegerOption: jest.fn().mockReturnThis()
-    })),
     Events: { ClientReady: 'ready' },
     GatewayIntentBits: { Guilds: 1 },
     MessageFlags: { Ephemeral: 64 }
@@ -106,6 +97,7 @@ const mockDiscordCommandsService = {
   handleRemoveRule: jest.fn(),
   handleListRules: jest.fn(),
   handleRecoverVerification: jest.fn(),
+  handleRefreshVerification: jest.fn(),
 };
 
 const mockVerificationService = {
@@ -244,6 +236,18 @@ describe('DiscordService - Enhanced Tests', () => {
   });
 
   describe('Slash Commands Registration', () => {
+    it('registers refresh options with Administrator permissions and valid Discord payloads', async () => {
+      await service.registerSlashCommands();
+      const command = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const actual = jest.requireActual('discord.js');
+      expect(command.default_member_permissions).toBe(actual.PermissionFlagsBits.Administrator.toString());
+      const refresh = command.options.find(option => option.name === 'refresh-verification');
+      expect(refresh.options).toEqual([
+        expect.objectContaining({ name: 'channel', required: true, channel_types: [actual.ChannelType.GuildText] }),
+        expect.objectContaining({ name: 'new_message', type: actual.ApplicationCommandOptionType.Boolean })
+      ]);
+    });
+
     it('should register slash commands successfully', async () => {
       await service.registerSlashCommands();
       
@@ -448,6 +452,26 @@ describe('DiscordService - Enhanced Tests', () => {
       
       await service.handleSetup(mockInteraction);
       expect(mockDiscordCommandsService.handleRecoverVerification).toHaveBeenCalledWith(mockInteraction);
+    });
+
+    it.each([true, false])('allows refresh-verification only for administrators (admin: %s)', async admin => {
+      const interaction = {
+        options: { getSubcommand: () => 'refresh-verification' },
+        guild: { id: 'g' },
+        guildId: 'g',
+        user: { id: 'user123', tag: 'TestUser#1234' },
+        memberPermissions: { has: jest.fn().mockReturnValue(admin) },
+        reply: jest.fn()
+      } as any;
+      await service.handleSetup(interaction);
+      if (admin) {
+        expect(mockDiscordCommandsService.handleRefreshVerification).toHaveBeenCalledWith(interaction);
+      } else {
+        expect(mockDiscordCommandsService.handleRefreshVerification).not.toHaveBeenCalled();
+        expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+          content: expect.stringContaining('Access Denied'), flags: 64
+        }));
+      }
     });
 
     it('should handle setup errors when interaction is not deferred or replied', async () => {

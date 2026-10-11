@@ -15,6 +15,7 @@ import { AddRuleHandler } from '@/services/discord-commands/handlers/add-rule.ha
 import { RemoveRuleHandler } from '@/services/discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from '@/services/discord-commands/handlers/list-rules.handler';
 import { RecoverVerificationHandler } from '@/services/discord-commands/handlers/recover-verification.handler';
+import { RefreshVerificationHandler } from '@/services/discord-commands/handlers/refresh-verification.handler';
 import { RemovalUndoInteractionHandler } from '@/services/discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from '@/services/discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from '@/services/discord-commands/interactions/rule-confirmation.interaction';
@@ -128,6 +129,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     RemoveRuleHandler,           // Remove rule command handler
     ListRulesHandler,            // List rules command handler
     RecoverVerificationHandler,  // Recover verification command handler
+    RefreshVerificationHandler,  // Refresh or repost verification messages
 
     // Discord interaction handlers
     RemovalUndoInteractionHandler,  // Handles undo functionality for rule removals

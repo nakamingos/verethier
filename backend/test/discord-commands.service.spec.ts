@@ -7,6 +7,7 @@ import { AddRuleHandler } from '../src/services/discord-commands/handlers/add-ru
 import { RemoveRuleHandler } from '../src/services/discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from '../src/services/discord-commands/handlers/list-rules.handler';
 import { RecoverVerificationHandler } from '../src/services/discord-commands/handlers/recover-verification.handler';
+import { RefreshVerificationHandler } from '../src/services/discord-commands/handlers/refresh-verification.handler';
 import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from '../src/services/discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from '../src/services/discord-commands/interactions/rule-confirmation.interaction';
@@ -86,6 +87,7 @@ describe('DiscordCommandsService (Refactored)', () => {
         { provide: RemoveRuleHandler, useValue: mockRemoveRuleHandler },
         { provide: ListRulesHandler, useValue: mockListRulesHandler },
         { provide: RecoverVerificationHandler, useValue: mockRecoverVerificationHandler },
+        { provide: RefreshVerificationHandler, useValue: { handle: jest.fn() } },
         { provide: RemovalUndoInteractionHandler, useValue: mockRemovalUndoHandler },
         { provide: RestoreUndoInteractionHandler, useValue: mockRestoreUndoHandler },
         { provide: RuleConfirmationInteractionHandler, useValue: mockRuleConfirmationHandler },

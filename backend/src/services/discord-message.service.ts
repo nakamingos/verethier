@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GuildTextBasedChannel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Client } from 'discord.js';
+import { GuildTextBasedChannel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, Message } from 'discord.js';
 
 /**
  * DiscordMessageService
@@ -37,43 +37,7 @@ export class DiscordMessageService {
    */
   async findExistingVerificationMessage(channel: GuildTextBasedChannel): Promise<boolean> {
     try {
-      // Check if client is properly initialized
-      const botUserId = this.client?.user?.id;
-      if (!botUserId) {
-        Logger.error('Discord client not properly initialized or bot user ID not available');
-        return false;
-      }
-
-      // Fetch recent messages from the channel (last 100 messages should be enough)
-      const messages = await channel.messages.fetch({ limit: 100 });
-      
-      let botMessagesCount = 0;
-      let botMessagesWithButtonsCount = 0;
-
-      for (const [messageId, message] of messages) {
-        // Check if message is from our bot
-        if (message.author.id !== botUserId) continue;
-        botMessagesCount++;
-        
-        // Check for verification message with specific custom ID
-        if (message.components.length > 0) {
-          botMessagesWithButtonsCount++;
-          
-          // Check if this message has the verification button
-          for (const actionRow of message.components) {
-            if (actionRow.type === 1) { // ActionRow type
-              for (const component of (actionRow as any).components) {
-                if (component.type === 2 && // ButtonComponent type
-                    component.customId === 'requestVerification') {
-                  return true;
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      return false;
+      return (await this.getExistingVerificationMessage(channel)) !== null;
     } catch (error) {
       Logger.error('Error searching for existing verification message:', error);
       return false;
@@ -86,6 +50,47 @@ export class DiscordMessageService {
    * @returns The message ID of the created verification message
    */
   async createVerificationMessage(channel: GuildTextBasedChannel): Promise<string> {
+    const sentMessage = await channel.send(this.buildVerificationMessage());
+    return sentMessage.id;
+  }
+
+  /** Updates the existing message without changing its ID, position, or pins. */
+  async refreshVerificationMessage(channel: GuildTextBasedChannel): Promise<string | null> {
+    // Lookup errors must propagate: failed reads are not evidence of a missing message.
+    const message = await this.getExistingVerificationMessage(channel);
+    if (!message) return null;
+
+    await message.edit({ content: null, ...this.buildVerificationMessage() });
+    return message.id;
+  }
+
+  private async getExistingVerificationMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
+    const botUserId = this.client?.user?.id;
+    if (!botUserId) throw new Error('Discord client not properly initialized or bot user ID not available');
+
+    const messages = await channel.messages.fetch({ limit: 100 });
+    for (const message of messages.values()) {
+      if (this.isVerificationMessage(message, botUserId)) return message;
+    }
+
+    // A pinned verification message may be older than the last 100 messages.
+    const pinnedMessages = await channel.messages.fetchPinned();
+    for (const message of pinnedMessages.values()) {
+      if (this.isVerificationMessage(message, botUserId)) return message;
+    }
+    return null;
+  }
+
+  private isVerificationMessage(message: Message, botUserId: string): boolean {
+    return message.author.id === botUserId && message.components.some(row =>
+      row.type === 1 && row.components.some(component =>
+        component.type === 2 && component.customId === 'requestVerification'
+      )
+    );
+  }
+
+  /** Keep newly posted and refreshed verification messages on the same template. */
+  private buildVerificationMessage() {
     const verifyEmbed = new EmbedBuilder()
       .setTitle('Bouncer · Wallet Verification')
       .setDescription('Verify your wallet. Get your roles. Click the button below to get started.')
@@ -99,12 +104,10 @@ export class DiscordMessageService {
           .setStyle(ButtonStyle.Primary)
       );
 
-    const sentMessage = await channel.send({
+    return {
       embeds: [verifyEmbed],
       components: [verifyButton],
-    });
-
-    return sentMessage.id;
+    };
   }
 
   /**

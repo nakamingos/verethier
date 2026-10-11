@@ -9,6 +9,7 @@ import { AddRuleHandler } from './discord-commands/handlers/add-rule.handler';
 import { RemoveRuleHandler } from './discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from './discord-commands/handlers/list-rules.handler';
 import { RecoverVerificationHandler } from './discord-commands/handlers/recover-verification.handler';
+import { RefreshVerificationHandler } from './discord-commands/handlers/refresh-verification.handler';
 import { RemovalUndoInteractionHandler } from './discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from './discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from './discord-commands/interactions/rule-confirmation.interaction';
@@ -57,6 +58,7 @@ export class DiscordCommandsService {
     private readonly removeRuleHandler: RemoveRuleHandler,
     private readonly listRulesHandler: ListRulesHandler,
     private readonly recoverVerificationHandler: RecoverVerificationHandler,
+    private readonly refreshVerificationHandler: RefreshVerificationHandler,
     private readonly removalUndoHandler: RemovalUndoInteractionHandler,
     private readonly restoreUndoHandler: RestoreUndoInteractionHandler,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
@@ -397,11 +399,15 @@ export class DiscordCommandsService {
   }
 
   /**
-   * Recovers verification setup for a channel by creating a new message and updating orphaned rules
+   * Recovers verification setup for a channel by creating a missing message.
    */
   async handleRecoverVerification(interaction: ChatInputCommandInteraction): Promise<void> {
     // Delegate to the specialized handler
     return this.recoverVerificationHandler.handle(interaction);
+  }
+
+  async handleRefreshVerification(interaction: ChatInputCommandInteraction): Promise<void> {
+    return this.refreshVerificationHandler.handle(interaction);
   }
 
   /**

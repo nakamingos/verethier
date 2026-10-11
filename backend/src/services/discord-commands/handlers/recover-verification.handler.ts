@@ -83,7 +83,7 @@ export class RecoverVerificationHandler {
     
     if (hasExistingMessage) {
       await interaction.editReply({
-        content: AdminFeedback.simple('Channel already has a verification message. No recovery needed.')
+        content: AdminFeedback.simple('Channel already has a verification message. Use `/setup refresh-verification` to update it, or add `new_message:true` to post another without deleting the existing message.')
       });
       return true;
     }

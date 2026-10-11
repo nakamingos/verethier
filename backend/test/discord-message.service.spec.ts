@@ -16,6 +16,7 @@ const mockChannel = {
   name: 'test-channel',
   messages: {
     fetch: jest.fn(),
+    fetchPinned: jest.fn(),
   },
   send: jest.fn(),
 };
@@ -59,6 +60,7 @@ describe('DiscordMessageService', () => {
     service = module.get<DiscordMessageService>(DiscordMessageService);
     service.initialize(mockClient as any);
     jest.clearAllMocks();
+    mockChannel.messages.fetchPinned.mockResolvedValue(new Map());
     loggerSpy.mockClear();
     loggerDebugSpy.mockClear();
   });
