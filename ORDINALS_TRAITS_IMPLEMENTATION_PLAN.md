@@ -1,0 +1,30 @@
+# Ordinals trait roles with shared IDs on each rule
+
+Use ord.net for live trait verification. Store all inscription IDs matching each configured trait rule on that rule, then use Xverse for fresh ownership checks during an ord.net outage. Store no per-member inscription list, full trait catalog, or cached ownership.
+
+1. **Keep `/setup add-rule`.** Enable the existing `attribute_key`, `attribute_value`, and `min_items` options for Ordinals. Reuse case-insensitive matching and key-only matching when the value is `ALL`. Autocomplete uses sampled or warmed ord.net traits within Discord's response deadline; allow manual entry. The existing deferred rule-creation flow builds and validates the complete matching ID list before saving the rule.
+
+2. **Store a snapshot on the rule.** Add one nullable JSONB field, `ordinal_trait_snapshot`, to `verifier_rules`. It contains `inscription_ids`, a fingerprint of the collection and trait criteria, and `fetched_at`. Save every matching ID in the collection, independent of current ownership and the rule's minimum count. Build snapshots only from complete, validated collection scans. Never overwrite a good snapshot with a failed or partial scan; an empty list is valid only after a complete scan. Changed collection or trait criteria invalidate the snapshot.
+
+3. **Keep ord.net as the primary provider.** Evaluate current owners and traits across every linked Bitcoin wallet, deduplicate inscriptions, and apply `min_items`. Share one collection scan across rules and members within a verification run. Refresh the applicable rule snapshots after successful scans, without saving raw traits or owners to the database. Missing traits or ownership must produce an unavailable check rather than a zero count.
+
+4. **Use Xverse automatically when ord.net cannot complete a check.** For individual verification, fetch the currently linked wallets' inscriptions in the collection and intersect those IDs with the rule's saved trait list. Share the wallet collection results across applicable rules, deduplicate inscriptions across wallets, and reuse complete reads for quantity checks and the collection-count safeguard. For scheduled six-hour checks, batch-read the saved IDs' current owners and share those ownership results across rules and members. Use bounded batches, deduplicate requested IDs, and retain request throttling. Treat these as the default lookup strategies and compare measured request usage before tuning them. Validate returned IDs, addresses, and pagination; omitted batch IDs, duplicate entries, malformed data, incomplete pages, or failed responses must not become negative ownership results. A valid snapshot can recognize replacement inscriptions and establish eligibility for new members during an outage. Keep snapshots on each rule; a shared snapshot table across servers is outside this release.
+
+5. **Keep outage decisions conservative.** Default snapshot validity is 24 hours from the last successful ord.net trait scan; successful Xverse ownership checks do not extend it. Snapshot criteria must match the current rule. Cached matches establish eligibility using the last known traits, not freshly fetched traits. Expired snapshots require live ord.net verification; subsequent trait changes are confirmed when live scans resume. When qualification is uncertain, retain existing roles and defer new assignments. Record the provider and check status in the existing role check details.
+
+   | Result | Action |
+   | --- | --- |
+   | Complete ord.net check meets the trait threshold | Grant or retain the role |
+   | Complete ord.net check is below the trait threshold | Fail this rule |
+   | Valid saved list and Xverse ownership meet the threshold | Grant or retain using the saved trait snapshot |
+   | Complete Xverse collection count is below the trait threshold | Fail this rule, even if the trait snapshot is unavailable |
+   | Cached IDs do not establish qualification and the collection count cannot prove ineligibility | Mark unavailable and retain an existing role |
+   | Both providers fail, or a required response is incomplete | Mark unavailable and retain an existing role |
+
+   The collection-count safeguard requires Xverse to recognize the same collection and to finish checking all linked wallets. Reuse the quantity-rule result when available; otherwise the same count helper can be called directly. Compare the actual count with the trait rule's minimum, not the quantity rule's pass/fail status. Conflicting provider results are unavailable. A role is removed only when all its rules fail; another passing rule still qualifies the member, and an unresolved rule prevents removal.
+
+6. **Apply one small migration and validate the upgrade.** Add the snapshot field, allow Ordinals trait fields in the existing rule constraint, and include trait criteria in the Ordinals duplicate-rule index. Existing rules start with a null snapshot and keep their current behavior. Preserve existing NFT and Ethscriptions constraints. Keep `ORDINALS_PROVIDER=ordnet` and the existing `XVERSE_API_KEY` configured for fallback; no new wallet flow or frontend step is needed.
+
+Validate setup/autocomplete, distinct trait rules sharing a collection, thresholds, multiple wallets, replacement inscriptions, new-member fallback, changed rule criteria, cache expiration, empty and partial snapshots, individual wallet-ID intersections, malformed or incomplete ownership responses, collection-count safeguards, shared wallet reads and scheduled request batching, and both providers failing without role removal. Back up the remote database before applying the migration, deploy the backend, and test live verification plus outage behavior.
+
+API references: [ord.net collection owners and traits](https://developers.ord.net/reference/collections/), [Xverse wallet collection inscriptions](https://docs.xverse.app/api/ordinals/ordinals-by-address/inscriptions-of-a-collection), and [Xverse batch inscription ownership](https://docs.xverse.app/api/ordinals/inscriptions/inscriptions-by-ids).

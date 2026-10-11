@@ -4,6 +4,7 @@ import { CONSTANTS } from '@/constants';
 import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
+import { OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
 
 /**
  * Database Service
@@ -54,6 +55,17 @@ export class DbService {
         .upsert(rows, { onConflict: 'chain_id,contract_address,token_id' });
       if (error) this.logger.warn('NFT metadata cache could not be updated.');
     } catch { this.logger.warn('NFT metadata cache could not be updated.'); }
+  }
+
+  async cacheOrdinalTraitSnapshot(rule: VerifierRole, snapshot: OrdinalTraitSnapshot): Promise<void> {
+    // Match the criteria as well as the ID: a scan started before a rule edit
+    // must never attach its IDs to the edited rule or replace a newer scan.
+    const { error } = await this.supabase.from('verifier_rules')
+      .update({ ordinal_trait_snapshot: snapshot })
+      .eq('id', rule.id).eq('asset_type', 'ordinal').eq('slug', rule.slug)
+      .eq('attribute_key', rule.attribute_key).eq('attribute_value', rule.attribute_value)
+      .or(`ordinal_trait_snapshot.is.null,ordinal_trait_snapshot->>criteria_hash.neq.${snapshot.criteria_hash},ordinal_trait_snapshot->>fetched_at.lte.${snapshot.fetched_at}`);
+    if (error) throw new Error('Ordinals trait snapshot could not be saved.');
   }
 
   /**

@@ -1,6 +1,6 @@
 """Restore the bot's SQL backup and rehearse its NFT, L2, Ordinals and trait migrations.
 
-Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file]
+Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file]
 Requires Docker and the cached Supabase Postgres image. No remote connections.
 Supabase-managed auth/storage tables are outside this application-table check.
 """
@@ -17,6 +17,7 @@ root = Path(__file__).resolve().parents[2]
 backup = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "backup"
 ordinal_sql = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "backend/supabase/migrations/20261008010000_add_ordinals_verification.sql"
 trait_sql = Path(sys.argv[3]) if len(sys.argv) > 3 else root / "backend/supabase/migrations/20261008020000_add_nft_trait_verification.sql"
+ordinal_trait_sql = Path(sys.argv[4]) if len(sys.argv) > 4 else root / "backend/supabase/migrations/20261011010000_add_ordinal_trait_snapshots.sql"
 container = f"verethier-backup-check-{os.getpid()}"
 image = "public.ecr.aws/supabase/postgres:17.6.1.132"
 database = "verethier_backup_check"
@@ -41,12 +42,14 @@ def sql(statement, target=database):
                input=statement.encode()).decode()
 
 
-def fingerprint(table, upgraded=False, ordinal_upgraded=False):
+def fingerprint(table, upgraded=False, ordinal_upgraded=False, ordinal_traits_upgraded=False):
     row = "to_jsonb(t)"
     if upgraded and table == "verifier_rules":
         row += " - ARRAY['asset_type','chain_id','contract_address','token_standard','token_ids','collection_name']"
     if ordinal_upgraded and table == "user_wallets":
         row += " - 'wallet_type'"
+    if ordinal_traits_upgraded and table == "verifier_rules":
+        row += " - 'ordinal_trait_snapshot'"
     return hashlib.sha256(sql(f"SELECT COALESCE(jsonb_agg({row} ORDER BY ({row})::text), '[]'::jsonb) FROM public.\"{table}\" t;").encode()).hexdigest()
 
 
@@ -156,6 +159,29 @@ try:
     sql((root / "backend/test/nft-migration.sql").read_text())
     sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
     print("PASS: existing ERC-721, ERC-1155 and Robinhood rule constraints")
+    has_ordinal_traits = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='ordinal_trait_snapshot';").strip() == "1"
+    if not has_ordinal_traits:
+        before_ordinal_traits = {table: fingerprint(table) for table in tables}
+        if len(sys.argv) > 4:
+            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
+              INSERT INTO supabase_migrations.schema_migrations (version)
+                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000'), ('20261008020000')
+                ON CONFLICT DO NOTHING;""")
+        sql(ordinal_trait_sql.read_text())
+        for table in tables:
+            if fingerprint(table, ordinal_traits_upgraded=True) != before_ordinal_traits[table]:
+                raise RuntimeError(f"Ordinals trait migration changed existing data in {table}")
+        if sql("SELECT count(*) FROM public.verifier_rules WHERE ordinal_trait_snapshot IS NOT NULL;").strip() != "0":
+            raise RuntimeError("Existing rules did not start with a null Ordinals trait snapshot")
+        print("PASS: Ordinals trait migration preserves every existing application value")
+    sql((root / "backend/test/ordinal-traits-migration.sql").read_text())
+    sql((root / "backend/test/ordinals-migration.sql").read_text())
+    sql((root / "backend/test/nft-traits-migration.sql").read_text())
+    sql((root / "backend/test/nft-migration.sql").read_text())
+    sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
+    print("PASS: Ordinals trait criteria, snapshot storage, duplicate guards and existing NFT constraints")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")

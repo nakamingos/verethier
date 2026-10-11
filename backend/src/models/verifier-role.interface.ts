@@ -1,3 +1,5 @@
+import { OrdinalTraitSnapshot } from './ordinal-collection.interface';
+
 export type AssetCount = number | string;
 
 export interface NftRuleFields {
@@ -9,6 +11,7 @@ export interface NftRuleFields {
   collection_name?: string | null;
   attribute_key?: string | null;
   attribute_value?: string | null;
+  ordinal_trait_snapshot?: OrdinalTraitSnapshot | null;
 }
 
 export interface VerifierRole extends NftRuleFields {

@@ -80,7 +80,7 @@ The `nft_token_metadata` table caches hosted attributes for ten minutes by netwo
 
 ## ord.net Provider Experiment
 
-`ORDINALS_PROVIDER=xverse` is the default. Set it to `ordnet` to use ord.net for all Ordinals collection/count rules. Discord still uses `/setup add-rule`, and members still connect and sign with Xverse. Existing rules and stored collection names remain in the database; new ord.net rules use the canonical slug as their label because its public API does not document a collection display-name endpoint. Confirm that your collection slugs resolve on ord.net before switching the backend. No migration is needed.
+`ORDINALS_PROVIDER=xverse` is the default. Set it to `ordnet` to use ord.net for live Ordinals quantity and trait rules, with automatic Xverse fallback when ord.net cannot finish a check. Keep `XVERSE_API_KEY` configured for fallback. Discord still uses `/setup add-rule`, and members still connect and sign with Xverse. Existing rules and stored collection names remain in the database; new ord.net rules use the canonical slug as their label because its public API does not document a collection display-name endpoint. Confirm that your collection slugs resolve on ord.net before switching the backend. Trait rules require migration `20261011010000_add_ordinal_trait_snapshots.sql`; changing providers alone does not require a migration.
 
 The public ord.net API is wallet-authenticated: the API wallet's payment address needs at least **0.001 BTC (100,000 sats) confirmed**, and sessions last one hour. This is the bot's dedicated API wallet, not a requirement for members' wallets. The backend signs new BIP-322 login challenges, shares concurrent renewals, and renews before expiration or after a rejected session. Sessions stay in memory. Only collection reads and the two authentication routes are used.
 
@@ -98,7 +98,7 @@ yarn ordnet:check          # Defaults to Pizza Comrades and our known community 
 yarn ordnet:check --collection yonder --collection pizza-comrades --collection idiots --wallet bc1p…
 ```
 
-The generated `.env.ordnet` is gitignored, created with mode `0600`, and never overwritten. It contains the signing key: retain it privately for wallet recovery. It uses one key with a Taproot Ordinals address and a native SegWit payment address. The check command reads this private file and then the normal `.env`; it does not start Discord or access Supabase. Its output includes complete collection size, owned count, unknown owners, missing/empty trait coverage, owned trait values/counts, and elapsed time. Trait inspection is diagnostic in this release; Ordinals trait-based Discord rules remain unsupported.
+The generated `.env.ordnet` is gitignored, created with mode `0600`, and never overwritten. It contains the signing key: retain it privately for wallet recovery. It uses one key with a Taproot Ordinals address and a native SegWit payment address. The check command reads this private file and then the normal `.env`; it does not start Discord or access Supabase. Its output includes complete collection size, owned count, unknown owners, missing/empty trait coverage, owned trait values/counts, and elapsed time.
 
 For an existing dedicated wallet, set `ORDNET_ORDINALS_ADDRESS`, `ORDNET_PAYMENT_ADDRESS`, and `ORDNET_ORDINALS_WIF` (a compressed mainnet WIF key). Set `ORDNET_PAYMENT_WIF` when the payment address uses a different key; otherwise the Ordinals key is used for both. Payment addresses may be native SegWit, Taproot, or nested SegWit. The backend checks that the keys control the configured addresses before requesting a challenge. As an optional manual test, `ORDNET_SESSION_TOKEN` takes precedence over automatic login; leave it empty for automatic renewal.
 
@@ -107,6 +107,16 @@ The application itself reads the normal `.env`, not `.env.ordnet`. To test local
 ord.net has no documented arbitrary-wallet holdings endpoint. Verification reads an entire collection in 100-item cursor pages, then matches current owner addresses. Every wallet and role using that collection shares one read within a verification/monitoring run. New runs read fresh ownership; there is no ownership cache across runs. Reads are serialized at least 2.1 seconds apart to stay under its documented 30 reads per profile per minute. Scans are bounded at 200 pages (20,000 items); large collections may take several minutes. Duplicate IDs, cursor loops, invalid responses, or any unknown owner make the check unavailable and preserve existing roles. The live check command reports these limitations before enabling the provider for real roles.
 
 Sources: [authentication](https://developers.ord.net/reference/authentication/), [collection owners and traits](https://developers.ord.net/reference/collections/), [rate limits](https://developers.ord.net/reference/errors-rate-limits/).
+
+### Ordinals trait rules
+
+Use the existing `attribute_key`, `attribute_value`, and `min_items` options. Matching is case-insensitive; leave the value empty or use `ALL` to match any value for that key. Autocomplete samples ord.net traits and reuses complete scans, while typed entries remain available when suggestions time out. Rule creation validates a complete collection scan before saving the rule.
+
+Each rule's nullable `ordinal_trait_snapshot` JSONB stores only the matching `inscription_ids`, `criteria_hash`, and `fetched_at`. Live ord.net scans refresh it once per rule per run; changed collection/trait criteria invalidate it. Member check details record provider and status without copying IDs or trait metadata. Snapshot persistence failure does not interrupt an otherwise successful live check.
+
+During ord.net outages, individual verification intersects Xverse wallet collection IDs with the saved list; scheduled checks share batches of up to 25 current-owner lookups across members/rules. Snapshot age is limited to 24 hours; Xverse ownership does not renew its timestamp. A valid snapshot can qualify new members or replacement inscriptions. A failed cached match alone cannot revoke a role. Only a complete collection count below the trait threshold proves ineligibility during an outage; otherwise the rule is unavailable. Roles use OR across their rules, retaining existing roles whenever a remaining rule is uncertain. Both providers must recognize the same collection slug for fallback.
+
+Switching to `ORDINALS_PROVIDER=xverse` keeps existing trait snapshots usable for their remaining lifetime. Live trait refresh and new trait setup require ord.net credentials. Fallback uses the last known traits; subsequent trait changes are confirmed when live ord.net scans resume.
 
 ## Database
 

@@ -13,6 +13,7 @@ import { CONSTANTS } from '@/constants';
 import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
 import { NFT_NETWORKS, getNftNetworkId } from '@/utils/nft-network.util';
 import { NftMetadataService } from '@/services/nft-metadata.service';
+import { OrdinalsOwnershipService } from '@/services/ordinals-ownership.service';
 
 /**
  * Discord Bot Service
@@ -73,6 +74,7 @@ export class DiscordService implements OnModuleInit {
     private readonly dataSvc: DataService,
     private readonly cacheSvc: CacheService,
     @Optional() private readonly nftMetadataSvc?: NftMetadataService,
+    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -207,6 +209,8 @@ export class DiscordService implements OnModuleInit {
             await this.handleRoleAutocomplete(interaction);
           } else if (interaction.options.getString('asset_type') === 'nft' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
             await this.handleNftAttributeAutocomplete(interaction);
+          } else if (interaction.options.getString('asset_type') === 'ordinal' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
+            await this.handleOrdinalAttributeAutocomplete(interaction);
           } else if (['nft', 'ordinal'].includes(interaction.options.getString('asset_type'))) {
             await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
@@ -782,6 +786,24 @@ export class DiscordService implements OnModuleInit {
         ]);
       }
     } catch { /* Manual entry is available when metadata suggestions are unavailable. */ }
+    const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
+    if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
+    await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));
+  }
+
+  async handleOrdinalAttributeAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+    const input = interaction.options.getFocused(true);
+    const typed = String(input.value).trim();
+    let suggestions: string[] = [];
+    try {
+      const slug = interaction.options.getString('slug');
+      const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
+      if (this.ordinalsSvc && slug && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
+        suggestions = await Promise.race([
+          this.ordinalsSvc.suggestions(slug, key), this.timeoutPromise(1500, []),
+        ]);
+      }
+    } catch { /* Typed traits remain available when suggestions time out. */ }
     const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
     if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
     await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));

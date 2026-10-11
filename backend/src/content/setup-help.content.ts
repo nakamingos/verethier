@@ -52,9 +52,10 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       name: '₿ Ordinals collections',
       value: 'Use `/setup add-rule` with **asset_type: Ordinals**, **slug: pizza-comrades**, and **min_items: 1**.\n' +
              '• **Wallet**: Xverse on Bitcoin mainnet\n' +
-             '• **Collection**: One collection slug, validated through Xverse\n' +
-             '• **Min Items**: Required number of inscriptions across verified Bitcoin wallets\n' +
-             'Leave NFT network/contract options and attributes empty. Trait verification is not supported yet.',
+             '• **Collection**: One collection slug, validated through the configured provider\n' +
+             '• **Attributes**: Optional trait key/value, with suggestions or manual entry\n' +
+             '• **Min Items**: Required number of matching inscriptions across verified Bitcoin wallets\n' +
+             'Leave NFT network/contract options empty. Trait setup uses ord.net; existing roles are retained when ownership cannot be checked.',
       inline: false
     },
     {
