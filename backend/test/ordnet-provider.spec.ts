@@ -160,12 +160,12 @@ describe('ord.net trait suggestions', () => {
     get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later)
       .mockResolvedValueOnce(page([category(3, 'Honorary')]));
     expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
-    now += 2 * 24 * 60 * 60 * 1000;
+    now += 8 * 24 * 60 * 60 * 1000;
     expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
     expect(get).toHaveBeenCalledTimes(2);
     finish(page([category(2, 'Cosmic Oven-Lord')]));
     await settle();
-    now += 24 * 60 * 60 * 1000 - 1;
+    now += 7 * 24 * 60 * 60 * 1000 - 1;
     expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
     expect(get).toHaveBeenCalledTimes(2);
     now += 2;
@@ -173,12 +173,12 @@ describe('ord.net trait suggestions', () => {
     expect(get).toHaveBeenCalledTimes(3);
   });
 
-  it('reuses verification trait menus six hours later while still fetching fresh ownership', async () => {
+  it('reuses verification trait menus six days later while still fetching fresh ownership', async () => {
     const now = Date.now();
     get.mockResolvedValueOnce(page([category(1, 'Cosmic Oven-Lord')]))
       .mockResolvedValueOnce(page([{ ...category(1, 'Cosmic Oven-Lord'), owner: otherWallet }]));
     expect(await service.count('pizza-comrades', [wallet], context())).toBe(1n);
-    jest.spyOn(Date, 'now').mockReturnValue(now + 6 * 60 * 60 * 1000);
+    jest.spyOn(Date, 'now').mockReturnValue(now + 6 * 24 * 60 * 60 * 1000);
     expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Cosmic Oven-Lord']);
     expect(get).toHaveBeenCalledTimes(1);
     expect(await service.count('pizza-comrades', [wallet], context())).toBe(0n);

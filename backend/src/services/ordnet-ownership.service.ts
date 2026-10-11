@@ -8,7 +8,7 @@ import { OrdnetApiService } from './ordnet-api.service';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 200;
-const TRAIT_MENU_TTL_MS = 24 * 60 * 60 * 1000;
+const TRAIT_MENU_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 type TraitItem = { traits?: Array<{ type: string; value: string }> | null };
 type TraitSuggestions = Map<string, Set<string>>;
 
