@@ -1,3 +1,4 @@
+import { InscriptionCriteria } from './inscription-criteria.interface';
 import { OrdinalTraitSnapshot } from './ordinal-collection.interface';
 
 export type AssetCount = number | string;
@@ -12,6 +13,7 @@ export interface NftRuleFields {
   attribute_key?: string | null;
   attribute_value?: string | null;
   ordinal_trait_snapshot?: OrdinalTraitSnapshot | null;
+  inscription_criteria?: InscriptionCriteria | null;
 }
 
 export interface VerifierRole extends NftRuleFields {

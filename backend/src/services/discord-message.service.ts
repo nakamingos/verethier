@@ -64,7 +64,7 @@ export class DiscordMessageService {
     return message.id;
   }
 
-  private async getExistingVerificationMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
+  async getExistingVerificationMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
     const botUserId = this.client?.user?.id;
     if (!botUserId) throw new Error('Discord client not properly initialized or bot user ID not available');
 

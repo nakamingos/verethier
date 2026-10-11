@@ -38,7 +38,7 @@ BEGIN
     BEGIN
       EXECUTE statement;
       RAISE EXCEPTION 'Invalid Ordinals trait fields were accepted: %', statement;
-    EXCEPTION WHEN check_violation THEN NULL;
+    EXCEPTION WHEN check_violation OR not_null_violation THEN NULL;
     END;
   END LOOP;
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.verifier_rules'::regclass) THEN

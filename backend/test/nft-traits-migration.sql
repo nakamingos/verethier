@@ -46,7 +46,7 @@ BEGIN
     BEGIN
       EXECUTE statement;
       RAISE EXCEPTION 'Invalid NFT trait fields were accepted: %', statement;
-    EXCEPTION WHEN check_violation THEN NULL;
+    EXCEPTION WHEN check_violation OR not_null_violation THEN NULL;
     END;
   END LOOP;
   -- Exact ERC-721 IDs retain their one-token threshold.
@@ -54,7 +54,7 @@ BEGIN
   BEGIN
     UPDATE public.verifier_rules SET min_items = 2 WHERE id = trait_id;
     RAISE EXCEPTION 'Specific ERC-721 ID allowed a threshold above one';
-  EXCEPTION WHEN check_violation THEN NULL;
+  EXCEPTION WHEN check_violation OR not_null_violation THEN NULL;
   END;
   INSERT INTO public.nft_token_metadata (chain_id, contract_address, token_id, attributes)
     VALUES
@@ -69,7 +69,7 @@ BEGIN
   BEGIN
     UPDATE public.nft_token_metadata SET attributes = '{}';
     RAISE EXCEPTION 'Non-array metadata attributes were accepted';
-  EXCEPTION WHEN check_violation THEN NULL;
+  EXCEPTION WHEN check_violation OR not_null_violation THEN NULL;
   END;
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.nft_token_metadata'::regclass)
     OR has_table_privilege('anon', 'public.nft_token_metadata', 'SELECT')

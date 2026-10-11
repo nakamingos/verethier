@@ -38,19 +38,24 @@ BEGIN
   -- The same collection can grant the same role through an Ethscriptions rule.
   INSERT INTO public.verifier_rules (server_id, channel_id, role_id, slug, min_items, attribute_key, attribute_value)
     VALUES ('ordinal-test', 'verify', 'holder', 'pizza-comrades', 10, 'ALL', 'ALL');
+  -- Production backups may contain no NFT rules. Always test the NFT guard
+  -- against our own fixture rather than relying on existing application rows.
+  INSERT INTO public.verifier_rules (server_id, channel_id, role_id, asset_type, chain_id, slug, contract_address, token_standard, min_items, attribute_key, attribute_value)
+    VALUES ('ordinal-test', 'verify', 'nft-holder', 'nft', 1, NULL,
+      '0x1111111111111111111111111111111111111111', 'erc721', 1, 'ALL', 'ALL');
 
   FOREACH statement IN ARRAY ARRAY[
-    $q$UPDATE public.verifier_rules SET chain_id = 1 WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET slug = 'ALL' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET slug = NULL WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET slug = 'pizza-comrades,other' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET attribute_key = '' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET attribute_value = 'Red' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET min_items = 0 WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET token_ids = ARRAY['1'] WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET contract_address = '0x1111111111111111111111111111111111111111' WHERE asset_type = 'ordinal'$q$,
-    $q$UPDATE public.verifier_rules SET chain_id = NULL WHERE asset_type = 'nft'$q$,
-    $q$UPDATE public.verifier_rules SET chain_id = NULL WHERE asset_type = 'ethscription'$q$
+    $q$UPDATE public.verifier_rules SET chain_id = 1 WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET slug = 'ALL' WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET slug = NULL WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET slug = 'pizza-comrades,other' WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET attribute_key = '' WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET attribute_value = 'Red' WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET min_items = 0 WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET token_ids = ARRAY['1'] WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET contract_address = '0x1111111111111111111111111111111111111111' WHERE server_id = 'ordinal-test' AND asset_type = 'ordinal'$q$,
+    $q$UPDATE public.verifier_rules SET chain_id = NULL WHERE server_id = 'ordinal-test' AND asset_type = 'nft'$q$,
+    $q$UPDATE public.verifier_rules SET chain_id = NULL WHERE server_id = 'ordinal-test' AND asset_type = 'ethscription'$q$
   ] LOOP
     BEGIN
       EXECUTE statement;

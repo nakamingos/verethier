@@ -4,6 +4,7 @@ import { AssetOwnershipService } from './asset-ownership.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { nftRuleLabel, serializeAssetCount } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { UserAddressService } from './user-address.service';
 import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 import { OrdinalCheckDetails } from '@/models/ordinal-collection.interface';
@@ -113,8 +114,8 @@ export class VerificationEngine {
       
       Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredCount}`);
       
-      // Rule snapshots belong only on verifier_rules, never in member check JSON.
-      const { ordinal_trait_snapshot, ...resultRule } = rule;
+      // Rule snapshots and selections belong on verifier_rules, not member check JSON.
+      const { ordinal_trait_snapshot, inscription_criteria, ...resultRule } = rule;
       return {
         isValid,
         status: isValid ? 'passed' : 'failed',
@@ -125,7 +126,7 @@ export class VerificationEngine {
         ownershipDetails: this.ownershipSvc.checkDetails?.(rule, addressesToCheck, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
           minItems: requiredCount,

@@ -18,10 +18,12 @@ import { DiscordService } from '../../discord.service';
 import { DataService } from '../../data.service';
 import { NftOwnershipService } from '../../nft-ownership.service';
 import { OrdinalsOwnershipService } from '../../ordinals-ownership.service';
+import { EthscriptionsOwnershipService } from '../../ethscriptions-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import { getNftNetworkId } from '@/utils/nft-network.util';
 import { nftTrait } from '@/utils/nft-trait.util';
 import { ordinalTrait } from '@/utils/ordinal-rule.util';
+import { RuleCreationAssetType } from '@/utils/rule-command.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
 import { validateRuleInputParams, formatAttribute } from '../utils/rule-validation.util';
@@ -54,18 +56,19 @@ export class AddRuleHandler {
     private readonly nftSvc: NftOwnershipService,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
-    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService
+    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService
   ) {}
 
   /**
    * Main entry point for add rule command
    */
-  async handle(interaction: ChatInputCommandInteraction): Promise<void> {
+  async handle(interaction: ChatInputCommandInteraction, assetType?: RuleCreationAssetType): Promise<void> {
     try {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       // Validate input parameters
-      const params = await this.validateInputParams(interaction);
+      const params = await this.validateInputParams(interaction, assetType);
       if (!params) {
         return; // Error already handled
       }
@@ -114,7 +117,7 @@ export class AddRuleHandler {
    * Validates basic input parameters for rule creation.
    * @returns Input parameters if valid, null if validation failed (error already sent to user)
    */
-  private async validateInputParams(interaction: ChatInputCommandInteraction): Promise<{
+  private async validateInputParams(interaction: ChatInputCommandInteraction, selectedAssetType?: RuleCreationAssetType): Promise<{
     channel: TextChannel;
     roleName: string;
     slug: string;
@@ -141,11 +144,31 @@ export class AddRuleHandler {
       await interaction.editReply({ content: AdminFeedback.simple('Minimum items must be a positive whole number.', true) });
       return null;
     }
-    const assetType = interaction.options.getString('asset_type') || 'ethscription';
+    const assetType = selectedAssetType || interaction.options.getString('asset_type') || 'ethscription';
     const contract = interaction.options.getString('contract_address');
     const tokenIds = interaction.options.getString('token_ids');
     const name = interaction.options.getString('collection_name');
     const network = interaction.options.getString('network');
+    const inscriptionIds = interaction.options.getString('inscription_ids');
+    const inscriptionNumbers = interaction.options.getString('inscription_numbers');
+    if (inscriptionIds != null || inscriptionNumbers != null) {
+      try {
+        if (!['ordinal', 'ethscription'].includes(assetType)) throw new Error('Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.');
+        if (interaction.options.getString('slug') != null || attributeKey !== 'ALL' || attributeValue !== 'ALL'
+          || contract || tokenIds != null || name != null || network != null) {
+          throw new Error('Specific inscription rules use IDs or numbers with min_items. Leave slug, attributes, and NFT options empty.');
+        }
+        if (assetType === 'ordinal' && !this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
+        if (assetType === 'ethscription' && !this.ethscriptionsSvc) throw new Error('Specific Ethscription verification is not configured.');
+        const assetFields = assetType === 'ordinal'
+          ? await this.ordinalsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems)
+          : await this.ethscriptionsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems);
+        return { channel, roleName, slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems, assetFields };
+      } catch (error) {
+        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the selected inscriptions. Please try again.', true) });
+        return null;
+      }
+    }
     if (assetType === 'ordinal') {
       if (contract || tokenIds != null || name != null || network != null) {
         await interaction.editReply({ content: AdminFeedback.simple('Ordinals rules use slug, optional attributes, and min_items. Leave NFT network and contract options empty.', true) });
@@ -183,7 +206,7 @@ export class AddRuleHandler {
       }
     }
     if (assetType !== 'ethscription' || contract || tokenIds != null || name != null || network != null) {
-      await interaction.editReply({ content: AdminFeedback.simple('Select asset_type:NFT to use network, contract_address, token_ids, or collection_name.', true) });
+      await interaction.editReply({ content: AdminFeedback.simple('Use /setup add-nft-rule for network, contract_address, token_ids, or collection_name.', true) });
       return null;
     }
 
@@ -903,7 +926,7 @@ export class AddRuleHandler {
         embeds: [AdminFeedback.error(
           'Setup Failed', 
           'Failed to set up verification. The rule was created but verification message setup failed.',
-          ['The rule exists in the database', 'Try running the recover-verification command']
+          ['The rule exists in the database', 'Try `/setup verification` with `action:recover`']
         )],
         components: []
       });

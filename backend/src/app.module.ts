@@ -14,8 +14,7 @@ import { DiscordCommandsService } from '@/services/discord-commands.service';
 import { AddRuleHandler } from '@/services/discord-commands/handlers/add-rule.handler';
 import { RemoveRuleHandler } from '@/services/discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from '@/services/discord-commands/handlers/list-rules.handler';
-import { RecoverVerificationHandler } from '@/services/discord-commands/handlers/recover-verification.handler';
-import { RefreshVerificationHandler } from '@/services/discord-commands/handlers/refresh-verification.handler';
+import { VerificationMessageHandler } from '@/services/discord-commands/handlers/verification-message.handler';
 import { RemovalUndoInteractionHandler } from '@/services/discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from '@/services/discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from '@/services/discord-commands/interactions/rule-confirmation.interaction';
@@ -28,6 +27,7 @@ import { AssetOwnershipService } from './services/asset-ownership.service';
 import { NftOwnershipService } from './services/nft-ownership.service';
 import { NftMetadataService } from './services/nft-metadata.service';
 import { OrdinalsOwnershipService } from './services/ordinals-ownership.service';
+import { EthscriptionsOwnershipService } from './services/ethscriptions-ownership.service';
 import { OrdnetApiService } from './services/ordnet-api.service';
 import { OrdnetOwnershipService } from './services/ordnet-ownership.service';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
@@ -128,8 +128,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     AddRuleHandler,              // Add rule command handler
     RemoveRuleHandler,           // Remove rule command handler
     ListRulesHandler,            // List rules command handler
-    RecoverVerificationHandler,  // Recover verification command handler
-    RefreshVerificationHandler,  // Refresh or repost verification messages
+    VerificationMessageHandler, // Refresh, create, or recover verification messages
 
     // Discord interaction handlers
     RemovalUndoInteractionHandler,  // Handles undo functionality for rule removals
@@ -149,6 +148,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Data access layer
     DbService,                  // Database operations
     DataService,                // Ethscriptions marketplace queries
+    EthscriptionsOwnershipService, // Global Ethscription ID and number queries
     AssetOwnershipService,
     NftOwnershipService,
     NftMetadataService,

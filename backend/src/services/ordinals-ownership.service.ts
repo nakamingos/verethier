@@ -4,6 +4,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { buildOrdinalTraitSnapshot, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
+import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
+import { inscriptionCriteria, inscriptionCriteriaCapacity, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { OrdinalCheckDetails, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
 import { DbService } from './db.service';
 import { NftCheckContext } from './nft-ownership.service';
@@ -24,9 +26,12 @@ export class OrdinalsOwnershipService {
 
   constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService, @Optional() private readonly db?: DbService) {}
 
-  private provider(): 'xverse' | 'ordnet' {
+  private provider(rule?: Partial<VerifierRole>): 'xverse' | 'ordnet' {
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
     if (provider !== 'xverse' && provider !== 'ordnet') throw new Error('ORDINALS_PROVIDER must be xverse or ordnet.');
+    // ord.net's documented ownership API is collection-scoped. Route these
+    // unsupported lookups through the same provider layer to Xverse.
+    if (rule && inscriptionCriteria(rule)) return 'xverse';
     if (provider === 'ordnet' && !this.ordnet) throw new Error('ord.net verification is not configured.');
     return provider;
   }
@@ -38,6 +43,24 @@ export class OrdinalsOwnershipService {
       asset_type: 'ordinal', slug: collection.id, chain_id: null,
       collection_name: collection.name, contract_address: null, token_standard: null, token_ids: null,
     };
+  }
+
+  async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number): Promise<NftRuleFields & { slug: null }> {
+    const criteria = parseInscriptionCriteria(ids, numbers);
+    if (!criteria) throw new Error('Enter inscription_ids or inscription_numbers.');
+    if (!Number.isSafeInteger(minItems) || minItems < 1 || BigInt(minItems) > inscriptionCriteriaCapacity(criteria)) {
+      throw new Error('Minimum items cannot exceed the number of selected inscriptions.');
+    }
+    const fields: NftRuleFields & { slug: null } = {
+      asset_type: 'ordinal', slug: null, chain_id: null, collection_name: null,
+      contract_address: null, token_standard: null, token_ids: null, inscription_criteria: criteria,
+    };
+    this.provider(fields);
+    if (!EnvironmentConfig.XVERSE_API_KEY) throw new Error('Specific inscription rules require XVERSE_API_KEY on the backend; ord.net does not support these lookups.');
+    // Validate exact IDs before creating a Discord role. Number selections are
+    // predicates, so they need no lookup or expansion during setup.
+    if (criteria.kind === 'ids') await this.savedIdOwners(criteria.ids, { checks: new Map() });
+    return fields;
   }
 
   async prepareTraitSnapshot(rule: NftRuleFields & { slug: string }): Promise<OrdinalTraitSnapshot> {
@@ -53,6 +76,8 @@ export class OrdinalsOwnershipService {
   }
 
   private checkKey(rule: VerifierRole, addresses: string[]): string {
+    const criteria = inscriptionCriteria(rule);
+    if (criteria) return JSON.stringify(['ordinal', this.provider(rule), criteria, addresses]);
     const trait = ordinalTrait(rule);
     return JSON.stringify(['ordinal', this.provider(), ordinalCollectionId(rule.slug), addresses,
       ...(trait.enabled ? [rule.id, ordinalTraitHash(rule), rule.min_items || 1] : [])]);
@@ -64,15 +89,77 @@ export class OrdinalsOwnershipService {
   }
 
   async count(rule: VerifierRole, wallets: string[], context?: NftCheckContext): Promise<bigint> {
-    const collectionId = ordinalCollectionId(rule.slug);
+    const criteria = inscriptionCriteria(rule);
+    const collectionId = criteria ? null : ordinalCollectionId(rule.slug);
     const trait = ordinalTrait(rule);
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return 0n;
     const run = context || { checks: new Map() };
-    const provider = this.provider();
+    const provider = this.provider(rule);
     const key = this.checkKey(rule, addresses);
-    if (!run.checks.has(key)) run.checks.set(key, this.readRule(rule, collectionId, addresses, run, key, provider, trait.enabled));
+    if (!run.checks.has(key)) run.checks.set(key, criteria ? this.readSelection(criteria, addresses, run, key)
+      : this.readRule(rule, collectionId, addresses, run, key, provider, trait.enabled));
     return run.checks.get(key);
+  }
+
+  private async readSelection(criteria: InscriptionCriteria, addresses: string[], context: NftCheckContext, key: string): Promise<bigint> {
+    this.detail(context, key, { provider: 'xverse', source: 'live' });
+    if (criteria.kind === 'ids') {
+      const owners = await this.savedIdOwners(criteria.ids, context);
+      const wallets = new Set(addresses);
+      return BigInt([...owners.values()].filter(owner => wallets.has(owner)).length);
+    }
+    context.ordinalInventories ||= new Map();
+    const inscriptions = new Map<string, number>();
+    // Read once per wallet/run and share the complete inventory with all number
+    // rules. Bounds stay compact even for a sub-100k or larger selection.
+    for (const wallet of addresses) {
+      if (!context.ordinalInventories.has(wallet)) context.ordinalInventories.set(wallet, this.readInventory(wallet));
+      for (const [id, number] of await context.ordinalInventories.get(wallet)) {
+        if (inscriptions.has(id) && inscriptions.get(id) !== number) throw new Error(UNAVAILABLE);
+        inscriptions.set(id, number);
+      }
+    }
+    return BigInt([...inscriptions.values()].filter(number => criteria.ranges.some(([start, end]) => number >= start && number <= end)).length);
+  }
+
+  private async readInventory(wallet: string): Promise<Map<string, number>> {
+    const items = new Map<string, number>();
+    const numbers = new Set<number>();
+    let offset = 0;
+    let total: number | undefined;
+    for (let page = 0; page <= MAX_PAGES; page++) {
+      const data = await this.request(`/v1/ordinals/address/${wallet}/inscriptions?limit=${PAGE_LIMIT}&offset=${offset}`);
+      if (!data || !Array.isArray(data.items) || data.offset !== offset) throw new Error(UNAVAILABLE);
+      const limit = this.integer(data.limit);
+      // Live responses are paginated despite older full-list documentation.
+      // Require consistent pages and a complete final page before using zero.
+      if (limit > PAGE_LIMIT || data.items.length > limit || (!limit && (offset > 0 || data.items.length))) throw new Error(UNAVAILABLE);
+      if (data.total != null) {
+        const currentTotal = this.integer(data.total);
+        if (total !== undefined && total !== currentTotal) throw new Error(UNAVAILABLE);
+        total = currentTotal;
+        if (total > PAGE_LIMIT * MAX_PAGES) throw new Error(UNAVAILABLE);
+        if (data.items.length !== Math.min(limit, total - offset)) throw new Error(UNAVAILABLE);
+      }
+      for (const item of data.items) {
+        if (!item || typeof item.id !== 'string' || !ORDINAL_INSCRIPTION_ID.test(item.id) || items.has(item.id)
+          || !Number.isSafeInteger(item.number) || numbers.has(item.number)
+          || typeof item.currentAddress !== 'string' || normalizeBitcoinAddress(item.currentAddress) !== wallet
+          || item.currentAddress !== item.currentAddress.trim()
+          || !/^[0-9a-f]{64}:\d+$/.test(item.currentOutput)) throw new Error(UNAVAILABLE);
+        items.set(item.id, item.number);
+        numbers.add(item.number);
+      }
+      offset += data.items.length;
+      if (items.size > PAGE_LIMIT * MAX_PAGES) throw new Error(UNAVAILABLE);
+      if (total !== undefined && offset === total) return items;
+      if (data.items.length < limit || !limit) {
+        if (total !== undefined) throw new Error(UNAVAILABLE);
+        return items;
+      }
+    }
+    throw new Error(UNAVAILABLE);
   }
 
   private async liveTraitSnapshot(rule: Partial<VerifierRole>, context: NftCheckContext): Promise<OrdinalTraitSnapshot> {

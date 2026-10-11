@@ -1,9 +1,9 @@
 import { ChannelType, ButtonStyle, MessageFlags } from 'discord.js';
-import { RefreshVerificationHandler } from '../src/services/discord-commands/handlers/refresh-verification.handler';
+import { VerificationMessageHandler } from '../src/services/discord-commands/handlers/verification-message.handler';
 import { DiscordMessageService } from '../src/services/discord-message.service';
 
-describe('Refresh verification messages', () => {
-  let handler: RefreshVerificationHandler;
+describe('Manage verification messages', () => {
+  let handler: VerificationMessageHandler;
   let channel: any;
   let interaction: any;
   let oldMessage: any;
@@ -26,7 +26,7 @@ describe('Refresh verification messages', () => {
     };
     interaction = {
       guild: { id: 'guild' }, deferred: false,
-      options: { getChannel: jest.fn().mockReturnValue(channel), getBoolean: jest.fn().mockReturnValue(null) },
+      options: { getChannel: jest.fn().mockReturnValue(channel), getString: jest.fn().mockReturnValue('refresh') },
       deferReply: jest.fn().mockImplementation(async () => { interaction.deferred = true; }),
       editReply: jest.fn(), reply: jest.fn()
     };
@@ -34,7 +34,7 @@ describe('Refresh verification messages', () => {
     db = { getRulesByChannel: jest.fn().mockResolvedValue(rules), addRoleMapping: jest.fn(), deleteRoleMapping: jest.fn() };
     const messages = new DiscordMessageService();
     messages.initialize({ user: { id: 'bot' } } as any);
-    handler = new RefreshVerificationHandler(db, messages);
+    handler = new VerificationMessageHandler(db, messages);
   });
 
   it('refreshes the original pinned message with the working verification button and all channel rules', async () => {
@@ -58,7 +58,7 @@ describe('Refresh verification messages', () => {
   });
 
   it('can post a new message while leaving the old one working and untouched', async () => {
-    interaction.options.getBoolean.mockReturnValue(true);
+    interaction.options.getString.mockReturnValue('new');
     await handler.handle(interaction);
     expect(channel.send).toHaveBeenCalledTimes(1);
     expect(channel.send.mock.calls[0][0].components[0].toJSON().components[0].custom_id).toBe('requestVerification');
@@ -74,6 +74,47 @@ describe('Refresh verification messages', () => {
     await handler.handle(interaction);
     expect(oldMessage.edit).toHaveBeenCalledTimes(1);
     expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it('recovers a missing message using all existing channel rules', async () => {
+    interaction.options.getString.mockReturnValue('recover');
+    channel.messages.fetch.mockResolvedValue(new Map());
+    await handler.handle(interaction);
+    expect(channel.send).toHaveBeenCalledTimes(1);
+    expect(oldMessage.edit).not.toHaveBeenCalled();
+    expect(oldMessage.delete).not.toHaveBeenCalled();
+    const feedback = interaction.editReply.mock.calls[0][0].embeds[0].toJSON();
+    expect(feedback.title).toContain('Verification Message Recovered');
+    expect(feedback.description).toContain('/guild/channel/new-message');
+    expect(feedback.fields.find(field => field.name === 'Active Rules').value).toContain('3 rules');
+    expect(db.addRoleMapping).not.toHaveBeenCalled();
+    expect(db.deleteRoleMapping).not.toHaveBeenCalled();
+  });
+
+  it.each(['recent', 'pinned'])('does not recover over an existing %s verification message', async location => {
+    interaction.options.getString.mockReturnValue('recover');
+    if (location === 'pinned') {
+      channel.messages.fetch.mockResolvedValue(new Map());
+      channel.messages.fetchPinned.mockResolvedValue(new Map([['old-message', oldMessage]]));
+    }
+    await handler.handle(interaction);
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(oldMessage.edit).not.toHaveBeenCalled();
+    expect(oldMessage.delete).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('already has a verification message') });
+    expect(interaction.editReply.mock.calls[0][0].content).toContain('action:new');
+  });
+
+  it.each(['read', 'pins'])('does not create a recovery message when %s access fails', async stage => {
+    interaction.options.getString.mockReturnValue('recover');
+    if (stage === 'read') channel.messages.fetch.mockRejectedValue(new Error('Missing permissions'));
+    else {
+      channel.messages.fetch.mockResolvedValue(new Map());
+      channel.messages.fetchPinned.mockRejectedValue(new Error('Missing permissions'));
+    }
+    await handler.handle(interaction);
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Missing permissions') });
   });
 
   it('refreshes only the newest matching message when several verification messages coexist', async () => {
@@ -109,19 +150,52 @@ describe('Refresh verification messages', () => {
     expect(oldMessage.delete).not.toHaveBeenCalled();
   });
 
-  it.each(['no rules', 'other server', 'voice channel', 'missing channel'])('refuses to modify verification messages for invalid setup (%s)', async kind => {
+  it.each(['no rules', 'other server', 'voice channel', 'missing channel', 'missing server'])('refuses to modify verification messages for invalid setup (%s)', async kind => {
     if (kind === 'no rules') db.getRulesByChannel.mockResolvedValue([]);
     if (kind === 'other server') channel.guild.id = 'other-guild';
     if (kind === 'voice channel') channel.type = ChannelType.GuildVoice;
     if (kind === 'missing channel') interaction.options.getChannel.mockReturnValue(null);
+    if (kind === 'missing server') interaction.guild = null;
     await handler.handle(interaction);
     expect(oldMessage.edit).not.toHaveBeenCalled();
     expect(channel.send).not.toHaveBeenCalled();
     expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.any(String) });
   });
 
+  it.each([null, '', 'delete'])('requires a valid action before touching the database or channel (%s)', async action => {
+    interaction.options.getString.mockReturnValue(action);
+    await handler.handle(interaction);
+    expect(db.getRulesByChannel).not.toHaveBeenCalled();
+    expect(channel.messages.fetch).not.toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Please select an action') });
+  });
+
+  it.each(['new', 'recover'])('requires existing rules before posting with action %s', async action => {
+    interaction.options.getString.mockReturnValue(action);
+    db.getRulesByChannel.mockResolvedValue([]);
+    await handler.handle(interaction);
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('No verification rules found') });
+  });
+
+  it('reports database failures without changing messages', async () => {
+    db.getRulesByChannel.mockRejectedValue(new Error('Database unavailable'));
+    await handler.handle(interaction);
+    expect(oldMessage.edit).not.toHaveBeenCalled();
+    expect(channel.send).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Database unavailable') });
+  });
+
+  it('reports errors before deferral with a private reply', async () => {
+    interaction.deferReply.mockRejectedValue(new Error('Could not defer'));
+    await handler.handle(interaction);
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining('Could not defer'), flags: MessageFlags.Ephemeral });
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
   it('reports a failed new-message post without altering the original message', async () => {
-    interaction.options.getBoolean.mockReturnValue(true);
+    interaction.options.getString.mockReturnValue('new');
     channel.send.mockRejectedValue(new Error('Send failed'));
     await handler.handle(interaction);
     expect(oldMessage.edit).not.toHaveBeenCalled();

@@ -1,4 +1,6 @@
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
+import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
+import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ButtonInteraction, ChatInputCommandInteraction, ComponentType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -343,7 +345,9 @@ export class RestoreUndoInteractionHandler {
         const slug = rule.slug || 'ALL';
         const minItems = rule.min_items || 1;
         
-        const criteria = rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
+        const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
+          : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
+          : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
         description += ruleInfo + '\n\n';
       });

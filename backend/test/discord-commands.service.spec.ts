@@ -6,8 +6,7 @@ import { DiscordService } from '../src/services/discord.service';
 import { AddRuleHandler } from '../src/services/discord-commands/handlers/add-rule.handler';
 import { RemoveRuleHandler } from '../src/services/discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from '../src/services/discord-commands/handlers/list-rules.handler';
-import { RecoverVerificationHandler } from '../src/services/discord-commands/handlers/recover-verification.handler';
-import { RefreshVerificationHandler } from '../src/services/discord-commands/handlers/refresh-verification.handler';
+import { VerificationMessageHandler } from '../src/services/discord-commands/handlers/verification-message.handler';
 import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from '../src/services/discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from '../src/services/discord-commands/interactions/rule-confirmation.interaction';
@@ -25,7 +24,7 @@ const mockListRulesHandler = {
   handle: jest.fn(),
 };
 
-const mockRecoverVerificationHandler = {
+const mockVerificationMessageHandler = {
   handle: jest.fn(),
 };
 
@@ -86,8 +85,7 @@ describe('DiscordCommandsService (Refactored)', () => {
         { provide: AddRuleHandler, useValue: mockAddRuleHandler },
         { provide: RemoveRuleHandler, useValue: mockRemoveRuleHandler },
         { provide: ListRulesHandler, useValue: mockListRulesHandler },
-        { provide: RecoverVerificationHandler, useValue: mockRecoverVerificationHandler },
-        { provide: RefreshVerificationHandler, useValue: { handle: jest.fn() } },
+        { provide: VerificationMessageHandler, useValue: mockVerificationMessageHandler },
         { provide: RemovalUndoInteractionHandler, useValue: mockRemovalUndoHandler },
         { provide: RestoreUndoInteractionHandler, useValue: mockRestoreUndoHandler },
         { provide: RuleConfirmationInteractionHandler, useValue: mockRuleConfirmationHandler },
@@ -101,6 +99,12 @@ describe('DiscordCommandsService (Refactored)', () => {
   });
 
   describe('handleAddRule', () => {
+    it.each(['nft', 'ordinal', 'ethscription'] as const)('passes the selected %s asset type to AddRuleHandler', async assetType => {
+      const interaction = { id: 'typed-rule' } as any;
+      await service.handleAddRule(interaction, assetType);
+      expect(mockAddRuleHandler.handle).toHaveBeenCalledWith(interaction, assetType);
+    });
+
     it('should delegate to AddRuleHandler', async () => {
       const mockInteraction = {
         id: 'interaction-123',
@@ -144,6 +148,15 @@ describe('DiscordCommandsService (Refactored)', () => {
 
       expect(mockListRulesHandler.handle).toHaveBeenCalledWith(mockInteraction);
     });
+  });
+
+  describe('verification messages', () => {
+    it('delegates the unified command without overriding its selected action', async () => {
+      const interaction = { id: 'verification' } as any;
+      await service.handleVerification(interaction);
+      expect(mockVerificationMessageHandler.handle).toHaveBeenCalledWith(interaction);
+    });
+
   });
 
   describe('service initialization', () => {

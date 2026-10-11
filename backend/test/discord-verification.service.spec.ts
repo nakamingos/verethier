@@ -8,6 +8,7 @@ import { DataService } from '../src/services/data.service';
 import { UserAddressService } from '../src/services/user-address.service';
 import { Logger } from '@nestjs/common';
 import { MessageFlags } from 'discord.js';
+import { boundedEmbedDescription } from '../src/utils/discord-embed.util';
 
 // Mock Logger methods to suppress error output during tests
 const loggerSpy = jest.spyOn(Logger, 'error').mockImplementation(() => {});
@@ -580,6 +581,27 @@ describe('DiscordVerificationService', () => {
         '**Test Role**: (6/1) The Test Collection ∨ The Other Collection ∨ The Third Collection'
       );
       expect(description).not.toContain('(3/1) The Test Collection');
+    });
+
+    it.each(['ordinal', 'ethscription'])('shows specific %s ranges and counts without labelling them as all collections', assetType => {
+      const rule = { asset_type: assetType, slug: null, min_items: 2, attribute_key: 'ALL', attribute_value: 'ALL',
+        inscription_criteria: { kind: 'numbers', ranges: [[100, 200], [500, 500]] } };
+      const requirement = (service as any).formatRoleRequirement(rule, {}, { matchingCount: 1 });
+      expect(requirement).toContain('Own 2+ matching');
+      expect(requirement).toContain('100–200, 500');
+      expect(requirement).toContain('(1/2)');
+      expect(requirement).toContain(assetType === 'ordinal' ? 'Bitcoin · Ordinals' : 'Ethereum · Ethscriptions');
+      expect((service as any).formatRoleRequirement(rule, {}, { style: 'holding', matchingCount: 3 })).toContain('(3/2)');
+      expect((service as any).isCollectionOnlyRule(rule)).toBe(false);
+    });
+
+    it('keeps a large verification result valid for Discord and makes omitted details clear', () => {
+      const description = 'Verification successful\n' + Array.from({ length: 30 }, (_, i) => `Role ${i}: ${'a'.repeat(64)}i0, ${'b'.repeat(64)}i0, ${'c'.repeat(64)}i0`).join('\n');
+      const bounded = boundedEmbedDescription(description);
+      expect(bounded.length).toBeLessThanOrEqual(4096);
+      expect(bounded).toContain('Verification successful');
+      expect(bounded).toContain('Additional role details were omitted');
+      expect(boundedEmbedDescription('Verification successful')).toBe('Verification successful');
     });
 
     it('should leave long trait requirements naturally wrappable without forcing visible line breaks', () => {
