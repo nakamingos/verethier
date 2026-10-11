@@ -108,7 +108,7 @@ describe('ord.net ownership provider',()=>{
   });
   it('keeps roles and successful check timestamps when ord.net fails',async()=>{
     get.mockRejectedValue(new Error('unavailable'));
-    const db:any={getActiveRoleAssignments:jest.fn().mockResolvedValue([{id:'assignment',user_id:'user',server_id:'guild',role_id:'holder'}]),
+    const db:any={getEarnedRoleAssignments:jest.fn().mockResolvedValue([{id:'assignment',user_id:'user',server_id:'guild',role_id:'holder'}]),
       getRoleMappings:jest.fn().mockResolvedValue([rule]),saveRoleCheckDetails:jest.fn(),updateLastVerified:jest.fn(),updateRoleAssignmentStatus:jest.fn()};
     const engine=new VerificationEngine(db,new AssetOwnershipService({} as any,{} as any,new OrdinalsOwnershipService(service)),{getUserAddresses:jest.fn().mockResolvedValue([wallet])} as any);
     const discord:any={removeUserRole:jest.fn()};

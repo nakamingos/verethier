@@ -84,6 +84,7 @@ const mockGuildMember = {
 };
 
 const mockFetchedGuild = {
+  id: 'guild-id',
   members: {
     fetch: jest.fn().mockResolvedValue(mockGuildMember),
   },
@@ -1073,4 +1074,46 @@ describe('DiscordVerificationService', () => {
       ).rejects.toThrow('Guild not found');
     });
   });
+  describe('fresh Discord role reconciliation', () => {
+    function memberWithRoles(ids: string[]) {
+      const member: any = { roles: { cache: new Map(ids.map(id => [id, { id }])) } };
+      member.roles.add = jest.fn(async (role: any) => memberWithRoles([...member.roles.cache.keys(), role.id]));
+      member.roles.remove = jest.fn(async (role: any) => memberWithRoles([...member.roles.cache.keys()].filter(id => id !== role.id)));
+      return member;
+    }
+
+    it('forces a fresh member fetch rather than trusting the Discord.js cache', async () => {
+      const liveMember = memberWithRoles(['role-id']);
+      mockFetchedGuild.members.fetch.mockResolvedValue(liveMember);
+      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id')).toBe(true);
+      expect(mockFetchedGuild.members.fetch).toHaveBeenCalledWith({ user: 'user-id', force: true });
+      expect(liveMember.roles.remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares fresh membership across roles and remembers successful changes within one run', async () => {
+      const context = new Map();
+      const liveMember = memberWithRoles([]);
+      mockFetchedGuild.members.fetch.mockResolvedValue(liveMember);
+      expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id', context)).toBe(true);
+      expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id', context)).toBe(true);
+      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id', context)).toBe(true);
+      expect(mockFetchedGuild.members.fetch).toHaveBeenCalledTimes(1);
+      expect(liveMember.roles.add).toHaveBeenCalledTimes(1);
+      // A later run must observe Discord again.
+      expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id', new Map())).toBe(true);
+      expect(mockFetchedGuild.members.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns failure when Discord rejects removal or restoration', async () => {
+      const liveMember = memberWithRoles(['role-id']);
+      liveMember.roles.remove.mockRejectedValueOnce(new Error('Missing Permissions'));
+      mockFetchedGuild.members.fetch.mockResolvedValue(liveMember);
+      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id')).toBe(false);
+      const empty = memberWithRoles([]);
+      empty.roles.add.mockRejectedValueOnce(new Error('Missing Permissions'));
+      mockFetchedGuild.members.fetch.mockResolvedValue(empty);
+      expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id')).toBe(false);
+    });
+  });
+
 });

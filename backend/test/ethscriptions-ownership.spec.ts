@@ -109,7 +109,7 @@ describe('Global Ethscription ownership', () => {
   });
   it('retains the role if either inventory fails, and removes it after a complete non-match', async () => {
     const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-10', 'ethscription') };
-    const db = { getActiveRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
+    const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
     const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };
@@ -120,7 +120,7 @@ describe('Global Ethscription ownership', () => {
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith('assignment', expect.objectContaining({ last_check_status: 'unavailable' }));
     request.mockResolvedValue(page());
     await scheduler.performScheduledReverification();
-    expect(discord.removeUserRole).toHaveBeenCalledWith('user', 'guild', 'special');
+    expect(discord.removeUserRole).toHaveBeenCalledWith('user', 'guild', 'special', expect.any(Map));
   });
 });
 

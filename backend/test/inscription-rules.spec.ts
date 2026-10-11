@@ -141,7 +141,7 @@ describe('Specific Ordinals ownership', () => {
     await expect(service.count({ ...base, inscription_criteria: parseInscriptionCriteria(null, '1') }, [wallet])).rejects.toThrow('unavailable');
   });
   it('retains roles on uncertain checks and revokes only after a confirmed non-match', async () => {
-    const db = { getActiveRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
+    const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([base]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
     const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };
@@ -152,6 +152,6 @@ describe('Specific Ordinals ownership', () => {
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith('assignment', expect.objectContaining({ last_check_status: 'unavailable' }));
     request.mockResolvedValue([{ id: id(1), currentAddress: other }]);
     await scheduler.performScheduledReverification();
-    expect(discord.removeUserRole).toHaveBeenCalledWith('user', 'guild', 'special');
+    expect(discord.removeUserRole).toHaveBeenCalledWith('user', 'guild', 'special', expect.any(Map));
   });
 });

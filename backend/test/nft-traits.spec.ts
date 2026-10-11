@@ -217,7 +217,7 @@ describe('NFT trait ownership', () => {
     const savedRule = { ...rule, id: 1, server_id: 'server', role_id: 'role', channel_id: 'channel', slug: null, min_items: 2 };
     const db = {
       getRuleById: jest.fn().mockResolvedValue(savedRule), getRoleMappings: jest.fn().mockResolvedValue([savedRule]),
-      getUserActiveAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role' }]),
+      getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role' }]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn(),
     };
     const adapter = new AssetOwnershipService({} as any, service);

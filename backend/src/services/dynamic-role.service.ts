@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DbService } from './db.service';
 import { VerificationEngine } from './verification-engine.service';
-import { DiscordVerificationService } from './discord-verification.service';
+import { DiscordVerificationService, RoleSyncContext } from './discord-verification.service';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftCheckContext } from './nft-ownership.service';
 
@@ -13,7 +13,7 @@ import { NftCheckContext } from './nft-ownership.service';
  * Provides both scheduled re-verification and on-demand role sync capabilities.
  * 
  * Key Features:
- * - Scheduled re-verification of all active role assignments
+ * - Scheduled re-verification of previously earned role assignments
  * - Automatic role removal when holdings no longer meet criteria
  * - Configurable verification intervals per rule
  * - Graceful handling of Discord API rate limits
@@ -31,25 +31,26 @@ export class DynamicRoleService {
 
   /**
    * Main scheduled task - runs based on DYNAMIC_ROLE_CRON environment variable
-   * Re-verifies all active role assignments
+   * Re-verifies previously earned role assignments
    */
   @Cron(EnvironmentConfig.DYNAMIC_ROLE_CRON)
   async performScheduledReverification() {
     Logger.log('🔄 Starting scheduled role re-verification');
     
     try {
-      const activeAssignments = await this.getActiveRoleAssignments();
-      Logger.log(`Found ${activeAssignments.length} active role assignments to verify`);
+      const earnedAssignments = await this.getEarnedRoleAssignments();
+      Logger.log(`Found ${earnedAssignments.length} previously earned role assignments to verify`);
       
       let verifiedCount = 0;
       let revokedCount = 0;
       let errorCount = 0;
       const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
+      const discordContext: RoleSyncContext = new Map();
 
       // Process in batches to avoid rate limits
       const batchSize = 10;
-      for (let i = 0; i < activeAssignments.length; i += batchSize) {
-        const batch = activeAssignments.slice(i, i + batchSize);
+      for (let i = 0; i < earnedAssignments.length; i += batchSize) {
+        const batch = earnedAssignments.slice(i, i + batchSize);
         
         for (const assignment of batch) {
           // Skip null or undefined assignments
@@ -62,11 +63,11 @@ export class DynamicRoleService {
             const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
             
             if (stillQualifies) {
-              await this.updateLastVerified(assignment.id);
+              await this.restoreRole(assignment, discordContext);
               verifiedCount++;
               Logger.debug(`✅ User ${assignment.user_id} still qualifies for role ${assignment.role_id}`);
             } else {
-              await this.revokeRole(assignment);
+              await this.revokeRole(assignment, discordContext);
               revokedCount++;
               Logger.log(`🚫 Revoked role ${assignment.role_name || assignment.role_id} from user ${assignment.user_name || assignment.user_id}`);
             }
@@ -77,7 +78,7 @@ export class DynamicRoleService {
         }
         
         // Rate limiting: small delay between batches
-        if (i + batchSize < activeAssignments.length) {
+        if (i + batchSize < earnedAssignments.length) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
@@ -95,20 +96,21 @@ export class DynamicRoleService {
   async reverifyUser(userId: string): Promise<{verified: number, revoked: number}> {
     Logger.log(`🔍 Manual re-verification for user ${userId}`);
     
-    const userAssignments = await this.getUserActiveAssignments(userId);
+    const userAssignments = await this.getUserEarnedAssignments(userId);
     let verified = 0;
     let revoked = 0;
     const context: NftCheckContext = { checks: new Map() };
+    const discordContext: RoleSyncContext = new Map();
 
     for (const assignment of userAssignments) {
       try {
         const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
         
         if (stillQualifies) {
-          await this.updateLastVerified(assignment.id);
+          await this.restoreRole(assignment, discordContext);
           verified++;
         } else {
-          await this.revokeRole(assignment);
+          await this.revokeRole(assignment, discordContext);
           revoked++;
         }
       } catch (error) {
@@ -126,15 +128,18 @@ export class DynamicRoleService {
   async reverifyRule(ruleId: string): Promise<void> {
     Logger.log(`🔍 Re-verifying all assignments for rule ${ruleId}`);
     
-    const ruleAssignments = await this.getRuleActiveAssignments(ruleId);
+    const ruleAssignments = await this.getRuleEarnedAssignments(ruleId);
     const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
+    const discordContext: RoleSyncContext = new Map();
     
     for (const assignment of ruleAssignments) {
       try {
         const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
         
-        if (!stillQualifies) {
-          await this.revokeRole(assignment);
+        if (stillQualifies) {
+          await this.restoreRole(assignment, discordContext);
+        } else {
+          await this.revokeRole(assignment, discordContext);
           Logger.log(`Revoked role from user ${assignment.user_id} due to rule change`);
         }
       } catch (error) {
@@ -144,15 +149,10 @@ export class DynamicRoleService {
   }
 
   /**
-   * Get all active role assignments that need verification
+   * Get previously earned role assignments that need verification
    */
-  private async getActiveRoleAssignments(): Promise<any[]> {
-    // This would query your enhanced tracking table
-    // Return assignments that are active and either:
-    // - Never been re-verified (last_checked is old)
-    // - Or are past their expires_at
-    
-    return this.dbSvc.getActiveRoleAssignments();
+  private async getEarnedRoleAssignments(): Promise<any[]> {
+    return this.dbSvc.getEarnedRoleAssignments();
   }
 
   /**
@@ -173,25 +173,26 @@ export class DynamicRoleService {
   /**
    * Revoke a role from Discord and update database
    */
-  private async revokeRole(assignment: any): Promise<void> {
-    try {
-      // Remove role from Discord
-      await this.discordVerificationSvc.removeUserRole(
-        assignment.user_id,
-        assignment.server_id,
-        assignment.role_id
-      );
-
-      // Update database status
+  private async revokeRole(assignment: any, context: RoleSyncContext): Promise<void> {
+    const removed = await this.discordVerificationSvc.removeUserRole(
+      assignment.user_id, assignment.server_id, assignment.role_id, context
+    );
+    if (!removed) throw new Error('Discord role removal failed; assignment retained for retry.');
+    if (assignment.status !== 'revoked') {
       await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'revoked');
-      
-      Logger.log(`Successfully revoked role ${assignment.role_id} from user ${assignment.user_id}`);
-      
-    } catch (error) {
-      Logger.error(`Failed to revoke role:`, error.message);
-      // Mark as expired if Discord removal fails
-      await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'expired');
     }
+    Logger.log(`Successfully revoked role ${assignment.role_id} from user ${assignment.user_id}`);
+  }
+
+  private async restoreRole(assignment: any, context: RoleSyncContext): Promise<void> {
+    const restored = await this.discordVerificationSvc.addUserRoleDynamic(
+      assignment.user_id, assignment.server_id, assignment.role_id, context
+    );
+    if (!restored) throw new Error('Discord role restoration failed; assignment retained for retry.');
+    if (assignment.status !== 'active') {
+      await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'active');
+    }
+    await this.updateLastVerified(assignment.id);
   }
 
   /**
@@ -202,17 +203,17 @@ export class DynamicRoleService {
   }
 
   /**
-   * Get active assignments for a specific user
+   * Get previously earned assignments for a specific user
    */
-  private async getUserActiveAssignments(userId: string): Promise<any[]> {
-    return this.dbSvc.getUserActiveAssignments(userId);
+  private async getUserEarnedAssignments(userId: string): Promise<any[]> {
+    return this.dbSvc.getEarnedRoleAssignments({ userId });
   }
 
   /**
-   * Get active assignments for a specific rule
+   * Get previously earned assignments for a specific rule
    */
-  private async getRuleActiveAssignments(ruleId: string): Promise<any[]> {
-    return this.dbSvc.getRuleActiveAssignments(ruleId);
+  private async getRuleEarnedAssignments(ruleId: string): Promise<any[]> {
+    return this.dbSvc.getEarnedRoleAssignments({ ruleId });
   }
 
   /**

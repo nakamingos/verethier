@@ -15,7 +15,7 @@ Bouncer is split into two deployable apps:
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
 - Bitcoin mainnet Ordinals quantity and trait rules using Xverse wallet signatures, ord.net traits, and Xverse ownership fallback
 - Wallet stacking across multiple verified addresses
-- Dynamic role re-verification and revocation
+- Scheduled reconciliation of previously earned roles: restore eligible roles, remove ineligible roles, and retry failed Discord changes. New roles still require explicit wallet verification.
 - Rich Discord verification result messages
 
 ## Requirements
