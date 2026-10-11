@@ -223,7 +223,7 @@ describe('NFT rules and role decisions', () => {
   let addresses: any;
   const rule = { ...nft, id: 1, server_id: 'server', channel_id: 'channel', role_id: 'role', slug: null, attribute_key: 'ALL', attribute_value: 'ALL', min_items: 2 };
   beforeEach(() => {
-    db = { getRuleById: jest.fn().mockResolvedValue(rule), getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn(), getUserActiveAssignments: jest.fn(), getUserRoleHistory: jest.fn() };
+    db = { getRuleById: jest.fn().mockResolvedValue(rule), getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn(), getEarnedRoleAssignments: jest.fn(), getUserRoleHistory: jest.fn() };
     count = jest.fn().mockResolvedValue(BigInt(2));
     addresses = { getUserAddresses: jest.fn().mockResolvedValue([wallet]) };
     engine = new VerificationEngine(db, { count } as any, addresses);
@@ -266,7 +266,7 @@ describe('NFT rules and role decisions', () => {
   });
   it('does not revoke or advance successful verification after an RPC failure', async () => {
     const assignment = { id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role', rule_id: null };
-    db.getUserActiveAssignments.mockResolvedValue([assignment]);
+    db.getEarnedRoleAssignments.mockResolvedValue([assignment]);
     const discord = { removeUserRole: jest.fn() };
     const dynamic = new DynamicRoleService(db, engine, discord as any);
     count.mockRejectedValue(new Error('RPC timeout'));
@@ -276,7 +276,7 @@ describe('NFT rules and role decisions', () => {
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith('assignment', expect.objectContaining({ last_check_status: 'unavailable' }));
   });
   it('retains roles when verified wallets cannot be read from the database', async () => {
-    db.getUserActiveAssignments.mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role' }]);
+    db.getEarnedRoleAssignments.mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role' }]);
     addresses.getUserAddresses.mockRejectedValue(new Error('Database unavailable'));
     const discord = { removeUserRole: jest.fn() };
     const dynamic = new DynamicRoleService(db, engine, discord as any);

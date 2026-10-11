@@ -7,7 +7,7 @@ import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { boundedEmbedDescription } from '@/utils/discord-embed.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { Injectable, Logger } from '@nestjs/common';
-import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags } from 'discord.js';
+import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags, Guild, GuildMember } from 'discord.js';
 import dotenv from 'dotenv';
 import { DbService } from './db.service';
 import { NonceService } from './nonce.service';
@@ -19,6 +19,9 @@ dotenv.config();
 
 const EXPIRY = EnvironmentConfig.NONCE_EXPIRY;
 const REPLACED_LINK_NOTICE_TTL_MS = 10_000;
+
+/** Fresh member state shared only within one reconciliation run. */
+export type RoleSyncContext = Map<string, Promise<GuildMember>>;
 
 type VerificationRoleResult = {
   roleId: string;
@@ -715,7 +718,7 @@ export class DiscordVerificationService {
    * Remove a Discord role from a user
    * Used for dynamic role revocation when holdings no longer meet criteria
    */
-  async removeUserRole(userId: string, serverId: string, roleId: string): Promise<boolean> {
+  async removeUserRole(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean> {
     if (!this.client) {
       Logger.error('Discord client not initialized');
       return false;
@@ -728,7 +731,7 @@ export class DiscordVerificationService {
         return false;
       }
 
-      const member = await guild.members.fetch(userId);
+      const member = await this.fetchRoleSyncMember(guild, userId, context);
       if (!member) {
         Logger.debug(`Member ${userId} not found in guild ${serverId}`);
         return false;
@@ -746,7 +749,8 @@ export class DiscordVerificationService {
         return true; // Consider this success since the desired state is achieved
       }
 
-      await member.roles.remove(role, 'Dynamic role verification: holdings no longer meet criteria');
+      const updated = await member.roles.remove(role, 'Dynamic role verification: holdings no longer meet criteria');
+      context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
       Logger.log(`✅ Removed role "${role.name}" from user ${userId} in ${guild.name}`);
       return true;
 
@@ -760,7 +764,7 @@ export class DiscordVerificationService {
    * Add a Discord role to a user (dynamic version)
    * Used for dynamic role assignment - different signature from the verification flow method
    */
-  async addUserRoleDynamic(userId: string, serverId: string, roleId: string): Promise<boolean> {
+  async addUserRoleDynamic(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean> {
     if (!this.client) {
       Logger.error('Discord client not initialized');
       return false;
@@ -773,7 +777,7 @@ export class DiscordVerificationService {
         return false;
       }
 
-      const member = await guild.members.fetch(userId);
+      const member = await this.fetchRoleSyncMember(guild, userId, context);
       if (!member) {
         Logger.debug(`Member ${userId} not found in guild ${serverId}`);
         return false;
@@ -791,7 +795,8 @@ export class DiscordVerificationService {
         return true;
       }
 
-      await member.roles.add(role, 'Dynamic role verification: holdings meet criteria');
+      const updated = await member.roles.add(role, 'Dynamic role verification: holdings meet criteria');
+      context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
       Logger.log(`✅ Added role "${role.name}" to user ${userId} in ${guild.name}`);
       return true;
 
@@ -799,6 +804,14 @@ export class DiscordVerificationService {
       Logger.error(`Failed to add role ${roleId} to user ${userId} in guild ${serverId}:`, error);
       return false;
     }
+  }
+
+  private fetchRoleSyncMember(guild: Guild, userId: string, context?: RoleSyncContext): Promise<GuildMember> {
+    const key = `${guild.id}:${userId}`;
+    if (context?.has(key)) return context.get(key)!;
+    const fetched = guild.members.fetch({ user: userId, force: true });
+    context?.set(key, fetched);
+    return fetched;
   }
 
   /**

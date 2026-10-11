@@ -60,7 +60,6 @@ describe('DynamicRoleService', () => {
 
   beforeEach(async () => {
     const mockDbServiceValue = {
-      getActiveRoleAssignments: jest.fn(),
       getRuleById: jest.fn(),
       getRoleMappings: jest.fn().mockImplementation(async () => {
         const rule = await mockDbServiceValue.getRuleById('rule123');
@@ -69,8 +68,7 @@ describe('DynamicRoleService', () => {
       saveRoleCheckDetails: jest.fn(),
       updateRoleAssignmentStatus: jest.fn(),
       updateLastVerified: jest.fn(),
-      getUserActiveAssignments: jest.fn(),
-      getRuleActiveAssignments: jest.fn(),
+      getEarnedRoleAssignments: jest.fn(),
       countActiveAssignments: jest.fn(),
       countRevokedAssignments: jest.fn(),
       countExpiringSoonAssignments: jest.fn(),
@@ -82,7 +80,8 @@ describe('DynamicRoleService', () => {
     };
 
     const mockDiscordVerificationServiceValue = {
-      removeUserRole: jest.fn(),
+      removeUserRole: jest.fn().mockResolvedValue(true),
+      addUserRoleDynamic: jest.fn().mockResolvedValue(true),
     };
 
     const mockDiscordServiceValue = {
@@ -137,14 +136,14 @@ describe('DynamicRoleService', () => {
         { ...mockActiveAssignment, id: 'assign2' }
       ];
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(mockAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3); // Qualifies
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
 
-      expect(mockDbService.getActiveRoleAssignments).toHaveBeenCalled();
+      expect(mockDbService.getEarnedRoleAssignments).toHaveBeenCalled();
       expect(mockDbService.getRuleById).toHaveBeenCalledTimes(2);
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledTimes(2);
       expect(mockDbService.updateLastVerified).toHaveBeenCalledTimes(2);
@@ -155,10 +154,10 @@ describe('DynamicRoleService', () => {
     it('should revoke roles when users no longer qualify', async () => {
       const mockAssignments = [mockActiveAssignment];
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(mockAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1); // Below required 2
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -166,7 +165,8 @@ describe('DynamicRoleService', () => {
       expect(mockDiscordVerificationService.removeUserRole).toHaveBeenCalledWith(
         'user123',
         'server123',
-        'role123'
+        'role123',
+        expect.any(Map)
       );
       expect(mockDbService.updateRoleAssignmentStatus).toHaveBeenCalledWith('assignment123', 'revoked');
       expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('0 verified, 1 revoked, 0 errors'));
@@ -175,9 +175,9 @@ describe('DynamicRoleService', () => {
     it('should handle missing rules gracefully', async () => {
       const mockAssignments = [mockActiveAssignment];
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(mockAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
       mockDbService.getRuleById.mockResolvedValue(null);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -192,7 +192,7 @@ describe('DynamicRoleService', () => {
         { ...mockActiveAssignment, id: 'assign2' }
       ];
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(mockAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
       mockDbService.getRuleById
         .mockResolvedValueOnce(mockRule)
         .mockRejectedValueOnce(new Error('Database error'));
@@ -206,16 +206,16 @@ describe('DynamicRoleService', () => {
     });
 
     it('should handle empty assignments list', async () => {
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([]);
 
       await service.performScheduledReverification();
 
-      expect(loggerSpy).toHaveBeenCalledWith('Found 0 active role assignments to verify');
+      expect(loggerSpy).toHaveBeenCalledWith('Found 0 previously earned role assignments to verify');
       expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('0 verified, 0 revoked, 0 errors'));
     });
 
     it('should handle top-level errors gracefully', async () => {
-      mockDbService.getActiveRoleAssignments.mockRejectedValue(new Error('Database connection failed'));
+      mockDbService.getEarnedRoleAssignments.mockRejectedValue(new Error('Database connection failed'));
 
       await service.performScheduledReverification();
 
@@ -232,7 +232,7 @@ describe('DynamicRoleService', () => {
         id: `assign${i}`
       }));
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(mockAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -251,7 +251,7 @@ describe('DynamicRoleService', () => {
         { ...mockActiveAssignment, id: 'assign2' }
       ];
 
-      mockDbService.getUserActiveAssignments.mockResolvedValue(userAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(userAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -260,17 +260,17 @@ describe('DynamicRoleService', () => {
 
       expect(result.verified).toBe(2);
       expect(result.revoked).toBe(0);
-      expect(mockDbService.getUserActiveAssignments).toHaveBeenCalledWith('user123');
+      expect(mockDbService.getEarnedRoleAssignments).toHaveBeenCalledWith({ userId: 'user123' });
       expect(loggerSpy).toHaveBeenCalledWith('🔍 Manual re-verification for user user123');
     });
 
     it('should revoke roles when user no longer qualifies', async () => {
       const userAssignments = [mockActiveAssignment];
 
-      mockDbService.getUserActiveAssignments.mockResolvedValue(userAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(userAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1); // Below required 2
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       const result = await service.reverifyUser('user123');
@@ -282,7 +282,7 @@ describe('DynamicRoleService', () => {
     it('should handle errors during manual re-verification', async () => {
       const userAssignments = [mockActiveAssignment];
 
-      mockDbService.getUserActiveAssignments.mockResolvedValue(userAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(userAssignments);
       mockDbService.getRuleById.mockRejectedValue(new Error('Rule fetch failed'));
 
       const result = await service.reverifyUser('user123');
@@ -296,7 +296,7 @@ describe('DynamicRoleService', () => {
     });
 
     it('should handle user with no active assignments', async () => {
-      mockDbService.getUserActiveAssignments.mockResolvedValue([]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([]);
 
       const result = await service.reverifyUser('user123');
 
@@ -312,18 +312,18 @@ describe('DynamicRoleService', () => {
         { ...mockActiveAssignment, id: 'assign2' }
       ];
 
-      mockDbService.getRuleActiveAssignments.mockResolvedValue(ruleAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(ruleAssignments);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria
         .mockResolvedValueOnce(3) // First user qualifies
         .mockResolvedValueOnce(1); // Second user doesn't qualify
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.reverifyRule('rule123');
 
-      expect(mockDbService.getRuleActiveAssignments).toHaveBeenCalledWith('rule123');
+      expect(mockDbService.getEarnedRoleAssignments).toHaveBeenCalledWith({ ruleId: 'rule123' });
       expect(mockDiscordVerificationService.removeUserRole).toHaveBeenCalledTimes(1);
       expect(loggerSpy).toHaveBeenCalledWith('🔍 Re-verifying all assignments for rule rule123');
     });
@@ -331,7 +331,7 @@ describe('DynamicRoleService', () => {
     it('should handle errors during rule re-verification', async () => {
       const ruleAssignments = [mockActiveAssignment];
 
-      mockDbService.getRuleActiveAssignments.mockResolvedValue(ruleAssignments);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(ruleAssignments);
       mockDbService.getRuleById.mockRejectedValue(new Error('Rule not found'));
 
       await service.reverifyRule('rule123');
@@ -343,7 +343,7 @@ describe('DynamicRoleService', () => {
     });
 
     it('should handle rule with no assignments', async () => {
-      mockDbService.getRuleActiveAssignments.mockResolvedValue([]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([]);
 
       await service.reverifyRule('rule123');
 
@@ -357,7 +357,7 @@ describe('DynamicRoleService', () => {
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
       // Access private method through performScheduledReverification
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -376,8 +376,8 @@ describe('DynamicRoleService', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1); // Below required 2
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -388,8 +388,8 @@ describe('DynamicRoleService', () => {
     it('should handle missing rule gracefully', async () => {
       mockDbService.getRuleById.mockResolvedValue(null);
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -402,7 +402,7 @@ describe('DynamicRoleService', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockRejectedValue(new Error('API timeout'));
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -417,7 +417,7 @@ describe('DynamicRoleService', () => {
       mockDbService.getRuleById.mockResolvedValue(ruleWithoutMinItems);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1);
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -434,11 +434,11 @@ describe('DynamicRoleService', () => {
 
   describe('revokeRole', () => {
     it('should successfully revoke role from Discord and update database', async () => {
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       // Test through scheduled re-verification
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0); // Doesn't qualify
 
@@ -447,7 +447,8 @@ describe('DynamicRoleService', () => {
       expect(mockDiscordVerificationService.removeUserRole).toHaveBeenCalledWith(
         'user123',
         'server123',
-        'role123'
+        'role123',
+        expect.any(Map)
       );
       expect(mockDbService.updateRoleAssignmentStatus).toHaveBeenCalledWith('assignment123', 'revoked');
       expect(loggerSpy).toHaveBeenCalledWith(
@@ -455,21 +456,18 @@ describe('DynamicRoleService', () => {
       );
     });
 
-    it('should mark as expired if Discord removal fails', async () => {
+    it('should leave status unchanged if Discord removal fails', async () => {
       mockDiscordVerificationService.removeUserRole.mockRejectedValue(new Error('Discord API error'));
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
 
       await service.performScheduledReverification();
 
-      expect(mockDbService.updateRoleAssignmentStatus).toHaveBeenCalledWith('assignment123', 'expired');
-      expect(Logger.error).toHaveBeenCalledWith(
-        'Failed to revoke role:',
-        'Discord API error'
-      );
+      expect(mockDbService.updateRoleAssignmentStatus).not.toHaveBeenCalled();
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('0 verified, 0 revoked, 1 errors'));
     });
   });
 
@@ -518,7 +516,7 @@ describe('DynamicRoleService', () => {
         min_items: undefined
       };
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(incompleteRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -537,7 +535,7 @@ describe('DynamicRoleService', () => {
     it('should handle empty assignment addresses', async () => {
       const assignmentWithEmptyAddress = { ...mockActiveAssignment, address: '' };
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([assignmentWithEmptyAddress]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([assignmentWithEmptyAddress]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -564,7 +562,7 @@ describe('DynamicRoleService', () => {
         id: `assign${i}`
       }));
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue(largeAssignmentList);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue(largeAssignmentList);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -576,7 +574,7 @@ describe('DynamicRoleService', () => {
     });
 
     it('should handle concurrent verification requests', async () => {
-      mockDbService.getUserActiveAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -598,7 +596,7 @@ describe('DynamicRoleService', () => {
     });
 
     it('should handle network timeouts gracefully', async () => {
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockImplementation(() => 
         new Promise((_, reject) => 
@@ -618,7 +616,7 @@ describe('DynamicRoleService', () => {
       const nullAssignment = null as any;
       const undefinedAssignment = undefined as any;
 
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([
         mockActiveAssignment,
         nullAssignment,
         undefinedAssignment
@@ -637,7 +635,7 @@ describe('DynamicRoleService', () => {
 
   describe('logging and monitoring', () => {
     it('should log detailed verification progress', async () => {
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -645,7 +643,7 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(loggerSpy).toHaveBeenCalledWith('🔄 Starting scheduled role re-verification');
-      expect(loggerSpy).toHaveBeenCalledWith('Found 1 active role assignments to verify');
+      expect(loggerSpy).toHaveBeenCalledWith('Found 1 previously earned role assignments to verify');
       // Note: Detailed user qualification logs may not be present in current implementation
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('🏁 Re-verification complete: 1 verified, 0 revoked, 0 errors')
@@ -653,10 +651,10 @@ describe('DynamicRoleService', () => {
     });
 
     it('should log role revocations with user-friendly names', async () => {
-      mockDbService.getActiveRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.performScheduledReverification();
@@ -667,7 +665,7 @@ describe('DynamicRoleService', () => {
     });
 
     it('should log manual verification progress', async () => {
-      mockDbService.getUserActiveAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
@@ -681,10 +679,10 @@ describe('DynamicRoleService', () => {
     });
 
     it('should log rule re-verification progress', async () => {
-      mockDbService.getRuleActiveAssignments.mockResolvedValue([mockActiveAssignment]);
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
-      mockDiscordVerificationService.removeUserRole.mockResolvedValue(undefined);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValue(true);
       mockDbService.updateRoleAssignmentStatus.mockResolvedValue(undefined);
 
       await service.reverifyRule('rule123');
@@ -695,4 +693,66 @@ describe('DynamicRoleService', () => {
       );
     });
   });
+  describe('previously earned role reconciliation', () => {
+    beforeEach(() => {
+      jest.spyOn(module.get(VerificationEngine), 'evaluateRole').mockResolvedValue({ status: 'passed', results: [] });
+    });
+
+    it.each(['revoked', 'expired'])('restores an eligible %s assignment and reactivates it', async status => {
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([{ ...mockActiveAssignment, status }]);
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.addUserRoleDynamic).toHaveBeenCalledWith('user123', 'server123', 'role123', expect.any(Map));
+      expect(mockDbService.updateRoleAssignmentStatus).toHaveBeenCalledWith('assignment123', 'active');
+      expect(mockDbService.updateLastVerified).toHaveBeenCalledWith('assignment123');
+    });
+
+    it('only reconciles roles in assignment history even when another rule could qualify', async () => {
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      jest.spyOn(module.get(VerificationEngine), 'evaluateRole').mockRestore();
+      mockDbService.getRoleMappings.mockResolvedValue([{ ...mockRule, role_id: 'role123' }, { ...mockRule, id: 'other', role_id: 'never-earned' }] as any);
+      mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.addUserRoleDynamic.mock.calls.map(call => call[2])).toEqual(['role123']);
+      expect(mockDbService.getRuleById).not.toHaveBeenCalled();
+    });
+
+    it('restores a missing role even when its assignment is already active', async () => {
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment]);
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.addUserRoleDynamic).toHaveBeenCalledTimes(1);
+      expect(mockDbService.updateRoleAssignmentStatus).not.toHaveBeenCalled();
+    });
+
+    it('retries restoration failures without advancing the successful-check timestamp', async () => {
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([{ ...mockActiveAssignment, status: 'revoked' }]);
+      mockDiscordVerificationService.addUserRoleDynamic.mockResolvedValueOnce(false);
+      await service.performScheduledReverification();
+      expect(mockDbService.updateRoleAssignmentStatus).not.toHaveBeenCalled();
+      expect(mockDbService.updateLastVerified).not.toHaveBeenCalled();
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.addUserRoleDynamic).toHaveBeenCalledTimes(2);
+      expect(mockDbService.updateRoleAssignmentStatus).toHaveBeenCalledWith('assignment123', 'active');
+    });
+
+    it.each(['active', 'revoked', 'expired'])('retries failed removals for %s assignments', async status => {
+      module.get(VerificationEngine).evaluateRole = jest.fn().mockResolvedValue({ status: 'failed', results: [] });
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([{ ...mockActiveAssignment, status }]);
+      mockDiscordVerificationService.removeUserRole.mockResolvedValueOnce(false);
+      await service.performScheduledReverification();
+      expect(mockDbService.updateRoleAssignmentStatus).not.toHaveBeenCalled();
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.removeUserRole).toHaveBeenCalledTimes(2);
+      expect(mockDiscordVerificationService.addUserRoleDynamic).not.toHaveBeenCalled();
+    });
+
+    it('makes no Discord changes during an ownership outage, for active and revoked roles', async () => {
+      module.get(VerificationEngine).evaluateRole = jest.fn().mockResolvedValue({ status: 'unavailable', results: [] });
+      mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment, { ...mockActiveAssignment, id: 'old', status: 'revoked' }]);
+      await service.performScheduledReverification();
+      expect(mockDiscordVerificationService.removeUserRole).not.toHaveBeenCalled();
+      expect(mockDiscordVerificationService.addUserRoleDynamic).not.toHaveBeenCalled();
+      expect(mockDbService.updateRoleAssignmentStatus).not.toHaveBeenCalled();
+    });
+  });
+
 });

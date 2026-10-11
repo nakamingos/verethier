@@ -19,6 +19,7 @@ describe('DbService (Unit Tests)', () => {
     // Create a mock Supabase client
     mockSupabaseClient = {
       from: jest.fn().mockReturnThis(),
+      range: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       insert: jest.fn().mockReturnThis(),
       upsert: jest.fn().mockReturnThis(),
@@ -514,6 +515,28 @@ describe('DbService (Unit Tests)', () => {
       mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
       await service.trackRoleAssignment({ userId: 'user', serverId: 'server', roleId: 'role', verificationData: { matched_rule_ids: [1, 2] } });
       expect(mockSupabaseClient.update).toHaveBeenCalledWith(expect.objectContaining({ verification_data: { existing_metadata: true, matched_rule_ids: [1, 2] } }));
+    });
+  });
+
+  describe('earned role history', () => {
+    it('includes every assignment status and paginates beyond the Supabase row limit', async () => {
+      const first = Array.from({ length: 1000 }, (_, id) => ({ id, status: 'revoked' }));
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: first }).mockResolvedValueOnce({ data: [{ id: 1000, status: 'active' }] });
+      expect(await service.getEarnedRoleAssignments()).toHaveLength(1001);
+      expect(mockSupabaseClient.in).toHaveBeenCalledWith('status', ['active', 'revoked', 'expired']);
+      expect(mockSupabaseClient.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    });
+
+    it('scopes manual reconciliation to the requested user or rule', async () => {
+      mockSupabaseClient.range.mockResolvedValue({ data: [] });
+      await service.getEarnedRoleAssignments({ userId: 'user', ruleId: '42' });
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', 'user');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('rule_id', '42');
+    });
+
+    it('propagates history query errors without returning a partial allowlist', async () => {
+      mockSupabaseClient.range.mockResolvedValue({ error: new Error('unavailable') });
+      await expect(service.getEarnedRoleAssignments()).rejects.toThrow('unavailable');
     });
   });
 
