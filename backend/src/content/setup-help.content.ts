@@ -26,6 +26,14 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
   footer: 'Need more help? Check the docs or ask in support channels',
   fields: [
     {
+      name: '🚫 Wallet restrictions',
+      value: '`/setup block-wallet address:… reason:…`\n' +
+             '`/setup unblock-wallet address:…`\n' +
+             '`/setup list-blocked-wallets`\n' +
+             'Server-only blocks; earned roles are rechecked.',
+      inline: false
+    },
+    {
       name: '🪙 `/setup add-token-rule`',
       value: 'Use **channel**, **role**, **contract_address**, and **min_balance**, such as `1000` or `0.5`.\n' +
              '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
@@ -114,7 +122,6 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• Previous/Next buttons browse up to 20 complete entries per page\n' +
              '• Clickable Ethereum and Bitcoin wallet links\n' +
              '• Admin-only access for security and privacy\n' +
-             '• Perfect for monitoring bot activity and user engagement\n' +
              '**Example**: `/setup audit-log days:7`\n\n',
       inline: false
     },

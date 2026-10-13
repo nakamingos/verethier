@@ -143,7 +143,7 @@ describe('Specific Ordinals ownership', () => {
   it('retains roles on uncertain checks and revokes only after a confirmed non-match', async () => {
     const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([base]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
-    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };
     const scheduler = new DynamicRoleService(db as any, engine, discord as any);
     request.mockResolvedValue([]); // Missing requested ID is uncertain, not zero.

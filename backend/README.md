@@ -64,7 +64,14 @@ DYNAMIC_ROLE_CRON=EVERY_6_HOURS
 Notes:
 - `BASE_URL` is used for CORS and verification flow URLs.
 - `DATA_*` and `DB_*` can point at separate Supabase projects.
+- `DB_SUPABASE_KEY` must be the backend database's service-role key. Wallet restrictions are inaccessible to anonymous and authenticated public clients.
 - `DYNAMIC_ROLE_CRON` accepts either the named presets in [environment.config.ts](src/config/environment.config.ts) or a raw cron expression.
+
+## Wallet Blocks
+
+`/setup block-wallet address:… reason:…`, `/setup unblock-wallet address:…`, and `/setup list-blocked-wallets` are administrator-only commands. The list is private and paginated. Blocks cover EVM and Bitcoin mainnet Ordinals wallets and apply only in the current Discord server. Blocked wallets cannot complete signature verification or contribute to stacked holdings. The same address stays blocked if it changes Discord accounts.
+
+Blocking or unblocking rechecks the linked member's previously earned roles in that server immediately. Eligible unblocked wallets still count; unavailable checks preserve existing roles for retry. Blocks are stored in `verifier_wallet_blocks` with the server, canonical address, wallet type, reason, administrator, and timestamp. Apply `20261013010000_add_wallet_blocklist.sql` before deploying. Local migration and access-control checks are in `test/wallet-blocks-migration.sql`.
 
 ## Verification Messages
 

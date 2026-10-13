@@ -1,3 +1,4 @@
+import { WalletBlockService } from '../../src/services/wallet-block.service';
 /**
  * VerificationEngine Integration Tests
  * 
@@ -38,6 +39,7 @@ describe('VerificationEngine - Integration Tests', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         VerificationEngine,
         DbService,
         DataService,

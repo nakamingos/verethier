@@ -166,3 +166,17 @@ The bot reads token decimals, name, and symbol from the contract. Amounts are co
 `/setup audit-log days:7` displays recent assignment activity with Previous/Next buttons, page numbers, and entry ranges. Pages contain up to 20 complete rows and adjust to Discord’s description limit without cutting rows or wallet links. Each view belongs to its requesting administrator and expires after five minutes; rerun the command to refresh it.
 
 The log uses the latest saved record for each user/role pair, rather than an immutable event history. Larger result sets and wallet lookups are paginated in Supabase.
+
+## Wallet blocks
+
+Server administrators can manage wallet restrictions:
+
+```text
+/setup block-wallet address:0x… reason:Temporarily shared asset across accounts
+/setup unblock-wallet address:0x…
+/setup list-blocked-wallets
+```
+
+Blocks apply only to the server where the command runs and cover EVM wallets across supported networks and Bitcoin mainnet Ordinals wallets (`bc1p…`). Blocked wallets cannot complete verification or contribute to stacked holdings. Blocking or unblocking immediately rechecks the linked member’s previously earned roles in that server. Other eligible wallets still count, and provider failures preserve existing roles for retry. Blocks remain attached to the address when it is unlinked or linked to another Discord account. The administrator list includes the full address, reason, blocking administrator, and date, with Previous/Next buttons. This blocks a wallet; it does not ban a Discord account or block an inscription from moving to another wallet.
+
+Apply `20261013010000_add_wallet_blocklist.sql` before deploying. `DB_SUPABASE_KEY` must be a backend service-role key; anonymous/public keys cannot access wallet restrictions. No new environment variables are required.

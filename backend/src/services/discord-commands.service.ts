@@ -1,4 +1,5 @@
 import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
+import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ChannelType, GuildTextBasedChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Role, Client, ComponentType, ButtonInteraction } from 'discord.js';
 import { DbService } from './db.service';
@@ -64,8 +65,17 @@ export class DiscordCommandsService {
     private readonly restoreUndoHandler: RestoreUndoInteractionHandler,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
-    private readonly auditLogHandler: AuditLogHandler
+    private readonly auditLogHandler: AuditLogHandler,
+    private readonly walletBlockHandler: WalletBlockHandler
   ) {}
+
+  async handleWalletBlock(interaction: ChatInputCommandInteraction): Promise<void> {
+    return this.walletBlockHandler.handle(interaction);
+  }
+
+  async handleWalletBlockPagination(interaction: ButtonInteraction): Promise<void> {
+    return this.walletBlockHandler.handlePaginationButton(interaction);
+  }
 
   async handleAddRule(interaction: ChatInputCommandInteraction, assetType?: RuleCreationAssetType): Promise<void> {
     // Delegate to the specialized handler

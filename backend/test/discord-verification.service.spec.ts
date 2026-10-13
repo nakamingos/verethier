@@ -1,3 +1,4 @@
+import { WalletBlockService } from '../src/services/wallet-block.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -156,6 +157,7 @@ describe('DiscordVerificationService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         AssetOwnershipService,
         { provide: NftOwnershipService, useValue: { count: jest.fn() } },
         DiscordVerificationService,

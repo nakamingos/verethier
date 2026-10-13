@@ -247,6 +247,8 @@ export class DiscordService implements OnModuleInit {
           await this.handleVerificationRequest(interaction);
         } else if (interaction.customId.startsWith('audit-log-')) {
           await this.discordCommandsSvc.handleAuditLogPagination(interaction);
+        } else if (interaction.customId.startsWith('wallet-blocks-')) {
+          await this.discordCommandsSvc.handleWalletBlockPagination(interaction);
         } else if (interaction.customId.startsWith('list-rules-')) {
           // Handle pagination buttons for list-rules command
           await this.discordCommandsSvc.handleListRulesPagination(interaction);
@@ -293,6 +295,8 @@ export class DiscordService implements OnModuleInit {
         await this.discordCommandsSvc.handleListRules(interaction);
       } else if (sub === 'verification') {
         await this.discordCommandsSvc.handleVerification(interaction);
+      } else if (['block-wallet', 'unblock-wallet', 'list-blocked-wallets'].includes(sub)) {
+        await this.discordCommandsSvc.handleWalletBlock(interaction);
       } else if (sub === 'audit-log') {
         await this.handleAuditLog(interaction);
       } else if (sub === 'help') {
@@ -545,6 +549,16 @@ export class DiscordService implements OnModuleInit {
               { name: 'Recover missing', value: 'recover' }
             ))
         )
+        .addSubcommand(sc =>
+          sc.setName('block-wallet').setDescription('Block a wallet from verification in this server')
+            .addStringOption(option => option.setName('address').setDescription('Full EVM (0x…) or Bitcoin Ordinals (bc1p…) wallet address').setRequired(true).setMaxLength(62))
+            .addStringOption(option => option.setName('reason').setDescription('Optional reason for the block').setMaxLength(200))
+        )
+        .addSubcommand(sc =>
+          sc.setName('unblock-wallet').setDescription('Allow a previously blocked wallet to verify in this server')
+            .addStringOption(option => option.setName('address').setDescription('Full blocked wallet address').setRequired(true).setMaxLength(62))
+        )
+        .addSubcommand(sc => sc.setName('list-blocked-wallets').setDescription('List this server’s blocked wallets'))
         .addSubcommand(sc =>
           sc.setName('help')
             .setDescription('Show help and information about setup commands')

@@ -14,6 +14,7 @@ import { DbService } from './db.service';
 import { NonceService } from './nonce.service';
 import { DataService } from './data.service';
 import { UserAddressService } from './user-address.service';
+import { WalletBlockService } from './wallet-block.service';
 
 // Load environment variables
 dotenv.config();
@@ -110,7 +111,8 @@ export class DiscordVerificationService {
     private readonly nonceSvc: NonceService,
     private readonly dataSvc: DataService,
     private readonly userAddressService: UserAddressService,
-    private readonly ownershipSvc: AssetOwnershipService
+    private readonly ownershipSvc: AssetOwnershipService,
+    private readonly walletBlocks: WalletBlockService
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {
@@ -975,9 +977,10 @@ export class DiscordVerificationService {
 
       const remainingRules = [];
       const context: NftCheckContext = ownershipContext || { checks: new Map() };
+      const allowedAddresses = await this.walletBlocks.allowedAddresses(guildId, addressesToCheck, context);
       for (const rule of unassignedRules) {
         try {
-          const matchingCount = serializeAssetCount(await this.ownershipSvc.count(rule, addressesToCheck, context));
+          const matchingCount = serializeAssetCount(allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, context) : 0n);
 
           remainingRules.push({
             ...rule,

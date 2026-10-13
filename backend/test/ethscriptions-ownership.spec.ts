@@ -111,7 +111,7 @@ describe('Global Ethscription ownership', () => {
     const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-10', 'ethscription') };
     const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
-    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };
     const scheduler = new DynamicRoleService(db as any, engine, discord as any);
     request.mockResolvedValueOnce(page()).mockRejectedValueOnce(new Error('offline'));

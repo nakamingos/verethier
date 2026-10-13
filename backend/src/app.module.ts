@@ -1,4 +1,6 @@
 import { AuditLogHandler } from './services/discord-commands/handlers/audit-log.handler';
+import { WalletBlockHandler } from './services/discord-commands/handlers/wallet-block.handler';
+import { WalletBlockService } from './services/wallet-block.service';
 import { Erc20OwnershipService } from './services/erc20-ownership.service';
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -132,6 +134,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
     RemoveRuleHandler,           // Remove rule command handler
     ListRulesHandler,            // List rules command handler
     AuditLogHandler,             // Paginated assignment activity
+    WalletBlockHandler,
+    WalletBlockService,
     VerificationMessageHandler, // Refresh, create, or recover verification messages
 
     // Discord interaction handlers

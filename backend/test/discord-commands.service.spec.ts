@@ -1,3 +1,4 @@
+import { WalletBlockHandler } from '../src/services/discord-commands/handlers/wallet-block.handler';
 import { AuditLogHandler } from '../src/services/discord-commands/handlers/audit-log.handler';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscordCommandsService } from '../src/services/discord-commands.service';
@@ -80,6 +81,7 @@ describe('DiscordCommandsService (Refactored)', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: WalletBlockHandler, useValue: { handle: jest.fn(), handlePaginationButton: jest.fn() } },
         DiscordCommandsService,
         { provide: DbService, useValue: mockDbService },
         { provide: DiscordMessageService, useValue: mockDiscordMessageService },
@@ -183,6 +185,14 @@ describe('DiscordCommandsService (Refactored)', () => {
     });
   });
   describe('audit log handler delegation', () => {
+    it('delegates wallet restrictions and list pages to their handler', async () => {
+      const interaction: any = { id: 'wallet-request' };
+      const handler = (service as any).walletBlockHandler;
+      await service.handleWalletBlock(interaction);
+      await service.handleWalletBlockPagination(interaction);
+      expect(handler.handle).toHaveBeenCalledWith(interaction);
+      expect(handler.handlePaginationButton).toHaveBeenCalledWith(interaction);
+    });
     it('delegates audit commands and page buttons', async () => {
       const interaction: any = { id: 'audit-request' };
       await service.handleAuditLog(interaction);

@@ -585,13 +585,14 @@ export class DbService {
   }
 
   /** Assignment history is the allowlist for automatic role restoration. */
-  async getEarnedRoleAssignments(filters: { userId?: string; ruleId?: string } = {}): Promise<any[]> {
+  async getEarnedRoleAssignments(filters: { userId?: string; ruleId?: string; serverId?: string } = {}): Promise<any[]> {
     const assignments: any[] = [];
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
       let query = this.supabase.from('verifier_user_roles').select('*')
         .in('status', ['active', 'revoked', 'expired']);
       if (filters.userId) query = query.eq('user_id', filters.userId);
+      if (filters.serverId) query = query.eq('server_id', filters.serverId);
       if (filters.ruleId) query = query.eq('rule_id', filters.ruleId);
       const { data, error } = await query.order('id').range(offset, offset + pageSize - 1);
       if (error) throw error;

@@ -63,6 +63,12 @@ describe('DbService (Unit Tests)', () => {
   });
 
   describe('Service Initialization', () => {
+    it('scopes immediate wallet rechecks by both member and server', async () => {
+      mockSupabaseClient.range.mockResolvedValue({ data: [], error: null });
+      await service.getEarnedRoleAssignments({ userId: 'member', serverId: 'guild' });
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', 'member');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('server_id', 'guild');
+    });
     it('should be defined', () => {
       expect(service).toBeDefined();
     });

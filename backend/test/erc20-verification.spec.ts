@@ -111,7 +111,7 @@ describe('token role decisions and display', () => {
     const token = { count: jest.fn().mockResolvedValueOnce(499999999999999999n).mockResolvedValueOnce(500000000000000000n) };
     const ownership = new AssetOwnershipService({} as any, {} as any, undefined, undefined, token as any);
     const engine = new VerificationEngine({ getRuleById: jest.fn().mockResolvedValue(rule) } as any, ownership,
-      { getUserAddresses: jest.fn().mockResolvedValue([wallet, 'bc1ptest']) } as any);
+      { getUserAddresses: jest.fn().mockResolvedValue([wallet, 'bc1ptest']) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     expect(await engine.verifyUser('user', 1, wallet)).toMatchObject({ isValid: false, matchingAssetCount: '0.499999999999999999', verificationDetails: { minItems: '0.5' } });
     expect(await engine.verifyUser('user', 1, wallet)).toMatchObject({ isValid: true, matchingAssetCount: '0.5' });
     expect(token.count.mock.calls[0][1]).toEqual([wallet]);
@@ -120,7 +120,7 @@ describe('token role decisions and display', () => {
     const db: any = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'a', user_id: 'user', server_id: 'guild', role_id: 'holder', status: 'active' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateRoleAssignmentStatus: jest.fn(), updateLastVerified: jest.fn() };
     const ownership = new AssetOwnershipService({} as any, {} as any, undefined, undefined, { count: jest.fn().mockRejectedValue(new Error('RPC failed')) } as any);
-    const engine = new VerificationEngine(db, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord: any = { removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn() };
     await new DynamicRoleService(db, engine, discord).performScheduledReverification();
     expect(discord.removeUserRole).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe('token role decisions and display', () => {
   it('formats token amounts consistently without min-items placeholders', () => {
     expect(tokenRuleCriteria(rule)).toContain('min 0.5');
     expect(AdminFeedback.formatRule(rule)).toContain('min 0.5');
-    const display = new DiscordVerificationService({} as any, {} as any, {} as any, {} as any, {} as any);
+    const display = new DiscordVerificationService({} as any, {} as any, {} as any, {} as any, {} as any, { allowedAddresses: async (_server, wallets) => wallets } as any);
     expect((display as any).formatRoleRequirement(rule, {}, { style: 'holding', matchingCount: '0.5' })).toContain('(0.5/0.5)');
     const fields = new DuplicateRuleConfirmationInteractionHandler({} as any).createRuleInfoFields(rule);
     expect(fields).toContainEqual(expect.objectContaining({ name: '**Min Balance**', value: '0.5' }));

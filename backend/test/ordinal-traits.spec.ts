@@ -175,7 +175,7 @@ describe('Ordinals live traits and outage fallback', () => {
     const rule = cached();
     const database: any = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: base.role_id }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
-    const engine = new VerificationEngine(database, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(database, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn() };
     await new DynamicRoleService(database, engine, discord as any).performScheduledReverification();
     expect(discord.removeUserRole).not.toHaveBeenCalled(); expect(database.updateLastVerified).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ describe('Ordinals live traits and outage fallback', () => {
   });
   it('records the provider while keeping snapshot IDs out of member check details', async () => {
     const rule = cached(); const engine = new VerificationEngine({} as any, new AssetOwnershipService({} as any, {} as any, service),
-      { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+      { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const result = await engine.verifyUser('user', rule.id, wallet, run(), rule);
     expect(result.isValid).toBe(true); expect(result.ownershipDetails.provider).toBe('xverse');
     expect(result.rule.ordinal_trait_snapshot).toBeUndefined(); expect(JSON.stringify(result)).not.toContain('inscription_ids');
@@ -192,7 +192,7 @@ describe('Ordinals live traits and outage fallback', () => {
     const rule = cached(); owned = [id(9)];
     const quantity = { ...base, id: 2, attribute_key: 'ALL', attribute_value: 'ALL', ordinal_trait_snapshot: null };
     const engine = new VerificationEngine({ getRoleMappings: jest.fn().mockResolvedValue([rule, quantity]) } as any,
-      new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+      new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     expect((await engine.evaluateRole('user', 'guild', base.role_id)).status).toBe('passed');
   });
   it('continues using saved traits when the primary provider is switched to Xverse', async () => {
@@ -217,7 +217,7 @@ describe('Ordinals live traits and outage fallback', () => {
     expect(ordinalTraitHash({ ...base, attribute_value: 'ALL' })).not.toBe(ordinalTraitHash({ ...base, attribute_value: 'all' }));
   });
   it('shows the trait criteria in member role requirements', () => {
-    const messages = new DiscordVerificationService({} as any, {} as any, {} as any, {} as any, {} as any);
+    const messages = new DiscordVerificationService({} as any, {} as any, {} as any, {} as any, {} as any, { allowedAddresses: async (_server, wallets) => wallets } as any);
     expect((messages as any).formatRoleRequirement(base)).toContain('Background=Blue');
     expect((messages as any).formatRoleRequirement({ ...base, attribute_value: 'ALL' })).toContain('Background (any value)');
   });

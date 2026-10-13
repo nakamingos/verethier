@@ -7,6 +7,7 @@ import { UserAddressService } from '@/services/user-address.service';
 import { DiscordService } from '@/services/discord.service';
 import { DecodedData } from '@/models/app.interface';
 import { BitcoinSignatureService } from './bitcoin-signature.service';
+import { WalletBlockService } from './wallet-block.service';
 
 /**
  * WalletService
@@ -29,6 +30,7 @@ export class WalletService {
     private userAddressService: UserAddressService,
     private discordService: DiscordService,
     private dynamicRoleService: DynamicRoleService,
+    private readonly walletBlocks: WalletBlockService,
     @Optional() private readonly bitcoinSvc?: BitcoinSignatureService
   ) {}
   
@@ -129,6 +131,9 @@ export class WalletService {
     Logger.debug('Expected address:', data.address);
 
     if (!address) throw new Error('Invalid signature.');
+    // Check before saving or transferring the wallet link. Keep this outside
+    // the optional address-storage catch so a blocked wallet cannot proceed.
+    await this.walletBlocks.assertAllowed(data.discordId, address);
     
     let walletOwnershipTransferred = false;
 
@@ -197,6 +202,7 @@ export class WalletService {
   private async verifyBitcoinSignature(data: DecodedData, signature: string) {
     if (!this.bitcoinSvc) throw new Error('Bitcoin verification is not configured.');
     const { address, context } = await this.bitcoinSvc.verify(data, signature);
+    await this.walletBlocks.assertAllowed(data.discordId, address);
     let userName: string | null = null;
     try {
       const user = await this.discordService.getUser(data.userId);

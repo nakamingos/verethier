@@ -221,7 +221,7 @@ describe('NFT trait ownership', () => {
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn(),
     };
     const adapter = new AssetOwnershipService({} as any, service);
-    const engine = new VerificationEngine(db as any, adapter, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db as any, adapter, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     expect(await engine.verifyUser('user', 1, wallet)).toMatchObject({ status: 'failed', matchingAssetCount: 1 });
     metadata.attributes.mockResolvedValue(new Map([['1', red], ['2', red]]));
     expect(await engine.verifyUser('user', 1, wallet)).toMatchObject({ status: 'passed', matchingAssetCount: 2 });
