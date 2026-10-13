@@ -21,9 +21,9 @@ export interface SetupHelpContent {
 
 export const SETUP_HELP_CONTENT: SetupHelpContent = {
   title: '🔧 Verification Setup Help',
-  description: 'Complete guide to setting up and managing collection verification rules for your server.',
+  description: 'Set up and manage verification rules for your server.',
   color: 0x00FF73, // Bouncer green
-  footer: 'Need more help? Check the docs or ask in support channels',
+  footer: 'More help: check the docs or ask in support',
   fields: [
     {
       name: '🚫 Wallet restrictions',
@@ -85,12 +85,14 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       inline: false
     },
     {
+      name: '✏️ `/setup edit-rule`',
+      value: 'Select **rule_id**, edit the prefilled requirements, then review and Save or Cancel.\n' +
+             'Keeps the rule ID, channel, role, asset type, and network. Rechecks previously earned roles.',
+      inline: false
+    },
+    {
       name: '🗑️ `/setup remove-rule`',
-      value: '**Remove existing verification rules**\n' +
-             '• **Rule ID**: Single ID (e.g., `5`) or multiple (`1,2,3`)\n' +
-             '• Use `/setup list-rules` to find rule IDs\n' +
-             '• Includes undo functionality\n' +
-             '**Example**: `/setup remove-rule 1,3,5`\n\n',
+      value: 'Remove one or more rules using **rule_id**, such as `1,3,5`. Includes undo. Use `/setup list-rules` to find IDs.',
       inline: false
     },
     {
@@ -99,7 +101,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• Shows rule IDs, channels, roles, and criteria\n' +
              '• **Asset Type**: Optional Tokens, NFT, Ordinals, or Ethscriptions filter; omit to show all\n' +
              '• Organized by channel for easy reading\n' +
-             '• Use rule IDs for removal\n' +
+             '• Use rule IDs for editing or removal\n' +
              '**Example**: `/setup list-rules asset_type:Ordinals`\n\n',
       inline: false
     },
@@ -132,8 +134,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• **Role Creation**: Type new role names to create them automatically\n' +
              '• **Duplicate Rules**: Bot warns about conflicts before creating\n' +
              '• **Undo System**: Most actions can be undone within a few minutes\n' +
-             '• **Case Sensitivity**: Role names preserve your exact casing\n' +
-             '• **Audit Trail**: Use audit-log to monitor all role changes',
+             '• **Case Sensitivity**: Role names preserve your exact casing',
       inline: false
     },
     {
@@ -161,7 +162,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '2. `/setup list-rules` (to check what was created)\n' +
              '3. `/setup add-ethscription-rule channel:#verify role:RareHolder slug:misprint-mingos attribute_key:Type attribute_value:Stork`\n' +
              '4. Test verification in the channel\n' +
-             '5. Use `/setup remove-rule` if changes needed',
+             '5. Use `/setup edit-rule` to change requirements',
       inline: false
     }
   ]

@@ -92,6 +92,10 @@ const mockDiscordVerificationService = {
 };
 
 const mockDiscordCommandsService = {
+  handleEditRule: jest.fn(),
+  handleEditRuleModal: jest.fn(),
+  handleEditRuleButton: jest.fn(),
+  handleEditRuleAutocomplete: jest.fn(),
   handleWalletBlock: jest.fn(),
   handleWalletBlockPagination: jest.fn(),
   handleAuditLog: jest.fn(),
@@ -1142,6 +1146,31 @@ describe('DiscordService - Enhanced Tests', () => {
     });
   });
   describe('audit log dispatch', () => {
+    it('registers a single autocomplete rule selector for editing', async () => {
+      await service.registerSlashCommands();
+      const setup=mockRest.put.mock.calls.at(-1)[1].body.find(command=>command.name==='setup');
+      const edit=setup.options.find(command=>command.name==='edit-rule');
+      expect(edit.options).toHaveLength(1);
+      expect(edit.options[0]).toMatchObject({name:'rule_id',required:true,autocomplete:true,type:3});
+    });
+    it('routes edit commands through the existing administrator guard', async () => {
+      const interaction: any={guildId:'guild',user:{id:'admin'},memberPermissions:{has:()=>true},options:{getSubcommand:()=> 'edit-rule'}};
+      await service.handleSetup(interaction);expect(mockDiscordCommandsService.handleEditRule).toHaveBeenCalledWith(interaction);
+      mockDiscordCommandsService.handleEditRule.mockClear();
+      interaction.memberPermissions.has=()=>false;interaction.reply=jest.fn();
+      await service.handleSetup(interaction);expect(mockDiscordCommandsService.handleEditRule).not.toHaveBeenCalled();
+    });
+    it.each(['modal','button','autocomplete'])('dispatches %s editing interactions independently of verification', async kind => {
+      let callback: Function;
+      mockClient.on.mockImplementation((event,listener)=>{if(event==='interactionCreate')callback=listener;});
+      await service.createSlashCommands();
+      const interaction: any={isModalSubmit:()=>kind==='modal',isAutocomplete:()=>kind==='autocomplete',isChatInputCommand:()=>false,
+        isButton:()=>kind==='button',customId:kind==='modal'?'edit-rule-form-session':'edit-rule-save-session',
+        commandName:'setup',options:{getSubcommand:()=> 'edit-rule'}};
+      await callback(interaction);
+      const delegate=kind==='modal'?mockDiscordCommandsService.handleEditRuleModal:kind==='button'?mockDiscordCommandsService.handleEditRuleButton:mockDiscordCommandsService.handleEditRuleAutocomplete;
+      expect(delegate).toHaveBeenCalledWith(interaction);
+    });
     it.each(['block-wallet', 'unblock-wallet', 'list-blocked-wallets'])('routes %s through the administrator guard', async command => {
       const interaction: any = { guildId: 'guild', user: { id: 'admin' }, memberPermissions: { has: () => true }, options: { getSubcommand: () => command } };
       await service.handleSetup(interaction);

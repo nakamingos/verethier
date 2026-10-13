@@ -108,11 +108,18 @@ export class DynamicRoleService {
     return this.reverifyAssignments(assignments);
   }
 
-  private async reverifyAssignments(assignments: any[]): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyRoleInServer(serverId: string, roleId: string): Promise<{ verified: number; revoked: number; errors: number }> {
+    // An assignment's rule_id is only its representative rule. Recheck every
+    // previous holder of this role, including holders who matched another rule.
+    const assignments = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
+    return this.reverifyAssignments(assignments, 'scheduled');
+  }
+
+  private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled'): Promise<{ verified: number; revoked: number; errors: number }> {
     let verified = 0;
     let revoked = 0;
     let errors = 0;
-    const context: NftCheckContext = { checks: new Map() };
+    const context: NftCheckContext = { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
     const discordContext: RoleSyncContext = new Map();
 
     for (const assignment of assignments) {
