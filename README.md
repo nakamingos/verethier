@@ -180,3 +180,11 @@ Server administrators can manage wallet restrictions:
 Blocks apply only to the server where the command runs and cover EVM wallets across supported networks and Bitcoin mainnet Ordinals wallets (`bc1p…`). Blocked wallets cannot complete verification or contribute to stacked holdings. Blocking or unblocking immediately rechecks the linked member’s previously earned roles in that server. Other eligible wallets still count, and provider failures preserve existing roles for retry. Blocks remain attached to the address when it is unlinked or linked to another Discord account. The administrator list includes the full address, reason, blocking administrator, and date, with Previous/Next buttons. This blocks a wallet; it does not ban a Discord account or block an inscription from moving to another wallet.
 
 Apply `20261013010000_add_wallet_blocklist.sql` before deploying. `DB_SUPABASE_KEY` must be a backend service-role key; anonymous/public keys cannot access wallet restrictions. No new environment variables are required.
+
+## Editing rules
+
+Use `/setup edit-rule rule_id:173` to open a prefilled form. Search the rule selector by ID, role name, or collection. Review the before/after preview, then Save or Cancel. Editors expire after ten minutes; another administrator's changes require reopening the form. Long previews attach the complete values, and lists use two text fields without dropping entries. Lists too long for both fields are rejected; numeric ranges can shorten them.
+
+The editor changes requirements within the existing rule type: collection and traits, specific IDs or numbers, NFT token IDs, minimum item count, or ERC-20 minimum balance. IDs stay IDs and numeric rules stay numeric rules. Rule ID, channel, role, asset type, network, and contract remain fixed. NFT collection labels also stay fixed; changing an Ordinals collection refreshes its label and trait snapshot.
+
+Saving rechecks everyone who previously earned the affected role against all rules for that role in the server. Alternative qualifying rules preserve the role; newly eligible members who never earned it must verify themselves. Provider errors preserve existing roles for a later scheduled check. No database migration or new environment variables are needed. Restarting the backend registers the command; reload Discord if it does not appear.

@@ -203,10 +203,18 @@ export class DiscordService implements OnModuleInit {
     await this.registerSlashCommands();
 
     this.client.on('interactionCreate', async (interaction) => {
+      if (interaction.isModalSubmit?.() && interaction.customId.startsWith('edit-rule-form-')) {
+        await this.discordCommandsSvc.handleEditRuleModal(interaction);
+        return;
+      }
       // Handle autocomplete interactions for role and slug selection
       if (interaction.isAutocomplete()) {
         if (interaction.commandName !== 'setup') return;
         const subcommand = interaction.options.getSubcommand();
+        if (subcommand === 'edit-rule') {
+          await this.discordCommandsSvc.handleEditRuleAutocomplete(interaction);
+          return;
+        }
         const assetType = ruleCommandAssetType(subcommand);
         if (!assetType) {
           await interaction.respond([]);
@@ -249,6 +257,8 @@ export class DiscordService implements OnModuleInit {
           await this.discordCommandsSvc.handleAuditLogPagination(interaction);
         } else if (interaction.customId.startsWith('wallet-blocks-')) {
           await this.discordCommandsSvc.handleWalletBlockPagination(interaction);
+        } else if (interaction.customId.startsWith('edit-rule-')) {
+          await this.discordCommandsSvc.handleEditRuleButton(interaction);
         } else if (interaction.customId.startsWith('list-rules-')) {
           // Handle pagination buttons for list-rules command
           await this.discordCommandsSvc.handleListRulesPagination(interaction);
@@ -291,6 +301,8 @@ export class DiscordService implements OnModuleInit {
         await this.discordCommandsSvc.handleAddRule(interaction, assetType);
       } else if (sub === 'remove-rule') {
         await this.discordCommandsSvc.handleRemoveRule(interaction);
+      } else if (sub === 'edit-rule') {
+        await this.discordCommandsSvc.handleEditRule(interaction);
       } else if (sub === 'list-rules') {
         await this.discordCommandsSvc.handleListRules(interaction);
       } else if (sub === 'verification') {
@@ -528,6 +540,10 @@ export class DiscordService implements OnModuleInit {
           sc.setName('remove-rule')
             .setDescription('Remove verification rule(s)')
             .addStringOption(option => option.setName('rule_id').setDescription('Rule ID(s) - single (e.g., 5) or multiple comma-separated (e.g., 1,2,3)').setRequired(true))
+        )
+        .addSubcommand(sc =>
+          sc.setName('edit-rule').setDescription('Edit a rule’s requirements using a prefilled form')
+            .addStringOption(option => option.setName('rule_id').setDescription('Rule ID or search by role name').setRequired(true).setAutocomplete(true).setMaxLength(20))
         )
         .addSubcommand(sc =>
           sc.setName('list-rules')

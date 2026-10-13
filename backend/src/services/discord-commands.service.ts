@@ -1,5 +1,7 @@
 import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
+import { EditRuleHandler } from './discord-commands/handlers/edit-rule.handler';
+import { ModalSubmitInteraction, AutocompleteInteraction } from 'discord.js';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ChannelType, GuildTextBasedChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Role, Client, ComponentType, ButtonInteraction } from 'discord.js';
 import { DbService } from './db.service';
@@ -66,8 +68,14 @@ export class DiscordCommandsService {
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
     private readonly auditLogHandler: AuditLogHandler,
-    private readonly walletBlockHandler: WalletBlockHandler
+    private readonly walletBlockHandler: WalletBlockHandler,
+    private readonly editRuleHandler: EditRuleHandler
   ) {}
+
+  async handleEditRule(interaction: ChatInputCommandInteraction): Promise<void> { return this.editRuleHandler.handle(interaction); }
+  async handleEditRuleModal(interaction: ModalSubmitInteraction): Promise<void> { return this.editRuleHandler.handleModal(interaction); }
+  async handleEditRuleButton(interaction: ButtonInteraction): Promise<void> { return this.editRuleHandler.handleButton(interaction); }
+  async handleEditRuleAutocomplete(interaction: AutocompleteInteraction): Promise<void> { return this.editRuleHandler.autocomplete(interaction); }
 
   async handleWalletBlock(interaction: ChatInputCommandInteraction): Promise<void> {
     return this.walletBlockHandler.handle(interaction);

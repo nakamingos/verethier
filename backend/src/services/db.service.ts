@@ -5,6 +5,7 @@ import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
 import { OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
+import { RULE_EDIT_GUARD_FIELDS, RULE_EDIT_MUTABLE_FIELDS } from '@/utils/rule-edit.util';
 
 /**
  * Database Service
@@ -585,7 +586,7 @@ export class DbService {
   }
 
   /** Assignment history is the allowlist for automatic role restoration. */
-  async getEarnedRoleAssignments(filters: { userId?: string; ruleId?: string; serverId?: string } = {}): Promise<any[]> {
+  async getEarnedRoleAssignments(filters: { userId?: string; ruleId?: string; serverId?: string; roleId?: string } = {}): Promise<any[]> {
     const assignments: any[] = [];
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
@@ -593,6 +594,7 @@ export class DbService {
         .in('status', ['active', 'revoked', 'expired']);
       if (filters.userId) query = query.eq('user_id', filters.userId);
       if (filters.serverId) query = query.eq('server_id', filters.serverId);
+      if (filters.roleId) query = query.eq('role_id', filters.roleId);
       if (filters.ruleId) query = query.eq('rule_id', filters.ruleId);
       const { data, error } = await query.order('id').range(offset, offset + pageSize - 1);
       if (error) throw error;
@@ -622,6 +624,33 @@ export class DbService {
       this.logger.error(`Error fetching rule ${ruleId}:`, error);
       throw error;
     }
+  }
+
+  async getRuleForServer(ruleId: string, serverId: string): Promise<VerifierRole | null> {
+    const { data, error } = await this.supabase.from('verifier_rules').select('*')
+      .eq('id', ruleId).eq('server_id', serverId).maybeSingle();
+    if (error) throw new Error('Could not read this rule. Please try again.');
+    return data;
+  }
+
+  /** Apply an edit atomically only if the definition still matches the opened form. */
+  async editRule(before: VerifierRole, after: VerifierRole): Promise<VerifierRole> {
+    const changes = Object.fromEntries(RULE_EDIT_MUTABLE_FIELDS.map(key => [key, after[key] ?? null]));
+    let query = this.supabase.from('verifier_rules').update(changes).eq('id', before.id);
+    for (const key of RULE_EDIT_GUARD_FIELDS) {
+      const value = before[key] ?? null;
+      if (value === null) query = query.is(key, null);
+      else {
+        const serialized = key === 'inscription_criteria' ? JSON.stringify(value)
+          : key === 'token_ids' ? `{${(value as string[]).join(',')}}` : value;
+        query = query.eq(key, serialized);
+      }
+    }
+    const { data, error } = await query.select().maybeSingle();
+    if (error?.code === '23505') throw new Error('An identical rule already exists. The edit was not saved.');
+    if (error) throw new Error('Could not save the rule edit. Please try again.');
+    if (!data) throw new Error('This rule changed or was removed while the editor was open. Run /setup edit-rule again.');
+    return data;
   }
 
   /**

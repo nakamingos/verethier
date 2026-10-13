@@ -1,4 +1,5 @@
 import { WalletBlockHandler } from '../src/services/discord-commands/handlers/wallet-block.handler';
+import { EditRuleHandler } from '../src/services/discord-commands/handlers/edit-rule.handler';
 import { AuditLogHandler } from '../src/services/discord-commands/handlers/audit-log.handler';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscordCommandsService } from '../src/services/discord-commands.service';
@@ -81,6 +82,7 @@ describe('DiscordCommandsService (Refactored)', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: EditRuleHandler, useValue: { handle: jest.fn(), autocomplete: jest.fn(), handleModal: jest.fn(), handleButton: jest.fn() } },
         { provide: WalletBlockHandler, useValue: { handle: jest.fn(), handlePaginationButton: jest.fn() } },
         DiscordCommandsService,
         { provide: DbService, useValue: mockDbService },
