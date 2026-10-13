@@ -1,3 +1,4 @@
+import { AuditLogHandler } from './services/discord-commands/handlers/audit-log.handler';
 import { Erc20OwnershipService } from './services/erc20-ownership.service';
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -130,6 +131,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     AddRuleHandler,              // Add rule command handler
     RemoveRuleHandler,           // Remove rule command handler
     ListRulesHandler,            // List rules command handler
+    AuditLogHandler,             // Paginated assignment activity
     VerificationMessageHandler, // Refresh, create, or recover verification messages
 
     // Discord interaction handlers

@@ -1,3 +1,4 @@
+import { AuditLogHandler } from '../src/services/discord-commands/handlers/audit-log.handler';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscordCommandsService } from '../src/services/discord-commands.service';
 import { DiscordMessageService } from '../src/services/discord-message.service';
@@ -20,6 +21,7 @@ const mockRemoveRuleHandler = {
   handle: jest.fn(),
 };
 
+const mockAuditLogHandler = { handle: jest.fn(), handlePaginationButton: jest.fn() };
 const mockListRulesHandler = {
   handle: jest.fn(),
 };
@@ -85,6 +87,7 @@ describe('DiscordCommandsService (Refactored)', () => {
         { provide: AddRuleHandler, useValue: mockAddRuleHandler },
         { provide: RemoveRuleHandler, useValue: mockRemoveRuleHandler },
         { provide: ListRulesHandler, useValue: mockListRulesHandler },
+        { provide: AuditLogHandler, useValue: mockAuditLogHandler },
         { provide: VerificationMessageHandler, useValue: mockVerificationMessageHandler },
         { provide: RemovalUndoInteractionHandler, useValue: mockRemovalUndoHandler },
         { provide: RestoreUndoInteractionHandler, useValue: mockRestoreUndoHandler },
@@ -179,4 +182,14 @@ describe('DiscordCommandsService (Refactored)', () => {
       expect(typeof service.handleListRules).toBe('function');
     });
   });
+  describe('audit log handler delegation', () => {
+    it('delegates audit commands and page buttons', async () => {
+      const interaction: any = { id: 'audit-request' };
+      await service.handleAuditLog(interaction);
+      await service.handleAuditLogPagination(interaction);
+      expect(mockAuditLogHandler.handle).toHaveBeenCalledWith(interaction);
+      expect(mockAuditLogHandler.handlePaginationButton).toHaveBeenCalledWith(interaction);
+    });
+  });
+
 });

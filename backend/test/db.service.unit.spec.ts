@@ -567,4 +567,56 @@ describe('DbService (Unit Tests)', () => {
     });
   });
 
+  describe('audit log retrieval', () => {
+    it('loads beyond 1,000 records and batches wallet lookups by unique user', async () => {
+      const first = Array.from({ length: 1000 }, (_, id) => ({ id, user_id: 'user-one' }));
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: first })
+        .mockResolvedValueOnce({ data: [{ id: 1000, user_id: 'user-two' }] })
+        .mockResolvedValueOnce({ data: [{ user_id: 'user-one', address: 'wallet-one' }, { user_id: 'user-two', address: 'wallet-two' }] });
+      const rows = await service.getServerAuditLog('guild', 7);
+      expect(rows).toHaveLength(1001);
+      expect(rows[0].user_wallets[0].address).toBe('wallet-one');
+      expect(rows[1000].user_wallets[0].address).toBe('wallet-two');
+      expect(mockSupabaseClient.in).toHaveBeenCalledTimes(1);
+      expect(mockSupabaseClient.in).toHaveBeenCalledWith('user_id', ['user-one', 'user-two']);
+      expect(mockSupabaseClient.range.mock.calls).toEqual([[0, 999], [1000, 1999], [0, 999]]);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('server_id', 'guild');
+      expect(mockSupabaseClient.order).toHaveBeenCalledWith('id', { ascending: true });
+    });
+
+    it('batches distinct users rather than sending an oversized wallet query', async () => {
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: Array.from({ length: 101 }, (_, id) => ({ id, user_id: 'user-' + id })) })
+        .mockResolvedValue({ data: [] });
+      expect(await service.getServerAuditLog('guild')).toHaveLength(101);
+      expect(mockSupabaseClient.in.mock.calls.map(call => call[1].length)).toEqual([100, 1]);
+    });
+
+    it('does not silently truncate a user with more than 1,000 linked wallets', async () => {
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: [{ id: 1, user_id: 'user' }] })
+        .mockResolvedValueOnce({ data: Array.from({ length: 1000 }, (_, id) => ({ user_id: 'user', address: 'wallet-' + id })) })
+        .mockResolvedValueOnce({ data: [{ user_id: 'user', address: 'last-wallet' }] });
+      const rows = await service.getServerAuditLog('guild');
+      expect(rows[0].user_wallets).toHaveLength(1001);
+    });
+
+    it('retains log records when wallet links cannot be loaded', async () => {
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: [{ id: 1, user_id: 'user' }] })
+        .mockResolvedValueOnce({ error: new Error('wallet read unavailable') });
+      expect(await service.getServerAuditLog('guild')).toEqual([{ id: 1, user_id: 'user', user_wallets: [] }]);
+    });
+
+    it('does not return a partial log when a later data page fails', async () => {
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: Array.from({ length: 1000 }, (_, id) => ({ id, user_id: 'user' })) })
+        .mockResolvedValueOnce({ error: new Error('page unavailable') });
+      await expect(service.getServerAuditLog('guild')).rejects.toThrow('page unavailable');
+      expect(mockSupabaseClient.in).not.toHaveBeenCalled();
+    });
+
+    it('does not fetch wallets for an empty log', async () => {
+      mockSupabaseClient.range.mockResolvedValueOnce({ data: [] });
+      expect(await service.getServerAuditLog('guild')).toEqual([]);
+      expect(mockSupabaseClient.in).not.toHaveBeenCalled();
+    });
+  });
+
 });
