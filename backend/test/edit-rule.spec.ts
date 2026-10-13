@@ -441,6 +441,7 @@ describe('Rule edit Undo/Redo chains', () => {
     const final = undo.interaction.editReply.mock.calls.at(-1)[0];
     expect(final.embeds[0].toJSON().title).toContain('Undone');
     expect(final.embeds[0].toJSON().description).toContain('now uses its original requirements');
+    expect(final.content).toBe(''); expect(final.attachments).toEqual([]);
     expect(nextButton(h, undo.interaction).data.label).toBe('Redo');
     expect(h.db.editRule).toHaveBeenCalledTimes(2);
   });
