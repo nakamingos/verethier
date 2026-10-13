@@ -1,3 +1,4 @@
+import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { AssetOwnershipService } from './asset-ownership.service';
 import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
 import { NftCheckContext } from './nft-ownership.service';
@@ -301,6 +302,12 @@ export class DiscordVerificationService {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
+    if (rule.asset_type === 'erc20') {
+      const minimum = tokenAmount(rule, tokenMinimum(rule));
+      const scope = tokenRuleScope(rule);
+      return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
+        : `Hold ${minimum}+ ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minimum})`}`;
+    }
     if (rule.inscription_criteria || rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
       const scope = rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
@@ -1225,7 +1232,7 @@ export class DiscordVerificationService {
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => !['nft', 'ordinal'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }

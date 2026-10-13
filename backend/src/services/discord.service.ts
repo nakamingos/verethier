@@ -220,7 +220,7 @@ export class DiscordService implements OnModuleInit {
             await this.handleNftAttributeAutocomplete(interaction);
           } else if (assetType === 'ordinal' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
             await this.handleOrdinalAttributeAutocomplete(interaction);
-          } else if (['nft', 'ordinal'].includes(assetType)) {
+          } else if (['nft', 'ordinal', 'erc20'].includes(assetType)) {
             await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
             await this.handleSlugAutocomplete(interaction);
@@ -473,6 +473,15 @@ export class DiscordService implements OnModuleInit {
         .setDescription('Setup the bot for the first time or manage rules')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // 🔒 ADMIN ONLY
         .addSubcommand(sc =>
+          sc.setName('add-token-rule')
+            .setDescription('Add an ERC-20 token balance verification rule')
+            .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
+            .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
+            .addStringOption(option => option.setName('contract_address').setDescription('ERC-20 contract address on the selected network').setRequired(true))
+            .addStringOption(option => option.setName('min_balance').setDescription('Minimum token amount, e.g. 1000 or 0.5').setMaxLength(360).setRequired(true))
+            .addStringOption(option => option.setName('network').setDescription('Token network (default: Ethereum)').addChoices(...NFT_NETWORKS.map(({ name, value }) => ({ name, value }))))
+        )
+        .addSubcommand(sc =>
           sc.setName('add-nft-rule')
             .setDescription('Add an NFT collection or token verification rule')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
@@ -518,6 +527,7 @@ export class DiscordService implements OnModuleInit {
           sc.setName('list-rules')
             .setDescription('List verification rules, optionally filtered by asset type')
             .addStringOption(option => option.setName('asset_type').setDescription('Show only this asset type (default: all)').addChoices(
+              { name: 'Tokens (ERC-20)', value: 'erc20' },
               { name: 'NFT', value: 'nft' },
               { name: 'Ordinals', value: 'ordinal' },
               { name: 'Ethscriptions', value: 'ethscription' }

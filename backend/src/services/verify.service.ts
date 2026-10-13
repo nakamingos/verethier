@@ -1,3 +1,4 @@
+import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleLabel } from '@/utils/nft-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from './wallet.service';
@@ -132,7 +133,9 @@ export class VerifyService {
           await this.discordVerificationSvc.throwError(payload.nonce, errorMsg);
           throw new Error(errorMsg);
         }
-        const errorMsg = rules[0]?.asset_type === 'nft'
+        const errorMsg = rules[0]?.asset_type === 'erc20'
+          ? `Wallet balance does not meet the token rule: ${tokenRuleCriteria(rules[0])}`
+          : rules[0]?.asset_type === 'nft'
           ? `Address does not own the required assets for collection: ${nftRuleLabel(rules[0])}`
           : rules[0]?.slug
           ? `Address does not own the required assets for collection: ${rules[0].slug}`

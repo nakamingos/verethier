@@ -1,3 +1,4 @@
+import { Erc20OwnershipService } from '../../erc20-ownership.service';
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { 
   ChatInputCommandInteraction, 
@@ -57,7 +58,8 @@ export class AddRuleHandler {
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
-    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService
+    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
+    @Optional() private readonly tokensSvc?: Erc20OwnershipService
   ) {}
 
   /**
@@ -151,6 +153,21 @@ export class AddRuleHandler {
     const network = interaction.options.getString('network');
     const inscriptionIds = interaction.options.getString('inscription_ids');
     const inscriptionNumbers = interaction.options.getString('inscription_numbers');
+    if (assetType === 'erc20') {
+      try {
+        if (!this.tokensSvc) throw new Error('Token verification is not configured.');
+        if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL'
+          || tokenIds != null || name != null || inscriptionIds != null || inscriptionNumbers != null
+          || interaction.options.getInteger('min_items') != null) throw new Error('Token rules use contract_address, min_balance, and optional network. Leave collection, NFT, and inscription options empty.');
+        const minimum = interaction.options.getString('min_balance');
+        if (!minimum) throw new Error('Enter min_balance as a positive token amount, such as 1000 or 0.5.');
+        const assetFields = await this.tokensSvc.prepareRule(contract, minimum, getNftNetworkId(network || 'ethereum'));
+        return { channel, roleName, slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems: null, assetFields };
+      } catch (error) {
+        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the token contract.', true) });
+        return null;
+      }
+    }
     if (inscriptionIds != null || inscriptionNumbers != null) {
       try {
         if (!['ordinal', 'ethscription'].includes(assetType)) throw new Error('Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.');

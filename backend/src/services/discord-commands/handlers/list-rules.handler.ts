@@ -1,3 +1,4 @@
+import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
@@ -10,7 +11,7 @@ import { formatAttribute } from '../utils/rule-validation.util';
 
 type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
 const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
-  nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
+  erc20: 'Tokens (ERC-20)', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
 };
 
 /**
@@ -242,6 +243,7 @@ export class ListRulesHandler {
     }
 
     try {
+      if (rule.asset_type === 'erc20') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);

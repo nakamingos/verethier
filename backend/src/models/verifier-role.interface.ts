@@ -4,7 +4,10 @@ import { OrdinalTraitSnapshot } from './ordinal-collection.interface';
 export type AssetCount = number | string;
 
 export interface NftRuleFields {
-  asset_type?: 'ethscription' | 'nft' | 'ordinal';
+  asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20';
+  min_balance?: string | null;
+  token_decimals?: number | null;
+  token_symbol?: string | null;
   chain_id?: number | null;
   contract_address?: string | null;
   token_standard?: 'erc721' | 'erc1155' | null;

@@ -2,7 +2,7 @@
 
 **Verify your wallet. Get your roles.**
 
-Discord-based wallet verification for Ethscriptions, NFTs and Bitcoin Ordinals communities.
+Discord-based wallet verification for Ethscriptions, NFTs, ERC-20 tokens and Bitcoin Ordinals communities.
 
 Bouncer is split into two deployable apps:
 - `backend/`: a NestJS API and Discord bot
@@ -12,6 +12,7 @@ Bouncer is split into two deployable apps:
 
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
+- ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum and Robinhood mainnet
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
 - Bitcoin mainnet Ordinals quantity and trait rules using Xverse wallet signatures, ord.net traits, and Xverse ownership fallback
 - Wallet stacking across multiple verified addresses
@@ -151,3 +152,11 @@ node test/check-ordinals-live.cjs
 ## License
 
 [CC0 1.0 Universal](LICENSE)
+
+## ERC-20 token rules
+
+Use `/setup add-token-rule` with `channel`, `role`, `contract_address`, and a required `min_balance` such as `1000` or `0.5`. Set `network:robinhood` for Robinhood mainnet; otherwise Ethereum is used. Existing backend `RPC_URL` and `ROBINHOOD_RPC_URL` settings apply.
+
+The bot reads token decimals, name, and symbol from the contract. Amounts are compared as exact base-unit integers; excess decimal precision is rejected. Linked EVM wallets are deduplicated and summed at one block per network. These rules check tokens held directly in wallets. Tokens without readable `decimals`, `balanceOf`, and `totalSupply` are rejected. Name and symbol are optional.
+
+`/setup list-rules asset_type:erc20` filters token rules. Scheduled checks follow assignment history: newly eligible roles require explicit verification, previously earned roles can be restored, and RPC failures preserve existing roles. Database `min_balance` stores canonical base units as text; `token_decimals` and `token_symbol` describe display amounts. Token rules leave `min_items` null.

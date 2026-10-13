@@ -540,4 +540,31 @@ describe('DbService (Unit Tests)', () => {
     });
   });
 
+  describe('ERC-20 rule persistence', () => {
+    const token = { asset_type: 'erc20' as const, chain_id: 4663, contract_address: '0x' + '1'.repeat(40),
+      token_decimals: 6, token_symbol: 'TEST', min_balance: '500000', collection_name: 'Test', token_standard: null, token_ids: null };
+    it('saves token fields without collection or item-count defaults', async () => {
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1, ...token } });
+      await service.addRoleMapping('guild', 'Guild', 'channel', 'Channel', null, 'role', 'Holder', 'ALL', 'ALL', null, token);
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ slug: null, min_items: null, ...token }));
+    });
+    it('matches duplicates by network, contract, and exact minimum independently of NFT rules', async () => {
+      await service.checkForExactDuplicateRule('guild', 'channel', null, 'ALL', 'ALL', null, 'role', token);
+      await service.checkForDuplicateRule('guild', 'channel', null, 'ALL', 'ALL', null, 'other-role', { ...token, min_balance: '1000000' });
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('asset_type', 'erc20');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('chain_id', 4663);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('contract_address', token.contract_address);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('min_balance', '500000');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('min_balance', '1000000');
+      expect(mockSupabaseClient.is).toHaveBeenCalledWith('min_items', null);
+      expect(mockSupabaseClient.eq).not.toHaveBeenCalledWith('asset_type', 'ethscription');
+    });
+    it('preserves the token threshold and metadata when restoring a removed rule', async () => {
+      mockSupabaseClient.single.mockResolvedValue({ data: { id: 1, ...token } });
+      await service.restoreRuleWithOriginalId({ id: 1, server_id: 'guild', channel_id: 'channel', role_id: 'role',
+        attribute_key: 'ALL', attribute_value: 'ALL', min_items: null, slug: null, ...token });
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ id: 1, slug: null, min_items: null, ...token }));
+    });
+  });
+
 });
