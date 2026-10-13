@@ -20,6 +20,7 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
   ordinalOwners?: Map<string, Promise<string>>;
   ordinalInventories?: Map<string, Promise<Map<string, number>>>;

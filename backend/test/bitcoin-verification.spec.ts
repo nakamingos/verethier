@@ -158,7 +158,7 @@ describe('Bitcoin wallet proof', () => {
   it('links only the signed Bitcoin address and rechecks the previous Discord owner on transfer', async () => {
     const addresses = { addUserAddress: jest.fn().mockResolvedValue({ success: true, wasTransferred: true, previousUserId: 'previous' }) };
     const roles = { reverifyUser: jest.fn().mockResolvedValue({ verified: 0, revoked: 1 }) };
-    const wallet = new WalletService(nonces, addresses as any, { getUser: jest.fn().mockResolvedValue({ username: 'User' }) } as any, roles as any, signatures);
+    const wallet = new WalletService(nonces, addresses as any, { getUser: jest.fn().mockResolvedValue({ username: 'User' }) } as any, roles as any, { assertAllowed: jest.fn().mockResolvedValue(undefined) } as any, signatures);
     const { data, signature } = await proof();
     const result = await wallet.verifySignature(data, signature);
     expect(addresses.addUserAddress).toHaveBeenCalledWith('user', vector.address, 'User', 'bitcoin');

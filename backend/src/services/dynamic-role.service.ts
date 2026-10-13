@@ -97,12 +97,25 @@ export class DynamicRoleService {
     Logger.log(`🔍 Manual re-verification for user ${userId}`);
     
     const userAssignments = await this.getUserEarnedAssignments(userId);
+    const { verified, revoked } = await this.reverifyAssignments(userAssignments);
+    Logger.log(`Manual re-verification complete for user ${userId}: ${verified} verified, ${revoked} revoked`);
+    return { verified, revoked };
+  }
+
+  /** Restriction changes only reconcile previously earned roles in the administrator's server. */
+  async reverifyUserInServer(userId: string, serverId: string): Promise<{ verified: number; revoked: number; errors: number }> {
+    const assignments = await this.dbSvc.getEarnedRoleAssignments({ userId, serverId });
+    return this.reverifyAssignments(assignments);
+  }
+
+  private async reverifyAssignments(assignments: any[]): Promise<{ verified: number; revoked: number; errors: number }> {
     let verified = 0;
     let revoked = 0;
+    let errors = 0;
     const context: NftCheckContext = { checks: new Map() };
     const discordContext: RoleSyncContext = new Map();
 
-    for (const assignment of userAssignments) {
+    for (const assignment of assignments) {
       try {
         const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
         
@@ -114,12 +127,12 @@ export class DynamicRoleService {
           revoked++;
         }
       } catch (error) {
+        errors++;
         Logger.error(`Error during manual re-verification:`, error.message);
       }
     }
 
-    Logger.log(`Manual re-verification complete for user ${userId}: ${verified} verified, ${revoked} revoked`);
-    return { verified, revoked };
+    return { verified, revoked, errors };
   }
 
   /**

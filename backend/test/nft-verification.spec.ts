@@ -226,7 +226,7 @@ describe('NFT rules and role decisions', () => {
     db = { getRuleById: jest.fn().mockResolvedValue(rule), getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn(), getEarnedRoleAssignments: jest.fn(), getUserRoleHistory: jest.fn() };
     count = jest.fn().mockResolvedValue(BigInt(2));
     addresses = { getUserAddresses: jest.fn().mockResolvedValue([wallet]) };
-    engine = new VerificationEngine(db, { count } as any, addresses);
+    engine = new VerificationEngine(db, { count } as any, addresses, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
   });
   it('routes Ethscriptions and NFTs through the shared adapter', async () => {
     const data = { checkAssetOwnershipWithCriteria: jest.fn().mockResolvedValue(3) };

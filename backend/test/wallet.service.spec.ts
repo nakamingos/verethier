@@ -1,3 +1,4 @@
+import { WalletBlockService } from '../src/services/wallet-block.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WalletService } from '../src/services/wallet.service';
 import { DynamicRoleService } from '../src/services/dynamic-role.service';
@@ -52,6 +53,7 @@ describe('WalletService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         WalletService,
         { provide: NonceService, useValue: mockNonceService },
         { provide: UserAddressService, useValue: mockUserAddressService },
@@ -68,6 +70,24 @@ describe('WalletService', () => {
   });
 
   describe('verifySignature', () => {
+    it('rejects a blocked EVM wallet before saving or transferring its link', async () => {
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
+      const blocks = (service as any).walletBlocks;
+      blocks.assertAllowed.mockRejectedValueOnce(new Error('This wallet has been blocked from verification in this server.'));
+      await expect(service.verifySignature(baseData, 'sig')).rejects.toThrow('blocked');
+      expect(blocks.assertAllowed).toHaveBeenCalledWith('d', '0xabc');
+      expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+      expect(mockDynamicRoleService.reverifyUser).not.toHaveBeenCalled();
+    });
+
+    it('stops EVM verification when the wallet restriction lookup fails', async () => {
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
+      (service as any).walletBlocks.assertAllowed.mockRejectedValueOnce(new Error('Could not check wallet restrictions.'));
+      await expect(service.verifySignature(baseData, 'sig')).rejects.toThrow('Could not check');
+      expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+    });
     it('throws error when validateNonce returns false', async () => {
       mockNonceService.validateNonce.mockResolvedValue(false);
       await expect(service.verifySignature(baseData, 'sig')).rejects.toThrow('Invalid or expired nonce.');

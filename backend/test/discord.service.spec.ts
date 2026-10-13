@@ -92,6 +92,8 @@ const mockDiscordVerificationService = {
 };
 
 const mockDiscordCommandsService = {
+  handleWalletBlock: jest.fn(),
+  handleWalletBlockPagination: jest.fn(),
   handleAuditLog: jest.fn(),
   handleAuditLogPagination: jest.fn(),
   initialize: jest.fn(),
@@ -237,6 +239,18 @@ describe('DiscordService - Enhanced Tests', () => {
   });
 
   describe('Slash Commands Registration', () => {
+    it('registers wallet restriction commands with a required address and bounded optional reason', async () => {
+      await service.registerSlashCommands();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const block = setup.options.find(option => option.name === 'block-wallet');
+      const unblock = setup.options.find(option => option.name === 'unblock-wallet');
+      expect(block.options).toEqual([
+        expect.objectContaining({ name: 'address', required: true, max_length: 62 }),
+        expect.objectContaining({ name: 'reason', max_length: 200 }),
+      ]);
+      expect(unblock.options).toEqual([expect.objectContaining({ name: 'address', required: true })]);
+      expect(setup.options.some(option => option.name === 'list-blocked-wallets')).toBe(true);
+    });
     it('registers an optional asset-type filter for list-rules', async () => {
       await service.registerSlashCommands();
       const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
@@ -1128,6 +1142,20 @@ describe('DiscordService - Enhanced Tests', () => {
     });
   });
   describe('audit log dispatch', () => {
+    it.each(['block-wallet', 'unblock-wallet', 'list-blocked-wallets'])('routes %s through the administrator guard', async command => {
+      const interaction: any = { guildId: 'guild', user: { id: 'admin' }, memberPermissions: { has: () => true }, options: { getSubcommand: () => command } };
+      await service.handleSetup(interaction);
+      expect(mockDiscordCommandsService.handleWalletBlock).toHaveBeenCalledWith(interaction);
+    });
+    it('routes wallet block pages to their own handler', async () => {
+      let callback: Function;
+      mockClient.on.mockImplementation((event, listener) => { if (event === 'interactionCreate') callback = listener; });
+      await service.createSlashCommands();
+      const interaction: any = { isAutocomplete: () => false, isChatInputCommand: () => false, isButton: () => true,
+        customId: 'wallet-blocks-next-0-585432476332064769-1369930881267142686' };
+      await callback(interaction);
+      expect(mockDiscordCommandsService.handleWalletBlockPagination).toHaveBeenCalledWith(interaction);
+    });
     it('delegates the audit command to its paginated handler', async () => {
       const interaction: any = { guildId: 'guild', user: { id: 'admin' } };
       await service.handleAuditLog(interaction);

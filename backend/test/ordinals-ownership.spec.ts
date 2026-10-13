@@ -90,7 +90,7 @@ describe('Ordinals ownership counts', () => {
     const ownership = new AssetOwnershipService(data as any, nft as any, service);
     const db = { getRoleMappings: jest.fn().mockResolvedValue([rule, { ...rule, id: 2, asset_type: 'nft', min_items: 100 }]) };
     const addresses = { getUserAddresses: jest.fn().mockResolvedValue([evm, wallet]) };
-    const engine = new VerificationEngine(db as any, ownership, addresses as any);
+    const engine = new VerificationEngine(db as any, ownership, addresses as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     expect((await engine.evaluateRole('user', 'guild', 'holder')).status).toBe('passed');
     expect(nft.count.mock.calls[0][1]).toEqual([evm]);
     expect(request.mock.calls[0][0]).toContain(wallet);
@@ -106,7 +106,7 @@ describe('Ordinals ownership counts', () => {
     const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue(assignments), getRoleMappings: jest.fn().mockResolvedValue([rule]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const ownership = new AssetOwnershipService({} as any, {} as any, service);
-    const engine = new VerificationEngine(db as any, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db as any, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn().mockResolvedValue(true) };
     await new DynamicRoleService(db as any, engine, discord as any).performScheduledReverification();
     expect(request).toHaveBeenCalledTimes(1);
@@ -121,9 +121,9 @@ describe('Ordinals ownership counts', () => {
     const addresses = { getUserAddresses: jest.fn().mockResolvedValue([wallet]) };
     const ownership = new AssetOwnershipService({} as any, {} as any, service);
     const context: NftCheckContext = { checks: new Map() };
-    const engine = new VerificationEngine(db as any, ownership, addresses as any);
+    const engine = new VerificationEngine(db as any, ownership, addresses as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     expect((await engine.verifyUserBulk('user', [rule.id], wallet, [rule], context)).validRules).toHaveLength(1);
-    const discord = new DiscordVerificationService(db as any, {} as any, {} as any, addresses as any, ownership);
+    const discord = new DiscordVerificationService(db as any, {} as any, {} as any, addresses as any, ownership, { allowedAddresses: async (_server, wallets) => wallets } as any);
     discord.initialize({ guilds: { fetch: jest.fn().mockResolvedValue({
       members: { fetch: jest.fn().mockResolvedValue({ roles: { cache: new Map([['holder', {}]]) } }) },
       roles: { fetch: jest.fn().mockResolvedValue({ name: 'Bonus Holder' }) },
@@ -137,7 +137,7 @@ describe('Ordinals ownership counts', () => {
     request.mockRejectedValue(new Error('unavailable'));
     const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'holder' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
-    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any);
+    const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn().mockResolvedValue(true) };
     await new DynamicRoleService(db as any, engine, discord as any).performScheduledReverification();
     expect(discord.removeUserRole).not.toHaveBeenCalled();

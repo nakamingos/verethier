@@ -9,6 +9,7 @@ import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { UserAddressService } from './user-address.service';
 import { AssetCount, VerifierRole } from '@/models/verifier-role.interface';
 import { OrdinalCheckDetails } from '@/models/ordinal-collection.interface';
+import { WalletBlockService } from './wallet-block.service';
 
 /**
  * VerificationEngine - Verification logic processor
@@ -42,6 +43,7 @@ export class VerificationEngine {
     private readonly dbSvc: DbService,
     private readonly ownershipSvc: AssetOwnershipService,
     private readonly userAddressService: UserAddressService,
+    private readonly walletBlocks: WalletBlockService,
   ) {}
 
   /**
@@ -96,7 +98,9 @@ export class VerificationEngine {
       const addressesToCheck = userAddresses.includes(address.toLowerCase()) 
         ? userAddresses 
         : [...userAddresses, address.toLowerCase()];
-      checkedAddresses = addressesToCheck;
+      const allowedAddresses = await this.walletBlocks.allowedAddresses(rule.server_id, addressesToCheck, run);
+      checkedAddresses = allowedAddresses;
+      const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes(address.toLowerCase()));
       
       if (addressesToCheck.length !== userAddresses.length) {
         Logger.warn(`Address ${address} not found in getUserAddresses for user ${userId}, adding it manually to prevent race condition`);
@@ -107,7 +111,7 @@ export class VerificationEngine {
       // Apply verification logic - now checks across ALL user's wallets
       Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
       
-      const count = await this.ownershipSvc.count(rule, addressesToCheck, run);
+      const count = allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, run) : 0n;
       const assetCount = rule.asset_type === 'erc20' ? tokenAmount(rule, count) : serializeAssetCount(count);
 
       const requiredCount = rule.asset_type === 'erc20' ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
@@ -125,14 +129,15 @@ export class VerificationEngine {
         ruleId,
         address,
         rule: resultRule,
-        ownershipDetails: this.ownershipSvc.checkDetails?.(rule, addressesToCheck, run),
+        ownershipDetails: this.ownershipSvc.checkDetails?.(rule, allowedAddresses, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
           collection: rule.asset_type === 'erc20' ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
           minItems: requiredDisplay,
-          foundAssets: assetCount
+          foundAssets: assetCount,
+          ...(blockedWallets.length ? { blockedWallets } : {}),
         }
       };
 
@@ -392,6 +397,7 @@ export interface VerificationResult {
     attributeValue: string;
     minItems: AssetCount;
     foundAssets: AssetCount;
+    blockedWallets?: string[];
   };
   // Multi-wallet specific properties
   verifiedAddress?: string; // The specific address that passed verification

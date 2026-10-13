@@ -1,3 +1,4 @@
+import { WalletBlockService } from '../src/services/wallet-block.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
@@ -94,6 +95,7 @@ describe('DynamicRoleService', () => {
 
     module = await Test.createTestingModule({
       providers: [
+        { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         VerificationEngine,
         AssetOwnershipService,
         { provide: NftOwnershipService, useValue: { count: jest.fn() } },
