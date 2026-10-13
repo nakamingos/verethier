@@ -26,6 +26,15 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
   footer: 'Need more help? Check the docs or ask in support channels',
   fields: [
     {
+      name: '🪙 `/setup add-token-rule`',
+      value: 'Use **channel**, **role**, **contract_address**, and **min_balance**, such as `1000` or `0.5`.\n' +
+             '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
+             '• ERC-20 balances are summed across verified EVM wallets\n' +
+             '• Name, symbol, and decimals are read from the contract\n' +
+             '• Checks tokens held directly in wallets; staking and pool positions need separate rules',
+      inline: false
+    },
+    {
       name: '📝 `/setup add-ethscription-rule`',
       value: '**Create new verification rules**\n' +
              '• **Channel**: Where users will verify\n' +
@@ -80,7 +89,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       name: '📋 `/setup list-rules`',
       value: '**View all verification rules**\n' +
              '• Shows rule IDs, channels, roles, and criteria\n' +
-             '• **Asset Type**: Optional NFT, Ordinals, or Ethscriptions filter; omit to show all\n' +
+             '• **Asset Type**: Optional Tokens, NFT, Ordinals, or Ethscriptions filter; omit to show all\n' +
              '• Organized by channel for easy reading\n' +
              '• Use rule IDs for removal\n' +
              '**Example**: `/setup list-rules asset_type:Ordinals`\n\n',
@@ -137,15 +146,6 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '**Manual Entry**: Can\'t find your option? Type it anyway!\n' +
              '**Validation**: Bot checks all entries when you submit\n' +
              '**Empty Fields**: Allow ALL values for that criteria (broader matching)',
-      inline: false
-    },
-    {
-      name: '🔄 **How It Works**',
-      value: '**Autocomplete**: Start typing to see exact matches prioritized first\n' +
-             '**Error Messages**: Clear, specific feedback when something goes wrong\n' +
-             '**Manual Entry**: Type any valid option, even if not in autocomplete\n' +
-             '**Performance**: Fast response times with daily data refresh\n' +
-             '**Validation**: Bot validates combinations using complete datasets',
       inline: false
     },
     {

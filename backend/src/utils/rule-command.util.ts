@@ -1,4 +1,5 @@
 export const RULE_CREATION_COMMANDS = [
+  { name: 'add-token-rule', assetType: 'erc20' },
   { name: 'add-nft-rule', assetType: 'nft' },
   { name: 'add-ordinals-rule', assetType: 'ordinal' },
   { name: 'add-ethscription-rule', assetType: 'ethscription' },

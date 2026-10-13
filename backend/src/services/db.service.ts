@@ -162,6 +162,8 @@ export class DbService {
   // New methods for v2:
 
   private filterRuleAsset(query: any, slug: string, assetFields?: NftRuleFields): any {
+    if (assetFields?.asset_type === 'erc20') return query.eq('asset_type', 'erc20')
+      .eq('chain_id', assetFields.chain_id).eq('contract_address', assetFields.contract_address).eq('min_balance', assetFields.min_balance);
     if (assetFields?.inscription_criteria != null) return query.eq('asset_type', assetFields.asset_type)
       .is('slug', null).eq('inscription_criteria', JSON.stringify(assetFields.inscription_criteria));
     if (assetFields?.asset_type === 'ordinal') {
@@ -206,8 +208,8 @@ export class DbService {
       .eq('server_id', serverId)
       .eq('channel_id', channelId)
       .eq('attribute_key', finalAttrKey)
-      .eq('attribute_value', finalAttrVal)
-      .eq('min_items', finalMinItems);
+      .eq('attribute_value', finalAttrVal);
+    query = assetFields?.asset_type === 'erc20' ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
 
@@ -252,12 +254,12 @@ export class DbService {
         server_name: serverName,
         channel_id: channelId,
         channel_name: channelName,
-        slug: assetFields?.asset_type === 'nft' || assetFields?.inscription_criteria != null ? null : finalSlug,
+        slug: ['nft', 'erc20'].includes(assetFields?.asset_type) || assetFields?.inscription_criteria != null ? null : finalSlug,
         role_id: roleId,
         role_name: roleName,
         attribute_key: finalAttrKey,
         attribute_value: finalAttrVal,
-        min_items: finalMinItems,
+        min_items: assetFields?.asset_type === 'erc20' ? null : finalMinItems,
         ...(assetFields ? assetFields : {})
       })
       .select()
@@ -536,8 +538,8 @@ export class DbService {
       .eq('channel_id', channelId)
       .eq('attribute_key', finalAttrKey)
       .eq('attribute_value', finalAttrVal)
-      .eq('min_items', finalMinItems)
       .eq('role_id', roleId);
+    query = assetFields?.asset_type === 'erc20' ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
     const { data, error } = await query;
@@ -1035,10 +1037,11 @@ export class DbService {
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
           ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria } : {}),
-          ...(removedRule.asset_type === 'nft' || removedRule.asset_type === 'ordinal' ? {
+          ...(['nft', 'ordinal', 'erc20'].includes(removedRule.asset_type) ? {
             asset_type: removedRule.asset_type, chain_id: removedRule.chain_id,
             contract_address: removedRule.contract_address, token_standard: removedRule.token_standard,
             token_ids: removedRule.token_ids, collection_name: removedRule.collection_name,
+            ...(removedRule.asset_type === 'erc20' ? { min_balance: removedRule.min_balance, token_decimals: removedRule.token_decimals, token_symbol: removedRule.token_symbol } : {}),
             ...(removedRule.asset_type === 'ordinal' ? {
               inscription_criteria: removedRule.inscription_criteria ?? null,
               ordinal_trait_snapshot: removedRule.ordinal_trait_snapshot ?? null,

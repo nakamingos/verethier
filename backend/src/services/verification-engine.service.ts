@@ -1,3 +1,4 @@
+import { tokenMinimum, tokenAmount, tokenRuleScope } from '@/utils/erc20-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
 import { AssetOwnershipService } from './asset-ownership.service';
@@ -107,12 +108,13 @@ export class VerificationEngine {
       Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
       
       const count = await this.ownershipSvc.count(rule, addressesToCheck, run);
-      const assetCount = serializeAssetCount(count);
+      const assetCount = rule.asset_type === 'erc20' ? tokenAmount(rule, count) : serializeAssetCount(count);
 
-      const requiredCount = rule.min_items || 1;
-      const isValid = count >= BigInt(requiredCount);
+      const requiredCount = rule.asset_type === 'erc20' ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
+      const isValid = count >= requiredCount;
+      const requiredDisplay = rule.asset_type === 'erc20' ? tokenAmount(rule, requiredCount) : Number(requiredCount);
       
-      Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredCount}`);
+      Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredDisplay}`);
       
       // Rule snapshots and selections belong on verifier_rules, not member check JSON.
       const { ordinal_trait_snapshot, inscription_criteria, ...resultRule } = rule;
@@ -126,10 +128,10 @@ export class VerificationEngine {
         ownershipDetails: this.ownershipSvc.checkDetails?.(rule, addressesToCheck, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: rule.asset_type === 'erc20' ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
-          minItems: requiredCount,
+          minItems: requiredDisplay,
           foundAssets: assetCount
         }
       };
@@ -388,7 +390,7 @@ export interface VerificationResult {
     collection: string;
     attributeKey: string;
     attributeValue: string;
-    minItems: number;
+    minItems: AssetCount;
     foundAssets: AssetCount;
   };
   // Multi-wallet specific properties

@@ -1,3 +1,4 @@
+import { Erc20OwnershipService } from './services/erc20-ownership.service';
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -119,6 +120,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
 
     // Core application services
     AppService,
+    Erc20OwnershipService,
 
     // Discord integration services
     DiscordService,              // Main Discord bot client

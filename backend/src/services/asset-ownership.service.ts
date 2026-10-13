@@ -1,3 +1,4 @@
+import { Erc20OwnershipService } from './erc20-ownership.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { DataService } from './data.service';
@@ -10,7 +11,8 @@ import { EthscriptionsOwnershipService } from './ethscriptions-ownership.service
 export class AssetOwnershipService {
   constructor(private readonly dataSvc: DataService, private readonly nftSvc: NftOwnershipService,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
-    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService) {}
+    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
+    @Optional() private readonly tokensSvc?: Erc20OwnershipService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
@@ -23,6 +25,10 @@ export class AssetOwnershipService {
     }
     const evmAddresses = addresses.filter(address => !/^bc1p/i.test(address));
     if (!evmAddresses.length) return BigInt(0);
+    if (rule.asset_type === 'erc20') {
+      if (!this.tokensSvc) throw new Error('Token verification is not configured.');
+      return this.tokensSvc.count(rule, evmAddresses, context);
+    }
     if (rule.asset_type === 'nft') return this.nftSvc.count(rule, evmAddresses, context);
     const criteria = inscriptionCriteria(rule);
     if (criteria) {

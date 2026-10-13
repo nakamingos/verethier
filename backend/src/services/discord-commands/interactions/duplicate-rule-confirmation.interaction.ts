@@ -1,3 +1,4 @@
+import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
@@ -232,7 +233,11 @@ export class DuplicateRuleConfirmationInteractionHandler {
     const fields = [];
     
     // Collection
-    if (rule.inscription_criteria) {
+    if (rule.asset_type === 'erc20') {
+      fields.push({ name: '**Token**', value: tokenRuleScope(rule), inline: false });
+      fields.push({ name: '**Contract**', value: rule.contract_address, inline: false });
+      fields.push({ name: '**Min Balance**', value: tokenAmount(rule, tokenMinimum(rule)), inline: true });
+    } else if (rule.inscription_criteria) {
       fields.push({ name: '**Inscriptions**', value: inscriptionRuleScope(rule), inline: false });
     } else if (rule.asset_type === 'nft') {
       fields.push({ name: '**Collection**', value: nftRuleScope(rule), inline: false });
@@ -248,7 +253,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (!rule.inscription_criteria && !['nft', 'ordinal'].includes(rule.asset_type) && rule.attribute_key && rule.attribute_value) {
+    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20'].includes(rule.asset_type) && rule.attribute_key && rule.attribute_value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;
@@ -264,7 +269,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Min Items
-    if (rule.min_items !== undefined) {
+    if (rule.asset_type !== 'erc20' && rule.min_items != null) {
       fields.push({
         name: '**Min Items**',
         value: rule.min_items.toString(),

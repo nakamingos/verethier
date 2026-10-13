@@ -243,6 +243,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(list.options[0]).toEqual(expect.objectContaining({
         name: 'asset_type',
         choices: [
+          { name: 'Tokens (ERC-20)', value: 'erc20' },
           { name: 'NFT', value: 'nft' },
           { name: 'Ordinals', value: 'ordinal' },
           { name: 'Ethscriptions', value: 'ethscription' }
@@ -251,14 +252,14 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(list.options[0].required).not.toBe(true);
     });
 
-    it('registers three focused rule commands with valid required options', async () => {
+    it('registers focused rule commands with valid required options', async () => {
       await service.registerSlashCommands();
       const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
-        'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+        'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([9, 8, 8]);
+      expect(rules.map(rule => rule.options.length)).toEqual([5, 9, 8, 8]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -266,10 +267,12 @@ describe('DiscordService - Enhanced Tests', () => {
         ]);
         expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
         for (const name of ['attribute_key', 'attribute_value']) {
-          expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+          if (rule.name !== 'add-token-rule') expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
         }
       }
-      const [nft, ordinals, ethscriptions] = rules;
+      const [token, nft, ordinals, ethscriptions] = rules;
+      expect(token.options[3]).toEqual(expect.objectContaining({ name: 'min_balance', type: 3, required: true }));
+      expect(token.options.some(option => option.name === 'min_items')).toBe(false);
       expect(nft.options[2]).toEqual(expect.objectContaining({ name: 'contract_address', required: true }));
       expect(nft.options.some(option => ['slug', 'inscription_ids', 'inscription_numbers'].includes(option.name))).toBe(false);
       for (const rule of [ordinals, ethscriptions]) {

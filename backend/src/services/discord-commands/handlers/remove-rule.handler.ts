@@ -1,3 +1,4 @@
+import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
@@ -305,6 +306,7 @@ export class RemoveRuleHandler {
         const minItems = s.data.min_items || 1;
         
         const criteria = s.data.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(s.data, 'compact')} | Min: ${minItems}`
+          : s.data.asset_type === 'erc20' ? `Token: ${tokenRuleCriteria(s.data)}`
           : s.data.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(s.data)}`
           : s.data.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(s.data)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${s.id} | Channel: <#${s.data.channel_id}> | Role: <@&${s.data.role_id}> | ${criteria}`;

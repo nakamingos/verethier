@@ -1,3 +1,4 @@
+import { tokenRuleCriteria, tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope, nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria, ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
@@ -384,6 +385,7 @@ export class RemovalUndoInteractionHandler {
         const minItems = rule.min_items || 1;
         
         const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
+          : rule.asset_type === 'erc20' ? `Token: ${tokenRuleCriteria(rule)}`
           : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
           : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
@@ -434,6 +436,11 @@ export class RemovalUndoInteractionHandler {
    * Creates detailed rule information fields for consistent display
    */
   private createRuleInfoFields(ruleData: any): any[] {
+    if (ruleData.asset_type === 'erc20') return [
+      { name: '**Token**', value: tokenRuleScope(ruleData), inline: false },
+      { name: '**Contract**', value: ruleData.contract_address, inline: false },
+      { name: '**Min Balance**', value: tokenAmount(ruleData, tokenMinimum(ruleData)), inline: true },
+    ];
     if (ruleData.inscription_criteria || ruleData.asset_type === 'ordinal') return [
       { name: ruleData.inscription_criteria ? '**Inscriptions**' : '**Collection**', value: ruleData.inscription_criteria ? inscriptionRuleScope(ruleData) : ordinalRuleScope(ruleData), inline: false },
       { name: '**Min Items**', value: String(ruleData.min_items || 1), inline: true },

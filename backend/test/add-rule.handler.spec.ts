@@ -1,3 +1,4 @@
+import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
@@ -12,6 +13,7 @@ import { DuplicateRuleConfirmationInteractionHandler } from '../src/services/dis
 import { RemovalUndoInteractionHandler } from '../src/services/discord-commands/interactions/removal-undo.interaction';
 import { ChannelType } from 'discord.js';
 
+const mockTokenService = { prepareRule: jest.fn() };
 const mockNftService = { prepareRule: jest.fn(), validateTraits: jest.fn() };
 const mockEthscriptionsService = { prepareInscriptionRule: jest.fn() };
 const mockOrdinalsService = { prepareRule: jest.fn(), prepareTraitSnapshot: jest.fn(), prepareInscriptionRule: jest.fn() };
@@ -113,6 +115,7 @@ describe('AddRuleHandler', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AddRuleHandler,
+        { provide: Erc20OwnershipService, useValue: mockTokenService },
         { provide: NftOwnershipService, useValue: mockNftService },
         { provide: OrdinalsOwnershipService, useValue: mockOrdinalsService },
         { provide: EthscriptionsOwnershipService, useValue: mockEthscriptionsService },
@@ -643,6 +646,30 @@ describe('AddRuleHandler', () => {
       await handler.handle(interaction);
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('temporarily unavailable') });
+    });
+  });
+
+  describe('ERC-20 rule setup', () => {
+    const token = { asset_type: 'erc20', chain_id: 4663, contract_address: '0x' + '1'.repeat(40), token_decimals: 6,
+      min_balance: '500000', token_symbol: 'TEST', collection_name: 'Test', token_standard: null, token_ids: null };
+    function interaction(extra = {}) {
+      const options = { role: 'Holder', contract_address: token.contract_address, min_balance: '0.5', network: 'robinhood', ...extra };
+      return { options: { getString: jest.fn(name => options[name] ?? null), getInteger: jest.fn(() => null),
+        getChannel: jest.fn(() => ({ id: 'channel' })) }, editReply: jest.fn() };
+    }
+    it('prepares fractional balances with the selected network and keeps item criteria empty', async () => {
+      mockTokenService.prepareRule.mockResolvedValue(token);
+      const input = interaction();
+      const result = await (handler as any).validateInputParams(input, 'erc20');
+      expect(mockTokenService.prepareRule).toHaveBeenCalledWith(token.contract_address, '0.5', 4663);
+      expect(result).toMatchObject({ slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems: null, assetFields: token });
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+      expect(mockNftService.prepareRule).not.toHaveBeenCalled();
+    });
+    it.each([{ min_balance: null }, { slug: 'collection' }, { attribute_key: 'Trait' }, { token_ids: '1' }, { inscription_numbers: '1' }])('rejects missing amounts or mixed asset options: %s', async extra => {
+      const input = interaction(extra);
+      expect(await (handler as any).validateInputParams(input, 'erc20')).toBeNull();
+      expect(input.editReply).toHaveBeenCalled();
     });
   });
 

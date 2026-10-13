@@ -67,7 +67,8 @@ describe('ListRulesHandler', () => {
 
   describe('handle', () => {
     it.each([
-      [null, [1, 2, 3, 4, 5, 6, 7], 'Verification Rules'],
+      [null, [1, 2, 3, 4, 5, 6, 7, 8], 'Verification Rules'],
+      ['erc20', [8], 'Tokens (ERC-20) Verification Rules'],
       ['nft', [3, 4], 'NFT Verification Rules'],
       ['ordinal', [5, 6], 'Ordinals Verification Rules'],
       ['ethscription', [1, 2, 7], 'Ethscriptions Verification Rules']
@@ -84,6 +85,7 @@ describe('ListRulesHandler', () => {
           inscription_criteria: { kind: 'numbers', ranges: [[1, 10]] } },
         { ...base, id: 7, asset_type: 'ethscription', slug: null,
           inscription_criteria: { kind: 'ids', ids: ['0x' + 'a'.repeat(64)] } },
+        { ...base, id: 8, asset_type: 'erc20', chain_id: 4663, contract_address: '0x' + '1'.repeat(40), slug: null, min_items: null, token_decimals: 6, min_balance: '500000', token_symbol: 'TEST' },
         { ...base, id: 99, asset_type: 'nft', server_id: '000000000000000000' }
       ];
       mockDbService.getRoleMappings.mockResolvedValue(rules.reverse() as any);
