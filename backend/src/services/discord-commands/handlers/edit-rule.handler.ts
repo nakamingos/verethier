@@ -191,7 +191,7 @@ export class EditRuleHandler {
     try {
       const embed = result.errors ? AdminFeedback.warning(title, description) : AdminFeedback.success(title, description);
       embed.setFooter({ text: 'Undo/Redo is available for 5 minutes after each action.' });
-      await interaction.editReply({ embeds: [embed], components: [this.historyButton(key, session)], allowedMentions: { parse: [] } });
+      await interaction.editReply({ content: '', embeds: [embed], components: [this.historyButton(key, session)], attachments: [], allowedMentions: { parse: [] } });
     } catch (error) { this.logger.warn(`Rule ${saved.id} ${action} applied; final reply failed: ${error.message}`); }
   }
 
