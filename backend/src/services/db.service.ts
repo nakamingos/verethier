@@ -1064,91 +1064,49 @@ export class DbService {
   }
 
   /**
-   * Get audit log of all role changes for a server within a date range
+   * Get latest assignment activity for a server within a date range
    */
   async getServerAuditLog(serverId: string, daysBack: number = 1): Promise<any[]> {
-    try {
-      // Validate inputs
-      if (!serverId) {
-        throw new Error('Server ID is required');
-      }
-      
-      if (daysBack < 1 || daysBack > 365) {
-        throw new Error('Days back must be between 1 and 365');
-      }
-
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - daysBack);
-      
-      this.logger.debug(`Fetching audit log for server ${serverId}, looking back ${daysBack} days from ${cutoffDate.toISOString()}`);
-      
-      // Query role assignments within the specified time range
-      // Use updated_at OR created_at to catch both new assignments and status changes
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select(`
-          id,
-          user_id,
-          server_id,
-          role_id,
-          rule_id,
-          user_name,
-          server_name,
-          role_name,
-          status,
-          verified_at,
-          created_at,
-          updated_at
-        `)
-        .eq('server_id', serverId)
-        .or(`created_at.gte.${cutoffDate.toISOString()},updated_at.gte.${cutoffDate.toISOString()}`)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        this.logger.error(`Error fetching audit log for server ${serverId}:`, error);
-        throw error;
-      }
-
-      this.logger.debug(`Found ${data?.length || 0} role assignments for server ${serverId} in the last ${daysBack} days`);
-
-      // For each role assignment, get the user's wallet addresses
-      const enrichedData = [];
-      if (data && data.length > 0) {
-        for (const roleEntry of data) {
-          try {
-            // Get user's wallet addresses
-            const { data: wallets, error: walletError } = await this.supabase
-              .from('user_wallets')
-              .select('address, last_verified_at')
-              .eq('user_id', roleEntry.user_id)
-              .order('last_verified_at', { ascending: false });
-
-            if (walletError) {
-              this.logger.warn(`Error fetching wallets for user ${roleEntry.user_id}:`, walletError);
-              // Continue with empty wallets array instead of failing completely
-            }
-
-            enrichedData.push({
-              ...roleEntry,
-              user_wallets: wallets || []
-            });
-          } catch (walletError) {
-            this.logger.warn(`Error processing wallets for user ${roleEntry.user_id}:`, walletError);
-            // Add entry without wallet data instead of failing
-            enrichedData.push({
-              ...roleEntry,
-              user_wallets: []
-            });
-          }
-        }
-      }
-
-      this.logger.debug(`Returning ${enrichedData.length} enriched audit entries`);
-      return enrichedData;
-    } catch (error) {
-      this.logger.error(`Error fetching audit log for server ${serverId}:`, error);
-      throw error;
+    if (!serverId) throw new Error('Server ID is required');
+    if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) throw new Error('Days back must be between 1 and 365');
+    const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+    const pageSize = 1000;
+    const entries: any[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await this.supabase.from('verifier_user_roles')
+        .select('id,user_id,server_id,role_id,rule_id,user_name,server_name,role_name,status,verified_at,created_at,updated_at')
+        .eq('server_id', serverId).or(`created_at.gte.${cutoff},updated_at.gte.${cutoff}`)
+        .order('updated_at', { ascending: false, nullsFirst: false }).order('id', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      entries.push(...(data || []));
+      if (!data || data.length < pageSize) break;
     }
+    // Fetch wallets once per user batch, rather than once per role assignment.
+    const walletsByUser = new Map<string, any[]>();
+    const users = [...new Set(entries.map(entry => entry.user_id))];
+    for (let start = 0; start < users.length; start += 100) {
+      const batch = users.slice(start, start + 100);
+      try {
+        const wallets: any[] = [];
+        for (let offset = 0; ; offset += pageSize) {
+          const { data, error } = await this.supabase.from('user_wallets')
+            .select('user_id,address,last_verified_at').in('user_id', batch)
+            .order('last_verified_at', { ascending: false, nullsFirst: false }).order('id', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+          if (error) throw error;
+          wallets.push(...(data || []));
+          if (!data || data.length < pageSize) break;
+        }
+        for (const wallet of wallets) {
+          if (!walletsByUser.has(wallet.user_id)) walletsByUser.set(wallet.user_id, []);
+          walletsByUser.get(wallet.user_id).push(wallet);
+        }
+      } catch (error) {
+        this.logger.warn('Could not load audit wallet links:', error.message);
+      }
+    }
+    return entries.map(entry => ({ ...entry, user_wallets: walletsByUser.get(entry.user_id) || [] }));
   }
 
 }

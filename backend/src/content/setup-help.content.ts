@@ -111,8 +111,8 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       value: '**View role assignment history**\n' +
              '• Shows initial verifications (✅), re-verifications (🔄), and removals (🗑️)\n' +
              '• **Days**: Number of days to look back (1-30, default: 1)\n' +
-             '• Compact format displays up to 375 entries per embed\n' +
-             '• Clickable wallet links to Ethscriptions.com marketplace\n' +
+             '• Previous/Next buttons browse up to 20 complete entries per page\n' +
+             '• Clickable Ethereum and Bitcoin wallet links\n' +
              '• Admin-only access for security and privacy\n' +
              '• Perfect for monitoring bot activity and user engagement\n' +
              '**Example**: `/setup audit-log days:7`\n\n',

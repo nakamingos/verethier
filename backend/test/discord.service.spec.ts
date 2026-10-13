@@ -92,6 +92,8 @@ const mockDiscordVerificationService = {
 };
 
 const mockDiscordCommandsService = {
+  handleAuditLog: jest.fn(),
+  handleAuditLogPagination: jest.fn(),
   initialize: jest.fn(),
   handleAddRule: jest.fn(),
   handleRemoveRule: jest.fn(),
@@ -1125,4 +1127,23 @@ describe('DiscordService - Enhanced Tests', () => {
       handleUnifiedSpy.mockRestore();
     });
   });
+  describe('audit log dispatch', () => {
+    it('delegates the audit command to its paginated handler', async () => {
+      const interaction: any = { guildId: 'guild', user: { id: 'admin' } };
+      await service.handleAuditLog(interaction);
+      expect(mockDiscordCommandsService.handleAuditLog).toHaveBeenCalledWith(interaction);
+    });
+    it('routes audit page buttons independently of verification and rule-list buttons', async () => {
+      let callback: Function;
+      mockClient.on.mockImplementation((event, listener) => {
+        if (event === 'interactionCreate') callback = listener;
+      });
+      await service.createSlashCommands();
+      const interaction: any = { isAutocomplete: () => false, isChatInputCommand: () => false,
+        isButton: () => true, customId: 'audit-log-next-0-123456789012345678' };
+      await callback(interaction);
+      expect(mockDiscordCommandsService.handleAuditLogPagination).toHaveBeenCalledWith(interaction);
+    });
+  });
+
 });

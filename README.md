@@ -160,3 +160,9 @@ Use `/setup add-token-rule` with `channel`, `role`, `contract_address`, and a re
 The bot reads token decimals, name, and symbol from the contract. Amounts are compared as exact base-unit integers; excess decimal precision is rejected. Linked EVM wallets are deduplicated and summed at one block per network. These rules check tokens held directly in wallets. Tokens without readable `decimals`, `balanceOf`, and `totalSupply` are rejected. Name and symbol are optional.
 
 `/setup list-rules asset_type:erc20` filters token rules. Scheduled checks follow assignment history: newly eligible roles require explicit verification, previously earned roles can be restored, and RPC failures preserve existing roles. Database `min_balance` stores canonical base units as text; `token_decimals` and `token_symbol` describe display amounts. Token rules leave `min_items` null.
+
+## Audit log
+
+`/setup audit-log days:7` displays recent assignment activity with Previous/Next buttons, page numbers, and entry ranges. Pages contain up to 20 complete rows and adjust to Discord’s description limit without cutting rows or wallet links. Each view belongs to its requesting administrator and expires after five minutes; rerun the command to refresh it.
+
+The log uses the latest saved record for each user/role pair, rather than an immutable event history. Larger result sets and wallet lookups are paginated in Supabase.

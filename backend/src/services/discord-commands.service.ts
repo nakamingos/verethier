@@ -1,3 +1,4 @@
+import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ChannelType, GuildTextBasedChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Role, Client, ComponentType, ButtonInteraction } from 'discord.js';
 import { DbService } from './db.service';
@@ -62,7 +63,8 @@ export class DiscordCommandsService {
     private readonly removalUndoHandler: RemovalUndoInteractionHandler,
     private readonly restoreUndoHandler: RestoreUndoInteractionHandler,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
-    private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler
+    private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
+    private readonly auditLogHandler: AuditLogHandler
   ) {}
 
   async handleAddRule(interaction: ChatInputCommandInteraction, assetType?: RuleCreationAssetType): Promise<void> {
@@ -396,6 +398,14 @@ export class DiscordCommandsService {
   async handleListRulesPagination(interaction: any): Promise<void> {
     // Delegate pagination button interactions to the specialized handler
     return this.listRulesHandler.handlePaginationButton(interaction);
+  }
+
+  async handleAuditLog(interaction: ChatInputCommandInteraction): Promise<void> {
+    return this.auditLogHandler.handle(interaction);
+  }
+
+  async handleAuditLogPagination(interaction: ButtonInteraction): Promise<void> {
+    return this.auditLogHandler.handlePaginationButton(interaction);
   }
 
   async handleVerification(interaction: ChatInputCommandInteraction): Promise<void> {
