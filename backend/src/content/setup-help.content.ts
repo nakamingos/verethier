@@ -87,7 +87,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     {
       name: '✏️ `/setup edit-rule`',
       value: 'Select **rule_id**, edit the prefilled requirements, then review and Save or Cancel.\n' +
-             'Keeps the rule ID, channel, role, asset type, and network. Rechecks previously earned roles.',
+             'Undo/Redo repeats with a fresh 5-minute window. Keeps rule identity; rechecks earned roles.',
       inline: false
     },
     {
