@@ -160,7 +160,10 @@ function harness(rule = base) {
   const validation = editor();
   const db = {
     getRuleForServer: jest.fn().mockResolvedValue(rule), getRoleMappings: jest.fn().mockResolvedValue([rule]),
-    editRule: jest.fn().mockImplementation(async (_before, after) => after)
+    editRule: jest.fn().mockImplementation(async (_before, after) => {
+      db.getRuleForServer.mockResolvedValue(structuredClone(after));
+      return after;
+    })
   };
   const roles = { reverifyRoleInServer: jest.fn().mockResolvedValue({ verified: 1, revoked: 0, errors: 0 }) };
   const handler = new EditRuleHandler(db as any, validation.editor, roles as any);
@@ -220,7 +223,7 @@ describe('Prefilled edit forms and confirmation', () => {
     expect(h.db.editRule).toHaveBeenCalledWith(numbers, expect.objectContaining({
       id: 173, role_id: 'holder', channel_id: 'verify',
       inscription_criteria: { kind: 'numbers', ranges: [[97305462, 97305462], [97308505, 97308527]] }
-}));
+    }));
     expect(h.roles.reverifyRoleInServer).toHaveBeenCalledWith('guild', 'holder');
   });
   it('rejects unchanged criteria and exact duplicates before Save', async () => {
@@ -293,6 +296,192 @@ describe('Prefilled edit forms and confirmation', () => {
     const request = h.interaction({ options: { getFocused: () => 'holder' }, respond: jest.fn() }); await h.handler.autocomplete(request);
     expect(h.db.getRoleMappings).toHaveBeenCalledWith('guild'); expect(request.respond.mock.calls[0][0]).toHaveLength(25);
     expect(request.respond.mock.calls[0][0][0].value).toBe('30');
+  });
+});
+
+describe('Rule edit Undo/Redo chains', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  async function saved(rule = base, updates: Record<string, string> = { min_items: '2' }) {
+    const h = harness(rule);
+    await h.start(); await h.preview(updates);
+    const button = h.button(); await h.handler.handleButton(button);
+    return { ...h, last: button };
+  }
+  function nextButton(h: ReturnType<typeof harness>, last: any) {
+    const payload = last.editReply.mock.calls.at(-1)[0];
+    const button = payload.components[0].toJSON().components[0];
+    return { data: button, interaction: h.interaction({ customId: button.custom_id }) };
+  }
+
+  it('alternates Undo and Redo repeatedly, keeping the same row and rechecking earned holders every time', async () => {
+    const h = await saved(); let last = h.last;
+    for (let step = 1; step <= 12; step++) {
+      const next = nextButton(h, last);
+      expect(next.data.label).toBe(step % 2 ? 'Undo' : 'Redo');
+      expect(next.data.custom_id).toBe(`edit-rule-${step % 2 ? 'undo' : 'redo'}-session-${step}`);
+      await h.handler.handleButton(next.interaction);
+      const [expected, written] = h.db.editRule.mock.calls.at(-1);
+      expect(expected.min_items).toBe(step % 2 ? 2 : 1);
+      expect(written).toMatchObject({ id: 173, role_id: 'holder', channel_id: 'verify', server_id: 'guild', min_items: step % 2 ? 1 : 2 });
+      last = next.interaction;
+    }
+    expect(h.db.editRule).toHaveBeenCalledTimes(13);
+    expect(h.roles.reverifyRoleInServer).toHaveBeenCalledTimes(13);
+    expect(h.roles.reverifyRoleInServer.mock.calls.every(args => args.join(',') === 'guild,holder')).toBe(true);
+    expect((h.handler as any).sessions.size).toBe(1);
+    expect((h.handler as any).expiryTimers.size).toBe(1);
+  });
+
+  it.each([base, nft, ordinal, numbers, token])('restores exact $asset_type requirements without provider validation gating Undo/Redo', async rule => {
+    const h = await saved(rule, rule.asset_type === 'erc20' ? { min_balance: '0.75' } : { min_items: '2' });
+    const edited = structuredClone(h.db.editRule.mock.calls[0][1]);
+    h.nfts.prepareRule.mockRejectedValue(new Error('provider down'));
+    h.ordinals.prepareRule.mockRejectedValue(new Error('provider down'));
+    h.ordinals.prepareTraitSnapshot.mockRejectedValue(new Error('provider down'));
+    const undo = nextButton(h, h.last); await h.handler.handleButton(undo.interaction);
+    expect(ruleEditVersion(h.db.editRule.mock.calls[1][1])).toBe(ruleEditVersion(rule));
+    const redo = nextButton(h, undo.interaction); await h.handler.handleButton(redo.interaction);
+    expect(ruleEditVersion(h.db.editRule.mock.calls[2][1])).toBe(ruleEditVersion(edited));
+  });
+
+  it('renews the five-minute window after every action and rejects the chain after inactivity', async () => {
+    const h = await saved();
+    jest.advanceTimersByTime(299000);
+    const undo = nextButton(h, h.last); await h.handler.handleButton(undo.interaction);
+    jest.advanceTimersByTime(299000);
+    const redo = nextButton(h, undo.interaction); await h.handler.handleButton(redo.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(3);
+    const expired = nextButton(h, redo.interaction);
+    jest.advanceTimersByTime(300001); await h.handler.handleButton(expired.interaction);
+    expect(expired.interaction.reply).toHaveBeenCalled(); expect(h.db.editRule).toHaveBeenCalledTimes(3);
+    expect((h.handler as any).sessions.size).toBe(0); expect((h.handler as any).expiryTimers.size).toBe(0);
+  });
+
+  it('handles simultaneous Undo clicks once and rejects a replay after later Redo', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    await Promise.all([h.handler.handleButton(undo.interaction), h.handler.handleButton(h.interaction({ customId: undo.data.custom_id }))]);
+    expect(h.db.editRule).toHaveBeenCalledTimes(2);
+    const redo = nextButton(h, undo.interaction); await h.handler.handleButton(redo.interaction);
+    const replay = h.interaction({ customId: undo.data.custom_id }); await h.handler.handleButton(replay);
+    expect(replay.reply).toHaveBeenCalled(); expect(h.db.editRule).toHaveBeenCalledTimes(3);
+    const fresh = nextButton(h, redo.interaction); await h.handler.handleButton(fresh.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(['undo','redo'])('guards %s against another admin, another server, and lost permissions', async action => {
+    const h = await saved(); let next = nextButton(h, h.last);
+    if (action === 'redo') { await h.handler.handleButton(next.interaction); next = nextButton(h, next.interaction); }
+    const writes = h.db.editRule.mock.calls.length;
+    for (const extra of [{ user: { id: 'another-admin' } }, { guildId: 'another-server' }, { memberPermissions: { has: () => false } }]) {
+      const denied = h.interaction({ customId: next.data.custom_id, ...extra }); await h.handler.handleButton(denied);
+      expect(denied.reply).toHaveBeenCalled(); expect(h.db.editRule).toHaveBeenCalledTimes(writes);
+    }
+    await h.handler.handleButton(next.interaction); expect(h.db.editRule).toHaveBeenCalledTimes(writes + 1);
+  });
+
+  it.each(['undo','redo'])('refuses %s when a newer edit exists', async action => {
+    const h = await saved(); let next = nextButton(h, h.last);
+    if (action === 'redo') { await h.handler.handleButton(next.interaction); next = nextButton(h, next.interaction); }
+    const writes = h.db.editRule.mock.calls.length;
+    h.db.getRuleForServer.mockResolvedValue({ ...base, min_items: 3 });
+    await h.handler.handleButton(next.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(writes);
+    expect(next.interaction.editReply.mock.calls.at(-1)[0].content).toContain('changed or was removed');
+    expect(next.interaction.editReply.mock.calls.at(-1)[0].components).toEqual([]);
+    expect((h.handler as any).sessions.size).toBe(0);
+  });
+
+  it('retains the same Undo button for retry after a failed database write', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    h.db.editRule.mockRejectedValueOnce(new Error('Database unavailable'));
+    await h.handler.handleButton(undo.interaction);
+    expect(h.roles.reverifyRoleInServer).toHaveBeenCalledTimes(1);
+    const retry = nextButton(h, undo.interaction); expect(retry.data.custom_id).toBe(undo.data.custom_id);
+    await h.handler.handleButton(retry.interaction);
+    expect(h.roles.reverifyRoleInServer).toHaveBeenCalledTimes(2);
+    expect(nextButton(h, retry.interaction).data.label).toBe('Redo');
+  });
+
+  it('keeps the original edit applied when another rule would conflict with Undo', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    h.db.getRoleMappings.mockResolvedValue([{ ...base, min_items: 2 }, { ...base, id: 174 }]);
+    await h.handler.handleButton(undo.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(1);
+    expect(undo.interaction.editReply.mock.calls.at(-1)[0].content).toContain('identical rule (174)');
+    h.db.getRoleMappings.mockResolvedValue([{ ...base, min_items: 2 }]);
+    const retry = nextButton(h, undo.interaction); await h.handler.handleButton(retry.interaction);
+    expect(h.db.editRule.mock.calls.at(-1)[1].min_items).toBe(1);
+  });
+
+  it('does not recreate a deleted rule when Undo is clicked', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    h.db.getRuleForServer.mockResolvedValue(null);
+    await h.handler.handleButton(undo.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(1);
+    expect(undo.interaction.editReply.mock.calls.at(-1)[0].components).toEqual([]);
+    expect((h.handler as any).sessions.size).toBe(0);
+  });
+
+  it('preserves the Undo retry after acknowledgment fails without writing the database', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    undo.interaction.deferUpdate.mockRejectedValueOnce(new Error('Could not acknowledge'));
+    await h.handler.handleButton(undo.interaction);
+    expect(undo.interaction.reply).toHaveBeenCalled(); expect(h.db.editRule).toHaveBeenCalledTimes(1);
+    const retry = h.interaction({ customId: undo.data.custom_id }); await h.handler.handleButton(retry);
+    expect(h.db.editRule).toHaveBeenCalledTimes(2); expect(nextButton(h, retry).data.label).toBe('Redo');
+  });
+
+  it('leaves Redo available after a successful Undo even if role checks and feedback fail', async () => {
+    const h = await saved(); const undo = nextButton(h, h.last);
+    h.roles.reverifyRoleInServer.mockRejectedValueOnce(new Error('provider down'));
+    undo.interaction.editReply.mockRejectedValueOnce(new Error('progress reply failed'));
+    await h.handler.handleButton(undo.interaction);
+    const final = undo.interaction.editReply.mock.calls.at(-1)[0];
+    expect(final.embeds[0].toJSON().title).toContain('Undone');
+    expect(final.embeds[0].toJSON().description).toContain('now uses its original requirements');
+    expect(nextButton(h, undo.interaction).data.label).toBe('Redo');
+    expect(h.db.editRule).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks another change while role reconciliation is running', async () => {
+    const h = harness(); await h.start(); await h.preview({ min_items: '2' });
+    let finish: (result: any) => void; let started: () => void;
+    const checking = new Promise<void>(resolve => { started = resolve; });
+    h.roles.reverifyRoleInServer.mockImplementationOnce(() => { started(); return new Promise(resolve => { finish = resolve; }); });
+    const button = h.button(); const pending = h.handler.handleButton(button); await checking;
+    jest.advanceTimersByTime(600001);
+    const premature = h.interaction({ customId: 'edit-rule-undo-session-1' }); await h.handler.handleButton(premature);
+    expect(premature.reply).toHaveBeenCalled(); expect(h.db.editRule).toHaveBeenCalledTimes(1);
+    finish({ verified: 1, revoked: 0, errors: 0 }); await pending;
+    const undo = nextButton(h, button); await h.handler.handleButton(undo.interaction);
+    expect(h.db.editRule).toHaveBeenCalledTimes(2);
+  });
+
+  it('restores each Ordinals trait with its own matching snapshot', async () => {
+    const original = { ...ordinal, ordinal_trait_snapshot: snapshot() };
+    const h = await saved(original, { attribute_value: 'Rare' });
+    const edited = h.db.editRule.mock.calls[0][1];
+    const undo = nextButton(h, h.last); await h.handler.handleButton(undo.interaction);
+    expect(h.db.editRule.mock.calls[1][1]).toMatchObject({ attribute_value: 'Cosmic Oven-Lord', ordinal_trait_snapshot: original.ordinal_trait_snapshot });
+    const redo = nextButton(h, undo.interaction); await h.handler.handleButton(redo.interaction);
+    expect(h.db.editRule.mock.calls[2][1]).toMatchObject({ attribute_value: 'Rare', ordinal_trait_snapshot: edited.ordinal_trait_snapshot });
+    expect(h.ordinals.prepareTraitSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains a newer matching snapshot during Undo but clears an expired snapshot', async () => {
+    const original = { ...ordinal, ordinal_trait_snapshot: snapshot() }; const h = await saved(original);
+    jest.advanceTimersByTime(1000); const latest = snapshot(ordinal, new Date().toISOString());
+    h.db.getRuleForServer.mockResolvedValue({ ...original, min_items: 2, ordinal_trait_snapshot: latest });
+    const undo = nextButton(h, h.last); await h.handler.handleButton(undo.interaction);
+    expect(h.db.editRule.mock.calls[1][1].ordinal_trait_snapshot).toEqual(latest);
+
+    const old = { ...ordinal, ordinal_trait_snapshot: snapshot(ordinal, new Date(Date.now()-86400001).toISOString()) };
+    const stale = await saved(old, { attribute_value: 'Rare' });
+    const restore = nextButton(stale, stale.last); await stale.handler.handleButton(restore.interaction);
+    expect(stale.db.editRule.mock.calls[1][1].ordinal_trait_snapshot).toBeNull();
+    expect(stale.ordinals.prepareTraitSnapshot).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -14,14 +14,20 @@ import { ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/ut
 
 interface EditSession {
   owner: string; server: string; before: VerifierRole; after?: VerifierRole;
-  stage: 'form' | 'validating' | 'preview' | 'saving'; expires: number;
+  current?: VerifierRole;
+  revision: number;
+  stage: 'form' | 'validating' | 'preview' | 'saving' | 'saved' | 'undone'; expires: number;
 }
+
+type EditAction = 'save' | 'undo' | 'redo';
 
 @Injectable()
 export class EditRuleHandler {
   private readonly logger = new Logger(EditRuleHandler.name);
   private readonly sessions = new Map<string, EditSession>();
+  private readonly expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly TTL = 10 * 60 * 1000;
+  private readonly UNDO_TTL = 5 * 60 * 1000;
   constructor(private readonly db: DbService, private readonly editor: RuleEditService, private readonly roles: DynamicRoleService) { }
 
   async handle(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -48,9 +54,10 @@ export class EditRuleHandler {
       if (modal.components.length > 5) throw new Error('This rule has too many fields for the editor. The rule has not changed.');
       this.expireSessions();
       if (this.sessions.size >= 200) throw new Error('Too many rule editors are open. Please try again shortly.');
-      this.sessions.set(interaction.id, { owner: interaction.user.id, server: interaction.guildId, before: structuredClone(before), stage: 'form', expires: Date.now() + this.TTL });
-      const timeout = setTimeout(() => this.expireSessions(), this.TTL + 1000); timeout.unref?.();
-      try { await interaction.showModal(modal); } catch (error) { this.sessions.delete(interaction.id); throw error; }
+      const session: EditSession = { owner: interaction.user.id, server: interaction.guildId, before: structuredClone(before), revision: 0, stage: 'form', expires: 0 };
+      this.sessions.set(interaction.id, session);
+      this.renewSession(interaction.id, session, this.TTL);
+      try { await interaction.showModal(modal); } catch (error) { this.dropSession(interaction.id); throw error; }
     } catch (error) {
       await interaction.reply({ content: `❌ ${this.safe(error.message)}`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     }
@@ -70,8 +77,10 @@ export class EditRuleHandler {
     if (!await this.authorized(interaction)) return;
     const key = interaction.customId.replace(/^edit-rule-form-/, '');
     const session = await this.session(interaction, key, 'form', 'validating'); if (!session) return;
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    let acknowledged = false;
     try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      acknowledged = true;
       const inputs: Record<string, string> = {};
       for (const field of ruleEditFields(session.before)) {
         const first = interaction.fields.getTextInputValue(field.key).trim();
@@ -82,8 +91,8 @@ export class EditRuleHandler {
       if (ruleEditVersion(after) === ruleEditVersion(session.before)) throw new Error('No rule requirements changed.');
       const conflicts = this.editor.duplicates(after, await this.db.getRoleMappings(session.server));
       if (conflicts.exact) throw new Error(`This would duplicate rule ${conflicts.exact.id}. The edit was not saved.`);
-      session.after = after; session.stage = 'preview'; session.expires = Date.now() + this.TTL;
-      const timeout = setTimeout(() => this.expireSessions(), this.TTL + 1000); timeout.unref?.();
+      session.after = after; session.stage = 'preview';
+      this.renewSession(key, session, this.TTL);
       const oldText = ruleEditSummary(session.before), newText = ruleEditSummary(after);
       const long = escapeMarkdown(oldText).length > 1000 || escapeMarkdown(newText).length > 1000;
       let description = `Rule **${after.id}** · <#${after.channel_id}> · <@&${after.role_id}>\nReview the changes, then Save or Cancel. Previously earned roles will be rechecked.`;
@@ -99,54 +108,135 @@ export class EditRuleHandler {
       const files = long ? [new AttachmentBuilder(Buffer.from(`Rule ${after.id}\n\nBefore\n${oldText}\n\nAfter\n${newText}\n`), { name: `rule-${after.id}-changes.txt` })] : [];
       await interaction.editReply({ embeds: [embed], components: [buttons], files, allowedMentions: { parse: [] } });
     } catch (error) {
-      this.sessions.delete(key);
-      await interaction.editReply({ content: `❌ ${this.safe(error.message)} Run \`/setup edit-rule\` again to retry.`, embeds: [], components: [], allowedMentions: { parse: [] } });
+      this.dropSession(key);
+      const payload = { content: `❌ ${this.safe(error.message)} Run \`/setup edit-rule\` again to retry.`, embeds: [], components: [], allowedMentions: { parse: [] } };
+      if (acknowledged || interaction.deferred) await interaction.editReply(payload);
+      else await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
     }
   }
 
   async handleButton(interaction: ButtonInteraction): Promise<void> {
     if (!await this.authorized(interaction)) return;
+    const history = /^edit-rule-(undo|redo)-(.+)-(\d+)$/.exec(interaction.customId);
+    if (history) {
+      const action = history[1] as 'undo' | 'redo';
+      const session = await this.session(interaction, history[2], action === 'undo' ? 'saved' : 'undone', 'saving', Number(history[3]));
+      if (session) await this.applyChange(interaction, history[2], session, action);
+      return;
+    }
     const match = /^edit-rule-(save|cancel)-(.+)$/.exec(interaction.customId);
     const session = await this.session(interaction, match?.[2], 'preview', 'saving'); if (!session) return;
     if (match[1] === 'cancel') {
-      this.sessions.delete(match[2]);
+      this.dropSession(match[2]);
       await interaction.update({ content: 'Rule edit canceled.', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] } }); return;
     }
-    await interaction.deferUpdate();
+    await this.applyChange(interaction, match[2], session, 'save');
+  }
+
+  private async applyChange(interaction: ButtonInteraction, key: string, session: EditSession, action: EditAction): Promise<void> {
+    const expected = action === 'save' ? session.before : session.current;
+    const target = action === 'undo' ? session.before : session.after;
+    const previousStage = action === 'save' ? 'preview' : action === 'undo' ? 'saved' : 'undone';
+    let invalidate = action === 'save';
+    let acknowledged = false;
     let saved: VerifierRole;
     try {
-      const current = await this.db.getRuleForServer(String(session.before.id), session.server);
-      if (!current || ruleEditVersion(current) !== ruleEditVersion(session.before)) throw new Error('The rule changed or was removed while this editor was open. Run /setup edit-rule again.');
-      const duplicates = this.editor.duplicates(session.after, await this.db.getRoleMappings(session.server));
-      if (duplicates.exact) throw new Error(`An identical rule (${duplicates.exact.id}) now exists. The edit was not saved.`);
-      // Include current snapshot updates when criteria are unchanged, otherwise
-      // commit the newly validated snapshot (or clear it when traits were removed).
-      if (session.after.asset_type === 'ordinal' && !session.after.inscription_criteria && ordinalTrait(session.after).enabled
-        && ordinalTraitHash(session.before) === ordinalTraitHash(session.after)) {
-        const latest = usableOrdinalTraitSnapshot(current);
-        if (latest && (!session.after.ordinal_trait_snapshot || Date.parse(latest.fetched_at) > Date.parse(session.after.ordinal_trait_snapshot.fetched_at))) {
-          session.after.ordinal_trait_snapshot = latest;
-        }
+      await interaction.deferUpdate();
+      acknowledged = true;
+      const current = await this.db.getRuleForServer(String(expected.id), session.server);
+      if (!current || ruleEditVersion(current) !== ruleEditVersion(expected)) {
+        invalidate = true;
+        throw new Error('The rule changed or was removed after your last action. Run /setup edit-rule again.');
       }
-      saved = await this.db.editRule(session.before, session.after);
+      const candidate = this.definitionWithSnapshot(target, current);
+      const duplicates = this.editor.duplicates(candidate, await this.db.getRoleMappings(session.server));
+      if (duplicates.exact) throw new Error(`An identical rule (${duplicates.exact.id}) now exists. This action was not applied.`);
+      saved = await this.db.editRule(expected, candidate);
     } catch (error) {
-      this.sessions.delete(match[2]);
-      await interaction.editReply({ content: `❌ ${this.safe(error.message)}`, embeds: [], components: [], attachments: [], allowedMentions: { parse: [] } });
+      if (invalidate) this.dropSession(key);
+      else {
+        session.stage = previousStage;
+        this.renewSession(key, session, this.UNDO_TTL);
+      }
+      const payload = { content: `❌ ${this.safe(error.message)}`, embeds: [],
+        components: invalidate ? [] : [this.historyButton(key, session)], attachments: [], allowedMentions: { parse: [] } };
+      try {
+        if (acknowledged || interaction.deferred) await interaction.editReply(payload);
+        else await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+      } catch (responseError) { this.logger.warn(`Rule ${expected.id} ${action} failed; feedback failed: ${responseError.message}`); }
       return;
     }
-    this.sessions.delete(match[2]);
+
+    // Keep both definitions so each successful action offers its inverse.
+    // The last written definition guards every subsequent atomic update.
+    session.current = structuredClone(saved);
+    if (action === 'undo') session.before = structuredClone(saved);
+    else session.after = structuredClone(saved);
+    session.revision++;
+    const title = action === 'undo' ? 'Rule Edit Undone' : action === 'redo' ? 'Rule Edit Redone' : 'Rule Updated';
+    const status = action === 'undo' ? 'now uses its original requirements' : action === 'redo' ? 'now uses its edited requirements' : 'was saved';
+    const nextStage = action === 'undo' ? 'undone' : 'saved';
     try {
-      await interaction.editReply({ embeds: [AdminFeedback.success('Rule Updated', `Rule **${saved.id}** was saved. Rechecking members who previously earned <@&${saved.role_id}>…`)], components: [], attachments: [], allowedMentions: { parse: [] } });
-    } catch (error) { this.logger.warn(`Rule ${saved.id} saved; progress reply failed: ${error.message}`); }
-    let result;
+      await interaction.editReply({ content: '', embeds: [AdminFeedback.success(title, `Rule **${saved.id}** ${status}. Rechecking members who previously earned <@&${saved.role_id}>…`)],
+        components: [], attachments: [], allowedMentions: { parse: [] } });
+    } catch (error) { this.logger.warn(`Rule ${saved.id} ${action} applied; progress reply failed: ${error.message}`); }
+    let result: { verified: number; revoked: number; errors: number };
     try { result = await this.roles.reverifyRoleInServer(saved.server_id, saved.role_id); }
-    catch (error) { this.logger.warn(`Rule ${saved.id} saved; immediate role checks failed: ${error.message}`); result = { errors: 1, verified: 0, revoked: 0 }; }
-    const description = result.errors
-      ? `Rule **${saved.id}** was saved. Some role checks could not finish; scheduled checks will retry.`
-      : `Rule **${saved.id}** was saved. Previously earned roles were rechecked: ${result.verified} qualifying, ${result.revoked} not qualifying.`;
+    catch (error) { this.logger.warn(`Rule ${saved.id} ${action} applied; immediate role checks failed: ${error.message}`); result = { errors: 1, verified: 0, revoked: 0 }; }
+    session.stage = nextStage;
+    this.renewSession(key, session, this.UNDO_TTL);
+    const description = `Rule **${saved.id}** ${status}. ` + (result.errors
+      ? 'Some role checks could not finish; scheduled checks will retry.'
+      : `Previously earned roles were rechecked: ${result.verified} qualifying, ${result.revoked} not qualifying.`);
     try {
-      await interaction.editReply({ embeds: [result.errors ? AdminFeedback.warning('Rule Updated', description) : AdminFeedback.success('Rule Updated', description)], allowedMentions: { parse: [] } });
-    } catch (error) { this.logger.warn(`Rule ${saved.id} saved; final reply failed: ${error.message}`); }
+      const embed = result.errors ? AdminFeedback.warning(title, description) : AdminFeedback.success(title, description);
+      embed.setFooter({ text: 'Undo/Redo is available for 5 minutes after each action.' });
+      await interaction.editReply({ embeds: [embed], components: [this.historyButton(key, session)], allowedMentions: { parse: [] } });
+    } catch (error) { this.logger.warn(`Rule ${saved.id} ${action} applied; final reply failed: ${error.message}`); }
+  }
+
+  /** Reuse validated definitions; ownership checks refresh stale trait data. */
+  private definitionWithSnapshot(target: VerifierRole, current: VerifierRole): VerifierRole {
+    const candidate = structuredClone(target);
+    if (candidate.asset_type === 'ordinal' && !candidate.inscription_criteria) {
+      candidate.ordinal_trait_snapshot = null;
+      if (ordinalTrait(candidate).enabled) {
+        const saved = usableOrdinalTraitSnapshot(target);
+        const latest = ordinalTraitHash(current) === ordinalTraitHash(target) ? usableOrdinalTraitSnapshot(current) : null;
+        candidate.ordinal_trait_snapshot = latest && (!saved || Date.parse(latest.fetched_at) > Date.parse(saved.fetched_at)) ? latest : saved;
+      }
+    }
+    return candidate;
+  }
+
+  private historyButton(key: string, session: EditSession): ActionRowBuilder<ButtonBuilder> {
+    const undo = session.stage === 'saved';
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder()
+      .setCustomId(`edit-rule-${undo ? 'undo' : 'redo'}-${key}-${session.revision}`)
+      .setLabel(undo ? 'Undo' : 'Redo').setEmoji(undo ? '↩️' : '↪️')
+      .setStyle(undo ? ButtonStyle.Danger : ButtonStyle.Primary));
+  }
+
+  private renewSession(key: string, session: EditSession, ttl: number): void {
+    clearTimeout(this.expiryTimers.get(key));
+    session.expires = Date.now() + ttl;
+    const timeout = setTimeout(() => {
+      if (this.sessions.get(key) === session && session.expires <= Date.now()) this.dropSession(key);
+    }, ttl + 1000);
+    timeout.unref?.();
+    this.expiryTimers.set(key, timeout);
+  }
+
+  private dropSession(key: string): void {
+    clearTimeout(this.expiryTimers.get(key));
+    this.expiryTimers.delete(key);
+    this.sessions.delete(key);
+  }
+
+  private expireSessions(): void {
+    for (const [key, session] of this.sessions) {
+      if (session.stage !== 'saving' && session.stage !== 'validating' && session.expires <= Date.now()) this.dropSession(key);
+    }
   }
 
   private async authorized(interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction): Promise<boolean> {
@@ -155,14 +245,16 @@ export class EditRuleHandler {
     }
     return true;
   }
-  private expireSessions(): void { for (const [key, session] of this.sessions) if (session.expires <= Date.now()) this.sessions.delete(key); }
-  private async session(interaction: ModalSubmitInteraction | ButtonInteraction, key: string, stage: EditSession['stage'], next: EditSession['stage']): Promise<EditSession | null> {
+  private async session(interaction: ModalSubmitInteraction | ButtonInteraction, key: string, stage: EditSession['stage'], next: EditSession['stage'], revision?: number): Promise<EditSession | null> {
     this.expireSessions(); const session = this.sessions.get(key);
-    if (!session || session.owner !== interaction.user.id || session.server !== interaction.guildId || session.stage !== stage) {
+    if (!session || session.owner !== interaction.user.id || session.server !== interaction.guildId || session.stage !== stage
+      || (revision !== undefined && revision !== session.revision)) {
       await interaction.reply({ content: 'This edit session is unavailable. Run `/setup edit-rule` to open your own editor.', flags: MessageFlags.Ephemeral }); return null;
     }
     // Claim the stage before yielding; simultaneous submissions cannot both save.
     session.stage = next;
+    clearTimeout(this.expiryTimers.get(key));
+    this.expiryTimers.delete(key);
     return session;
   }
   private safe(text: string, limit = 500, multiline = false): string {
