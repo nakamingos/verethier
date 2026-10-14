@@ -82,6 +82,6 @@ export class BitcoinSignatureService {
       if (bytes.toString('base64') !== simple || bytes[0] !== 1 || ![64, 65].includes(bytes[1])
         || bytes.length !== bytes[1] + 2 || (bytes[1] === 65 && bytes[66] !== 1)) throw new Error();
       if (!Verifier.verifySignature(address.toLowerCase(), message, simple, true)) throw new Error();
-    } catch { throw new Error('Invalid Bitcoin signature. Please sign again with your Xverse Ordinals address.'); }
+    } catch { throw new Error('Invalid Bitcoin signature. Please sign again with your Bitcoin Ordinals address.'); }
   }
 }

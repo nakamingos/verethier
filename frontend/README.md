@@ -15,6 +15,8 @@ Angular verification app for Discord users following `/verify/:data` links.
 - Connects wallets through WalletConnect, injected wallets, and Coinbase Wallet
 - Signs EIP-712 verification payloads
 - Sends verification requests to the backend API
+- Connects Xverse or UniSat Bitcoin mainnet Taproot Ordinals wallets and signs BIP-322 ownership messages
+- Opens mobile verification links inside UniSat through its HTTPS `openDapp` app link
 
 ## Requirements
 

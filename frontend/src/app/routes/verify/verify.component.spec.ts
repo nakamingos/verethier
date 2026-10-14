@@ -16,9 +16,13 @@ describe('Verification page wallet choice', () => {
   let ethereum: any;
   let bitcoin: any;
   let routeParams: BehaviorSubject<{ data: string }>;
+  let originalUrl: string;
   beforeEach(async () => {
+    originalUrl = window.location.href;
     ethereum = { connectedState$: EMPTY, connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
     bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
+      preferredProvider: jasmine.createSpy().and.returnValue('xverse'), isUniSatAvailable: jasmine.createSpy().and.returnValue(false),
+      openUniSatMobile: jasmine.createSpy(),
       connect: jasmine.createSpy().and.callFake(async () => bitcoin.address$.next(address)),
       syncConnectedAccount: jasmine.createSpy().and.resolveTo(address), signMessage: jasmine.createSpy().and.resolveTo({ address, signature: 'btc-signature' }) };
     const encoded = btoa(JSON.stringify(['user', 'User', '', 'guild', 'Guild', '', 'role', 'Holder', 'nonce', expiry]));
@@ -28,7 +32,7 @@ describe('Verification page wallet choice', () => {
     }).overrideComponent(VerifyComponent, { set: { providers: [{ provide: WalletService, useValue: ethereum }, { provide: BitcoinWalletService, useValue: bitcoin }] } }).compileComponents();
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => http.verify());
+  afterEach(() => { http.verify(); history.replaceState(null, '', originalUrl); });
 
   function page(walletTypes: string[]) {
     const fixture = TestBed.createComponent(VerifyComponent);
@@ -42,7 +46,7 @@ describe('Verification page wallet choice', () => {
     const fixture = page(['bitcoin']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('bitcoin');
     expect(fixture.nativeElement.textContent).toContain('Connect your Xverse wallet');
-    expect(fixture.nativeElement.querySelector('.wallet-choice')).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
   });
 
   it('keeps the existing Ethereum flow for an Ethereum-only channel', () => {
@@ -53,14 +57,91 @@ describe('Verification page wallet choice', () => {
 
   it('offers a small choice in mixed channels and resets the previous connection', async () => {
     const fixture = page(['evm', 'bitcoin']);
-    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(3);
     fixture.componentInstance.selectWallet('bitcoin');
     await fixture.componentInstance.connect();
-    expect(bitcoin.connect).toHaveBeenCalled();
+    expect(bitcoin.connect).toHaveBeenCalledWith('xverse');
     expect(ethereum.connect).not.toHaveBeenCalled();
     expect(fixture.componentInstance.state$.value.connectedAddress).toBe(address);
     fixture.componentInstance.selectWallet('evm');
     expect(fixture.componentInstance.state$.value.connectedAddress).toBeNull();
+  });
+
+  it('connects and signs with the selected UniSat provider using the existing Bitcoin endpoints', async () => {
+    bitcoin.isUniSatAvailable.and.returnValue(true);
+    const fixture = page(['evm','bitcoin']); const component = fixture.componentInstance;
+    const choice = fixture.nativeElement.querySelector('[aria-label="Bitcoin with UniSat"]'); choice.click();
+    fixture.detectChanges();
+    expect(component.state$.value.bitcoinProvider).toBe('unisat');
+    expect(fixture.nativeElement.textContent).toContain('Connect your UniSat wallet');
+    await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat');
+    const pending = component.verify(data); await Promise.resolve();
+    http.expectOne(request => request.url.endsWith('/bitcoin-challenge')).flush({ address, message: 'UniSat challenge\nNonce: nonce', expiry });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(bitcoin.signMessage).toHaveBeenCalledWith(address, 'UniSat challenge\nNonce: nonce');
+    const proof = http.expectOne(request => request.url.endsWith('/verify-signature'));
+    expect(proof.request.body.data.walletType).toBe('bitcoin'); expect(proof.request.body.data.address).toBe(address);
+    expect(proof.request.body.data.walletProvider).toBeUndefined();
+    proof.flush({ assignedRoles: ['holder'] }); await pending;
+    expect(component.state$.value.messageVerified).toBeTrue(); expect(ethereum.signTypedMessage).not.toHaveBeenCalled();
+  });
+
+  it('offers a mobile app launch when UniSat is not injected and Connect inside its browser', () => {
+    const fixture = page(['bitcoin']); const component = fixture.componentInstance;
+    component.selectWallet('bitcoin','unisat'); fixture.detectChanges();
+    const button = Array.from(fixture.nativeElement.querySelectorAll('.step-1 button')).find((button: any) => button.textContent.includes('Open in UniSat')) as HTMLButtonElement;
+    expect(button).toBeTruthy(); button.click(); expect(bitcoin.openUniSatMobile).toHaveBeenCalledTimes(1);
+    expect(bitcoin.connect).not.toHaveBeenCalled();
+    bitcoin.isUniSatAvailable.and.returnValue(true); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.step-1 .actions button').textContent).toBe('Connect');
+  });
+
+  it('selects UniSat automatically inside its browser for an Ordinals-only channel', () => {
+    bitcoin.preferredProvider.and.returnValue('unisat'); bitcoin.isUniSatAvailable.and.returnValue(true);
+    const fixture = page(['bitcoin']);
+    expect(fixture.componentInstance.state$.value.bitcoinProvider).toBe('unisat');
+    expect(fixture.nativeElement.querySelector('[aria-label="Bitcoin with UniSat"]').getAttribute('aria-pressed')).toBe('true');
+    expect(bitcoin.connect).not.toHaveBeenCalled();
+  });
+
+  it('retains the explicit UniSat mobile selection after opening the same link in a mixed channel', () => {
+    const target = new URL(window.location.href); target.searchParams.set('wallet','unisat'); history.replaceState(null,'',target);
+    const fixture = page(['evm','bitcoin']);
+    expect(fixture.componentInstance.state$.value.walletType).toBe('bitcoin');
+    expect(fixture.componentInstance.state$.value.bitcoinProvider).toBe('unisat');
+    expect(bitcoin.connect).not.toHaveBeenCalled();
+  });
+
+  it('does not let a mobile selection hint override an Ethereum-only verification context', () => {
+    const target = new URL(window.location.href); target.searchParams.set('wallet','unisat'); history.replaceState(null,'',target);
+    const fixture = page(['evm']); expect(fixture.componentInstance.state$.value.walletType).toBe('evm');
+    expect(fixture.nativeElement.querySelector('.wallet-choice')).toBeNull();
+  });
+
+  it('clears the previous account when switching Bitcoin wallet providers', async () => {
+    const fixture = page(['bitcoin']); const component = fixture.componentInstance;
+    await component.connect(); component.setState({ messageSigned: true, errorMessage: 'Old error' });
+    component.selectWallet('bitcoin','unisat');
+    expect(component.state$.value).toEqual(jasmine.objectContaining({ bitcoinProvider:'unisat',walletConnected:false,connectedAddress:null,messageSigned:false,errorMessage:null }));
+  });
+
+  it('keeps provider changes and app launches locked during signing and submission', async () => {
+    const fixture = page(['bitcoin']); const component = fixture.componentInstance;
+    component.selectWallet('bitcoin','unisat'); await component.connect();
+    component.setState({ messageSigning:true }); component.selectWallet('bitcoin','xverse'); component.openUniSatMobile();
+    fixture.detectChanges();
+    expect(component.state$.value.bitcoinProvider).toBe('unisat'); expect(component.state$.value.connectedAddress).toBe(address);
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.wallet-choice button')).every((button:any)=>button.disabled)).toBeTrue();
+    expect(bitcoin.openUniSatMobile).not.toHaveBeenCalled();
+    component.setState({messageSigning:false,verificationSubmitting:true}); component.selectWallet('bitcoin','xverse'); component.openUniSatMobile();
+    expect(component.state$.value.bitcoinProvider).toBe('unisat'); expect(bitcoin.openUniSatMobile).not.toHaveBeenCalled();
+  });
+
+  it('shows a mobile-launch error without starting a wallet signature or submitting a proof', () => {
+    const fixture = page(['bitcoin']); const component = fixture.componentInstance;
+    component.selectWallet('bitcoin','unisat'); bitcoin.openUniSatMobile.and.throwError('Could not open UniSat'); component.openUniSatMobile();
+    expect(component.state$.value.errorMessage).toBe('Could not open UniSat'); expect(bitcoin.signMessage).not.toHaveBeenCalled();
+    http.expectNone(request => request.url.endsWith('/verify-signature'));
   });
 
   it('signs the server challenge and submits the Bitcoin proof with its exact expiry', async () => {
