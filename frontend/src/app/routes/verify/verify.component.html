@@ -31,11 +31,14 @@
   </div> -->
 
   @if ((state$ | async); as state) {
-    <div class="steps-wrapper">
-      @if (state.walletTypes.length > 1 && !state.messageVerified) {
-        <div class="wallet-choice" role="group" aria-label="Wallet type">
-          <button type="button" [attr.aria-pressed]="state.walletType === 'evm'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('evm')">Ethereum</button>
-          <button type="button" [attr.aria-pressed]="state.walletType === 'bitcoin'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin')">Bitcoin · Xverse</button>
+    <div class="steps-wrapper" [class.unisat-launch]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat' && !bitcoinWalletSvc.isUniSatAvailable() && !state.messageVerified">
+      @if (state.walletTypes.includes('bitcoin') && !state.messageVerified) {
+        <div class="wallet-choice" role="group" aria-label="Wallet">
+          @if (state.walletTypes.includes('evm')) {
+            <button type="button" [attr.aria-pressed]="state.walletType === 'evm'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('evm')">Ethereum</button>
+          }
+          <button type="button" aria-label="Bitcoin with Xverse" [attr.aria-pressed]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'xverse'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin', 'xverse')">Xverse</button>
+          <button type="button" aria-label="Bitcoin with UniSat" [attr.aria-pressed]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin', 'unisat')">UniSat</button>
         </div>
       }
 
@@ -49,15 +52,20 @@
         </div>
 
         <div class="content">
-          <div class="title">{{ state.walletType === 'bitcoin' ? 'Connect your Xverse wallet' : 'Connect your wallet' }}</div>
+          <div class="title">{{ state.walletType === 'bitcoin' ? (state.bitcoinProvider === 'unisat' ? 'Connect your UniSat wallet' : 'Connect your Xverse wallet') : 'Connect your wallet' }}</div>
           @if (state.walletType === 'bitcoin') {
-            <div class="sub">Use your Bitcoin mainnet Ordinals address.</div>
+            <div class="sub">Use your Bitcoin mainnet Ordinals address (bc1p…).</div>
           }
           @if (state.connectedAddress) {
             <div class="sub">Connected: <span class="pink">{{ formatAddress(state.connectedAddress) }}</span></div>
           }
           <div class="actions">
-            <button (click)="connect()" [disabled]="state.walletConnecting">{{ state.walletConnecting ? 'Connecting...' : state.walletConnected ? 'Connected' : 'Connect' }}</button>
+            @if (state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat' && !bitcoinWalletSvc.isUniSatAvailable()) {
+              <button type="button" (click)="openUniSatMobile()">Open in UniSat app</button>
+              <div class="sub mobile-wallet-help">On mobile, open this page in UniSat. On desktop, use the UniSat browser extension.</div>
+            } @else {
+              <button (click)="connect()" [disabled]="state.walletConnecting">{{ state.walletConnecting ? 'Connecting...' : state.walletConnected ? 'Connected' : 'Connect' }}</button>
+            }
           </div>
         </div>
       </div>

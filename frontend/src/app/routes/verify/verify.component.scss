@@ -73,12 +73,24 @@
   position: relative;
   height: 14rem;
 
+  &.unisat-launch { height: 19rem; }
+
   .wallet-choice {
     display: flex;
     gap: 1rem;
+    flex-wrap: wrap;
     position: absolute;
     top: -4rem;
     left: 7rem;
+
+    @media (max-width: $mobile) {
+      left: 0;
+      right: 0;
+      top: -6rem;
+      justify-content: center;
+      column-gap: 1rem;
+      row-gap: .6rem;
+    }
 
     button {
       font-size: 1rem;
@@ -153,6 +165,7 @@
     }
 
     .actions {
+      .mobile-wallet-help { padding-top: 1rem; }
       button {
         box-shadow: .3rem .3rem 0 0 rgba(var(--black), 1);
       }

@@ -14,7 +14,7 @@ Bouncer is split into two deployable apps:
 - Collection-level, category-level, and trait-level verification rules
 - ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum and Robinhood mainnet
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
-- Bitcoin mainnet Ordinals quantity and trait rules using Xverse wallet signatures, ord.net traits, and Xverse ownership fallback
+- Bitcoin mainnet Ordinals quantity and trait rules using Xverse or UniSat wallet signatures, ord.net traits, and Xverse ownership fallback
 - Wallet stacking across multiple verified addresses
 - Scheduled reconciliation of previously earned roles: restore eligible roles, remove ineligible roles, and retry failed Discord changes. New roles still require explicit wallet verification.
 - Rich Discord verification result messages
@@ -105,7 +105,9 @@ For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the coll
 /setup add-ordinals-rule channel:#verify role:Holder slug:pizza-comrades min_items:10
 ```
 
-The collection label comes from the configured provider. Bitcoin mainnet is implicit; connect the Xverse Ordinals address (`bc1p…`). Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum or Bitcoin within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. Add `attribute_key` and optionally `attribute_value` for a trait rule; `min_items` counts matching inscriptions. Trait setup requires ord.net and saves the collection's complete matching ID list on the rule.
+The collection label comes from the configured provider. Bitcoin mainnet is implicit; connect the Taproot Ordinals address (`bc1p…`) holding your inscriptions with Xverse or UniSat. Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum, Xverse, or UniSat within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. Add `attribute_key` and optionally `attribute_value` for a trait rule; `min_items` counts matching inscriptions. Trait setup requires ord.net and saves the collection's complete matching ID list on the rule.
+
+UniSat browser-extension users choose UniSat and connect normally. Mobile users choose UniSat, then **Open in UniSat app**, and connect/sign inside the app's browser. The same verification link and selected wallet are retained. This uses UniSat's HTTPS `openDapp` link from its [developer guidance](https://github.com/unisat-wallet/dev-support/issues/105#issuecomment-5307886170); use a current UniSat app release. Mainnet is checked using `getChain()` so Fractal mainnet cannot be mistaken for Bitcoin mainnet. Both wallets sign the backend's exact message as a BIP-322 simple proof. Wallet selection does not change `ORDINALS_PROVIDER`, collections, role checks, or API billing. No additional API key or database migration is required for UniSat support.
 
 Xverse remains the default API provider. Set `ORDINALS_PROVIDER=ordnet` for live traits and automatic Xverse fallback when ord.net is unavailable; retain `XVERSE_API_KEY` on the backend. A dedicated API wallet can renew its one-hour sessions automatically. Valid trait snapshots last 24 hours and are combined with fresh ownership checks. Uncertain checks retain existing roles; a complete collection count below a trait rule's minimum can still prove ineligibility. Apply `20261011010000_add_ordinal_trait_snapshots.sql` before deploying this feature. See [ord.net setup and testing](backend/README.md#ordnet-provider-experiment).
 

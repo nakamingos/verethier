@@ -7,7 +7,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap, switchMap, shareReplay } from 'rxjs';
 
 import { WalletService } from '@/services/wallet.service';
-import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
+import { BitcoinWalletProvider, BitcoinWalletService } from '@/services/bitcoin-wallet.service';
 
 import { DecodedData } from '@/models/app.interface';
 
@@ -15,6 +15,7 @@ import { env } from 'src/env/env';
 
 interface State {
   walletType: 'evm' | 'bitcoin';
+  bitcoinProvider: BitcoinWalletProvider;
   walletTypes: Array<'evm' | 'bitcoin'>;
   walletConnecting: boolean;
   walletConnected: boolean;
@@ -46,6 +47,7 @@ export class VerifyComponent {
 
   state$: BehaviorSubject<State> = new BehaviorSubject<State>({
     walletType: 'evm',
+    bitcoinProvider: 'xverse',
     walletTypes: ['evm'],
     walletConnecting: false,
     walletConnected: false,
@@ -78,7 +80,9 @@ export class VerifyComponent {
         if (!resolvedData.userId || !resolvedData.discordId || !resolvedData.nonce
           || !resolvedData.userTag || !resolvedData.discordName) throw new Error('Missing verification context.');
         this.setState({ walletTypes: context.walletTypes });
-        this.selectWallet(context.walletTypes[0]);
+        if (context.walletTypes.includes('bitcoin') && new URL(window.location.href).searchParams.get('wallet') === 'unisat') {
+          this.selectWallet('bitcoin', 'unisat');
+        } else this.selectWallet(context.walletTypes[0]);
         return resolvedData as DecodedData;
       }))),
       catchError((err) => {
@@ -329,11 +333,14 @@ export class VerifyComponent {
     });
   }
 
-  selectWallet(walletType: 'evm' | 'bitcoin'): void {
-    if (!this.state$.value.walletTypes.includes(walletType)) return;
+  selectWallet(walletType: 'evm' | 'bitcoin', bitcoinProvider?: BitcoinWalletProvider): void {
+    const state = this.state$.value;
+    if (!state.walletTypes.includes(walletType) || state.walletConnecting || state.messageSigning
+      || state.verificationSubmitting || state.messageVerified) return;
     this.bitcoinWalletSvc.disconnect();
     void this.walletSvc.disconnectWeb3();
-    this.setState({ walletType, walletConnecting: false, walletConnected: false, connectedAddress: null,
+    this.setState({ walletType, bitcoinProvider: walletType === 'bitcoin' ? bitcoinProvider || this.bitcoinWalletSvc.preferredProvider() : state.bitcoinProvider,
+      walletConnecting: false, walletConnected: false, connectedAddress: null,
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
   }
@@ -342,13 +349,21 @@ export class VerifyComponent {
     if (this.state$.value.walletConnecting || this.state$.value.messageSigning || this.state$.value.verificationSubmitting) return;
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
-      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect();
+      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider);
       else await this.walletSvc.connect();
     } catch (error) {
       this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not connect your wallet.' });
     } finally {
       this.setState({ walletConnecting: false });
     }
+  }
+
+  openUniSatMobile(): void {
+    const state = this.state$.value;
+    if (state.walletType !== 'bitcoin' || state.bitcoinProvider !== 'unisat' || state.walletConnecting
+      || state.messageSigning || state.verificationSubmitting || state.messageVerified) return;
+    try { this.bitcoinWalletSvc.openUniSatMobile(); }
+    catch (error) { this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not open UniSat.' }); }
   }
 
   formatAddress(address: string | null): string {

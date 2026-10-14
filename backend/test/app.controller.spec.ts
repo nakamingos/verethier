@@ -159,7 +159,7 @@ describe('AppController', () => {
       expect(mockVerifyService.verifySignatureFlow).toHaveBeenCalledWith({ ...expectedDecodedData, walletType: 'bitcoin' }, validRequestBody.signature);
     });
 
-    it.each(['Invalid Bitcoin signature. Please sign again with your Xverse Ordinals address.',
+    it.each(['Invalid Bitcoin signature. Please sign again with your Bitcoin Ordinals address.',
       'Invalid Bitcoin verification challenge.', 'Collection verification is temporarily unavailable. Please try again.'])(
       'keeps a helpful verification error in production: %s', async message => {
         const previousEnvironment = process.env.NODE_ENV;
