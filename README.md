@@ -21,7 +21,7 @@ Bouncer is split into two deployable apps:
 
 ## Requirements
 
-- Node.js `20.19+` or `22.12+`
+- Node.js `22.12+` (22.x) for the frontend; the backend also supports `20.19+`
 - Yarn `1.22.x`
 - Supabase CLI for local database work
 - A Discord application/bot and Supabase project(s)

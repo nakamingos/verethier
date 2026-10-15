@@ -35,7 +35,6 @@ interface State {
         NgTemplateOutlet
     ],
     providers: [
-        WalletService,
         BitcoinWalletService
     ],
     templateUrl: './verify.component.html',
@@ -108,6 +107,9 @@ export class VerifyComponent {
       }),
       takeUntilDestroyed(),
     ).subscribe();
+    this.walletSvc.connectionErrors$.pipe(takeUntilDestroyed()).subscribe(errorMessage => {
+      if (this.state$.value.walletType === 'evm') this.setState({ errorMessage });
+    });
     this.bitcoinWalletSvc.address$.pipe(takeUntilDestroyed()).subscribe(address => {
       if (this.state$.value.walletType === 'bitcoin') {
         this.setState({ walletConnected: !!address, connectedAddress: address });
@@ -338,7 +340,11 @@ export class VerifyComponent {
     if (!state.walletTypes.includes(walletType) || state.walletConnecting || state.messageSigning
       || state.verificationSubmitting || state.messageVerified) return;
     this.bitcoinWalletSvc.disconnect();
-    void this.walletSvc.disconnectWeb3();
+    void this.walletSvc.disconnectWeb3().catch(error => {
+      if (this.state$.value.walletType === 'evm') {
+        this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not reset your wallet connection.' });
+      }
+    });
     this.setState({ walletType, bitcoinProvider: walletType === 'bitcoin' ? bitcoinProvider || this.bitcoinWalletSvc.preferredProvider() : state.bitcoinProvider,
       walletConnecting: false, walletConnected: false, connectedAddress: null,
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,

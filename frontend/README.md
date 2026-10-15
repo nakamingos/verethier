@@ -7,7 +7,7 @@ Angular verification app for Discord users following `/verify/:data` links.
 - Angular 21
 - TypeScript 5.9
 - SCSS
-- wagmi 3 + Web3Modal + viem
+- wagmi 3 + Reown AppKit + viem
 
 ## What It Does
 
@@ -20,7 +20,7 @@ Angular verification app for Discord users following `/verify/:data` links.
 
 ## Requirements
 
-- Node.js `20.19+` or `22.12+`
+- Node.js `22.12+` (22.x)
 - Yarn `1.22.x`
 
 ## Environment Files
@@ -70,6 +70,15 @@ For a headless local/CI-style test run:
 yarn test --watch=false --browsers=ChromeHeadless
 ```
 
+Check the production wallet bundle with an installed Chrome/Chromium browser:
+
+```bash
+yarn build
+CHROME_BIN=/path/to/chrome yarn test:wallet-smoke
+```
+
+This uses simulated wallets, backend responses, and relay traffic. It verifies EIP-712 signatures on desktop/mobile layouts and the Android Rainbow app link without using real wallets or API credits. Screenshots are written to a temporary directory.
+
 ## Deployment
 
 This app is deployed as a built static bundle plus a simple static file server:
@@ -82,6 +91,17 @@ yarn start
 Notes:
 - `yarn start` expects `dist/frontend/browser` to already exist.
 - On Railway, prefer `Railpack` instead of deprecated `Nixpacks`.
+- The frontend's `package.json` selects Node 22. If Railway has a `RAILPACK_NODE_VERSION` or `NIXPACKS_NODE_VERSION` override, set it to `22` as well.
+
+## EVM Wallet Connections
+
+Reown AppKit owns WalletConnect, injected-wallet discovery, and Coinbase connectors through one shared Wagmi adapter. It uses the existing Reown/WalletConnect project ID and the page's current origin for Bouncer metadata. Ensure any origin allowlist in the Reown dashboard includes the deployed frontend domain.
+
+Automatic reconnection is disabled so each verification starts with an explicit wallet choice. Email/social login, swaps, on-ramp, send/receive, and account history are disabled. The existing EIP-712 verification message and backend signature checks are unchanged. Xverse and UniSat continue to use their separate Bitcoin connection flow.
+
+Connection errors from the picker appear on the verification page, including guidance for pending requests and connection-service failures. Browser-to-wallet app launches still depend on the mobile browser and installed wallet. Test Rainbow on a real Android/iOS device before treating a desktop browser check as confirmation of mobile compatibility.
+
+Keep the explicit `module` resolution condition in both Angular build configurations. WalletConnect's package has separate ESM and CommonJS exports; resolving the wrong form can compile successfully but fail during provider initialization. The production browser smoke test covers this path.
 
 ## Project Layout
 
