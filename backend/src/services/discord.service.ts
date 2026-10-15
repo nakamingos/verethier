@@ -307,6 +307,8 @@ export class DiscordService implements OnModuleInit {
         await this.discordCommandsSvc.handleListRules(interaction);
       } else if (sub === 'verification') {
         await this.discordCommandsSvc.handleVerification(interaction);
+      } else if (sub === 'refresh-collection') {
+        await this.discordCommandsSvc.handleRefreshCollection(interaction);
       } else if (['block-wallet', 'unblock-wallet', 'list-blocked-wallets'].includes(sub)) {
         await this.discordCommandsSvc.handleWalletBlock(interaction);
       } else if (sub === 'audit-log') {
@@ -565,6 +567,8 @@ export class DiscordService implements OnModuleInit {
               { name: 'Recover missing', value: 'recover' }
             ))
         )
+        .addSubcommand(sc => sc.setName('refresh-collection').setDescription('Refresh stored Ordinals collection membership and traits')
+          .addStringOption(option => option.setName('collection_slug').setDescription('Ordinals collection slug used by a rule in this server').setRequired(true).setMaxLength(100)))
         .addSubcommand(sc =>
           sc.setName('block-wallet').setDescription('Block a wallet from verification in this server')
             .addStringOption(option => option.setName('address').setDescription('Full EVM (0x…) or Bitcoin Ordinals (bc1p…) wallet address').setRequired(true).setMaxLength(62))

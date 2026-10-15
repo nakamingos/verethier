@@ -23,6 +23,9 @@ export class EnvironmentConfig {
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
   public static readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
   public static readonly XVERSE_API_KEY = process.env.XVERSE_API_KEY;
+  public static readonly ORDISCAN_API_KEY = process.env.ORDISCAN_API_KEY;
+  public static readonly SANDSHREW_API_KEY = process.env.SANDSHREW_API_KEY;
+  public static readonly ORDINALS_OWNERSHIP_PROVIDERS = process.env.ORDINALS_OWNERSHIP_PROVIDERS || 'ordiscan,subfrost,sandshrew,xverse';
   public static readonly ORDINALS_PROVIDER = process.env.ORDINALS_PROVIDER?.trim().toLowerCase() || 'xverse';
   public static readonly ORDNET_SESSION_TOKEN = process.env.ORDNET_SESSION_TOKEN;
   public static readonly ORDNET_ORDINALS_ADDRESS = process.env.ORDNET_ORDINALS_ADDRESS;

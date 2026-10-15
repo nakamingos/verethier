@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DbService } from './db.service';
 import { VerificationEngine } from './verification-engine.service';
 import { DiscordVerificationService, RoleSyncContext } from './discord-verification.service';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftCheckContext } from './nft-ownership.service';
+import { OrdinalsOwnershipService } from './ordinals-ownership.service';
 
 /**
  * DynamicRoleService
@@ -21,10 +22,12 @@ import { NftCheckContext } from './nft-ownership.service';
  */
 @Injectable()
 export class DynamicRoleService {
+  private scheduledRunning = false;
   constructor(
     private readonly dbSvc: DbService,
     private readonly verificationEngine: VerificationEngine,
     private readonly discordVerificationSvc: DiscordVerificationService,
+    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
   ) {
     Logger.log(`🔄 DynamicRoleService initialized with CRON schedule: ${EnvironmentConfig.DYNAMIC_ROLE_CRON}`);
   }
@@ -35,6 +38,8 @@ export class DynamicRoleService {
    */
   @Cron(EnvironmentConfig.DYNAMIC_ROLE_CRON)
   async performScheduledReverification() {
+    if (this.scheduledRunning) return;
+    this.scheduledRunning = true;
     Logger.log('🔄 Starting scheduled role re-verification');
     
     try {
@@ -46,6 +51,9 @@ export class DynamicRoleService {
       let errorCount = 0;
       const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
       const discordContext: RoleSyncContext = new Map();
+
+      try { await this.ordinalsSvc?.refreshScheduledCatalogs(context); }
+      catch { Logger.warn('Scheduled Ordinals catalog refresh unavailable; using existing complete catalogs.'); }
 
       // Process in batches to avoid rate limits
       const batchSize = 10;
@@ -87,6 +95,8 @@ export class DynamicRoleService {
       
     } catch (error) {
       Logger.error('Failed to perform scheduled re-verification:', error);
+    } finally {
+      this.scheduledRunning = false;
     }
   }
 

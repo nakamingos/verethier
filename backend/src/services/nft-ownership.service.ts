@@ -6,7 +6,7 @@ import { NFT_BATCH_SIZE, nftRuleLabel, parseTokenIds } from '@/utils/nft-rule.ut
 import { getNftNetwork } from '@/utils/nft-network.util';
 import { NftAttributes, matchesNftTrait, nftTrait } from '@/utils/nft-trait.util';
 import { NftMetadataService } from './nft-metadata.service';
-import { OrdinalCheckDetails, OrdinalCollectionSnapshot, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
+import { OrdinalCheckDetails, OrdinalCollectionSnapshot, OrdinalTraitSnapshot, OrdinalWalletInventory } from '@/models/ordinal-collection.interface';
 import { EthscriptionOwnership } from '@/models/ethscription-ownership.interface';
 import type { OrdinalRequestWork } from './ordinals-request-scheduler.service';
 
@@ -26,6 +26,9 @@ export interface NftCheckContext {
   ordinalWork?: OrdinalRequestWork;
   ordinalOwners?: Map<string, Promise<string>>;
   ordinalInventories?: Map<string, Promise<Map<string, number>>>;
+  ordinalWalletInventories?: Map<string, Promise<OrdinalWalletInventory>>;
+  ordinalCatalogs?: Map<string, Promise<OrdinalCollectionSnapshot>>;
+  ordinalNeedsNumbers?: boolean;
   ethscriptionOwners?: Map<string, Promise<EthscriptionOwnership>>;
   ethscriptionInventories?: Map<string, Promise<Map<string, EthscriptionOwnership>>>;
   ordinalSnapshots?: Map<string, Promise<OrdinalTraitSnapshot>>;

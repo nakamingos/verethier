@@ -37,6 +37,9 @@ import { EthscriptionsOwnershipService } from './services/ethscriptions-ownershi
 import { OrdnetApiService } from './services/ordnet-api.service';
 import { OrdnetOwnershipService } from './services/ordnet-ownership.service';
 import { OrdinalsRequestScheduler } from './services/ordinals-request-scheduler.service';
+import { OrdinalCollectionCacheService } from './services/ordinal-collection-cache.service';
+import { OrdinalWalletInventoryService } from './services/ordinal-wallet-inventory.service';
+import { RefreshCollectionHandler } from './services/discord-commands/handlers/refresh-collection.handler';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { VerifyService } from './services/verify.service';
 import { VerificationService } from './services/verification.service';
@@ -166,6 +169,9 @@ import { EnvironmentConfig } from '@/config/environment.config';
     NftOwnershipService,
     NftMetadataService,
     OrdinalsOwnershipService,
+    OrdinalCollectionCacheService,
+    OrdinalWalletInventoryService,
+    RefreshCollectionHandler,
     OrdnetApiService,
     OrdnetOwnershipService,
     OrdinalsRequestScheduler,

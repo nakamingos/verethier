@@ -107,6 +107,14 @@ export class OrdnetOwnershipService {
     return context.ordinalCollections.get(key);
   }
 
+  promoteScan(slug: string): void {
+    const scan = this.scans.get(ordinalCollectionId(slug));
+    if (scan) {
+      this.requests?.promote(scan.work);
+      scan.work.priority = 'interactive';
+    }
+  }
+
   private collectionScan(id: string, work: OrdinalRequestWork, onPage?: (items: Iterable<TraitItem>) => void): Promise<OrdinalCollectionSnapshot> {
     let scan = this.scans.get(id);
     if (scan) {

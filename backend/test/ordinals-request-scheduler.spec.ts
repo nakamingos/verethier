@@ -49,6 +49,16 @@ describe('Ordinals request scheduling', () => {
     expect(task).toHaveBeenCalledWith(0);
   });
 
+  it.each(['ordiscan', 'subfrost', 'sandshrew'] as const)('also pauses background %s requests during verification', async provider => {
+    const finish = scheduler.beginVerification();
+    const task = jest.fn().mockResolvedValue('complete');
+    const pending = scheduler.enqueue(provider, background(), task);
+    await jest.advanceTimersByTimeAsync(10000);
+    expect(task).not.toHaveBeenCalled();
+    finish();
+    await expect(pending).resolves.toBe('complete');
+  });
+
   it('serves an interactive request ahead of an earlier paused background request', async () => {
     const finish = scheduler.beginVerification();
     const calls: string[] = [];

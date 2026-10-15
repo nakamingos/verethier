@@ -81,7 +81,13 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• **inscription_ids**: One full ID or comma-separated IDs (Ethscriptions use `0x…`; Ordinals use `…i0`)\n' +
              '• **inscription_numbers**: Global numbers or inclusive ranges, such as `12345,100000-100999`\n' +
              '• Use one input. **min_items: 1** means any match; a list of 3 IDs with **min_items: 3** requires all 3.\n' +
-             'Ownership is checked fresh across linked wallets. Specific Ordinals use Xverse; specific Ethscriptions use the public Ethscriptions API.',
+             'Ownership is checked fresh across linked wallets. Specific Ethscriptions use the public Ethscriptions API.',
+      inline: false
+    },
+    {
+      name: '🔄 `/setup refresh-collection`',
+      value: 'Use **collection_slug** to refresh an Ordinals collection’s stored membership and traits now.\n' +
+             'Collections refresh automatically with scheduled role checks, every six hours by default. Wallet ownership is always checked separately.',
       inline: false
     },
     {
@@ -145,15 +151,6 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '**"Rule not found"** → Check with list-rules first to confirm IDs\n' +
              '**"Permission denied"** → Ensure admin permissions for the user\n' +
              '**"Option not in autocomplete"** → Just type it manually! Bot supports all valid options',
-      inline: false
-    },
-    {
-      name: '🔢 **Autocomplete System**',
-      value: '**Prioritization**: When you start typing, exact matches appear first\n' +
-             '**Rarest First**: For browsing, shows 25 rarest options to help find unique traits\n' +
-             '**Manual Entry**: Can\'t find your option? Type it anyway!\n' +
-             '**Validation**: Bot checks all entries when you submit\n' +
-             '**Empty Fields**: Allow ALL values for that criteria (broader matching)',
       inline: false
     },
     {
