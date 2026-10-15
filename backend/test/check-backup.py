@@ -1,6 +1,6 @@
 """Restore the bot's SQL backup and rehearse its verification migrations.
 
-Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file] [selection-sql-file]
+Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file] [selection-sql-file] [catalog-sql-file]
 Requires Docker and the cached Supabase Postgres image. No remote connections.
 Supabase-managed auth/storage tables are outside this application-table check.
 """
@@ -208,6 +208,25 @@ try:
     sql((root / "backend/test/nft-traits-migration.sql").read_text())
     sql((root / "backend/test/nft-migration.sql").read_text())
     print("PASS: global Ethscription and Ordinals selections, minimums, duplicate guards and existing NFT/trait constraints")
+    has_catalog = sql("SELECT to_regclass('public.ordinal_collections') IS NOT NULL;").strip() == "t"
+    if not has_catalog:
+        before_catalog = {table: fingerprint(table) for table in tables}
+        if len(sys.argv) > 6:
+            # Only in this disposable target: rehearse the exact production
+            # transaction, including its existing-data and migration guards.
+            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
+              INSERT INTO supabase_migrations.schema_migrations (version, name)
+                VALUES ('20261013010000', 'add_wallet_blocklist') ON CONFLICT DO NOTHING;""")
+        catalog_sql = Path(sys.argv[6]) if len(sys.argv) > 6 else root / "backend/supabase/migrations/20261015010000_add_ordinal_collection_cache.sql"
+        sql(catalog_sql.read_text())
+        for table in tables:
+            if fingerprint(table) != before_catalog[table]:
+                raise RuntimeError(f"Ordinals catalog migration changed existing data in {table}")
+        print("PASS: Ordinals catalog migration preserves every existing application value")
+    sql((root / "backend/test/ordinal-catalog-migration.sql").read_text())
+    print("PASS: atomic catalogs, failed-refresh preservation, complete large reads, backend-only access and persistent quota")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")

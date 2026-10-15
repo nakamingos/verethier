@@ -2,7 +2,7 @@ import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
 import { EditRuleHandler } from './discord-commands/handlers/edit-rule.handler';
 import { ModalSubmitInteraction, AutocompleteInteraction } from 'discord.js';
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ChannelType, GuildTextBasedChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Role, Client, ComponentType, ButtonInteraction } from 'discord.js';
 import { DbService } from './db.service';
 import { DiscordMessageService } from './discord-message.service';
@@ -13,6 +13,7 @@ import { AddRuleHandler } from './discord-commands/handlers/add-rule.handler';
 import { RemoveRuleHandler } from './discord-commands/handlers/remove-rule.handler';
 import { ListRulesHandler } from './discord-commands/handlers/list-rules.handler';
 import { VerificationMessageHandler } from './discord-commands/handlers/verification-message.handler';
+import { RefreshCollectionHandler } from './discord-commands/handlers/refresh-collection.handler';
 import { RemovalUndoInteractionHandler } from './discord-commands/interactions/removal-undo.interaction';
 import { RestoreUndoInteractionHandler } from './discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from './discord-commands/interactions/rule-confirmation.interaction';
@@ -69,10 +70,12 @@ export class DiscordCommandsService {
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
     private readonly auditLogHandler: AuditLogHandler,
     private readonly walletBlockHandler: WalletBlockHandler,
-    private readonly editRuleHandler: EditRuleHandler
+    private readonly editRuleHandler: EditRuleHandler,
+    @Optional() private readonly refreshCollectionHandler?: RefreshCollectionHandler
   ) {}
 
   async handleEditRule(interaction: ChatInputCommandInteraction): Promise<void> { return this.editRuleHandler.handle(interaction); }
+  async handleRefreshCollection(interaction: ChatInputCommandInteraction): Promise<void> { return this.refreshCollectionHandler.handle(interaction); }
   async handleEditRuleModal(interaction: ModalSubmitInteraction): Promise<void> { return this.editRuleHandler.handleModal(interaction); }
   async handleEditRuleButton(interaction: ButtonInteraction): Promise<void> { return this.editRuleHandler.handleButton(interaction); }
   async handleEditRuleAutocomplete(interaction: AutocompleteInteraction): Promise<void> { return this.editRuleHandler.autocomplete(interaction); }

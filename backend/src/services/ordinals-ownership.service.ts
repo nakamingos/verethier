@@ -3,7 +3,7 @@ import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
-import { buildOrdinalTraitSnapshot, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
+import { buildOrdinalTraitSnapshot, matchesOrdinalTrait, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
 import { inscriptionCriteria, inscriptionCriteriaCapacity, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { OrdinalCheckDetails, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
@@ -11,6 +11,8 @@ import { DbService } from './db.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { OrdnetOwnershipService } from './ordnet-ownership.service';
 import { OrdinalRequestWork, ordinalRequestWork, OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
+import { OrdinalCollectionCacheService } from './ordinal-collection-cache.service';
+import { OrdinalWalletInventoryService } from './ordinal-wallet-inventory.service';
 
 const API_URL = 'https://api.secretkeylabs.io';
 const PAGE_LIMIT = 25;
@@ -25,7 +27,19 @@ export class OrdinalsOwnershipService {
   private readonly collectionLookups = new Map<string, { data: Promise<{ id: string; name: string }>; work: OrdinalRequestWork }>();
 
   constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService, @Optional() private readonly db?: DbService,
-    @Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler()) {}
+    @Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler(),
+    @Optional() private readonly catalog?: OrdinalCollectionCacheService,
+    @Optional() private readonly inventories?: OrdinalWalletInventoryService) {}
+
+  async refreshScheduledCatalogs(context: NftCheckContext): Promise<void> {
+    if (this.catalog && this.provider() === 'ordnet') await this.catalog.refreshScheduled(context);
+  }
+
+  async refreshCollection(slug: string): Promise<{ slug: string; count: number; fetched_at: string }> {
+    if (!this.catalog || this.provider() !== 'ordnet') throw new Error('Collection metadata refresh requires ORDINALS_PROVIDER=ordnet.');
+    const catalog = await this.catalog.refresh(slug, { priority: 'background' });
+    return { slug: catalog.slug, count: catalog.items.size, fetched_at: catalog.fetched_at };
+  }
 
   private provider(rule?: Partial<VerifierRole>): 'xverse' | 'ordnet' {
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
@@ -57,7 +71,7 @@ export class OrdinalsOwnershipService {
       contract_address: null, token_standard: null, token_ids: null, inscription_criteria: criteria,
     };
     this.provider(fields);
-    if (!EnvironmentConfig.XVERSE_API_KEY) throw new Error('Specific inscription rules require XVERSE_API_KEY on the backend; ord.net does not support these lookups.');
+    if (!EnvironmentConfig.XVERSE_API_KEY) throw new Error('Specific inscription rules require XVERSE_API_KEY on the backend for lookup validation and fallback.');
     // Validate exact IDs before creating a Discord role. Number selections are
     // predicates, so they need no lookup or expansion during setup.
     if (criteria.kind === 'ids') await this.savedIdOwners(criteria.ids, { checks: new Map() });
@@ -73,6 +87,7 @@ export class OrdinalsOwnershipService {
 
   async suggestions(slug: string, key?: string): Promise<string[]> {
     if (!this.ordnet) return [];
+    if (this.catalog && this.provider() === 'ordnet') return this.catalog.suggestions(slug, key);
     return this.ordnet.suggestions(ordinalCollectionId(slug), key);
   }
 
@@ -98,9 +113,43 @@ export class OrdinalsOwnershipService {
     const run = context || { checks: new Map() };
     const provider = this.provider(rule);
     const key = this.checkKey(rule, addresses);
-    if (!run.checks.has(key)) run.checks.set(key, criteria ? this.readSelection(criteria, addresses, run, key)
+    if (!run.checks.has(key)) run.checks.set(key, this.inventories && (criteria || provider === 'ordnet')
+      ? this.readCachedRule(rule, addresses, run, key)
+      : criteria ? this.readSelection(criteria, addresses, run, key)
       : this.readRule(rule, collectionId, addresses, run, key, provider, trait.enabled));
     return run.checks.get(key);
+  }
+
+  private async readCachedRule(rule: VerifierRole, addresses: string[], context: NftCheckContext, key: string): Promise<bigint> {
+    const criteria = inscriptionCriteria(rule);
+    const catalog = criteria ? null : await this.catalog.snapshot(rule.slug, context);
+    const traits = criteria ? null : ordinalTrait(rule);
+    const owned = new Set<string>();
+    const numbers = new Map<string, number>();
+    const providers = new Set<OrdinalCheckDetails['provider']>();
+    for (const wallet of addresses) {
+      const inventory = await this.inventories.inventory(wallet, context, criteria?.kind === 'numbers',
+        (address, work) => this.readInventory(address, work));
+      providers.add(inventory.provider);
+      for (const id of inventory.ids) owned.add(id);
+      if (inventory.numbers) for (const [id, number] of inventory.numbers) {
+        if (numbers.has(id) && numbers.get(id) !== number) throw new Error(UNAVAILABLE);
+        numbers.set(id, number);
+      }
+    }
+    this.detail(context, key, { provider: providers.size === 1 ? [...providers][0] : 'mixed',
+      source: catalog ? 'collection-cache' : 'live', ...(catalog ? { snapshot_fetched_at: catalog.fetched_at } : {}) });
+    if (criteria?.kind === 'ids') return BigInt(criteria.ids.filter(id => owned.has(id)).length);
+    if (criteria?.kind === 'numbers') {
+      if (numbers.size !== owned.size) throw new Error(UNAVAILABLE);
+      return BigInt([...numbers.values()].filter(number => criteria.ranges.some(([start, end]) => number >= start && number <= end)).length);
+    }
+    let count = 0n;
+    for (const id of owned) {
+      const item = catalog.items.get(id);
+      if (item && (!traits.enabled || matchesOrdinalTrait(item.traits, rule))) count++;
+    }
+    return count;
   }
 
   private async readSelection(criteria: InscriptionCriteria, addresses: string[], context: NftCheckContext, key: string): Promise<bigint> {
@@ -167,7 +216,8 @@ export class OrdinalsOwnershipService {
     context.ordinalSnapshots ||= new Map();
     const key = ordinalTraitHash(rule);
     if (!context.ordinalSnapshots.has(key)) context.ordinalSnapshots.set(key,
-      this.ordnet.snapshot(rule.slug, context).then(collection => buildOrdinalTraitSnapshot(rule, collection)));
+      (this.catalog && this.provider() === 'ordnet' ? this.catalog.snapshot(rule.slug, context)
+        : this.ordnet.snapshot(rule.slug, context)).then(collection => buildOrdinalTraitSnapshot(rule, collection)));
     return context.ordinalSnapshots.get(key);
   }
 

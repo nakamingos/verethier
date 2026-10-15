@@ -4,7 +4,7 @@ import { CONSTANTS } from '@/constants';
 import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
-import { OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
+import { OrdinalTraitSnapshot, OrdinalAttributeRow } from '@/models/ordinal-collection.interface';
 import { RULE_EDIT_GUARD_FIELDS, RULE_EDIT_MUTABLE_FIELDS } from '@/utils/rule-edit.util';
 
 /**
@@ -39,6 +39,38 @@ export class DbService {
   constructor(
     @Inject('SUPABASE_CLIENT') private readonly supabase: SupabaseClient
   ) {}
+
+  async getOrdinalCollection(slug: string): Promise<unknown> {
+    const { data, error } = await this.supabase.rpc('get_ordinal_collection', { p_slug: slug });
+    if (error) throw new Error('Ordinals collection cache could not be read.');
+    return data;
+  }
+
+  async replaceOrdinalCollection(slug: string, fetchedAt: string, items: OrdinalAttributeRow[]): Promise<boolean> {
+    const { data, error } = await this.supabase.rpc('replace_ordinal_collection', {
+      p_slug: slug, p_fetched_at: fetchedAt, p_items: items,
+    });
+    if (error || typeof data !== 'boolean') throw new Error('Ordinals collection cache could not be saved.');
+    return data;
+  }
+
+  async reserveOrdinalProviderRequest(): Promise<boolean> {
+    const { data, error } = await this.supabase.rpc('reserve_ordinal_provider_request');
+    // Missing accounting must never let a restart silently reset the free allowance.
+    if (error) throw new Error('Ordinals provider usage could not be reserved.');
+    return data === true;
+  }
+
+  async getOrdinalCatalogRules(): Promise<Array<{ slug: string | null; inscription_criteria: unknown }>> {
+    const rules: Array<{ slug: string | null; inscription_criteria: unknown }> = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await this.supabase.from('verifier_rules').select('slug,inscription_criteria')
+        .eq('asset_type', 'ordinal').order('id').range(offset, offset + 999);
+      if (error || !Array.isArray(data)) throw new Error('Ordinals collection rules could not be read.');
+      rules.push(...data);
+      if (data.length < 1000) return rules;
+    }
+  }
 
   async getCachedNftMetadata(chainId: number, contract: string, ids: string[], since: string): Promise<NftMetadataRow[]> {
     // The cache is optional; provider metadata can still be read if it is unavailable.

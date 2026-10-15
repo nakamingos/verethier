@@ -16,7 +16,18 @@ export interface OrdinalTraitSnapshot {
 }
 
 export interface OrdinalCheckDetails {
-  provider: 'ordnet' | 'xverse';
-  source: 'live' | 'trait-snapshot' | 'collection-upper-bound';
+  provider: 'ordnet' | 'xverse' | 'ordiscan' | 'subfrost' | 'sandshrew' | 'mixed';
+  source: 'live' | 'trait-snapshot' | 'collection-upper-bound' | 'collection-cache';
   snapshot_fetched_at?: string;
+}
+
+export interface OrdinalWalletInventory {
+  ids: Set<string>;
+  numbers?: Map<string, number>;
+  provider: 'xverse' | 'ordiscan' | 'subfrost' | 'sandshrew';
+}
+
+export interface OrdinalAttributeRow {
+  inscription_id: string;
+  values: Record<string, string | string[]>;
 }

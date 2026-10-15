@@ -14,7 +14,7 @@ Bouncer is split into two deployable apps:
 - Collection-level, category-level, and trait-level verification rules
 - ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum and Robinhood mainnet
 - ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
-- Bitcoin mainnet Ordinals quantity and trait rules using Xverse or UniSat wallet signatures, ord.net traits, and Xverse ownership fallback
+- Bitcoin mainnet Ordinals quantity and trait rules using Xverse or UniSat wallet signatures, persistent collection metadata, and ordered ownership API fallbacks
 - Wallet stacking across multiple verified addresses
 - Scheduled reconciliation of previously earned roles: restore eligible roles, remove ineligible roles, and retry failed Discord changes. New roles still require explicit wallet verification.
 - Rich Discord verification result messages
@@ -109,7 +109,7 @@ The collection label comes from the configured provider. Bitcoin mainnet is impl
 
 UniSat browser-extension users choose UniSat and connect normally. Mobile users choose UniSat, then **Open in UniSat app**, and connect/sign inside the app's browser. The same verification link and selected wallet are retained. This uses UniSat's HTTPS `openDapp` link from its [developer guidance](https://github.com/unisat-wallet/dev-support/issues/105#issuecomment-5307886170); use a current UniSat app release. Mainnet is checked using `getChain()` so Fractal mainnet cannot be mistaken for Bitcoin mainnet. Both wallets sign the backend's exact message as a BIP-322 simple proof. Wallet selection does not change `ORDINALS_PROVIDER`, collections, role checks, or API billing. No additional API key or database migration is required for UniSat support.
 
-Xverse remains the default API provider. Set `ORDINALS_PROVIDER=ordnet` for live traits and automatic Xverse fallback when ord.net is unavailable; retain `XVERSE_API_KEY` on the backend. A dedicated API wallet can renew its one-hour sessions automatically. Valid trait snapshots last 24 hours and are combined with fresh ownership checks. Uncertain checks retain existing roles; a complete collection count below a trait rule's minimum can still prove ineligibility. Apply `20261011010000_add_ordinal_trait_snapshots.sql` before deploying this feature. See [ord.net setup and testing](backend/README.md#ordnet-provider-experiment).
+Set `ORDINALS_PROVIDER=ordnet` to store collection IDs and traits in Supabase, refreshing each unique collection with scheduled role checks every six hours by default. Fresh ownership uses **Ordiscan → SUBFROST → Sandshrew → Xverse**, configurable through `ORDINALS_OWNERSHIP_PROVIDERS`. Set backend-only `ORDISCAN_API_KEY`, `SANDSHREW_API_KEY`, and `XVERSE_API_KEY`; SUBFROST uses its public endpoint. Unavailable or exhausted providers are skipped, and uncertain checks retain existing roles. Back up Supabase and apply `20261015010000_add_ordinal_collection_cache.sql` before deploying. Admins can refresh early with `/setup refresh-collection collection_slug:pizza-comrades`. See [catalogs and fallback behavior](backend/README.md#persistent-catalogs-and-wallet-ownership-fallbacks).
 
 For specific **Ordinals or Ethscriptions**, use `/setup add-ordinals-rule` or `/setup add-ethscription-rule` with either `inscription_ids` (full ID or comma-separated IDs) or `inscription_numbers` (global numbers or inclusive ranges). Leave `slug` and attributes empty:
 
@@ -118,7 +118,7 @@ For specific **Ordinals or Ethscriptions**, use `/setup add-ordinals-rule` or `/
 /setup add-ethscription-rule channel:#verify role:EthscriptionHolder inscription_numbers:5853618,6000000-6000099 min_items:1
 ```
 
-Ordinals IDs have the `transactionhashi0` format; Ethscription IDs are `0x` transaction hashes. `min_items:1` accepts any selected asset; three selected IDs with `min_items:3` require all three across linked wallets. These checks also support assets outside collections. Ordinals selections use Xverse because ord.net's documented ownership routes require a collection; specific Ethscriptions use the public Ethscriptions API, with marketplace escrow handling. Collection and trait rules keep their existing providers. Apply `20261011020000_add_inscription_selection_rules.sql` before deployment. See [selection limits and storage](backend/README.md#specific-inscription-rules).
+Ordinals IDs have the `transactionhashi0` format; Ethscription IDs are `0x` transaction hashes. `min_items:1` accepts any selected asset; three selected IDs with `min_items:3` require all three across linked wallets. These checks also support assets outside collections. Ordinals selections use fresh wallet inventories through the ownership fallback chain; number/range rules skip ID-only providers and use Xverse when necessary. Specific Ethscriptions use the public Ethscriptions API, with marketplace escrow handling. Apply `20261011020000_add_inscription_selection_rules.sql` before deployment. See [selection limits and storage](backend/README.md#specific-inscription-rules).
 
 ## Testing
 

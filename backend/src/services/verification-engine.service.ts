@@ -179,6 +179,10 @@ export class VerificationEngine {
     
     // Process all verifications in parallel for better performance
     const context: NftCheckContext = sharedContext || { checks: new Map() };
+    // Scheduled contexts span many members. A numeric role for one member must
+    // not force every later member onto a numbered (potentially paid) lookup.
+    if (context.ordinalMode !== 'scheduled'
+      && loadedRules?.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
     const verificationPromises = ruleIds.map(ruleId =>
       this.verifyUser(userId, ruleId, address, context, loadedRules?.find(rule => rule.id.toString() === ruleId.toString()))
     );

@@ -6,7 +6,7 @@ export function ordinalRequestWork(context: { ordinalMode?: 'scheduled'; ordinal
   return context.ordinalWork ||= { priority: context.ordinalMode === 'scheduled' ? 'background' : 'interactive' };
 }
 
-type Provider = 'ordnet' | 'xverse';
+type Provider = 'ordnet' | 'xverse' | 'ordiscan' | 'subfrost' | 'sandshrew';
 type Request = {
   work: OrdinalRequestWork;
   queuedAt: number;
@@ -25,7 +25,7 @@ type Queue = {
   timer?: ReturnType<typeof setTimeout>;
 };
 
-const GAP: Record<Provider, number> = { ordnet: 2100, xverse: 650 };
+const GAP: Record<Provider, number> = { ordnet: 2100, xverse: 650, ordiscan: 650, subfrost: 1100, sandshrew: 250 };
 const MAX_BACKGROUND_PAUSE = 5 * 60 * 1000;
 const BACKGROUND_ALLOWANCE_GAP = 30000;
 
