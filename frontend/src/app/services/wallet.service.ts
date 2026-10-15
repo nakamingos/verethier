@@ -1,22 +1,19 @@
-import { Injectable, NgZone } from '@angular/core';
+import { Inject, Injectable, InjectionToken, NgZone, OnDestroy } from '@angular/core';
 
 import { Address, PublicClient, createPublicClient, getAddress, http } from 'viem';
 import { mainnet } from 'viem/chains';
 
-import { createWeb3Modal } from '@web3modal/wagmi';
-import { coinbaseWallet, walletConnect } from '@wagmi/connectors';
+import { createAppKit } from '@reown/appkit';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import {
   Config,
   GetAccountReturnType,
-  createConfig,
-  disconnect,
   getAccount,
-  injected,
   signTypedData,
   watchAccount,
 } from '@wagmi/core';
 
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
 
@@ -30,79 +27,139 @@ const metadata = {
 };
 
 const themeVariables = {
-  '--w3m-font-family': 'Montserrat, sans-serif',
-  '--w3m-accent': 'rgba(var(--highlight), 1)',
-  '--w3m-z-index': 99999,
-  '--w3m-border-radius-master': '0',
+  '--apkt-font-family': 'Montserrat, sans-serif',
+  '--apkt-accent': '#00FF73',
+  '--apkt-z-index': 99999,
+  '--apkt-border-radius-master': '0px',
 };
 
-@Injectable()
-export class WalletService {
-  // maxCooldown = 4;
-  // web3Connecting: boolean = false;
-  connectedState$!: Observable<GetAccountReturnType>;
+export interface EvmWalletConnection {
+  config: Config;
+  modal: ReturnType<typeof createAppKit>;
+}
 
-  client!: PublicClient;
-  config!: Config;
-  modal!: ReturnType<typeof createWeb3Modal>;
-
-  constructor(private ngZone: NgZone) {
-    this.client = createPublicClient({
-      chain: mainnet,
-      transport: http(env.rpcHttpProvider),
-    });
-
-    this.config = createConfig({
-      chains: [mainnet],
+// AppKit and its Wagmi config must share the same lifetime and connector instances.
+export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EVM wallet connection', {
+  providedIn: 'root',
+  factory: () => {
+    const adapter = new WagmiAdapter({
+      networks: [mainnet],
+      projectId,
       transports: {
         [1]: http(env.rpcHttpProvider),
       },
-      connectors: [
-        walletConnect({
-          projectId,
-          metadata,
-          showQrModal: false,
-        }),
-        injected({ shimDisconnect: true }),
-        coinbaseWallet({
-          appName: metadata.name,
-          appLogoUrl: metadata.icons[0],
-        }),
-      ],
     });
-
-    this.modal = createWeb3Modal({
-      wagmiConfig: this.config,
+    const modal = createAppKit({
+      adapters: [adapter],
+      networks: [mainnet],
       projectId,
-      enableAnalytics: false,
+      metadata,
+      enableReconnect: false,
+      enableCoinbase: true,
+      enableBaseAccount: false,
+      enableInjected: true,
+      enableEIP6963: true,
+      features: {
+        analytics: false,
+        connectMethodsOrder: ['wallet'],
+        email: false,
+        socials: [],
+        swaps: false,
+        onramp: false,
+        send: false,
+        receive: false,
+        history: false,
+      },
       themeVariables,
     });
+    return { config: adapter.wagmiConfig, modal };
+  },
+});
 
+function connectionErrorMessage(error: unknown): string {
+  const reason = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (/already (?:pending|active)|request.*pending|pending.*request|already processing/i.test(reason)) {
+    return 'A wallet connection request is already pending. Open your wallet to finish or cancel it, then try again.';
+  }
+  if (/user rejected|user denied|user disapproved/i.test(reason)) {
+    return 'The wallet connection request was declined. Try again when you are ready.';
+  }
+  if (/network|websocket|relay|timed? ?out|timeout|fetch/i.test(reason)) {
+    return 'Could not reach the wallet connection service. Check your connection and try again.';
+  }
+  // Keep the useful reason, without displaying connection URIs or credential-bearing URLs.
+  const detail = reason.replace(/(?:https?:\/\/|wc:)[^\s]+/gi, '[connection link]')
+    .split('\n')[0].slice(0, 200);
+  return detail && detail !== 'Unknown'
+    ? `Could not connect to your wallet: ${detail}`
+    : 'Could not connect to your wallet. Try again, or open your wallet and check for a pending connection request.';
+}
 
-    this.connectedState$ = new Observable((observer) =>
-      watchAccount(this.config, {
+@Injectable({ providedIn: 'root' })
+export class WalletService implements OnDestroy {
+  readonly connectedState$: Observable<GetAccountReturnType>;
+  private readonly connectionErrors = new Subject<string | null>();
+  readonly connectionErrors$ = this.connectionErrors.asObservable();
+  readonly client: PublicClient;
+  readonly config: Config;
+  readonly modal: ReturnType<typeof createAppKit>;
+  private readonly unsubscribeEvents: () => void;
+  private connecting?: Promise<void>;
+
+  constructor(private ngZone: NgZone, @Inject(EVM_WALLET_CONNECTION) connection: EvmWalletConnection) {
+    this.config = connection.config;
+    this.modal = connection.modal;
+    this.client = createPublicClient({ chain: mainnet, transport: http(env.rpcHttpProvider) });
+
+    this.connectedState$ = new Observable((observer) => {
+      observer.next(getAccount(this.config));
+      return watchAccount(this.config, {
         onChange: (account) => this.ngZone.run(() => observer.next(account)),
-      })
-    );
+      });
+    });
+    this.unsubscribeEvents = this.modal.subscribeEvents(({ data }) => {
+      this.ngZone.run(() => {
+        if (data.event === 'CONNECT_ERROR' || data.event === 'USER_REJECTED' || data.event === 'CONNECT_PROXY_ERROR') {
+          this.connectionErrors.next(connectionErrorMessage(data.properties.message));
+        } else if (data.event === 'SELECT_WALLET' || data.event === 'CONNECT_SUCCESS') {
+          this.connectionErrors.next(null);
+        }
+      });
+    });
   }
 
-  async connect(): Promise<void> {
-    try {
-      if (getAccount(this.config).isConnected) {
-        await this.disconnectWeb3();
-      }
+  connect(): Promise<void> {
+    if (this.connecting) return this.connecting;
+    this.connecting = this.openConnection().finally(() => { this.connecting = undefined; });
+    return this.connecting;
+  }
 
-      await this.modal.open();
+  private async openConnection(): Promise<void> {
+    this.connectionErrors.next(null);
+    try {
+      await this.modal.ready();
+      if (getAccount(this.config).isConnected) await this.disconnectWeb3();
+      await this.modal.open({ view: 'Connect', namespace: 'eip155' });
+      // Opening the picker is not a finished connection. Wait for approval or dismissal.
+      await new Promise<void>((resolve) => {
+        const unsubscribe = this.modal.subscribeState(({ open }) => {
+          if (!open) { unsubscribe(); resolve(); }
+        });
+        if (!this.modal.getState().open) { unsubscribe(); resolve(); }
+      });
     } catch (error) {
-      // Error logging handled by the component
-      this.disconnectWeb3();
+      throw new Error(connectionErrorMessage(error));
     }
   }
 
   async disconnectWeb3(): Promise<void> {
-    if (getAccount(this.config).isConnected) {
-      await disconnect(this.config);
-    }
+    await this.modal.ready();
+    if (getAccount(this.config).isConnected) await this.modal.disconnect('eip155');
+  }
+
+  ngOnDestroy(): void {
+    this.unsubscribeEvents();
+    this.connectionErrors.complete();
   }
 
   async syncConnectedAccount(): Promise<`0x${string}`> {

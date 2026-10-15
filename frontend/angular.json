@@ -41,6 +41,7 @@
           },
           "configurations": {
             "production": {
+              "conditions": ["module", "production"],
               "budgets": [
                 {
                   "type": "initial",
@@ -56,6 +57,7 @@
               "outputHashing": "all"
             },
             "development": {
+              "conditions": ["module", "development"],
               "fileReplacements": [
                 {
                   "replace": "src/env/env.ts",

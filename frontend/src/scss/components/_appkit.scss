@@ -1,0 +1,8 @@
+// AppKit 1.8's generated palette can override its configured accent with blue.
+// Keep the primary tokens tied to the public accent setting after CSS injection.
+:root {
+  --apkt-tokens-core-backgroundAccentPrimary: var(--w3m-accent) !important;
+  --apkt-tokens-core-textAccentPrimary: var(--w3m-accent) !important;
+  --apkt-tokens-core-iconAccentPrimary: var(--w3m-accent) !important;
+  --apkt-tokens-core-borderAccentPrimary: var(--w3m-accent) !important;
+}

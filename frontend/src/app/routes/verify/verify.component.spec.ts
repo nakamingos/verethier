@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, EMPTY, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, EMPTY, Subject, firstValueFrom } from 'rxjs';
 import { VerifyComponent } from './verify.component';
 import { WalletService } from '../../services/wallet.service';
 import { BitcoinWalletService } from '../../services/bitcoin-wallet.service';
@@ -19,7 +19,7 @@ describe('Verification page wallet choice', () => {
   let originalUrl: string;
   beforeEach(async () => {
     originalUrl = window.location.href;
-    ethereum = { connectedState$: EMPTY, connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
+    ethereum = { connectedState$: EMPTY, connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
     bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
       preferredProvider: jasmine.createSpy().and.returnValue('xverse'), isUniSatAvailable: jasmine.createSpy().and.returnValue(false),
       openUniSatMobile: jasmine.createSpy(),
@@ -53,6 +53,31 @@ describe('Verification page wallet choice', () => {
     const fixture = page(['evm']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('evm');
     expect(fixture.nativeElement.querySelector('.wallet-choice')).toBeNull();
+  });
+
+  it('keeps Connect disabled until the Ethereum picker finishes, then allows another attempt', async () => {
+    let dismiss!: () => void;
+    ethereum.connect.and.returnValue(new Promise<void>(resolve => { dismiss = resolve; }));
+    const fixture = page(['evm']);
+    const pending = fixture.componentInstance.connect();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.step-1 button').disabled).toBeTrue();
+    await fixture.componentInstance.connect();
+    expect(ethereum.connect).toHaveBeenCalledTimes(1);
+    dismiss(); await pending; fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.step-1 button').disabled).toBeFalse();
+  });
+
+  it('shows Ethereum picker errors and clears them when another wallet is selected', () => {
+    const fixture = page(['evm', 'bitcoin']);
+    ethereum.connectionErrors$.next('A wallet connection request is already pending.');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('A wallet connection request is already pending.');
+    ethereum.connectionErrors$.next(null);
+    expect(fixture.componentInstance.state$.value.errorMessage).toBeNull();
+    fixture.componentInstance.selectWallet('bitcoin');
+    ethereum.connectionErrors$.next('Ethereum connection failed');
+    expect(fixture.componentInstance.state$.value.errorMessage).toBeNull();
   });
 
   it('offers a small choice in mixed channels and resets the previous connection', async () => {
