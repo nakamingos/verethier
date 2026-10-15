@@ -7,6 +7,10 @@ import { DiscordVerificationService } from '../src/services/discord-verification
 import { DataService } from '../src/services/data.service';
 import { DbService } from '../src/services/db.service';
 import { VerificationService } from '../src/services/verification.service';
+import { OrdinalsRequestScheduler } from '../src/services/ordinals-request-scheduler.service';
+
+const finishVerification = jest.fn();
+const mockOrdinalRequests = { beginVerification: jest.fn().mockReturnValue(finishVerification) };
 
 const mockWalletService = { verifySignature: jest.fn() };
 const mockNonceService = { 
@@ -102,6 +106,7 @@ describe('VerifyService', () => {
         { provide: DataService, useValue: mockDataService },
         { provide: DbService, useValue: mockDbService },
         { provide: VerificationService, useValue: mockVerificationService },
+        { provide: OrdinalsRequestScheduler, useValue: mockOrdinalRequests },
       ],
     }).compile();
     service = module.get<VerifyService>(VerifyService);
@@ -186,6 +191,8 @@ describe('VerifyService', () => {
     expect(mockNonceService.getNonceData).toHaveBeenCalledWith('user123', 'nonce123');
     expect(mockNonceService.invalidateNonce).toHaveBeenCalledWith('nonce123');
     expect(mockVerificationService.getRulesForChannel).toHaveBeenCalledWith('guild123', 'ch-456');
+    expect(mockOrdinalRequests.beginVerification).toHaveBeenCalledTimes(1);
+    expect(finishVerification).toHaveBeenCalledTimes(1);
     const ownershipContext = mockVerificationService.verifyUserBulk.mock.calls[0][3];
     expect(ownershipContext.checks).toBeInstanceOf(Map);
     expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc', ownershipContext);
@@ -273,6 +280,7 @@ describe('VerifyService', () => {
       .rejects.toThrow('No verification rules found for this channel');
     
     expect(mockDiscordVerificationService.throwError).toHaveBeenCalledWith('nonce123', 'No verification rules found for this channel');
+    expect(finishVerification).toHaveBeenCalledTimes(1);
   });
 
   it('handles message-based verification when user does not meet criteria', async () => {

@@ -1,12 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { Signer, Verifier, Address } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { OrdnetUnavailableError } from '@/utils/ordnet-error.util';
+import { OrdinalRequestWork, OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
 
 const API_URL = 'https://ord.net/api/v1';
-const REQUEST_GAP = 2100; // ord.net permits 30 trading reads per profile per minute.
+const REQUEST_GAP = 2100;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validToken = (value: unknown): value is string => typeof value === 'string' && /^[\x21-\x7e]{1,4096}$/.test(value);
 
@@ -15,16 +16,19 @@ class OrdnetUnauthorized extends Error {}
 /** The service only exposes documented read endpoints and wallet authentication. */
 @Injectable()
 export class OrdnetApiService {
-  private requestTail: Promise<unknown> = Promise.resolve();
   private session?: { token: string; expires: number };
   private authentication?: Promise<string>;
+  private authenticationWork?: OrdinalRequestWork;
+  private authenticationSources?: Set<OrdinalRequestWork>;
 
-  async get(path: string): Promise<any> {
+  constructor(@Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler()) {}
+
+  async get(path: string, work: OrdinalRequestWork = { priority: 'interactive' }): Promise<any> {
     if (!/^\/collection\/[a-z0-9][a-z0-9._-]{0,99}\/inscriptions\?/.test(path)
       && !/^\/collection-stats\/floors\?/.test(path)) throw new Error('Unsupported ord.net read endpoint.');
     for (let attempt = 0; attempt < 2; attempt++) {
-      const token = await this.getToken();
-      try { return await this.request(path, { token }); }
+      const token = await this.getToken(work);
+      try { return await this.request(path, { token }, work); }
       catch (error) {
         if (!(error instanceof OrdnetUnauthorized)) throw error;
         if (EnvironmentConfig.ORDNET_SESSION_TOKEN) {
@@ -37,21 +41,31 @@ export class OrdnetApiService {
     throw new OrdnetUnavailableError('read session could not be established');
   }
 
-  private async getToken(): Promise<string> {
+  private async getToken(work: OrdinalRequestWork): Promise<string> {
     if (EnvironmentConfig.ORDNET_SESSION_TOKEN) {
       if (!validToken(EnvironmentConfig.ORDNET_SESSION_TOKEN)) throw new Error('Invalid ORDNET_SESSION_TOKEN configuration.');
       return EnvironmentConfig.ORDNET_SESSION_TOKEN;
     }
     if (this.session && this.session.expires > Date.now() + 30000) return this.session.token;
     if (!this.authentication) {
-      this.authentication = this.authenticate();
+      const sources = this.authenticationSources = new Set([work]);
+      let promoted = false;
+      // A shared scan can gain an interactive caller while it is still logging in.
+      // Authentication must inherit that promotion too, including already queued requests.
+      this.authenticationWork = {
+        get priority() { return promoted || [...sources].some(source => source.priority === 'interactive') ? 'interactive' : 'background'; },
+        set priority(value) { promoted = value === 'interactive'; },
+      };
+      this.authentication = this.authenticate(this.authenticationWork);
       // Share a renewal across concurrent collection reads. Never retain a failed login.
       this.authentication.then(() => { this.authentication = undefined; }, () => { this.authentication = undefined; });
     }
+    this.authenticationSources.add(work);
+    if (work.priority === 'interactive') this.requests.promote(this.authenticationWork);
     return this.authentication;
   }
 
-  private async authenticate(): Promise<string> {
+  private async authenticate(work: OrdinalRequestWork): Promise<string> {
     let ordinalsAddress: string;
     let paymentAddress: string;
     const ordinalsWif = EnvironmentConfig.ORDNET_ORDINALS_WIF;
@@ -69,7 +83,7 @@ export class OrdnetApiService {
       }
     } catch { throw new Error('Invalid ord.net API wallet configuration. Check the mainnet addresses and their compressed WIF keys.'); }
 
-    const challenge = await this.request('/auth/challenge', { body: { ordinalsAddress, paymentAddress } });
+    const challenge = await this.request('/auth/challenge', { body: { ordinalsAddress, paymentAddress } }, work);
     if (!UUID.test(challenge?.authRequestId) || !Array.isArray(challenge.challenges)
       || challenge.challenges.length < 1 || challenge.challenges.length > 2) throw new OrdnetUnavailableError('auth/challenge returned an invalid response');
     const signedAddresses = new Set<string>();
@@ -87,7 +101,7 @@ export class OrdnetApiService {
       } catch { throw new Error('Could not sign the ord.net API wallet challenge. Check the configured wallet keys.'); }
     });
     if (![ordinalsAddress, paymentAddress].every(address => signedAddresses.has(address))) throw new Error('Incomplete ord.net wallet authentication challenge.');
-    const data = await this.request('/auth/verify', { body: { authRequestId: challenge.authRequestId, verifications } });
+    const data = await this.request('/auth/verify', { body: { authRequestId: challenge.authRequestId, verifications } }, work);
     const expires = Date.parse(data?.expiresAt);
     if (!validToken(data?.sessionToken) || !Number.isFinite(expires) || expires <= Date.now() + 30000
       || !Array.isArray(data.walletBindings) || !data.walletBindings.some(binding => binding.ordinalsAddress === ordinalsAddress && binding.paymentAddress === paymentAddress)) throw new OrdnetUnavailableError('auth/verify returned an invalid session or wallet binding');
@@ -117,11 +131,10 @@ export class OrdnetApiService {
     return /^bc1/i.test(value) ? value.toLowerCase() : value;
   }
 
-  private request(path: string, options: { token?: string; body?: object }): Promise<any> {
-    const queuedAt = Date.now();
+  private request(path: string, options: { token?: string; body?: object }, work: OrdinalRequestWork): Promise<any> {
     const route = `${options.body ? 'POST' : 'GET'} ${path.split('?')[0]}`;
-    const result = this.requestTail.then(async () => {
-      if (Date.now() - queuedAt > 45000) throw new OrdnetUnavailableError(`${route}: request queue exceeded 45 seconds`);
+    return this.requests.enqueue('ordnet', work, async queueWait => {
+      if (queueWait > 45000) throw new OrdnetUnavailableError(`${route}: request queue exceeded 45 seconds`);
       const attempts = options.body ? 1 : 3; // Failed auth flows must start with a fresh challenge.
       let failure = 'network request failed';
       for (let attempt = 0; attempt < attempts; attempt++) {
@@ -161,7 +174,5 @@ export class OrdnetApiService {
       }
       throw new OrdnetUnavailableError(`${route}: ${failure} after ${attempts} attempts`);
     });
-    this.requestTail = result.catch(() => undefined).then(() => new Promise(resolve => setTimeout(resolve, REQUEST_GAP)));
-    return result;
   }
 }

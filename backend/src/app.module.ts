@@ -36,6 +36,7 @@ import { OrdinalsOwnershipService } from './services/ordinals-ownership.service'
 import { EthscriptionsOwnershipService } from './services/ethscriptions-ownership.service';
 import { OrdnetApiService } from './services/ordnet-api.service';
 import { OrdnetOwnershipService } from './services/ordnet-ownership.service';
+import { OrdinalsRequestScheduler } from './services/ordinals-request-scheduler.service';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { VerifyService } from './services/verify.service';
 import { VerificationService } from './services/verification.service';
@@ -167,6 +168,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     OrdinalsOwnershipService,
     OrdnetApiService,
     OrdnetOwnershipService,
+    OrdinalsRequestScheduler,
     BitcoinSignatureService,
     UserAddressService,         // Multi-wallet address management
 
