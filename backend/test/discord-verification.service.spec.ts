@@ -142,6 +142,7 @@ const mockInteraction = {
     roles: { cache: new Map([['role-id', { id: 'role-id', name: 'Test Role' }]]) } 
   },
   channel: { id: 'channel-id' },
+  channelId: 'channel-id',
   message: { id: 'message-id' },
   user: { id: 'user-id', tag: 'testuser#1234', avatarURL: () => 'avatar-url' },
   deferReply: jest.fn(),
@@ -372,6 +373,32 @@ describe('DiscordVerificationService', () => {
   });
 
   describe('sendVerificationComplete', () => {
+    it('only recommends rules from the verification channel, including when a role has rules in both channels', async () => {
+      const local = { id: 20, role_id: 'role-id-2', channel_id: 'channel-id', slug: 'local-collection', min_items: 2 };
+      const other = { id: 21, role_id: 'role-id-2', channel_id: 'other-channel', slug: 'other-collection', min_items: 1 };
+      const lookup = async (_guild, channel) => channel === 'channel-id' ? [local] : [local, other];
+      mockDbService.getRoleMappings.mockImplementationOnce(lookup).mockImplementationOnce(lookup);
+      mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
+      service.tempMessages['scoped'] = mockInteraction as any;
+
+      await service.sendVerificationComplete('guild-id', 'scoped', [], '0xnewwallet');
+
+      expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('guild-id', 'channel-id');
+      expect(mockDbService.getRoleMappings.mock.calls.every(call => call[1] === 'channel-id')).toBe(true);
+      expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledTimes(1);
+      expect(mockDataService.checkAssetOwnershipWithCriteria.mock.calls[0][1]).toBe('local-collection');
+      const description = mockInteraction.editReply.mock.calls[0][0].embeds[0].data.description;
+      expect(description).toContain('Test Role 2');
+      expect(description).not.toContain('The Other Collection');
+    });
+
+    it('does not perform server-wide recommendation lookups when channel context is missing', async () => {
+      service.tempMessages['missing-channel'] = { ...mockInteraction, channelId: undefined } as any;
+      await service.sendVerificationComplete('guild-id', 'missing-channel', [], '0xnewwallet');
+      expect(mockDataService.checkAssetOwnershipWithCriteria).not.toHaveBeenCalled();
+      expect(mockInteraction.editReply.mock.calls[0][0].embeds[0].data.description).not.toContain('Additional Roles Available');
+    });
+
     it('should send verification complete message with role names', async () => {
       const nonce = 'test-nonce';
       service.tempMessages[nonce] = mockInteraction as any;
@@ -846,6 +873,7 @@ describe('DiscordVerificationService', () => {
 
       const potentialRoles = await (service as any).analyzePotentialRoles(
         'guild-id',
+        'channel-id',
         'user-id',
         ['role-id'],
         '0xnewwallet'

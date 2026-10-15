@@ -1,21 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { OrdinalCollectionSnapshot } from '@/models/ordinal-collection.interface';
 import { NftCheckContext } from './nft-ownership.service';
 import { ordinalCollectionId } from '@/utils/ordinal-rule.util';
 import { OrdnetUnavailableError } from '@/utils/ordnet-error.util';
 import { OrdnetApiService } from './ordnet-api.service';
+import { OrdinalRequestWork, ordinalRequestWork, OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 200;
 const TRAIT_MENU_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 type TraitItem = { traits?: Array<{ type: string; value: string }> | null };
 type TraitSuggestions = Map<string, Set<string>>;
+type CollectionScan = {
+  work: OrdinalRequestWork;
+  items: OrdinalCollectionSnapshot['items'];
+  listeners: Set<(items: Iterable<TraitItem>) => void>;
+  result: Promise<OrdinalCollectionSnapshot>;
+};
 
 @Injectable()
 export class OrdnetOwnershipService {
   private readonly traitSuggestions = new Map<string, { expires: number; traits: Promise<TraitSuggestions> }>();
-  constructor(private readonly api: OrdnetApiService) {}
+  private readonly scans = new Map<string, CollectionScan>();
+  constructor(private readonly api: OrdnetApiService, @Optional() private readonly requests?: OrdinalsRequestScheduler) {}
 
   async suggestions(slug: string, key?: string): Promise<string[]> {
     const id = ordinalCollectionId(slug);
@@ -34,10 +42,13 @@ export class OrdnetOwnershipService {
       this.traitSuggestions.set(id, cached);
       const entry = cached;
       // Return the first page promptly, then add rare values from the remaining pages.
-      void this.readCollection(id, items => {
+      void this.collectionScan(id, { priority: 'background' }, items => {
         this.suggestionMap(items, values);
         firstPage(values);
-      }).then(() => {
+      }).then(collection => {
+        // A join after the last page (including an empty collection) may miss its callback.
+        this.suggestionMap(collection.items.values(), values);
+        firstPage(values);
         if (this.traitSuggestions.get(id) === entry) entry.expires = Date.now() + TRAIT_MENU_TTL_MS;
       }, error => {
         if (this.traitSuggestions.get(id) === entry) this.traitSuggestions.delete(id);
@@ -92,18 +103,50 @@ export class OrdnetOwnershipService {
     const id = ordinalCollectionId(slug);
     context.ordinalCollections ||= new Map();
     const key = JSON.stringify(['ordnet', id]);
-    if (!context.ordinalCollections.has(key)) context.ordinalCollections.set(key, this.readCollection(id));
+    if (!context.ordinalCollections.has(key)) context.ordinalCollections.set(key, this.collectionScan(id, ordinalRequestWork(context)));
     return context.ordinalCollections.get(key);
   }
 
-  private async readCollection(id: string, onPage?: (items: TraitItem[]) => void): Promise<OrdinalCollectionSnapshot> {
+  private collectionScan(id: string, work: OrdinalRequestWork, onPage?: (items: Iterable<TraitItem>) => void): Promise<OrdinalCollectionSnapshot> {
+    let scan = this.scans.get(id);
+    if (scan) {
+      if (work.priority === 'interactive') {
+        this.requests?.promote(scan.work);
+        scan.work.priority = 'interactive';
+      }
+      if (onPage) {
+        scan.listeners.add(onPage);
+        // An autocomplete request joining midway must also see earlier pages.
+        if (scan.items.size) onPage(scan.items.values());
+      }
+      return scan.result;
+    }
+    scan = { work: { priority: work.priority }, items: new Map(), listeners: new Set(onPage ? [onPage] : []), result: undefined };
+    this.scans.set(id, scan);
+    const entry = scan;
+    scan.result = this.readCollection(id, scan).then(collection => {
+      if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
+      this.traitSuggestions.set(id, {
+        expires: Date.now() + TRAIT_MENU_TTL_MS,
+        traits: Promise.resolve(this.suggestionMap(collection.items.values())),
+      });
+      return collection;
+    }).finally(() => {
+      // Completed ownership is retained only by its existing run contexts.
+      // A later independent verification starts a fresh scan, including after errors.
+      if (this.scans.get(id) === entry) this.scans.delete(id);
+    });
+    return scan.result;
+  }
+
+  private async readCollection(id: string, scan: CollectionScan): Promise<OrdinalCollectionSnapshot> {
     const fetchedAt = new Date().toISOString();
-    const items: OrdinalCollectionSnapshot['items'] = new Map();
+    const items = scan.items;
     const cursors = new Set<string>();
     let cursor: string | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
       const params = new URLSearchParams({ limit: String(PAGE_LIMIT), sort: 'oldest', ...(cursor ? { cursor } : {}) });
-      const data = await this.api.get(`/collection/${id}/inscriptions?${params}`);
+      const data = await this.api.get(`/collection/${id}/inscriptions?${params}`, scan.work);
       const pagination = data?.pagination;
       if (!Array.isArray(data?.items) || data.items.length > PAGE_LIMIT || !pagination
         || !Number.isSafeInteger(pagination.pageSize) || pagination.pageSize < 1 || pagination.pageSize > PAGE_LIMIT
@@ -132,16 +175,12 @@ export class OrdnetOwnershipService {
       }
       if (!pagination.hasNext) {
         if (pagination.nextCursor !== null) throw new OrdnetUnavailableError(`collection ${id}: final page has an unexpected cursor`);
-        onPage?.(data.items);
-        if (!onPage) {
-          if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
-          this.traitSuggestions.set(id, { expires: Date.now() + TRAIT_MENU_TTL_MS, traits: Promise.resolve(this.suggestionMap(items.values())) });
-        }
+        for (const listener of scan.listeners) listener(data.items);
         return { slug: id, items, fetched_at: fetchedAt };
       }
       if (!data.items.length || typeof pagination.nextCursor !== 'string' || !pagination.nextCursor
         || pagination.nextCursor.length > 4096 || cursors.has(pagination.nextCursor)) throw new OrdnetUnavailableError(`collection ${id}: empty continuing page or invalid/repeated cursor`);
-      onPage?.(data.items);
+      for (const listener of scan.listeners) listener(data.items);
       cursor = pagination.nextCursor;
       cursors.add(cursor);
     }

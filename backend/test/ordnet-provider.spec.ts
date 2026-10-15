@@ -7,6 +7,7 @@ import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { DynamicRoleService } from '../src/services/dynamic-role.service';
 import { Verifier } from 'bip322-js';
+import { OrdinalsRequestScheduler } from '../src/services/ordinals-request-scheduler.service';
 import vectors from './fixtures/bip322-taproot.json';
 
 const wallet = vectors.valid[0].address;
@@ -56,6 +57,42 @@ describe('ord.net ownership provider',()=>{
     await expect(facade.count(rule,[wallet],context())).resolves.toBe(0n);
     await expect(facade.count(rule,[wallet],context())).resolves.toBe(1n);
     expect(get).toHaveBeenCalledTimes(2);
+  });
+  it('shares one complete in-flight scan between independent member verifications', async () => {
+    let finish: (data: any) => void;
+    get.mockResolvedValueOnce(page([item(1)], 'next')).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const first = service.count('pizza-comrades', [wallet], context());
+    const second = service.count('pizza-comrades', [otherWallet], context());
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(get).toHaveBeenCalledTimes(2);
+    finish(page([item(2, otherWallet), item(3)]));
+    await expect(Promise.all([first, second])).resolves.toEqual([2n, 1n]);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+  it('clears a shared failed scan so the next member gets a fresh attempt', async () => {
+    get.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce(page([item(1)]));
+    const results = await Promise.allSettled([
+      service.count('pizza-comrades', [wallet], context()),
+      service.count('pizza-comrades', [otherWallet], context()),
+    ]);
+    expect(results.map(result => result.status)).toEqual(['rejected', 'rejected']);
+    expect(get).toHaveBeenCalledTimes(1);
+    await expect(service.count('pizza-comrades', [wallet], context())).resolves.toBe(1n);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+  it('promotes a paused scheduled scan when a member needs it instead of starting a duplicate', async () => {
+    const requests = new OrdinalsRequestScheduler();
+    const finish = requests.beginVerification();
+    const read = jest.fn().mockResolvedValue(page([item(1)]));
+    get.mockImplementation((_path, work) => requests.enqueue('ordnet', work, read));
+    service = new OrdnetOwnershipService({ get } as any, requests);
+    const scheduled = service.count('pizza-comrades', [otherWallet], { ...context(), ordinalMode: 'scheduled' });
+    expect(read).not.toHaveBeenCalled();
+    const member = service.count('pizza-comrades', [wallet], context());
+    await expect(Promise.all([scheduled, member])).resolves.toEqual([0n, 1n]);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    finish();
   });
   it('supports a complete empty collection and avoids lookups for an empty wallet list',async()=>{
     get.mockResolvedValue(page());const facade=new OrdinalsOwnershipService(service);
@@ -195,17 +232,42 @@ describe('ord.net trait suggestions', () => {
     expect(get).toHaveBeenCalledTimes(3);
   });
 
-  it('does not replace a newer full-verification cache with an older suggestion scan', async () => {
+  it('replays earlier validated traits when autocomplete joins a verification midway through its scan', async () => {
+    let finish: (data: any) => void;
+    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next'))
+      .mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const verification = service.snapshot('pizza-comrades', context());
+    await settle();
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade']);
+    expect(get).toHaveBeenCalledTimes(2);
+    finish(page([category(2, 'Cosmic Oven-Lord')]));
+    await verification;
+    expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves autocomplete when it joins just after an empty final page', async () => {
+    get.mockResolvedValue(page());
+    const verification = service.snapshot('pizza-comrades', context());
+    await Promise.resolve();
+    const suggestions = service.suggestions('pizza-comrades');
+    await expect(suggestions).resolves.toEqual([]);
+    await verification;
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares an autocomplete scan with verification and retains its complete trait menu', async () => {
     let finish: (data: any) => void;
     const later = new Promise(resolve => { finish = resolve; });
-    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later)
-      .mockResolvedValueOnce(page([category(1, 'Comrade'), category(3, 'Cosmic Oven-Lord')]));
+    get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later);
     await service.suggestions('pizza-comrades', 'Category');
-    await service.snapshot('pizza-comrades', context());
-    finish(page([category(2, 'Comrade')]));
+    const verification = service.snapshot('pizza-comrades', context());
+    expect(get).toHaveBeenCalledTimes(2);
+    finish(page([category(2, 'Cosmic Oven-Lord')]));
+    expect((await verification).items.size).toBe(2);
     await settle();
     expect(await service.suggestions('pizza-comrades', 'Category')).toEqual(['Comrade', 'Cosmic Oven-Lord']);
-    expect(get).toHaveBeenCalledTimes(3);
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
   it('retains searchable values beyond the old 500-value sample limit', async () => {
@@ -285,6 +347,21 @@ describe('ord.net API authentication and transport',()=>{
       expect(Verifier.verifySignature(entry.address,data.challenges[index].message,Buffer.from(entry.signature,'hex').toString('base64'))).toBe(true);
     }
     expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it('promotes authentication as well as the scan when verification joins paused background work', async () => {
+    const requests = new OrdinalsRequestScheduler();
+    const finish = requests.beginVerification();
+    const work = { priority: 'background' as const };
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValueOnce(response(challenge()))
+      .mockResolvedValueOnce(response(session())).mockResolvedValueOnce(response(page()));
+    const pending = new OrdnetApiService(requests).get(GET_PATH, work);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetch).not.toHaveBeenCalled();
+    requests.promote(work);
+    await jest.advanceTimersByTimeAsync(4200);
+    await pending;
+    expect(fetch).toHaveBeenCalledTimes(3);
+    finish();
   });
   it.each(['wrong-domain','wrong-message-address','missing-nonce','expired','invalid-date','future-issued','invalid-order','extra-instructions'])(
     'rejects a live login envelope with %s before signing',async problem=>{

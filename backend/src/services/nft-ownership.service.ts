@@ -8,6 +8,7 @@ import { NftAttributes, matchesNftTrait, nftTrait } from '@/utils/nft-trait.util
 import { NftMetadataService } from './nft-metadata.service';
 import { OrdinalCheckDetails, OrdinalCollectionSnapshot, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
 import { EthscriptionOwnership } from '@/models/ethscription-ownership.interface';
+import type { OrdinalRequestWork } from './ordinals-request-scheduler.service';
 
 const ABI = parseAbi([
   'function supportsInterface(bytes4 interfaceId) view returns (bool)',
@@ -22,6 +23,7 @@ const ABI = parseAbi([
 export interface NftCheckContext {
   walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
+  ordinalWork?: OrdinalRequestWork;
   ordinalOwners?: Map<string, Promise<string>>;
   ordinalInventories?: Map<string, Promise<Map<string, number>>>;
   ethscriptionOwners?: Map<string, Promise<EthscriptionOwnership>>;

@@ -3,6 +3,7 @@ import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { DynamicRoleService } from '../src/services/dynamic-role.service';
 import { DiscordVerificationService } from '../src/services/discord-verification.service';
+import { OrdinalsRequestScheduler } from '../src/services/ordinals-request-scheduler.service';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { VerifierRole } from '../src/models/verifier-role.interface';
 import { NftCheckContext } from '../src/services/nft-ownership.service';
@@ -128,7 +129,7 @@ describe('Ordinals ownership counts', () => {
       members: { fetch: jest.fn().mockResolvedValue({ roles: { cache: new Map([['holder', {}]]) } }) },
       roles: { fetch: jest.fn().mockResolvedValue({ name: 'Bonus Holder' }) },
     }) } } as any);
-    const recommendations = await discord.analyzePotentialRoles('guild', 'user', ['holder'], wallet, context);
+    const recommendations = await discord.analyzePotentialRoles('guild', 'channel', 'user', ['holder'], wallet, context);
     expect(recommendations[0].matchedRules[0].matchingCount).toBe(76);
     expect(request).toHaveBeenCalledTimes(1);
   });
@@ -169,6 +170,23 @@ describe('Xverse request handling', () => {
     await second;
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/api\.secretkeylabs\.io\//), expect.objectContaining({ redirect: 'error', headers: { 'x-api-key': 'local-test-key', Accept: 'application/json' } }));
+  });
+
+  it('pauses scheduled Xverse reads while a member verifies and resumes them afterward', async () => {
+    const requests = new OrdinalsRequestScheduler();
+    const finish = requests.beginVerification();
+    const fetch = jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(JSON.stringify(summary())));
+    const service = new OrdinalsOwnershipService(undefined, undefined, requests);
+    const scheduled = service.count(rule, [wallet], { checks: new Map(), ordinalMode: 'scheduled' });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetch).not.toHaveBeenCalled();
+    const member = service.count(rule, [secondWallet]);
+    await expect(member).resolves.toBe(76n);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    finish();
+    await jest.advanceTimersByTimeAsync(650);
+    await expect(scheduled).resolves.toBe(76n);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('retries a rate-limited request with bounded backoff', async () => {

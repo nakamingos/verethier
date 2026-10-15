@@ -644,7 +644,8 @@ export class DiscordVerificationService {
       let description = `You have been successfully verified in ${guild.name}`;
       
       // Get rule details for all assigned roles to show requirements
-      const allRules = await this.dbSvc.getRoleMappings(guildId);
+      const channelId = storedInteraction.channelId;
+      const allRules = await this.dbSvc.getRoleMappings(guildId, channelId);
       const collectionNames = await this.getCollectionNamesForRules(allRules);
       
       // Add new roles section if any
@@ -662,10 +663,10 @@ export class DiscordVerificationService {
       }
       
       // Add role recommendations if we have user address and there are unassigned roles
-      if (userAddress && storedInteraction?.user?.id) {
+      if (userAddress && storedInteraction?.user?.id && channelId) {
         try {
           const assignedRoleIds = groupedRoleResults.map(r => r.roleId);
-          const potentialRoles = await this.analyzePotentialRoles(guildId, storedInteraction.user.id, assignedRoleIds, userAddress, ownershipContext);
+          const potentialRoles = await this.analyzePotentialRoles(guildId, channelId, storedInteraction.user.id, assignedRoleIds, userAddress, ownershipContext);
 
           if (potentialRoles.length > 0) {
             description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames)).join('\n')}`;
@@ -923,11 +924,12 @@ export class DiscordVerificationService {
    * Analyze verification roles the user does not currently have.
    *
    * This powers the "Additional Roles Available" section by showing every
-   * remaining verifier role for the server and attaching progress counts when
+   * remaining verifier role for the verification channel and attaching progress counts when
    * the user has any matching holdings.
    */
   async analyzePotentialRoles(
     guildId: string, 
+    channelId: string,
     userId: string,
     assignedRoleIds: string[],
     address: string,
@@ -937,6 +939,7 @@ export class DiscordVerificationService {
       Logger.error('analyzePotentialRoles: Discord client not initialized');
       return [];
     }
+    if (!channelId) return [];
 
     try {
       Logger.debug(`Analyzing additional roles for user ${userId} in guild ${guildId}`);
@@ -959,8 +962,8 @@ export class DiscordVerificationService {
         Logger.debug(`Potential role analysis is excluding ${excludedRoleIds.size} current role(s) from database state`);
       }
       
-      // Get all rules for this server
-      const allRules = await this.dbSvc.getRoleMappings(guildId);
+      // Recommendations follow the same channel scope as verification.
+      const allRules = await this.dbSvc.getRoleMappings(guildId, channelId);
       
       // Filter out rules for roles they already have or were just assigned in this verification
       const unassignedRules = allRules.filter(rule => !excludedRoleIds.has(rule.role_id));

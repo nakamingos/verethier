@@ -1,6 +1,6 @@
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleLabel } from '@/utils/nft-rule.util';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { NonceService }  from './nonce.service';
 import { DiscordVerificationService } from './discord-verification.service';
@@ -10,6 +10,7 @@ import { VerificationService } from './verification.service';
 import { DecodedData }   from '@/models/app.interface';
 import { matchRule }   from './utils/match-rule.util';
 import { NftCheckContext } from './nft-ownership.service';
+import { OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
 
 /**
  * VerifyService
@@ -31,6 +32,7 @@ export class VerifyService {
     private readonly dataSvc: DataService,
     private readonly dbSvc: DbService,
     private readonly verificationSvc: VerificationService,
+    @Optional() private readonly ordinalRequests?: OrdinalsRequestScheduler,
   ) {}
 
   /**
@@ -47,6 +49,18 @@ export class VerifyService {
   ) {
     // Verify the wallet signature and extract the signing address
     const walletVerification = await this.walletSvc.verifySignature(payload, signature);
+    const finish = this.ordinalRequests?.beginVerification();
+    try {
+      return await this.completeVerification(payload, walletVerification);
+    } finally {
+      finish?.();
+    }
+  }
+
+  private async completeVerification(
+    payload: DecodedData & { address?: string },
+    walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>,
+  ) {
     const { address, walletOwnershipTransferred } = walletVerification;
     const ownershipContext: NftCheckContext = { checks: new Map() };
     

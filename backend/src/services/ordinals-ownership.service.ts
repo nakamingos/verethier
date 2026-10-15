@@ -10,6 +10,7 @@ import { OrdinalCheckDetails, OrdinalTraitSnapshot } from '@/models/ordinal-coll
 import { DbService } from './db.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { OrdnetOwnershipService } from './ordnet-ownership.service';
+import { OrdinalRequestWork, ordinalRequestWork, OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
 
 const API_URL = 'https://api.secretkeylabs.io';
 const PAGE_LIMIT = 25;
@@ -20,11 +21,11 @@ class XverseConflictError extends Error {}
 
 @Injectable()
 export class OrdinalsOwnershipService {
-  private requestTail: Promise<unknown> = Promise.resolve();
   private readonly collections = new Map<string, { expires: number; data: { id: string; name: string } }>();
-  private readonly collectionLookups = new Map<string, Promise<{ id: string; name: string }>>();
+  private readonly collectionLookups = new Map<string, { data: Promise<{ id: string; name: string }>; work: OrdinalRequestWork }>();
 
-  constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService, @Optional() private readonly db?: DbService) {}
+  constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService, @Optional() private readonly db?: DbService,
+    @Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler()) {}
 
   private provider(rule?: Partial<VerifierRole>): 'xverse' | 'ordnet' {
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
@@ -114,7 +115,7 @@ export class OrdinalsOwnershipService {
     // Read once per wallet/run and share the complete inventory with all number
     // rules. Bounds stay compact even for a sub-100k or larger selection.
     for (const wallet of addresses) {
-      if (!context.ordinalInventories.has(wallet)) context.ordinalInventories.set(wallet, this.readInventory(wallet));
+      if (!context.ordinalInventories.has(wallet)) context.ordinalInventories.set(wallet, this.readInventory(wallet, ordinalRequestWork(context)));
       for (const [id, number] of await context.ordinalInventories.get(wallet)) {
         if (inscriptions.has(id) && inscriptions.get(id) !== number) throw new Error(UNAVAILABLE);
         inscriptions.set(id, number);
@@ -123,13 +124,13 @@ export class OrdinalsOwnershipService {
     return BigInt([...inscriptions.values()].filter(number => criteria.ranges.some(([start, end]) => number >= start && number <= end)).length);
   }
 
-  private async readInventory(wallet: string): Promise<Map<string, number>> {
+  private async readInventory(wallet: string, work: OrdinalRequestWork): Promise<Map<string, number>> {
     const items = new Map<string, number>();
     const numbers = new Set<number>();
     let offset = 0;
     let total: number | undefined;
     for (let page = 0; page <= MAX_PAGES; page++) {
-      const data = await this.request(`/v1/ordinals/address/${wallet}/inscriptions?limit=${PAGE_LIMIT}&offset=${offset}`);
+      const data = await this.request(`/v1/ordinals/address/${wallet}/inscriptions?limit=${PAGE_LIMIT}&offset=${offset}`, false, false, work);
       if (!data || !Array.isArray(data.items) || data.offset !== offset) throw new Error(UNAVAILABLE);
       const limit = this.integer(data.limit);
       // Live responses are paginated despite older full-list documentation.
@@ -206,7 +207,7 @@ export class OrdinalsOwnershipService {
     }
     this.detail(context, key, { provider: 'xverse', source: traits ? 'trait-snapshot' : 'live' });
     // Xverse must recognize the exact collection before absence can mean zero.
-    if (provider === 'ordnet' || traits) await this.getCollection(collectionId);
+    if (provider === 'ordnet' || traits) await this.getCollection(collectionId, ordinalRequestWork(context));
     if (!traits) return this.readCount(collectionId, addresses, context);
     return this.readTraitFallback(rule, collectionId, addresses, context, key);
   }
@@ -216,7 +217,7 @@ export class OrdinalsOwnershipService {
     const ids = new Set<string>();
     for (const wallet of addresses) {
       const key = JSON.stringify([wallet, collectionId]);
-      if (!context.ordinalIds.has(key)) context.ordinalIds.set(key, this.readIds(wallet, collectionId));
+      if (!context.ordinalIds.has(key)) context.ordinalIds.set(key, this.readIds(wallet, collectionId, ordinalRequestWork(context)));
       for (const id of await context.ordinalIds.get(key)) ids.add(id);
     }
     return ids;
@@ -292,7 +293,7 @@ export class OrdinalsOwnershipService {
       const chunk = missing.slice(start, start + PAGE_LIMIT);
       // Queue one chunk at a time so large trait lists cannot expire while
       // waiting behind hundreds of provider requests.
-      const batch = tail.then(() => this.readOwners(chunk));
+      const batch = tail.then(() => this.readOwners(chunk, ordinalRequestWork(context)));
       tail = batch;
       for (const id of chunk) {
         const owner = batch.then(result => result.get(id));
@@ -303,8 +304,8 @@ export class OrdinalsOwnershipService {
     return new Map(await Promise.all(ids.map(async id => [id, await context.ordinalOwners.get(id)] as const)));
   }
 
-  private async readOwners(ids: string[]): Promise<Map<string, string>> {
-    const data = await this.request('/v1/inscriptions/batch?' + new URLSearchParams({ inscriptionIds: ids.join(',') }));
+  private async readOwners(ids: string[], work: OrdinalRequestWork): Promise<Map<string, string>> {
+    const data = await this.request('/v1/inscriptions/batch?' + new URLSearchParams({ inscriptionIds: ids.join(',') }), false, false, work);
     if (!Array.isArray(data) || data.length !== ids.length) throw new Error(UNAVAILABLE);
     const requested = new Set(ids);
     const owners = new Map<string, string>();
@@ -325,7 +326,7 @@ export class OrdinalsOwnershipService {
     if (addresses.length === 1) {
       context.ordinalSummaries ||= new Map();
       const wallet = addresses[0];
-      if (!context.ordinalSummaries.has(wallet)) context.ordinalSummaries.set(wallet, this.readSummary(wallet));
+      if (!context.ordinalSummaries.has(wallet)) context.ordinalSummaries.set(wallet, this.readSummary(wallet, ordinalRequestWork(context)));
       try {
         return (await context.ordinalSummaries.get(wallet)).get(collectionId) || 0n;
       } catch (error) {
@@ -338,12 +339,12 @@ export class OrdinalsOwnershipService {
     return BigInt((await this.walletIds(collectionId, addresses, context)).size);
   }
 
-  private async readSummary(wallet: string): Promise<Map<string, bigint>> {
+  private async readSummary(wallet: string, work: OrdinalRequestWork): Promise<Map<string, bigint>> {
     const counts = new Map<string, bigint>();
     let total: number | undefined;
     let offset = 0;
     for (let page = 0; page < MAX_PAGES; page++) {
-      const data = await this.request(`/v1/ordinals/address/${wallet}/collections?limit=${PAGE_LIMIT}&offset=${offset}`, false, true);
+      const data = await this.request(`/v1/ordinals/address/${wallet}/collections?limit=${PAGE_LIMIT}&offset=${offset}`, false, true, work);
       const currentTotal = this.integer(data.totalCollections);
       if (total !== undefined && total !== currentTotal) throw new Error(UNAVAILABLE);
       total = currentTotal;
@@ -361,12 +362,12 @@ export class OrdinalsOwnershipService {
     throw new Error(UNAVAILABLE);
   }
 
-  private async readIds(wallet: string, collectionId: string): Promise<Set<string>> {
+  private async readIds(wallet: string, collectionId: string, work: OrdinalRequestWork): Promise<Set<string>> {
     const ids = new Set<string>();
     let total: number | undefined;
     let offset = 0;
     for (let page = 0; page < MAX_PAGES; page++) {
-      const data = await this.request(`/v1/ordinals/address/${wallet}/inscriptions/collection/${encodeURIComponent(collectionId)}?limit=${PAGE_LIMIT}&offset=${offset}`);
+      const data = await this.request(`/v1/ordinals/address/${wallet}/inscriptions/collection/${encodeURIComponent(collectionId)}?limit=${PAGE_LIMIT}&offset=${offset}`, false, false, work);
       const currentTotal = this.integer(data.total);
       if (total !== undefined && total !== currentTotal) throw new Error(UNAVAILABLE);
       total = currentTotal;
@@ -384,19 +385,23 @@ export class OrdinalsOwnershipService {
     throw new Error(UNAVAILABLE);
   }
 
-  private async getCollection(id: string): Promise<{ id: string; name: string }> {
+  private async getCollection(id: string, work: OrdinalRequestWork = { priority: 'interactive' }): Promise<{ id: string; name: string }> {
     const cached = this.collections.get(id);
     if (cached && cached.expires > Date.now()) return cached.data;
     const pending = this.collectionLookups.get(id);
-    if (pending) return pending;
-    const lookup = this.loadCollection(id);
-    this.collectionLookups.set(id, lookup);
+    if (pending) {
+      if (work.priority === 'interactive') this.requests.promote(pending.work);
+      return pending.data;
+    }
+    const lookupWork = { priority: work.priority };
+    const lookup = this.loadCollection(id, lookupWork);
+    this.collectionLookups.set(id, { data: lookup, work: lookupWork });
     lookup.then(() => this.collectionLookups.delete(id), () => this.collectionLookups.delete(id));
     return lookup;
   }
 
-  private async loadCollection(id: string): Promise<{ id: string; name: string }> {
-    const data = await this.request(`/v1/ordinals/collections/${encodeURIComponent(id)}`, true);
+  private async loadCollection(id: string, work: OrdinalRequestWork): Promise<{ id: string; name: string }> {
+    const data = await this.request(`/v1/ordinals/collections/${encodeURIComponent(id)}`, true, false, work);
     if (data.id !== id || typeof data.name !== 'string' || !data.name.trim()) throw new Error(UNAVAILABLE);
     const collection = { id, name: data.name.trim().slice(0, 100) };
     if (this.collections.size >= 200) this.collections.clear();
@@ -409,13 +414,12 @@ export class OrdinalsOwnershipService {
     return value;
   }
 
-  private request(path: string, setup = false, summary = false): Promise<any> {
+  private request(path: string, setup = false, summary = false, work: OrdinalRequestWork = { priority: 'interactive' }): Promise<any> {
     if (!EnvironmentConfig.XVERSE_API_KEY) {
       return Promise.reject(new Error('Ordinals verification is not configured. Set XVERSE_API_KEY on the backend.'));
     }
-    const queuedAt = Date.now();
-    const result = this.requestTail.then(async () => {
-      if (Date.now() - queuedAt > 45000) throw new Error(UNAVAILABLE);
+    return this.requests.enqueue('xverse', work, async queueWait => {
+      if (queueWait > 45000) throw new Error(UNAVAILABLE);
       for (let attempt = 0; attempt < 3; attempt++) {
         let retryDelay = 1000 * (attempt + 1);
         const controller = new AbortController();
@@ -441,8 +445,5 @@ export class OrdinalsOwnershipService {
       }
       throw new Error(UNAVAILABLE);
     });
-    // Serialize provider calls, including concurrent rules, below the trial's 100 requests/minute.
-    this.requestTail = result.catch(() => undefined).then(() => new Promise(resolve => setTimeout(resolve, 650)));
-    return result;
   }
 }
