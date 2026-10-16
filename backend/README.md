@@ -217,3 +217,9 @@ backend/
 
 - [Project root README](../README.md)
 - [Frontend README](../frontend/README.md)
+
+### One collection per rule
+
+Create a separate rule for each collection. Collectible rules sharing a channel, role and minimum combine matching holdings, including across protocols; overlapping assets count once. The rule list labels each combined channel group and its shared minimum even when filtered by asset type. ERC-20 balances remain independent.
+
+Apply `20261016010000_single_collection_rules.sql` after a verified backup. It splits comma-separated Ethscriptions rules while preserving the source IDs, roles, channels, minimums, creation timestamps and assignment references. The database rejects comma-separated collection slugs afterward; setup and editing explain how to add another rule instead. Specific ID/number lists are unchanged.

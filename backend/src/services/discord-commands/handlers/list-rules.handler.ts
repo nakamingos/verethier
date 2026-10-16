@@ -51,7 +51,7 @@ export class ListRulesHandler {
       
       this.logger.log(`Found ${allRules?.length || 0} total rules`);
       
-      const rules = this.filterAndSortRules(allRules, assetType);
+      const rules = this.filterAndSortRules(this.withCombinedGroups(allRules), assetType);
       
       this.logger.log(`Filtered to ${rules?.length || 0} rules`);
 
@@ -134,6 +134,7 @@ export class ListRulesHandler {
     assetType: RuleAssetType | null = null,
     listId: string = interaction.id
   ): Promise<void> {
+    allRules = this.withCombinedGroups(allRules);
     const pages: any[][] = [];
     let current: any[] = [];
     let length = 0;
@@ -235,9 +236,29 @@ export class ListRulesHandler {
   }
 
   /**
-   * Formats a single rule for display (legacy method kept for compatibility)
+   * Adds the shared minimum label to a rule’s criteria
    */
   private formatSingleRule(rule: any): string {
+    const row = this.formatRuleCriteria(rule);
+    return rule?.combinedGroup ? `${row}\n↳ Combined minimum: **${rule.min_items || 1}** · group **#${rule.combinedGroup.id}** (${rule.combinedGroup.size} rules in this channel)` : row;
+  }
+
+  private withCombinedGroups(rules: any[]): any[] {
+    const groups = new Map<string, any[]>();
+    for (const rule of rules) {
+      if (rule.asset_type === 'erc20' || !rule.role_id || rule.server_id === '000000000000000000') continue;
+      const key = JSON.stringify([rule.server_id, rule.channel_id, rule.role_id, rule.min_items || 1]);
+      groups.set(key, [...(groups.get(key) || []), rule]);
+    }
+    return rules.map(rule => {
+      const key = JSON.stringify([rule.server_id, rule.channel_id, rule.role_id, rule.min_items || 1]);
+      const group = groups.get(key);
+      if (rule.asset_type === 'erc20' || !group || group.length < 2) return rule;
+      return { ...rule, combinedGroup: rule.combinedGroup || { id: Math.min(...group.map(item => item.id)), size: group.length } };
+    });
+  }
+
+  private formatRuleCriteria(rule: any): string {
     if (!rule) {
       return 'Invalid rule data';
     }
@@ -247,11 +268,7 @@ export class ListRulesHandler {
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);
-      let slug = rule.slug || 'ALL';
-      // Format multi-slug display with spaces after commas for readability
-      if (slug !== 'ALL' && slug.includes(',')) {
-        slug = slug.split(',').map(s => s.trim()).join(', ');
-      }
+      const slug = rule.slug || 'ALL';
       const minItems = rule.min_items || 1;
       const ruleId = rule.id || 'N/A';
       const channelId = rule.channel_id || 'N/A';

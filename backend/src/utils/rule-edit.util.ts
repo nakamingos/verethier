@@ -61,8 +61,8 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
     value: compactTokenIds(rule.token_ids), list: true
   }, ...traits];
   return [{
-    key: 'slug', label: rule.asset_type === 'ordinal' ? 'Collection slug' : 'Collection slug(s)', value: rule.slug || 'ALL',
-    list: rule.asset_type !== 'ordinal', maxLength: rule.asset_type === 'ordinal' ? 100 : 4000
+    key: 'slug', label: 'Collection slug', value: rule.slug || 'ALL',
+    maxLength: rule.asset_type === 'ordinal' ? 100 : 4000
   }, ...traits];
 }
 

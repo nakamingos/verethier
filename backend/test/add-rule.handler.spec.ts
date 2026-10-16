@@ -1,3 +1,4 @@
+import { validateEthscriptionCriteria } from '../src/services/discord-commands/utils/rule-validation.util';
 import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
 import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
@@ -673,4 +674,13 @@ describe('AddRuleHandler', () => {
     });
   });
 
+});
+
+describe('single collection setup validation', () => {
+  it('rejects comma-separated slugs before querying collection or attribute suggestions', async () => {
+    const data = { getAllSlugs: jest.fn() };
+    const result = await validateEthscriptionCriteria(data as any, 'comrades,other', 'ALL', 'ALL');
+    expect(result).toEqual({ isValid: false, message: expect.stringContaining('one collection per rule') });
+    expect(data.getAllSlugs).not.toHaveBeenCalled();
+  });
 });

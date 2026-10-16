@@ -21,7 +21,7 @@ export interface SetupHelpContent {
 
 export const SETUP_HELP_CONTENT: SetupHelpContent = {
   title: '🔧 Verification Setup Help',
-  description: 'Set up and manage verification rules for your server.',
+  description: 'Use one collection per rule. Collectible rules in the same verification channel with the same role and minimum combine holdings across protocols; overlapping assets count once. ERC-20 balances stay separate.',
   color: 0x00FF73, // Bouncer green
   footer: 'More help: check the docs or ask in support',
   fields: [

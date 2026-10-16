@@ -17,7 +17,6 @@ export function matchRule(
   channelId?: string
 ): boolean {
   // Slug matching: Wildcard support for 'ALL' or empty strings
-  // Supports comma-separated slugs for multi-collection rules
   // Allows rules to match all collections or specific collection slugs
   const slugMatch = checkSlugMatch(rule.slug, assets);
 
@@ -51,9 +50,9 @@ export function matchRule(
 
 /**
  * Check if assets match the slug criteria
- * Supports single slugs and comma-separated multi-slugs
+ * Supports one collection per rule
  * 
- * @param ruleSlug - Single slug or comma-separated slugs from the rule
+ * @param ruleSlug - Collection slug from the rule
  * @param assets - User's assets to check against
  * @returns boolean - True if any asset matches any of the rule's slugs
  */
@@ -63,12 +62,5 @@ function checkSlugMatch(ruleSlug: string | undefined, assets: Asset[]): boolean 
     return true;
   }
   
-  // Parse comma-separated slugs
-  const slugs = ruleSlug
-    .split(',')
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
-  
-  // Check if any asset matches any of the specified slugs
-  return assets.some(asset => slugs.includes(asset.slug || ''));
+  return !ruleSlug.includes(',') && assets.some(asset => asset.slug === ruleSlug);
 }

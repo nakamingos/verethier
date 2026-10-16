@@ -510,12 +510,9 @@ export class DataService {
     const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
     const marketAddress = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
     
-    // Parse comma-separated slugs for multi-collection support
-    const slugs = this.parseMultiSlug(slug);
-    const isMultiSlug = slugs.length > 1;
-    
-    Logger.log(`🔍 DETAILED CHECK - Address${addresses.length > 1 ? 'es' : ''}: ${addresses.join(', ')} (${addresses.length} wallet${addresses.length > 1 ? 's' : ''})`);
-    Logger.log(`🎯 DETAILED CHECK - Criteria: slug=${slug} (${slugs.length} collection${slugs.length > 1 ? 's' : ''}), attribute=${attributeKey}=${attributeValue}, minItems=${minItems}`);
+    if (slug?.includes(',')) throw new Error('Use one collection per rule.');
+    const collection = slug?.trim();
+    const filterCollection = collection && collection !== 'ALL' && collection !== 'all-collections';
 
     // Early return for simple ownership check (no attribute filtering)
     const hasAttributeFilter = this.hasAttributeCriteria(attributeKey, attributeValue);
@@ -537,24 +534,14 @@ export class DataService {
         .select('hashId, owner, prevOwner, slug')
         .or(ownershipConditions);
 
-      // Filter by slug(s) if specified
-      if (slugs.length > 0 && slugs[0] !== 'ALL' && slugs[0] !== 'all-collections') {
-        if (isMultiSlug) {
-          // Multiple slugs - use IN clause
-          query = query.in('slug', slugs);
-          Logger.log(`🔍 DETAILED CHECK - Filtering by ${slugs.length} slugs: ${slugs.join(', ')}`);
-        } else {
-          // Single slug - use eq for better performance
-          query = query.eq('slug', slugs[0]);
-        }
-      }
+      if (filterCollection) query = query.eq('slug', collection);
 
       const { data, error } = await query;
       if (error) {
         throw new Error(error.message);
       }
       
-      Logger.log(`🔍 DETAILED CHECK - Simple query returned ${data.length} assets across ${normalizedAddresses.length} wallet(s) and ${isMultiSlug ? 'multiple collections' : '1 collection'}`);
+      Logger.log(`🔍 DETAILED CHECK - Simple query returned ${data.length} assets across ${normalizedAddresses.length} wallet(s) and ${collection || 'ALL'}`);
       return [...new Set(data.map(item => item.hashId.toLowerCase()))];
     }
 
@@ -578,17 +565,7 @@ export class DataService {
       `)
       .or(ownershipConditions);
 
-    // Filter by slug(s) if specified
-    if (slugs.length > 0 && slugs[0] !== 'ALL' && slugs[0] !== 'all-collections') {
-      if (isMultiSlug) {
-        // Multiple slugs - use IN clause
-        joinQuery = joinQuery.in('slug', slugs);
-        Logger.log(`🔍 DETAILED CHECK - Filtering attributes by ${slugs.length} slugs: ${slugs.join(', ')}`);
-      } else {
-        // Single slug - use eq for better performance
-        joinQuery = joinQuery.eq('slug', slugs[0]);
-      }
-    }
+    if (filterCollection) joinQuery = joinQuery.eq('slug', collection);
 
     const { data: joinedData, error: joinError } = await joinQuery;
 
@@ -605,35 +582,9 @@ export class DataService {
     const matchingItems = this.filterByAttributes(joinedData, attributeKey, attributeValue);
     const matchingCount = matchingItems.length;
     
-    Logger.debug(`Found ${matchingCount} matching ethscriptions with ${attributeKey}=${attributeValue} across ${normalizedAddresses.length} wallet(s) and ${isMultiSlug ? slugs.length + ' collections' : '1 collection'}`);
+    Logger.debug(`Found ${matchingCount} matching ethscriptions with ${attributeKey}=${attributeValue} across ${normalizedAddresses.length} wallet(s) and ${collection || 'ALL'}`);
     
     return [...new Set(matchingItems.map(item => item.hashId.toLowerCase()))];
-  }
-
-  /**
-   * Parse comma-separated slugs into an array
-   * Handles single slugs, multi-slugs, and special cases like 'ALL'
-   * 
-   * @param slug - Single slug or comma-separated slugs
-   * @returns Array of trimmed slug strings
-   * 
-   * @example
-   * parseMultiSlug('collection-a') => ['collection-a']
-   * parseMultiSlug('collection-a,collection-b') => ['collection-a', 'collection-b']
-   * parseMultiSlug('collection-a, collection-b') => ['collection-a', 'collection-b']
-   * parseMultiSlug('ALL') => ['ALL']
-   * parseMultiSlug(undefined) => ['ALL']
-   */
-  private parseMultiSlug(slug?: string): string[] {
-    if (!slug || slug === 'ALL' || slug === 'all-collections') {
-      return ['ALL'];
-    }
-    
-    // Split by comma, trim whitespace, filter out empty strings
-    return slug
-      .split(',')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
   }
 
   /**

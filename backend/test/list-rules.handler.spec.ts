@@ -61,6 +61,23 @@ describe('ListRulesHandler', () => {
     handler = module.get<ListRulesHandler>(ListRulesHandler);
   });
 
+  it('shows combined groups across protocols even when an asset filter hides a member', async () => {
+    const base = { server_id: 'test-guild-id', channel_id: 'verify', role_id: 'collector', min_items: 10,
+      attribute_key: 'ALL', attribute_value: 'ALL' };
+    mockDbService.getRoleMappings.mockResolvedValue([
+      { ...base, id: 150, asset_type: 'ethscription', slug: 'comrades' },
+      { ...base, id: 151, asset_type: 'ordinal', slug: 'pizza-comrades' },
+      { ...base, id: 152, min_items: 5, asset_type: 'ordinal', slug: 'yonder' },
+      { ...base, id: 153, channel_id: 'other-channel', asset_type: 'ordinal', slug: 'yonder' },
+    ] as any);
+    mockInteraction.options.getString.mockReturnValue('ordinal');
+    await handler.handle(mockInteraction);
+    const description = getLastEditReplyPayload().embeds[0].toJSON().description;
+    expect(description).not.toContain('ID: 150');
+    expect(description).toContain('Combined minimum: **10** · group **#150** (2 rules in this channel)');
+    expect(description.match(/Combined minimum:/g)).toHaveLength(1);
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
