@@ -77,7 +77,9 @@ yarn build
 CHROME_BIN=/path/to/chrome yarn test:wallet-smoke
 ```
 
-This uses simulated wallets, backend responses, and relay traffic. It verifies EIP-712 signatures on desktop/mobile layouts and the Android Rainbow app link without using real wallets or API credits. Screenshots are written to a temporary directory.
+This uses simulated wallets, backend responses, and relay traffic. It verifies EIP-712 signatures on desktop/mobile layouts, repeat visits, Android Rainbow app links, and retries with a saved connection from a previous page. It does not use real wallets or API credits. Screenshots are written to a temporary directory.
+
+EVM verification requires an explicit wallet choice on each visit. Wagmi connection persistence is disabled alongside AppKit's `enableReconnect: false` so a saved connector cannot leave the wallet picker disabled after a reload.
 
 ## Deployment
 

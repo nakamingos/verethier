@@ -17,6 +17,7 @@ import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
 
+// Reown AppKit project ID for Bouncer. 0xsnepsid
 const projectId = 'de9770bd24af8a4e743551a95c3cde67';
 
 const metadata = {
@@ -45,6 +46,9 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
     const adapter = new WagmiAdapter({
       networks: [mainnet],
       projectId,
+      // Verification starts with an explicit wallet choice. Restoring Wagmi's saved
+      // connectors conflicts with AppKit's enableReconnect: false on page reload.
+      storage: null,
       transports: {
         [1]: http(env.rpcHttpProvider),
       },
