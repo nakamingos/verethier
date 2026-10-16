@@ -29,13 +29,17 @@ export class EthscriptionsOwnershipService {
   }
 
   async countSelection(wallets: string[], criteria: InscriptionCriteria, context: NftCheckContext): Promise<bigint> {
+    return BigInt((await this.matchingIds(wallets, criteria, context)).length);
+  }
+
+  async matchingIds(wallets: string[], criteria: InscriptionCriteria, context: NftCheckContext): Promise<string[]> {
     const addresses = [...new Set(wallets.map(wallet => wallet.toLowerCase()))].sort();
     if (addresses.some(wallet => !ADDRESS.test(wallet))) throw new Error(UNAVAILABLE);
-    if (!addresses.length) return 0n;
+    if (!addresses.length) return [];
     const linked = new Set(addresses);
     if (criteria.kind === 'ids') {
       const owners = await this.selectionOwners(criteria.ids, context);
-      return BigInt([...owners.values()].filter(record => this.owned(record, linked)).length);
+      return [...owners].filter(([, record]) => this.owned(record, linked)).map(([id]) => id);
     }
     context.ethscriptionInventories ||= new Map();
     const selected = new Map<string, number>();
@@ -46,7 +50,7 @@ export class EthscriptionsOwnershipService {
         selected.set(id, record.number);
       }
     }
-    return BigInt([...selected.values()].filter(number => criteria.ranges.some(([start, end]) => number >= start && number <= end)).length);
+    return [...selected].filter(([, number]) => criteria.ranges.some(([start, end]) => number >= start && number <= end)).map(([id]) => id);
   }
 
   private owned(record: EthscriptionOwnership, wallets: Set<string>): boolean {

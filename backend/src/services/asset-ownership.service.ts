@@ -18,6 +18,21 @@ export class AssetOwnershipService {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
   }
 
+  async matchingAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    if (rule.asset_type === 'ordinal') {
+      if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
+      return this.ordinalsSvc.matchingAssets(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
+    }
+    const evm = addresses.filter(address => !/^bc1p/i.test(address));
+    if (!evm.length) return new Map();
+    if (rule.asset_type === 'nft') return this.nftSvc.matchingAssets(rule, evm, context);
+    const criteria = inscriptionCriteria(rule);
+    if (criteria && !this.ethscriptionsSvc) throw new Error('Ethscriptions verification is not configured.');
+    const ids = criteria ? await this.ethscriptionsSvc.matchingIds(evm, criteria, context)
+      : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL');
+    return new Map(ids.map(id => [id.toLowerCase(), 1n]));
+  }
+
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
     if (rule.asset_type === 'ordinal') {
       if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
@@ -45,4 +60,10 @@ export class AssetOwnershipService {
     );
     return BigInt(count);
   }
+}
+
+/** Assets from separate protocols/chains/contracts cannot overlap. */
+export function collectibleDomain(rule: VerifierRole): string {
+  if (rule.asset_type === 'nft') return `nft:${rule.chain_id}:${rule.contract_address?.toLowerCase()}`;
+  return rule.asset_type || 'ethscription';
 }

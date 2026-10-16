@@ -493,13 +493,18 @@ export class DataService {
    * @param minItems - Minimum required assets (minimum 1, even if 0 is passed)
    * @returns Number of matching assets, or 0 if requirements not met
    */
-  async checkAssetOwnershipWithCriteria(
+  async checkAssetOwnershipWithCriteria(address: string | string[], slug?: string, attributeKey?: string, attributeValue?: string, minItems = 1): Promise<number> {
+    const ids = await this.matchingAssetIdsWithCriteria(address, slug, attributeKey, attributeValue);
+    return ids.length >= minItems ? ids.length : 0;
+  }
+
+  async matchingAssetIdsWithCriteria(
     address: string | string[],
     slug?: string,
     attributeKey?: string,
     attributeValue?: string,
     minItems: number = 1
-  ): Promise<number> {
+  ): Promise<string[]> {
     // Handle both single address and array of addresses (for wallet stacking)
     const addresses = Array.isArray(address) ? address : [address];
     const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
@@ -550,7 +555,7 @@ export class DataService {
       }
       
       Logger.log(`🔍 DETAILED CHECK - Simple query returned ${data.length} assets across ${normalizedAddresses.length} wallet(s) and ${isMultiSlug ? 'multiple collections' : '1 collection'}`);
-      return data.length >= minItems ? data.length : 0;
+      return [...new Set(data.map(item => item.hashId.toLowerCase()))];
     }
 
     Logger.log(`🔍 DETAILED CHECK - Using attribute filtering query`);
@@ -593,7 +598,7 @@ export class DataService {
 
     if (!joinedData || joinedData.length === 0) {
       Logger.debug(`No ethscriptions found with attributes for user`);
-      return 0;
+      return [];
     }
 
     // Optimized attribute filtering
@@ -602,7 +607,7 @@ export class DataService {
     
     Logger.debug(`Found ${matchingCount} matching ethscriptions with ${attributeKey}=${attributeValue} across ${normalizedAddresses.length} wallet(s) and ${isMultiSlug ? slugs.length + ' collections' : '1 collection'}`);
     
-    return matchingCount >= minItems ? matchingCount : 0;
+    return [...new Set(matchingItems.map(item => item.hashId.toLowerCase()))];
   }
 
   /**
