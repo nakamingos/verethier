@@ -98,6 +98,30 @@ async function setup(browser, mobile, injected) {
   return { context, page, errors, consoleErrors, socketMethods, get proof() { return proof; }, get typedData() { return typedData; } };
 }
 
+async function restorePreviousWalletConnectConnection(page) {
+  // Wagmi persists connector metadata, not its methods or the new page's UID.
+  // This used to repopulate AppKit's connected-wallet list even though both the
+  // verification page and enableReconnect: false considered it disconnected.
+  await page.evaluate(address => {
+    const uid = 'previous-page-walletconnect';
+    localStorage.setItem('wagmi.store', JSON.stringify({ version: 3, state: {
+      chainId: 1, current: uid,
+      connections: { __type: 'Map', value: [[uid, {
+        accounts: [address], chainId: 1,
+        connector: { id: 'walletConnect', name: 'WalletConnect', type: 'walletConnect', uid },
+      }]] },
+    } }));
+    localStorage.setItem('@appkit/eip155:connected_connector_id', 'walletConnect');
+    localStorage.setItem('@appkit/connection_status', 'connected');
+    localStorage.setItem('@appkit/connected_namespaces', 'eip155');
+    localStorage.setItem('@appkit/connections', JSON.stringify({ eip155: [
+      { connectorId: 'walletConnect', accounts: [{ address }] },
+    ] }));
+  }, account.address);
+  await page.reload();
+  await page.getByText('Connect your wallet', { exact: true }).waitFor();
+}
+
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env['CHROME_BIN'], headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   try {
@@ -114,32 +138,73 @@ async function setup(browser, mobile, injected) {
       assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       assert.equal(test.typedData.domain.name, 'Bouncer');
       assert.equal(test.typedData.message.Nonce, nonce);
+      // A second visit must require a fresh choice and still sign successfully.
+      await page.reload();
+      await page.getByText('Connect your wallet', { exact: true }).waitFor();
+      assert.equal(await page.locator('.step-1 .actions button').innerText(), 'Connect');
+      await page.locator('.step-1 .actions button').click();
+      await page.getByText('Test Wallet', { exact: true }).last().click();
+      await page.getByRole('button', { name: 'Sign Message', exact: true }).click();
+      await page.locator('.step-3.active').waitFor();
+      assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       assert.deepEqual(test.errors, []);
       await page.screenshot({ path: path.join(artifacts, (mobile ? 'phone' : 'desktop') + '.png'), fullPage: true });
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));
       await test.context.close();
     }
-    const test = await setup(browser, true, false);
-    const { page } = test;
-    let handoff;
-    const cdp = await test.context.newCDPSession(page);
-    await cdp.send('Page.enable');
-    cdp.on('Page.frameRequestedNavigation', event => { if (event.url.startsWith('rainbow:')) handoff = event.url; });
-    await page.locator('.step-1 .actions button').click();
-    await page.getByText('Rainbow', { exact: true }).last().click();
-    for (let n = 0; n < 40 && !handoff; n++) await page.waitForTimeout(250);
-    if (!handoff) {
-      await page.screenshot({ path: path.join(artifacts, 'rainbow-pending.png'), fullPage: true });
-      console.log(JSON.stringify({ pageError: await page.locator('.error-message').allTextContents(), modalText: await page.locator('w3m-modal').ariaSnapshot(), errors: test.errors, consoleErrors: test.consoleErrors.slice(-15), socketMethods: test.socketMethods }));
+    for (const previousConnection of [false, true]) {
+      const test = await setup(browser, true, false);
+      const { page } = test;
+      let handoff;
+      await page.exposeFunction('__testWalletHandoff', url => { handoff = url; });
+      await page.addInitScript(() => {
+        // Capture the link without invoking the OS. Headless Chrome has no
+        // wallet app to return from, which otherwise interferes with retry taps.
+        const open = window.open;
+        window.open = (url, ...args) => {
+          if (String(url).startsWith('rainbow:')) {
+            window.__testWalletHandoff(String(url));
+            return null;
+          }
+          return open.call(window, url, ...args);
+        };
+      });
+      if (previousConnection) await restorePreviousWalletConnectConnection(page);
+      else {
+        await page.reload();
+        await page.getByText('Connect your wallet', { exact: true }).waitFor();
+      }
+      await page.locator('.step-1 .actions button').click();
+      const rainbowRow = page.locator('w3m-list-wallet[name="Rainbow"]');
+      await rainbowRow.waitFor();
+      assert.equal(await rainbowRow.getAttribute('disabled'), null, 'Rainbow must be selectable, including after a saved connection');
+      assert.equal(await page.getByRole('button', { name: /Search Wallet/ }).isEnabled(), true);
+      await page.getByText('Rainbow', { exact: true }).last().click();
+      for (let n = 0; n < 40 && !handoff; n++) await page.waitForTimeout(250);
+      if (!handoff) {
+        await page.screenshot({ path: path.join(artifacts, 'rainbow-pending.png'), fullPage: true });
+        console.log(JSON.stringify({ pageError: await page.locator('.error-message').allTextContents(), modalText: await page.locator('w3m-modal').ariaSnapshot(), errors: test.errors, consoleErrors: test.consoleErrors.slice(-15), socketMethods: test.socketMethods }));
+      }
+      assert(handoff, 'Expected an Android Rainbow app handoff');
+      assert(new URL(handoff).searchParams.get('uri').startsWith('wc:'), 'Handoff must contain a WalletConnect pairing URI');
+      assert.equal(await page.locator('w3m-email-login-widget').count(), 0);
+      assert.equal(await page.locator('w3m-social-login-widget').count(), 0);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--apkt-tokens-core-backgroundAccentPrimary').trim().toUpperCase()), '#00FF73');
+      assert.deepEqual(test.errors, []);
+      await page.screenshot({ path: path.join(artifacts, previousConnection ? 'rainbow-after-saved-session.png' : 'rainbow-mobile.png'), fullPage: true });
+      // Dismissing an unapproved request must allow another wallet choice.
+      const previousHandoff = handoff;
+      handoff = undefined;
+      await page.getByTestId('w3m-header-close').getByRole('button').click();
+      await page.locator('.step-1 .actions button').click();
+      assert.equal(await rainbowRow.getAttribute('disabled'), null);
+      await page.getByText('Rainbow', { exact: true }).last().click();
+      for (let n = 0; n < 40 && !handoff; n++) await page.waitForTimeout(250);
+      assert(handoff, 'Expected another Android Rainbow app handoff after dismissing the first request');
+      assert(handoff !== previousHandoff, 'A retry should use a fresh pairing URI');
+      assert.deepEqual(test.errors, []);
+      console.log(JSON.stringify({ scenario: previousConnection ? 'android-rainbow-after-saved-connection-and-retry' : 'android-rainbow-deep-link-and-retry', result: 'passed' }));
+      await test.context.close();
     }
-    assert(handoff, 'Expected an Android Rainbow app handoff');
-    assert(new URL(handoff).searchParams.get('uri').startsWith('wc:'), 'Handoff must contain a WalletConnect pairing URI');
-    assert.equal(await page.locator('w3m-email-login-widget').count(), 0);
-    assert.equal(await page.locator('w3m-social-login-widget').count(), 0);
-    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--apkt-tokens-core-backgroundAccentPrimary').trim().toUpperCase()), '#00FF73');
-    assert.deepEqual(test.errors, []);
-    await page.screenshot({ path: path.join(artifacts, 'rainbow-mobile.png'), fullPage: true });
-    console.log(JSON.stringify({ scenario: 'android-rainbow-deep-link', result: 'passed' }));
-    await test.context.close();
   } finally { await browser.close(); console.log(`Browser screenshots: ${artifacts}`); }
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
