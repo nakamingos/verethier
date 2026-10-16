@@ -17,7 +17,7 @@ import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
 
-const projectId = 'd183619f342281fd3f3ff85716b6016a';
+const projectId = 'de9770bd24af8a4e743551a95c3cde67';
 
 const metadata = {
   name: 'Bouncer',
