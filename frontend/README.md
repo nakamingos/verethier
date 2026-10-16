@@ -7,7 +7,7 @@ Angular verification app for Discord users following `/verify/:data` links.
 - Angular 21
 - TypeScript 5.9
 - SCSS
-- wagmi 3 + Reown AppKit + viem
+- Wagmi Core 2 + Reown AppKit + viem
 
 ## What It Does
 
@@ -99,11 +99,23 @@ Notes:
 
 Reown AppKit owns WalletConnect, injected-wallet discovery, and Coinbase connectors through one shared Wagmi adapter. It uses the existing Reown/WalletConnect project ID and the page's current origin for Bouncer metadata. Ensure any origin allowlist in the Reown dashboard includes the deployed frontend domain.
 
+The public project ID and shared app metadata live in `src/app/services/evm-wallet.config.ts`.
+
+Keep AppKit 1.8.24 on the stable Wagmi Core 2.22.1 / Connectors 6.2.0 combination. The Yarn resolution for `@wagmi/connectors` also pins AppKit's broad optional dependency, which otherwise selects Connectors 8 and expects Wagmi 3. The production smoke check verifies that AppKit and the application resolve the same core and connector instances. See [Reown's stable installation](https://docs.reown.com/appkit/javascript/core/installation) and [separate Wagmi 3 beta](https://docs.reown.com/appkit/react/core/wagmi-3-migration).
+
 Automatic reconnection reuses an approved wallet session rather than disconnecting it whenever a verification link loads. Each verification still requires signing its fresh EIP-712 challenge; a restored session does not verify the member. The connected address and a **Change wallet** button are shown before signing. Changing wallets deliberately disconnects through AppKit before opening the picker. Switching between Ethereum and Bitcoin does not tear down the EVM session. Email/social login, swaps, on-ramp, send/receive, and account history are disabled. Xverse and UniSat continue to use their separate Bitcoin connection flow.
 
 Connection errors from the picker appear on the verification page, including guidance for pending requests and connection-service failures. Browser-to-wallet app launches still depend on the mobile browser and installed wallet. Test Rainbow on a real Android/iOS device before treating a desktop browser check as confirmation of mobile compatibility.
 
 Keep the explicit `module` resolution condition in both Angular build configurations. WalletConnect's package has separate ESM and CommonJS exports; resolving the wrong form can compile successfully but fail during provider initialization. The production browser smoke test covers this path.
+
+### Mobile connection diagnostics
+
+Open `/wallet-check` on the affected device to test the same AppKit connection independently of verification. **Start connection** opens the normal wallet picker. After a failed attempt, return to the page and use **Copy connection details**.
+
+The **WalletConnect only** link opens `/wallet-check?mode=direct`. It uses the same Reown project, origin, metadata, and Sign Client 2.23.7, but bypasses AppKit, Wagmi, and automatic app launching. Start the test, then tap **Open Rainbow**. Its one-chain connection request grants no transaction method and requests no signatures. The diagnostic session uses a separate storage prefix so it cannot delete the verification app's session. Reload either mode to check session restoration; **Disconnect test** deliberately ends the session used by that mode (the Bouncer-kit mode shares the normal verification connection).
+
+Both modes record elapsed times, browser visibility, relay events, and session approval. They never call the verification backend or change member roles. Copied details omit pairing URIs, credentials, wallet addresses, session topics, and encrypted message bodies; they remain local unless the tester shares them. Success in direct mode but failure in normal mode narrows the issue to the adapter, request scope, storage, or app-launch flow. Failure in both modes points to their shared protocol, wallet, project, or network path; it does not identify the exact cause on its own.
 
 ## Project Layout
 

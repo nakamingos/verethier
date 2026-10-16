@@ -1,0 +1,21 @@
+<h2>Wallet connection check</h2>
+<p>This checks the wallet connection only. It does not verify holdings, request signatures, or change Discord roles.</p>
+<nav aria-label="Connection test mode">
+  <a href="/wallet-check" [attr.aria-current]="!direct ? 'page' : null">Bouncer kit</a>
+  <a href="/wallet-check?mode=direct" [attr.aria-current]="direct ? 'page' : null">WalletConnect only</a>
+</nav>
+<p>{{ direct ? 'WalletConnect only: bypasses AppKit, Wagmi, and the automatic app launch.' : 'Bouncer kit: uses the same connection setup as verification.' }}</p>
+<p role="status">{{ status() }}</p>
+<div class="actions">
+  <button type="button" (click)="start()" [disabled]="busy() || connected()">Start connection</button>
+  @if (rainbowLink(); as link) {
+    <a class="wallet-launch" [href]="link" (click)="openRainbow()">Open Rainbow</a>
+  }
+  @if (connected()) {
+    <button type="button" (click)="disconnect()" [disabled]="busy()">Disconnect test</button>
+  }
+  <a [href]="direct ? '/wallet-check?mode=direct' : '/wallet-check'">Reload test</a>
+</div>
+<p>After a failed attempt, return here and copy the details. To check repeat connections, reload this test after connecting.</p>
+<button type="button" (click)="copy()">{{ copied() ? 'Copied' : 'Copy connection details' }}</button>
+<textarea readonly aria-label="Connection details" [value]="report" spellcheck="false"></textarea>

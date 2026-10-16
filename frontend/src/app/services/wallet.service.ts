@@ -16,16 +16,7 @@ import {
 import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
-
-// Reown AppKit project ID for Bouncer. 0xsnepsid
-const projectId = 'de9770bd24af8a4e743551a95c3cde67';
-
-const metadata = {
-  name: 'Bouncer',
-  description: 'Verify your wallet. Get your roles.',
-  url: window.location.origin,
-  icons: [new URL('/assets/bouncer.svg', window.location.origin).href],
-};
+import { evmWalletMetadata, projectId } from './evm-wallet.config';
 
 const themeVariables = {
   '--apkt-font-family': 'Montserrat, sans-serif',
@@ -54,7 +45,7 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
       adapters: [adapter],
       networks: [mainnet],
       projectId,
-      metadata,
+      metadata: evmWalletMetadata(),
       // Reuse an approved session across verification links. Disconnecting it on
       // every page load makes mobile wallets tear down and pair again immediately.
       enableReconnect: true,
