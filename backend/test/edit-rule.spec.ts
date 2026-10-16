@@ -95,12 +95,14 @@ describe('Rule edit validation', () => {
     const result = await service.prepare(base, { ...inputs(base), slug: ' comrades ', attribute_key: 'Category', attribute_value: 'Cosmic Oven-Lord', min_items: '2' });
     expect(result).toMatchObject({ slug: 'comrades', attribute_value: 'Cosmic Oven-Lord', min_items: 2 });
     expect(data.getAllAttributeValues).toHaveBeenCalledWith('Category', 'comrades');
-    await expect(service.prepare(base, { ...inputs(base), slug: 'comrades,other', attribute_key: 'Category' })).rejects.toThrow('Multi-collection');
-    await expect(service.prepare(base, { ...inputs(base), slug: 'missing' })).rejects.toThrow('do not exist');
+    await expect(service.prepare(base, { ...inputs(base), slug: 'comrades,other', attribute_key: 'Category' })).rejects.toThrow('one collection per rule');
+    await expect(service.prepare(base, { ...inputs(base), slug: 'missing' })).rejects.toThrow('does not exist');
     await expect(service.prepare(base, { ...inputs(base), attribute_value: 'Rare' })).rejects.toThrow('without specifying');
   });
-  it('sorts multi-collection Ethscription criteria', async () => {
-    expect(await editor().editor.prepare(base, { ...inputs(base), slug: 'other, comrades' })).toMatchObject({ slug: 'comrades,other' });
+  it('rejects multiple collections and uses a single collection field', async () => {
+    await expect(editor().editor.prepare(base, { ...inputs(base), slug: 'other, comrades' })).rejects.toThrow('one collection per rule');
+    expect(ruleEditFields(base)[0]).toMatchObject({ label: 'Collection slug' });
+    expect(ruleEditFields(base)[0].list).toBeUndefined();
   });
   it('uses existing NFT contract/network validation and refreshes token selection', async () => {
     const { editor: service, nfts } = editor(); const result = await service.prepare(nft, { ...inputs(nft), token_ids: '1,3' });

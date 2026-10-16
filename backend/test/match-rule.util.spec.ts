@@ -17,6 +17,9 @@ describe('matchRule', () => {
     expect(matchRule({ slug: '' }, [{ slug: 'foo', attributes: {} }])).toBe(true);
     expect(matchRule({ slug: 'ALL' }, [{ slug: 'foo', attributes: {} }])).toBe(true);
   });
+  it('does not interpret comma-separated slugs as a collection selection', () => {
+    expect(matchRule({ slug: 'foo,baz' }, assets)).toBe(false);
+  });
   it('matches trait', () => {
     expect(matchRule({ attribute_key: 'foo', attribute_value: 'bar' }, [{ slug: 'x', attributes: { foo: 'bar' } }])).toBe(true);
     expect(matchRule({ attribute_key: 'foo', attribute_value: 'baz' }, [{ slug: 'x', attributes: { foo: 'bar' } }])).toBe(false);

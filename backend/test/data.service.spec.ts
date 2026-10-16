@@ -62,6 +62,11 @@ describe('DataService', () => {
     return recorder;
   };
 
+  it('does not execute an ownership query for a multi-collection rule', async () => {
+    await expect(service.matchingAssetIdsWithCriteria('0x123', 'one,two')).rejects.toThrow('one collection per rule');
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     queuedQueries = [];
     mockSupabase.from.mockImplementation((table: string) => {

@@ -227,21 +227,6 @@ export class AddRuleHandler {
       return null;
     }
 
-    // Normalize multi-slug input: parse, trim, sort alphabetically, rejoin
-    // This prevents duplicate rules like "collection-a,collection-b" vs "collection-b,collection-a"
-    if (slug !== 'ALL' && slug.includes(',')) {
-      const slugs = slug.split(',')
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-        .sort(); // Alphabetical sorting ensures consistent ordering
-      
-      if (slugs.length === 0) {
-        slug = 'ALL';
-      } else {
-        slug = slugs.join(',');
-      }
-    }
-
     // Validate input combinations against database
     try {
       const validationResult = await this.validateInputCombinations(slug, attributeKey, attributeValue);

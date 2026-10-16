@@ -65,7 +65,6 @@ export class RuleEditService {
       }
       return candidate;
     }
-    if (candidate.slug !== 'ALL' && candidate.slug.includes(',')) candidate.slug = candidate.slug.split(',').map(value => value.trim()).filter(Boolean).sort().join(',') || 'ALL';
     const validated = await validateEthscriptionCriteria(this.data, candidate.slug, candidate.attribute_key, candidate.attribute_value);
     if (!validated.isValid) throw new Error(validated.message);
     return candidate;

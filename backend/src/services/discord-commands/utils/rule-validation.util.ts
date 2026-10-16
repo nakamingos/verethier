@@ -50,36 +50,22 @@ export function formatAttribute(key: string, value: string): string {
 
 export async function validateEthscriptionCriteria(dataSvc: DataService, slug: string, attributeKey: string, attributeValue: string): Promise<{ isValid: boolean; message: string }> {
 
+  if (slug.includes(',')) return {
+    isValid: false,
+    message: 'Use one collection per rule. Add another rule with the same role and minimum to combine holdings.'
+  };
+
   // If all options are 'ALL', no validation needed
   if (slug === 'ALL' && attributeKey === 'ALL' && attributeValue === 'ALL') {
     return { isValid: true, message: '' };
   }
 
   try {
-    // Validate slug(s) exist (unless ALL)
     if (slug !== 'ALL') {
       const availableSlugs = await dataSvc.getAllSlugs();
-
-      // Handle multi-slug input: validate each slug individually
-      const inputSlugs = slug.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      const invalidSlugs = inputSlugs.filter(s => !availableSlugs.includes(s));
-
-      if (invalidSlugs.length > 0) {
-        const slugLabel = invalidSlugs.length > 1 ? 'Collections' : 'Collection';
-        const slugList = invalidSlugs.map(s => `"${s}"`).join(', ');
-        return {
-          isValid: false,
-          message: `${slugLabel} ${slugList} do not exist in the marketplace database.`
-        };
-      }
-
-      // For multi-slug rules, attributes must be ALL (can't filter specific attributes across multiple collections)
-      if (inputSlugs.length > 1 && (attributeKey !== 'ALL' || attributeValue !== 'ALL')) {
-        return {
-          isValid: false,
-          message: 'Multi-collection rules (comma-separated slugs) do not support attribute filtering. Set both attribute key and value to ALL.'
-        };
-      }
+      if (!availableSlugs.includes(slug)) return {
+        isValid: false, message: `Collection "${slug}" does not exist in the marketplace database.`
+      };
     }
 
     // Validate attribute key exists for the selected collection
