@@ -1,7 +1,7 @@
 import { tokenMinimum, tokenAmount, tokenRuleScope } from '@/utils/erc20-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
-import { AssetOwnershipService } from './asset-ownership.service';
+import { AssetOwnershipService, collectibleDomain } from './asset-ownership.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { nftRuleLabel, serializeAssetCount } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
@@ -150,6 +150,7 @@ export class VerificationEngine {
       return {
         isValid: false,
         status: 'unavailable',
+        rule: checkedRule ? (({ ordinal_trait_snapshot, inscription_criteria, ...rule }) => rule)(checkedRule) : undefined,
         ownershipDetails,
         error: error.message || 'Unknown verification error',
         userId,
@@ -179,15 +180,21 @@ export class VerificationEngine {
     
     // Process all verifications in parallel for better performance
     const context: NftCheckContext = sharedContext || { checks: new Map() };
+    const ruleEntries = await Promise.all(ruleIds.map(async id => [id.toString(), loadedRules
+      ? loadedRules.find(rule => rule.id.toString() === id.toString())
+      : await this.getRuleById(id)] as const));
+    const ruleMap = new Map(ruleEntries);
+    const rules = ruleEntries.map(([, rule]) => rule).filter(Boolean);
     // Scheduled contexts span many members. A numeric role for one member must
     // not force every later member onto a numbered (potentially paid) lookup.
     if (context.ordinalMode !== 'scheduled'
-      && loadedRules?.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
+      && rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
     const verificationPromises = ruleIds.map(ruleId =>
-      this.verifyUser(userId, ruleId, address, context, loadedRules?.find(rule => rule.id.toString() === ruleId.toString()))
+      this.verifyUser(userId, ruleId, address, context, ruleMap.get(ruleId.toString()))
     );
     
     const results = await Promise.all(verificationPromises);
+    await this.combineCounts(userId, address, results, context, rules);
     
     const validRules: VerifierRole[] = [];
     const invalidRules: VerifierRole[] = [];
@@ -196,8 +203,8 @@ export class VerificationEngine {
     results.forEach(result => {
       if (result.isValid && result.rule) {
         validRules.push(result.rule);
-        if (result.matchingAssetCount) {
-          matchingAssetCounts.set(result.ruleId.toString(), result.matchingAssetCount);
+        if (result.combinedAssetCount || result.matchingAssetCount) {
+          matchingAssetCounts.set(result.ruleId.toString(), result.combinedAssetCount ?? result.matchingAssetCount);
         }
       } else if (result.rule && result.status !== 'unavailable') {
         invalidRules.push(result.rule);
@@ -213,6 +220,57 @@ export class VerificationEngine {
       matchingAssetCounts,
       results
     };
+  }
+
+  private async combineCounts(userId: string, address: string, results: VerificationResult[], context: NftCheckContext, rules: VerifierRole[]): Promise<void> {
+    const groups = new Map<string, VerificationResult[]>();
+    for (const result of results) {
+      const rule = result.rule;
+      if (!rule || rule.asset_type === 'erc20') continue;
+      const key = JSON.stringify([rule.server_id, rule.role_id, rule.min_items || 1]);
+      groups.set(key, [...(groups.get(key) || []), result]);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 2 || group.some(result => result.isValid)) continue;
+      const domains = new Map<string, VerificationResult[]>();
+      for (const result of group) {
+        const domain = collectibleDomain(result.rule);
+        domains.set(domain, [...(domains.get(domain) || []), result]);
+      }
+      let total = 0n;
+      let unavailable = false;
+      for (const checks of domains.values()) {
+        if (checks.length === 1) {
+          const check = checks[0];
+          if (check.status === 'unavailable' || check.error || check.ownershipDetails?.source === 'collection-upper-bound') unavailable = true;
+          else total += BigInt(check.matchingAssetCount || 0);
+          continue;
+        }
+        const owned = new Map<string, bigint>();
+        const addresses = [...await this.userAddressService.getUserAddresses(userId)];
+        if (!addresses.includes(address.toLowerCase())) addresses.push(address.toLowerCase());
+        for (const check of checks) {
+          try {
+            const allowed = await this.walletBlocks.allowedAddresses(check.rule.server_id, addresses, context);
+            const assets = await this.ownershipSvc.matchingAssets(rules.find(rule => rule.id.toString() === check.ruleId.toString()) || check.rule, allowed, context);
+            for (const [id, copies] of assets) {
+              // ERC-1155 copies count, but overlapping rules must not add the same copies twice.
+              if (copies > (owned.get(id) || 0n)) owned.set(id, copies);
+            }
+          } catch { unavailable = true; }
+        }
+        for (const count of owned.values()) total += count;
+      }
+      const passed = total >= BigInt(group[0].rule.min_items || 1);
+      for (const result of group) {
+        result.isValid = passed;
+        result.status = passed ? 'passed' : unavailable ? 'unavailable' : 'failed';
+        result.combinedAssetCount = serializeAssetCount(total);
+        result.combinedRuleIds = group.map(check => check.ruleId);
+        if (passed) delete result.error;
+        else if (unavailable) result.error = 'Combined ownership check is temporarily unavailable.';
+      }
+    }
   }
 
   /**
@@ -320,8 +378,8 @@ export class VerificationEngine {
     results.forEach(result => {
       if (result.isValid && result.rule) {
         validRules.push(result.rule);
-        if (result.matchingAssetCount) {
-          matchingAssetCounts.set(result.ruleId.toString(), result.matchingAssetCount);
+        if (result.combinedAssetCount || result.matchingAssetCount) {
+          matchingAssetCounts.set(result.ruleId.toString(), result.combinedAssetCount ?? result.matchingAssetCount);
         }
       } else if (result.rule && result.status !== 'unavailable') {
         invalidRules.push(result.rule);
@@ -394,6 +452,8 @@ export interface VerificationResult {
   address: string;
   rule?: VerifierRole;
   matchingAssetCount?: AssetCount;
+  combinedAssetCount?: AssetCount;
+  combinedRuleIds?: (string | number)[];
   error?: string;
   verificationDetails?: {
     collection: string;

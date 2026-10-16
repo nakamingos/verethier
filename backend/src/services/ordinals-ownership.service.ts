@@ -120,6 +120,41 @@ export class OrdinalsOwnershipService {
     return run.checks.get(key);
   }
 
+  async matchingAssets(rule: VerifierRole, wallets: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
+    if (!addresses.length) return new Map();
+    if (!this.inventories) throw new Error(UNAVAILABLE);
+    const criteria = inscriptionCriteria(rule);
+    let catalog: Awaited<ReturnType<OrdinalCollectionCacheService['snapshot']>> | null = null;
+    const trait = ordinalTrait(rule);
+    if (!criteria) {
+      try { catalog = await this.catalog.snapshot(rule.slug, context); }
+      catch {
+        // An outage must not force us to discard a complete, usable trait list.
+        const snapshot = trait.enabled ? usableOrdinalTraitSnapshot(rule) : null;
+        if (trait.enabled && !snapshot) throw new Error(UNAVAILABLE);
+        const collectionId = ordinalCollectionId(rule.slug);
+        await this.getCollection(collectionId, ordinalRequestWork(context));
+        const ids = await this.walletIds(collectionId, addresses, context);
+        return new Map([...ids].filter(id => !trait.enabled || snapshot.inscription_ids.includes(id)).map(id => [id, 1n]));
+      }
+    }
+    const matching = new Map<string, bigint>();
+    for (const wallet of addresses) {
+      const inventory = await this.inventories.inventory(wallet, context, criteria?.kind === 'numbers',
+        (address, work) => this.readInventory(address, work));
+      if (criteria?.kind === 'numbers' && inventory.numbers?.size !== inventory.ids.size) throw new Error(UNAVAILABLE);
+      for (const id of inventory.ids) {
+        const item = catalog?.items.get(id);
+        const matches = criteria?.kind === 'ids' ? criteria.ids.includes(id)
+          : criteria?.kind === 'numbers' ? criteria.ranges.some(([start, end]) => inventory.numbers.get(id) >= start && inventory.numbers.get(id) <= end)
+          : item && (!trait.enabled || matchesOrdinalTrait(item.traits, rule));
+        if (matches) matching.set(id, 1n);
+      }
+    }
+    return matching;
+  }
+
   private async readCachedRule(rule: VerifierRole, addresses: string[], context: NftCheckContext, key: string): Promise<bigint> {
     const criteria = inscriptionCriteria(rule);
     const catalog = criteria ? null : await this.catalog.snapshot(rule.slug, context);

@@ -192,3 +192,9 @@ After saving, Undo restores the original requirements and offers Redo. Redo reap
 The editor changes requirements within the existing rule type: collection and traits, specific IDs or numbers, NFT token IDs, minimum item count, or ERC-20 minimum balance. IDs stay IDs and numeric rules stay numeric rules. Rule ID, channel, role, asset type, network, and contract remain fixed. NFT collection labels also stay fixed; changing an Ordinals collection refreshes its label and trait snapshot.
 
 Saving rechecks everyone who previously earned the affected role against all rules for that role in the server. Alternative qualifying rules preserve the role; newly eligible members who never earned it must verify themselves. Provider errors preserve existing roles for a later scheduled check. No database migration or new environment variables are needed. Restarting the backend registers the command; reload Discord if it does not appear.
+
+### Combined collectible minimums
+
+Collectible rules in the same server with the same Discord role and `min_items` combine their matching holdings. For example, two rules with minimum 10 can qualify a member holding 7 matching Ethscriptions and 3 matching Ordinals across their verified wallets. Rules with different minimums remain alternative ways to earn the role. Initial verification uses the rules in that verification channel; scheduled checks consider all rules for the earned role.
+
+Overlapping rules count each asset once. NFT identity includes its network, contract, and token ID; ERC-1155 copies retain their quantity without counting the same copies twice. ERC-20 balances remain independent. An incomplete combined check preserves an earned role unless confirmed holdings already meet the minimum. No schema migration or extra setup option is needed.

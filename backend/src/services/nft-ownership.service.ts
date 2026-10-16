@@ -107,6 +107,22 @@ export class NftOwnershipService {
     return run.checks.get(key);
   }
 
+  async matchingAssets(rule: NftRuleFields, wallets: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    // Count first to apply the normal network/configuration checks.
+    await this.count(rule, wallets, context);
+    const addresses = [...new Set(wallets.map(wallet => wallet.toLowerCase()))] as Address[];
+    if (!addresses.length) return new Map();
+    if (nftTrait(rule).enabled) return this.readTraitAssets(rule, addresses, context);
+    return this.cachedOwnedTokens(rule, addresses, context);
+  }
+
+  private cachedOwnedTokens(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    context.nftOwnedTokens ||= new Map();
+    const scope = JSON.stringify([rule.chain_id, rule.contract_address?.toLowerCase(), rule.token_standard, rule.token_ids, addresses.slice().sort()]);
+    if (!context.nftOwnedTokens.has(scope)) context.nftOwnedTokens.set(scope, this.readOwnedTokens(rule, addresses, context));
+    return context.nftOwnedTokens.get(scope);
+  }
+
   async validateTraits(rule: NftRuleFields): Promise<void> {
     if (!nftTrait(rule).enabled) return;
     if (!this.metadataSvc) throw new Error('NFT trait verification is not configured.');
@@ -140,12 +156,14 @@ export class NftOwnershipService {
   }
 
   private async readTraitBalances(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<bigint> {
+    const matching = await this.readTraitAssets(rule, addresses, context);
+    return [...matching.values()].reduce((sum, copies) => sum + copies, 0n);
+  }
+
+  private async readTraitAssets(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<Map<string, bigint>> {
     if (!this.metadataSvc) throw new Error('NFT trait verification is not configured.');
-    context.nftOwnedTokens ||= new Map();
-    const scope = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort()]);
-    if (!context.nftOwnedTokens.has(scope)) context.nftOwnedTokens.set(scope, this.readOwnedTokens(rule, addresses, context));
-    const owned = await context.nftOwnedTokens.get(scope);
-    if (!owned.size) return 0n;
+    const owned = await this.cachedOwnedTokens(rule, addresses, context);
+    if (!owned.size) return owned;
     context.nftMetadata ||= new Map();
     const metadataScope = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, [...owned.keys()].sort()]);
     if (!context.nftMetadata.has(metadataScope)) {
@@ -153,12 +171,12 @@ export class NftOwnershipService {
         this.metadataSvc.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber))));
     }
     const attributes = await context.nftMetadata.get(metadataScope);
-    let count = 0n;
+    const matching = new Map<string, bigint>();
     for (const [id, copies] of owned) {
       if (!attributes.has(id)) throw new Error('NFT trait verification is temporarily unavailable. Please try again.');
-      if (matchesNftTrait(attributes.get(id), rule)) count += copies;
+      if (matchesNftTrait(attributes.get(id), rule)) matching.set(id, copies);
     }
-    return count;
+    return matching;
   }
 
   private async metadataUri(rule: NftRuleFields, id: string, blockNumber: bigint): Promise<string | null> {
