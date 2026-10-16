@@ -46,7 +46,8 @@ describe('Verification page wallet choice', () => {
     const fixture = page(['bitcoin']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('bitcoin');
     expect(fixture.nativeElement.textContent).toContain('Connect your Xverse wallet');
-    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('.bitcoin-wallet-choice button').length).toBe(2);
   });
 
   it('keeps the existing Ethereum flow for an Ethereum-only channel', () => {
@@ -142,7 +143,7 @@ describe('Verification page wallet choice', () => {
 
   it('offers a small choice in mixed channels and resets the previous connection', async () => {
     const fixture = page(['evm', 'bitcoin']);
-    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(3);
+    expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
     fixture.componentInstance.selectWallet('bitcoin');
     await fixture.componentInstance.connect();
     expect(bitcoin.connect).toHaveBeenCalledWith('xverse');
@@ -155,6 +156,9 @@ describe('Verification page wallet choice', () => {
   it('connects and signs with the selected UniSat provider using the existing Bitcoin endpoints', async () => {
     bitcoin.isUniSatAvailable.and.returnValue(true);
     const fixture = page(['evm','bitcoin']); const component = fixture.componentInstance;
+    expect(fixture.nativeElement.querySelector('.bitcoin-wallet-choice')).toBeNull();
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.wallet-choice button')).map((button: any) => button.textContent.trim())).toEqual(['Ethereum', 'Bitcoin']);
+    fixture.nativeElement.querySelector('[aria-label="Bitcoin"]').click(); fixture.detectChanges();
     const choice = fixture.nativeElement.querySelector('[aria-label="Bitcoin with UniSat"]'); choice.click();
     fixture.detectChanges();
     expect(component.state$.value.bitcoinProvider).toBe('unisat');

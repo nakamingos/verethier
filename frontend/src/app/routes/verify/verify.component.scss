@@ -73,7 +73,21 @@
   position: relative;
   height: 14rem;
 
-  &.unisat-launch { height: 19rem; }
+  &.bitcoin-wallets { height: 18rem; }
+  &.unisat-launch { height: 23rem; }
+
+  .bitcoin-wallet-choice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1rem;
+
+    button {
+      font-size: 1rem;
+      opacity: .65;
+      &[aria-pressed='true'] { opacity: 1; }
+    }
+  }
 
   .step-2 .actions {
     display: flex;
