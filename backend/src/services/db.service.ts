@@ -72,6 +72,26 @@ export class DbService {
     }
   }
 
+  /** Public collection slugs only: no member data or external Ordinals API calls. */
+  async getKnownOrdinalCollectionSlugs(): Promise<string[]> {
+    const catalogs = async (): Promise<Array<{ slug: string }>> => {
+      const rows: Array<{ slug: string }> = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await this.supabase.from('ordinal_collections').select('slug')
+          .order('slug').range(offset, offset + 999);
+        if (error || !Array.isArray(data)) throw new Error('Ordinals collection suggestions could not be read.');
+        rows.push(...data);
+        if (data.length < 1000) return rows;
+      }
+    };
+    const [rules, cached] = await Promise.all([this.getOrdinalCatalogRules(), catalogs()]);
+    return [...new Set([
+      ...rules.filter(rule => !rule.inscription_criteria).map(rule => rule.slug),
+      ...cached.map(row => row.slug),
+    ].filter((slug): slug is string => typeof slug === 'string' && slug !== 'all'
+      && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(slug)))].sort((a, b) => a.localeCompare(b));
+  }
+
   async getCachedNftMetadata(chainId: number, contract: string, ids: string[], since: string): Promise<NftMetadataRow[]> {
     // The cache is optional; provider metadata can still be read if it is unavailable.
     try {

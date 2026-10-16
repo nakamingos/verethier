@@ -69,6 +69,7 @@ const mockDbService = {
   addRoleMapping: jest.fn(),
   deleteRoleMapping: jest.fn(),
   getRoleMappings: jest.fn(),
+  getKnownOrdinalCollectionSlugs: jest.fn(),
   ruleExists: jest.fn(),
   insertRoleMapping: jest.fn(),
   findRuleByMessageId: jest.fn(),
@@ -415,7 +416,7 @@ describe('DiscordService - Enhanced Tests', () => {
           expect(rule.options.find(option => option.name === name).max_length).toBe(6000);
         }
       }
-      expect(ordinals.options.find(option => option.name === 'slug').autocomplete).not.toBe(true);
+      expect(ordinals.options.find(option => option.name === 'slug').autocomplete).toBe(true);
       expect(ethscriptions.options.find(option => option.name === 'slug').autocomplete).toBe(true);
     });
 
@@ -800,6 +801,39 @@ describe('DiscordService - Enhanced Tests', () => {
     });
   });
 
+  describe('Ordinals slug autocomplete', () => {
+    const interaction = (typed = '') => ({ options: { getFocused: () => typed }, respond: jest.fn() });
+    it('populates existing database collections and searches them case-insensitively', async () => {
+      mockDbService.getKnownOrdinalCollectionSlugs.mockResolvedValue(['pizza-comrades', 'yonder']);
+      const empty = interaction(); await service.handleOrdinalSlugAutocomplete(empty as any);
+      expect(empty.respond).toHaveBeenCalledWith([{ name: 'pizza-comrades', value: 'pizza-comrades' }, { name: 'yonder', value: 'yonder' }]);
+      const query = interaction('PIZZA'); await service.handleOrdinalSlugAutocomplete(query as any);
+      expect(query.respond).toHaveBeenCalledWith([{ name: 'pizza-comrades', value: 'pizza-comrades' }, { name: 'pizza', value: 'pizza' }]);
+    });
+    it('keeps manual entry available when the database fails, without offering ALL or multiple slugs', async () => {
+      mockDbService.getKnownOrdinalCollectionSlugs.mockRejectedValue(new Error('offline'));
+      const manual = interaction(' NEW-COLLECTION '); await service.handleOrdinalSlugAutocomplete(manual as any);
+      expect(manual.respond).toHaveBeenCalledWith([{ name: 'new-collection', value: 'new-collection' }]);
+      for (const value of ['ALL', 'one,two', 'a'.repeat(101)]) {
+        const invalid = interaction(value); await service.handleOrdinalSlugAutocomplete(invalid as any);
+        expect(invalid.respond).toHaveBeenCalledWith([]);
+      }
+    });
+    it('limits suggestions to 25 and responds before the Discord deadline when the database stalls', async () => {
+      mockDbService.getKnownOrdinalCollectionSlugs.mockResolvedValue(Array.from({length: 30}, (_, n) => `collection-${n}`));
+      const limited = interaction('collection'); await service.handleOrdinalSlugAutocomplete(limited as any);
+      expect(limited.respond.mock.calls[0][0]).toHaveLength(25);
+      expect(limited.respond.mock.calls[0][0][24]).toEqual({name: 'collection', value: 'collection'});
+      jest.useFakeTimers();
+      try {
+        mockDbService.getKnownOrdinalCollectionSlugs.mockReturnValue(new Promise(() => {}));
+        const stalled = interaction('new'); const pending = service.handleOrdinalSlugAutocomplete(stalled as any);
+        await jest.advanceTimersByTimeAsync(1500); await pending;
+        expect(stalled.respond).toHaveBeenCalledWith([{ name: 'new', value: 'new' }]);
+      } finally { jest.useRealTimers(); }
+    });
+  });
+
   describe('Ordinals attribute autocomplete', () => {
     function interaction(name = 'attribute_key', value = '', options = {}) {
       const fields = { slug: 'yonder', asset_type: 'ordinal', ...options };
@@ -1100,6 +1134,7 @@ describe('DiscordService - Enhanced Tests', () => {
       ['add-ethscription-rule', 'role', 'handleRoleAutocomplete'],
       ['add-nft-rule', 'attribute_key', 'handleNftAttributeAutocomplete'],
       ['add-nft-rule', 'attribute_value', 'handleNftAttributeAutocomplete'],
+      ['add-ordinals-rule', 'slug', 'handleOrdinalSlugAutocomplete'],
       ['add-ordinals-rule', 'attribute_key', 'handleOrdinalAttributeAutocomplete'],
       ['add-ordinals-rule', 'attribute_value', 'handleOrdinalAttributeAutocomplete'],
       ['add-ethscription-rule', 'slug', 'handleSlugAutocomplete'],
