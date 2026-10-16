@@ -15,7 +15,7 @@ export const CONSTANTS = {
   },
 
   // Discord configuration
-  DISCORD_INITIALIZATION_TIMEOUT: 10000, // 10 seconds - timeout for Discord bot initialization
+  DISCORD_INITIALIZATION_TIMEOUT: 60000, // Allow a minute for Discord gateway startup
   
   // Nonce and verification security  
   DEFAULT_NONCE_EXPIRY: 300000, // 5 minutes - default expiration for verification nonces
