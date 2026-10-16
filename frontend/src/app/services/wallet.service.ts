@@ -46,9 +46,6 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
     const adapter = new WagmiAdapter({
       networks: [mainnet],
       projectId,
-      // Verification starts with an explicit wallet choice. Restoring Wagmi's saved
-      // connectors conflicts with AppKit's enableReconnect: false on page reload.
-      storage: null,
       transports: {
         [1]: http(env.rpcHttpProvider),
       },
@@ -58,7 +55,9 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
       networks: [mainnet],
       projectId,
       metadata,
-      enableReconnect: false,
+      // Reuse an approved session across verification links. Disconnecting it on
+      // every page load makes mobile wallets tear down and pair again immediately.
+      enableReconnect: true,
       enableCoinbase: true,
       enableBaseAccount: false,
       enableInjected: true,
@@ -167,6 +166,7 @@ export class WalletService implements OnDestroy {
   }
 
   async syncConnectedAccount(): Promise<`0x${string}`> {
+    await this.modal.ready();
     const account = getAccount(this.config);
     if (!account.isConnected || !account.connector) {
       throw new Error('Wallet not connected');

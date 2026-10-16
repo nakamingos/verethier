@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, EMPTY, Subject, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Subject, firstValueFrom } from 'rxjs';
 import { VerifyComponent } from './verify.component';
 import { WalletService } from '../../services/wallet.service';
 import { BitcoinWalletService } from '../../services/bitcoin-wallet.service';
@@ -19,7 +19,7 @@ describe('Verification page wallet choice', () => {
   let originalUrl: string;
   beforeEach(async () => {
     originalUrl = window.location.href;
-    ethereum = { connectedState$: EMPTY, connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
+    ethereum = { connectedState$: new BehaviorSubject({ isConnecting: false, isConnected: false }), connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
     bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
       preferredProvider: jasmine.createSpy().and.returnValue('xverse'), isUniSatAvailable: jasmine.createSpy().and.returnValue(false),
       openUniSatMobile: jasmine.createSpy(),
@@ -53,6 +53,66 @@ describe('Verification page wallet choice', () => {
     const fixture = page(['evm']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('evm');
     expect(fixture.nativeElement.querySelector('.wallet-choice')).toBeNull();
+  });
+
+  it('retains an approved Ethereum session on a fresh link and still requires a signature', () => {
+    const evmAddress = '0x' + '1'.repeat(40);
+    ethereum.connectedState$.next({ isConnecting: false, isConnected: true, address: evmAddress });
+    const fixture = page(['evm']);
+    expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({
+      walletConnected: true, connectedAddress: evmAddress, messageSigned: false, messageVerified: false,
+    }));
+    expect(fixture.nativeElement.querySelector('.step-2').classList.contains('active')).toBeTrue();
+    expect(ethereum.disconnectWeb3).not.toHaveBeenCalled();
+    expect(ethereum.signTypedMessage).not.toHaveBeenCalled();
+    const changeWallet = Array.from(fixture.nativeElement.querySelectorAll('.step-2 button'))
+      .find((button: any) => button.textContent.trim() === 'Change wallet') as HTMLButtonElement;
+    changeWallet.click();
+    expect(ethereum.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the Ethereum account after switching back from Bitcoin without disconnecting it', () => {
+    const fixture = page(['evm', 'bitcoin']);
+    const evmAddress = '0x' + '2'.repeat(40);
+    fixture.componentInstance.selectWallet('bitcoin');
+    ethereum.connectedState$.next({ isConnecting: false, isConnected: true, address: evmAddress });
+    expect(fixture.componentInstance.state$.value.connectedAddress).toBeNull();
+    fixture.componentInstance.selectWallet('evm');
+    expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({
+      walletConnected: true, connectedAddress: evmAddress,
+    }));
+    expect(ethereum.disconnectWeb3).not.toHaveBeenCalled();
+  });
+
+  it('selects Bitcoin-only context even while Ethereum is restoring a session', () => {
+    ethereum.connectedState$.next({ isConnecting: true, isConnected: false });
+    const fixture = page(['bitcoin']);
+    expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({
+      walletType: 'bitcoin', walletConnecting: false, walletConnected: false,
+    }));
+    expect(ethereum.disconnectWeb3).not.toHaveBeenCalled();
+  });
+
+  it('waits for session restoration before enabling signing with a saved address', () => {
+    const evmAddress = '0x' + '1'.repeat(40);
+    ethereum.connectedState$.next({ isConnecting: false, isReconnecting: true, isConnected: true, address: evmAddress });
+    const fixture = page(['evm']);
+    expect(fixture.componentInstance.state$.value.walletConnected).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.step-2 button').disabled).toBeTrue();
+    ethereum.connectedState$.next({ isConnecting: false, isReconnecting: false, isConnected: true, address: evmAddress });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.state$.value.walletConnected).toBeTrue();
+    expect(fixture.nativeElement.querySelector('.step-2 button').disabled).toBeFalse();
+  });
+
+  it('disables changing the Ethereum wallet during signing and verification', () => {
+    ethereum.connectedState$.next({ isConnecting: false, isConnected: true, address: '0x' + '1'.repeat(40) });
+    const fixture = page(['evm']);
+    for (const busy of [{ messageSigning: true, verificationSubmitting: false }, { messageSigning: false, verificationSubmitting: true }]) {
+      fixture.componentInstance.setState(busy); fixture.detectChanges();
+      const buttons = Array.from(fixture.nativeElement.querySelectorAll('.step-2 button')) as HTMLButtonElement[];
+      expect(buttons.every(button => button.disabled)).toBeTrue();
+    }
   });
 
   it('keeps Connect disabled until the Ethereum picker finishes, then allows another attempt', async () => {

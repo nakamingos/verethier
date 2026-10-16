@@ -103,6 +103,9 @@
                 Sign Message
               }
             </button>
+            @if (state.walletType === 'evm' && state.walletConnected && !state.messageVerified) {
+              <button type="button" (click)="connect()" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting">Change wallet</button>
+            }
           </div>
         </div>
       </div>
