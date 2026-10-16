@@ -13,8 +13,15 @@ const origin = 'https://verify.bouncer.test';
 const nonce = 'a'.repeat(64);
 const expiry = Math.floor(Date.now() / 1000) + 3600;
 const rainbow = { id: 'rainbow-test', name: 'Rainbow', mobile_link: 'rainbow://', chains: ['eip155:1'], supports_wc: true };
+let currentScenario = 'startup';
+// AppKit's optional dependency accepts newer connector majors as well. Keep the
+// adapter and application on the same stable connector/core instances.
+const adapterDirectory = path.dirname(require.resolve('@reown/appkit-adapter-wagmi'));
+for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
+  assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
+}
 
-async function setup(browser, mobile, injected) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -24,6 +31,7 @@ async function setup(browser, mobile, injected) {
   const errors = [];
   const consoleErrors = [];
   const socketMethods = [];
+  const apiRequests = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleErrors.push(message.text().replace(/(?:https?:\/\/|wss?:\/\/|wc:)[^\s]+/gi, '[link]')); });
   let proof, typedData, signatures = 0;
@@ -81,11 +89,12 @@ async function setup(browser, mobile, injected) {
     const request = route.request();
     const url = new URL(request.url());
     if (url.origin === origin) {
-      if (url.pathname.startsWith('/verify/')) return route.fulfill({ contentType: 'text/html', body: index });
+      if (url.pathname.startsWith('/verify/') || url.pathname === '/wallet-check') return route.fulfill({ contentType: 'text/html', body: index });
       const file = path.resolve(dist, '.' + url.pathname);
       if (file.startsWith(dist + '/') && fs.existsSync(file) && fs.statSync(file).isFile()) return route.fulfill({ path: file });
       return route.abort();
     }
+    if (url.pathname.startsWith('/api/')) apiRequests.push(url.pathname);
     if (url.pathname === '/api/verification-context') return route.fulfill({ json: {
       walletTypes: ['evm', 'bitcoin'], expiry,
       data: { userId: 'test-member', userTag: 'Collector', avatar: '', discordId: 'test-guild', discordName: 'NoMoreLabs', discordIcon: '', nonce: request.postDataJSON().nonce },
@@ -103,9 +112,10 @@ async function setup(browser, mobile, injected) {
     }
     return route.fulfill({ json: {} });
   });
-  await page.goto(origin + '/verify/' + nonce);
-  await page.getByText('Connect your wallet', { exact: true }).waitFor();
-  return { context, page, errors, consoleErrors, socketMethods, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
+  await page.goto(origin + entry);
+  if (entry.startsWith('/wallet-check')) await page.getByRole('heading', { name: 'Wallet connection check' }).waitFor();
+  else await page.getByText('Connect your wallet', { exact: true }).waitFor();
+  return { context, page, errors, consoleErrors, socketMethods, apiRequests, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
 }
 
 async function restorePreviousWalletConnectConnection(page) {
@@ -136,6 +146,7 @@ async function restorePreviousWalletConnectConnection(page) {
   const browser = await chromium.launch({ executablePath: process.env['CHROME_BIN'], headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   try {
     for (const mobile of [false, true]) {
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} injected wallet connection`;
       const test = await setup(browser, mobile, true);
       const { page } = test;
       await page.locator('.step-1 .actions button').click();
@@ -159,6 +170,7 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal(test.typedData.message.Nonce, nextNonce);
       assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       // Changing wallets is deliberate, rather than a side effect of loading a link.
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} injected wallet change`;
       await page.reload();
       await page.getByRole('button', { name: 'Change wallet', exact: true }).click();
       await page.getByText('Test Wallet', { exact: true }).last().click();
@@ -169,7 +181,30 @@ async function restorePreviousWalletConnectConnection(page) {
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));
       await test.context.close();
     }
+    for (const direct of [false, true]) {
+      currentScenario = direct ? 'direct diagnostics' : 'AppKit diagnostics';
+      const test = await setup(browser, true, false, '/wallet-check' + (direct ? '?mode=direct' : ''));
+      const { page } = test;
+      await page.getByRole('button', { name: 'Start connection', exact: true }).click();
+      if (direct) {
+        const link = await page.getByRole('link', { name: 'Open Rainbow', exact: true }).getAttribute('href');
+        assert(new URL(link).searchParams.get('uri').startsWith('wc:'));
+      } else {
+        await page.getByText('Rainbow', { exact: true }).last().click();
+        await page.waitForFunction(() => document.querySelector('textarea').value.includes('Pairing link created'));
+      }
+      const report = await page.getByRole('textbox', { name: 'Connection details', exact: true }).inputValue();
+      assert(/Relay (?:already )?connected/.test(report), report);
+      assert(!report.includes('wc:'));
+      assert(!report.includes('symKey'));
+      assert(!report.includes(account.address));
+      assert.deepEqual(test.apiRequests, [], 'Connection diagnostics must not request verification contexts or mutate Discord roles');
+      assert.deepEqual(test.errors, []);
+      console.log(JSON.stringify({ scenario: direct ? 'isolated-walletconnect-diagnostics' : 'appkit-connection-diagnostics', result: 'passed' }));
+      await test.context.close();
+    }
     for (const previousConnection of [false, true]) {
+      currentScenario = previousConnection ? 'saved-session retry' : 'fresh-session retry';
       const test = await setup(browser, true, false);
       const { page } = test;
       let handoff;
@@ -224,4 +259,4 @@ async function restorePreviousWalletConnectConnection(page) {
       await test.context.close();
     }
   } finally { await browser.close(); console.log(`Browser screenshots: ${artifacts}`); }
-})().catch(error => { console.error(error.message); process.exitCode = 1; });
+})().catch(error => { console.error(`${currentScenario}: ${error.message}`); process.exitCode = 1; });
