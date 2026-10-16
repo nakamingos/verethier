@@ -26,14 +26,16 @@ async function setup(browser, mobile, injected) {
   const socketMethods = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleErrors.push(message.text().replace(/(?:https?:\/\/|wss?:\/\/|wc:)[^\s]+/gi, '[link]')); });
-  let proof, typedData;
+  let proof, typedData, signatures = 0;
   if (injected) {
     await page.exposeFunction('__testSign', async data => {
+      signatures++;
       typedData = data;
       return account.signTypedData(data);
     });
     await page.addInitScript(({ address }) => {
       const listeners = new Map();
+      let authorized = localStorage.getItem('test-wallet-authorized') === 'true';
       const provider = {
         isMetaMask: false,
         on: (name, fn) => listeners.set(name, [...(listeners.get(name) || []), fn]),
@@ -41,11 +43,19 @@ async function setup(browser, mobile, injected) {
         request: async ({ method, params }) => {
           window.__walletCalls.push(method);
           if (method === 'eth_chainId') return '0x1';
-          if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [address];
-          if (method === 'wallet_requestPermissions') return [{ parentCapability: 'eth_accounts' }];
+          if (method === 'eth_accounts') return authorized ? [address] : [];
+          if (method === 'eth_requestAccounts' || method === 'wallet_requestPermissions') {
+            authorized = true;
+            localStorage.setItem('test-wallet-authorized', 'true');
+            return method === 'eth_requestAccounts' ? [address] : [{ parentCapability: 'eth_accounts' }];
+          }
           if (method === 'wallet_getCapabilities') return {};
           if (method === 'eth_signTypedData_v4') return window.__testSign(JSON.parse(params[1]));
-          if (method === 'wallet_revokePermissions') return null;
+          if (method === 'wallet_revokePermissions') {
+            authorized = false;
+            localStorage.removeItem('test-wallet-authorized');
+            return null;
+          }
           throw Object.assign(new Error('Unsupported test method'), { code: 4200 });
         },
       };
@@ -78,7 +88,7 @@ async function setup(browser, mobile, injected) {
     }
     if (url.pathname === '/api/verification-context') return route.fulfill({ json: {
       walletTypes: ['evm', 'bitcoin'], expiry,
-      data: { userId: 'test-member', userTag: 'Collector', avatar: '', discordId: 'test-guild', discordName: 'NoMoreLabs', discordIcon: '', nonce },
+      data: { userId: 'test-member', userTag: 'Collector', avatar: '', discordId: 'test-guild', discordName: 'NoMoreLabs', discordIcon: '', nonce: request.postDataJSON().nonce },
     } });
     if (url.pathname === '/api/verify-signature') { proof = request.postDataJSON(); return route.fulfill({ json: { assignedRoles: ['holder'] } }); }
     if (url.pathname === '/appkit/v1/config') return route.fulfill({ json: { features: [] } });
@@ -95,7 +105,7 @@ async function setup(browser, mobile, injected) {
   });
   await page.goto(origin + '/verify/' + nonce);
   await page.getByText('Connect your wallet', { exact: true }).waitFor();
-  return { context, page, errors, consoleErrors, socketMethods, get proof() { return proof; }, get typedData() { return typedData; } };
+  return { context, page, errors, consoleErrors, socketMethods, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
 }
 
 async function restorePreviousWalletConnectConnection(page) {
@@ -138,15 +148,22 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       assert.equal(test.typedData.domain.name, 'Bouncer');
       assert.equal(test.typedData.message.Nonce, nonce);
-      // A second visit must require a fresh choice and still sign successfully.
-      await page.reload();
+      // A second visit reuses the approved wallet but still requires a signature.
+      const nextNonce = 'b'.repeat(64);
+      await page.goto(origin + '/verify/' + nextNonce);
       await page.getByText('Connect your wallet', { exact: true }).waitFor();
-      assert.equal(await page.locator('.step-1 .actions button').innerText(), 'Connect');
-      await page.locator('.step-1 .actions button').click();
+      assert.equal(test.signatures, 1, 'Restoring a session must not sign automatically');
+      await page.getByRole('button', { name: 'Sign Message', exact: true }).click();
+      await page.locator('.step-3.active').waitFor();
+      assert.equal(test.signatures, 2, 'A fresh verification must request another signature');
+      assert.equal(test.typedData.message.Nonce, nextNonce);
+      assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
+      // Changing wallets is deliberate, rather than a side effect of loading a link.
+      await page.reload();
+      await page.getByRole('button', { name: 'Change wallet', exact: true }).click();
       await page.getByText('Test Wallet', { exact: true }).last().click();
       await page.getByRole('button', { name: 'Sign Message', exact: true }).click();
       await page.locator('.step-3.active').waitFor();
-      assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       assert.deepEqual(test.errors, []);
       await page.screenshot({ path: path.join(artifacts, (mobile ? 'phone' : 'desktop') + '.png'), fullPage: true });
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));

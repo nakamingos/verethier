@@ -12,6 +12,7 @@ import { BitcoinWalletProvider, BitcoinWalletService } from '@/services/bitcoin-
 import { DecodedData } from '@/models/app.interface';
 
 import { env } from 'src/env/env';
+import type { GetAccountReturnType } from '@wagmi/core';
 
 interface State {
   walletType: 'evm' | 'bitcoin';
@@ -43,6 +44,7 @@ interface State {
 export class VerifyComponent {
 
   routeData$!: Observable<DecodedData | null>;
+  private evmAccount?: GetAccountReturnType;
 
   state$: BehaviorSubject<State> = new BehaviorSubject<State>({
     walletType: 'evm',
@@ -80,8 +82,8 @@ export class VerifyComponent {
           || !resolvedData.userTag || !resolvedData.discordName) throw new Error('Missing verification context.');
         this.setState({ walletTypes: context.walletTypes });
         if (context.walletTypes.includes('bitcoin') && new URL(window.location.href).searchParams.get('wallet') === 'unisat') {
-          this.selectWallet('bitcoin', 'unisat');
-        } else this.selectWallet(context.walletTypes[0]);
+          this.setWalletType('bitcoin', 'unisat');
+        } else this.setWalletType(context.walletTypes[0]);
         return resolvedData as DecodedData;
       }))),
       catchError((err) => {
@@ -98,10 +100,11 @@ export class VerifyComponent {
     // Set connected state to local state
     this.walletSvc.connectedState$.pipe(
       tap((account) => {
+        this.evmAccount = account;
         if (this.state$.value.walletType !== 'evm') return;
         this.setState({
-          walletConnecting: account.isConnecting,
-          walletConnected: account.isConnected,
+          walletConnecting: account.isConnecting || account.isReconnecting,
+          walletConnected: account.isConnected && !account.isReconnecting,
           connectedAddress: account.isConnected ? account.address || null : null,
         });
       }),
@@ -339,14 +342,17 @@ export class VerifyComponent {
     const state = this.state$.value;
     if (!state.walletTypes.includes(walletType) || state.walletConnecting || state.messageSigning
       || state.verificationSubmitting || state.messageVerified) return;
+    this.setWalletType(walletType, bitcoinProvider);
+  }
+
+  private setWalletType(walletType: 'evm' | 'bitcoin', bitcoinProvider?: BitcoinWalletProvider): void {
+    const state = this.state$.value;
     this.bitcoinWalletSvc.disconnect();
-    void this.walletSvc.disconnectWeb3().catch(error => {
-      if (this.state$.value.walletType === 'evm') {
-        this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not reset your wallet connection.' });
-      }
-    });
+    const account = walletType === 'evm' ? this.evmAccount : undefined;
     this.setState({ walletType, bitcoinProvider: walletType === 'bitcoin' ? bitcoinProvider || this.bitcoinWalletSvc.preferredProvider() : state.bitcoinProvider,
-      walletConnecting: false, walletConnected: false, connectedAddress: null,
+      walletConnecting: account?.isConnecting || account?.isReconnecting || false,
+      walletConnected: !!account?.isConnected && !account.isReconnecting,
+      connectedAddress: account?.isConnected ? account.address || null : null,
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
   }

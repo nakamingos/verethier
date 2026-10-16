@@ -79,7 +79,7 @@ CHROME_BIN=/path/to/chrome yarn test:wallet-smoke
 
 This uses simulated wallets, backend responses, and relay traffic. It verifies EIP-712 signatures on desktop/mobile layouts, repeat visits, Android Rainbow app links, and retries with a saved connection from a previous page. It does not use real wallets or API credits. Screenshots are written to a temporary directory.
 
-EVM verification requires an explicit wallet choice on each visit. Wagmi connection persistence is disabled alongside AppKit's `enableReconnect: false` so a saved connector cannot leave the wallet picker disabled after a reload.
+AppKit and Wagmi restore approved EVM wallet sessions together across visits. Wagmi also persists the session's requested chains, which its WalletConnect connector needs to recognize a restored session. A saved connection without a live session must still allow a fresh wallet choice.
 
 ## Deployment
 
@@ -99,7 +99,7 @@ Notes:
 
 Reown AppKit owns WalletConnect, injected-wallet discovery, and Coinbase connectors through one shared Wagmi adapter. It uses the existing Reown/WalletConnect project ID and the page's current origin for Bouncer metadata. Ensure any origin allowlist in the Reown dashboard includes the deployed frontend domain.
 
-Automatic reconnection is disabled so each verification starts with an explicit wallet choice. Email/social login, swaps, on-ramp, send/receive, and account history are disabled. The existing EIP-712 verification message and backend signature checks are unchanged. Xverse and UniSat continue to use their separate Bitcoin connection flow.
+Automatic reconnection reuses an approved wallet session rather than disconnecting it whenever a verification link loads. Each verification still requires signing its fresh EIP-712 challenge; a restored session does not verify the member. The connected address and a **Change wallet** button are shown before signing. Changing wallets deliberately disconnects through AppKit before opening the picker. Switching between Ethereum and Bitcoin does not tear down the EVM session. Email/social login, swaps, on-ramp, send/receive, and account history are disabled. Xverse and UniSat continue to use their separate Bitcoin connection flow.
 
 Connection errors from the picker appear on the verification page, including guidance for pending requests and connection-service failures. Browser-to-wallet app launches still depend on the mobile browser and installed wallet. Test Rainbow on a real Android/iOS device before treating a desktop browser check as confirmation of mobile compatibility.
 
