@@ -257,6 +257,8 @@ export class DiscordService implements OnModuleInit {
             await this.handleNftAttributeAutocomplete(interaction);
           } else if (assetType === 'ordinal' && ['attribute_key', 'attribute_value'].includes(focusedOption.name)) {
             await this.handleOrdinalAttributeAutocomplete(interaction);
+          } else if (assetType === 'ordinal' && focusedOption.name === 'slug') {
+            await this.handleOrdinalSlugAutocomplete(interaction);
           } else if (['nft', 'ordinal', 'erc20'].includes(assetType)) {
             await interaction.respond([]);
           } else if (focusedOption.name === 'slug') {
@@ -549,7 +551,7 @@ export class DiscordService implements OnModuleInit {
             .setDescription('Add a Bitcoin Ordinals collection, ID, or number verification rule')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
-            .addStringOption(option => option.setName('slug').setDescription('One collection slug; leave empty for specific inscription IDs or numbers'))
+            .addStringOption(option => option.setName('slug').setDescription('One collection slug; leave empty for specific inscription IDs or numbers').setAutocomplete(true))
             .addStringOption(option => option.setName('inscription_ids').setDescription('Full inscription ID or comma-separated IDs; leave slug empty').setMaxLength(6000))
             .addStringOption(option => option.setName('inscription_numbers').setDescription('Global inscription numbers or inclusive ranges, e.g. 12345,100000-100999').setMaxLength(6000))
             .addStringOption(option => option.setName('attribute_key').setDescription('Collection attribute key (leave empty for ALL attributes)').setAutocomplete(true))
@@ -912,6 +914,21 @@ export class DiscordService implements OnModuleInit {
     const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
     if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
     await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));
+  }
+
+  async handleOrdinalSlugAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+    const typed = String(interaction.options.getFocused()).trim().toLowerCase();
+    let slugs: string[] = [];
+    try {
+      slugs = await Promise.race([this.dbSvc.getKnownOrdinalCollectionSlugs(), this.timeoutPromise(1500, [])]);
+    } catch { /* Manual entry remains available if database suggestions fail. */ }
+    const values = slugs.filter(slug => slug.includes(typed)).slice(0, 25);
+    if (typed !== 'all' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(typed) && !values.includes(typed)) {
+      // Keep database matches first while allowing a new provider-validated slug.
+      values.splice(24);
+      values.push(typed);
+    }
+    await this.safeRespond(interaction, values.map(value => ({ name: value, value })));
   }
 
   async handleOrdinalAttributeAutocomplete(interaction: AutocompleteInteraction): Promise<void> {

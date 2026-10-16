@@ -15,6 +15,34 @@ describe('DbService (Unit Tests)', () => {
   let mockSupabaseClient: any;
   let loggerSpy: jest.SpyInstance;
 
+  describe('known Ordinals collection slugs', () => {
+    it('merges cached collections with saved rules, deduplicates, and excludes number/ID rules', async () => {
+      mockSupabaseClient.from.mockImplementation(table => {
+        const data = table === 'ordinal_collections'
+          ? [{slug: 'yonder'}, {slug: 'pizza-comrades'}]
+          : [{slug: 'yonder', inscription_criteria: null}, {slug: 'idiots', inscription_criteria: null},
+            {slug: null, inscription_criteria: {kind: 'numbers'}}, {slug: 'wrong', inscription_criteria: {kind: 'ids'}},
+            {slug: 'ALL'}, {slug: 'one,two'}];
+        const query: any = { select: () => query, eq: () => query, order: () => query, range: jest.fn().mockResolvedValue({data, error: null}) };
+        return query;
+      });
+      expect(await service.getKnownOrdinalCollectionSlugs()).toEqual(['idiots', 'pizza-comrades', 'yonder']);
+      expect(mockSupabaseClient.from.mock.calls.map(call => call[0]).sort()).toEqual(['ordinal_collections','verifier_rules']);
+    });
+    it('reads later catalog pages rather than dropping collections beyond the database row cap', async () => {
+      const catalogRange = jest.fn().mockResolvedValueOnce({ data: Array.from({length: 1000}, (_, n) => ({slug: `collection-${n}`})), error: null })
+        .mockResolvedValueOnce({ data: [{slug: 'last-page'}], error: null });
+      mockSupabaseClient.from.mockImplementation(table => {
+        const query: any = { select: () => query, eq: () => query, order: () => query,
+          range: table === 'ordinal_collections' ? catalogRange : jest.fn().mockResolvedValue({data: [], error: null}) };
+        return query;
+      });
+      const slugs = await service.getKnownOrdinalCollectionSlugs();
+      expect(slugs).toHaveLength(1001); expect(slugs).toContain('last-page');
+      expect(catalogRange).toHaveBeenLastCalledWith(1000, 1999);
+    });
+  });
+
   beforeEach(async () => {
     // Create a mock Supabase client
     mockSupabaseClient = {
