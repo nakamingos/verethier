@@ -50,6 +50,9 @@ export class DiscordService implements OnModuleInit {
   
   /** Flag to track if the service is fully initialized */
   private isInitialized = false;
+
+  private initializing?: Promise<void>;
+  private interactionClient?: Client;
   
   /**
    * Creates an instance of DiscordService.
@@ -109,7 +112,8 @@ export class DiscordService implements OnModuleInit {
           Logger.warn('Cache warming failed:', error.message)
         );
       } catch (error) {
-        Logger.error('Failed to initialize Discord bot - continuing without Discord functionality', error.message);
+        Logger.error('Failed to initialize Discord bot - aborting startup', error.message);
+        throw error;
       }
     }
   }
@@ -143,42 +147,62 @@ export class DiscordService implements OnModuleInit {
    * - Timeout protection to prevent hanging initialization
    * 
    * @returns Promise that resolves when the bot is successfully initialized
-   * @throws Error if initialization fails or times out after 10 seconds
+   * @throws Error if initialization fails or exceeds the startup timeout
    */
   async initializeBot(): Promise<void> {
+    if (this.initializing) return this.initializing;
     if (this.client) return Promise.resolve();
 
-    return new Promise((resolve, reject) => {
-      this.client = new Client({ intents: [GatewayIntentBits.Guilds] });
+    const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+    this.client = client;
+
+    this.initializing = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        this.client = null;
+        this.isInitialized = false;
+        void client.destroy().catch(cleanupError => Logger.warn('Could not close failed Discord connection:', cleanupError.message));
+        reject(error);
+      };
 
       // Set a timeout to prevent hanging
       const timeout = setTimeout(() => {
-        reject(new Error(`Discord bot initialization timed out after ${CONSTANTS.DISCORD_INITIALIZATION_TIMEOUT / 1000} seconds`));
+        fail(new Error(`Discord bot initialization timed out after ${CONSTANTS.DISCORD_INITIALIZATION_TIMEOUT / 1000} seconds`));
       }, CONSTANTS.DISCORD_INITIALIZATION_TIMEOUT);
 
-      this.client.on(Events.ClientReady, (readyClient) => {
-        clearTimeout(timeout);
-        Logger.debug('Discord bot initialized.', readyClient.user.tag);
-        // Initialize the new services with the client
-        this.discordMessageSvc.initialize(this.client);
-        this.discordVerificationSvc.initialize(this.client);
-        this.discordCommandsSvc.initialize(this.client);
-        resolve();
+      client.on(Events.ClientReady, (readyClient) => {
+        if (settled) return;
+        try {
+          // Initialize the services before accepting verification requests.
+          this.discordMessageSvc.initialize(client);
+          this.discordVerificationSvc.initialize(client);
+          this.discordCommandsSvc.initialize(client);
+          settled = true;
+          clearTimeout(timeout);
+          Logger.debug('Discord bot initialized.', readyClient.user.tag);
+          resolve();
+        } catch (error) {
+          fail(error);
+        }
       });
 
-      this.client.on('error', (error) => {
-        clearTimeout(timeout);
-        Logger.error('Discord bot initialization failed:', error);
-        reject(error);
+      client.on('error', (error) => {
+        Logger.error('Discord client error:', error);
+        fail(error);
       });
 
-      this.client.login(EnvironmentConfig.DISCORD_BOT_TOKEN).catch((error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-    });
+      client.login(EnvironmentConfig.DISCORD_BOT_TOKEN).catch(fail);
+    }).finally(() => { this.initializing = undefined; });
+    return this.initializing;
   }
 
+  /** A listening HTTP server alone does not mean verification buttons work. */
+  isReady(): boolean {
+    return this.isInitialized && this.client === this.interactionClient && Boolean(this.client?.isReady());
+  }
 
   /**
    * Creates and registers slash commands for the Discord bot.
@@ -200,8 +224,13 @@ export class DiscordService implements OnModuleInit {
    * @returns Promise that resolves when slash commands are registered and handlers are set up
    */
   async createSlashCommands(): Promise<void> {
+    this.registerInteractionHandlers();
     await this.registerSlashCommands();
+  }
 
+  private registerInteractionHandlers(): void {
+    if (!this.client) throw new Error('Discord client is not initialized');
+    if (this.interactionClient === this.client) return;
     this.client.on('interactionCreate', async (interaction) => {
       if (interaction.isModalSubmit?.() && interaction.customId.startsWith('edit-rule-form-')) {
         await this.discordCommandsSvc.handleEditRuleModal(interaction);
@@ -265,6 +294,7 @@ export class DiscordService implements OnModuleInit {
         }
       }
     });
+    this.interactionClient = this.client;
   }
 
   /**

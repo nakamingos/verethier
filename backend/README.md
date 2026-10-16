@@ -2,6 +2,8 @@
 
 NestJS API and Discord bot for wallet verification, rule evaluation, and role assignment.
 
+When Discord is enabled, startup waits up to 60 seconds for the gateway and aborts if it cannot connect. Once running, `/api/health` returns HTTP 503 if the bot becomes unavailable, so a running HTTP server cannot mask broken verification buttons. When Discord is intentionally disabled, the health check covers the API alone.
+
 ## Stack
 
 - NestJS 9

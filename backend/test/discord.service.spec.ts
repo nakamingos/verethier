@@ -11,6 +11,8 @@ import { CacheService } from '../src/services/cache.service';
 import { Logger } from '@nestjs/common';
 import { NftMetadataService } from '../src/services/nft-metadata.service';
 import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
+import { EnvironmentConfig } from '../src/config/environment.config';
+import { CONSTANTS } from '../src/constants';
 
 // Mock Discord.js client and related objects
 const mockUser = { id: 'user123', tag: 'TestBot#1234' };
@@ -31,6 +33,8 @@ const mockRole = { id: 'role123', name: 'TestRole', position: 5, editable: true 
 const mockClient = {
   on: jest.fn(),
   login: jest.fn().mockResolvedValue(''),
+  destroy: jest.fn().mockResolvedValue(undefined),
+  isReady: jest.fn().mockReturnValue(true),
   users: {
     fetch: jest.fn().mockResolvedValue(mockUser)
   },
@@ -166,6 +170,8 @@ describe('DiscordService - Enhanced Tests', () => {
     }).compile();
     service = module.get<DiscordService>(DiscordService);
     jest.clearAllMocks();
+    mockClient.on.mockReset();
+    mockClient.isReady.mockReturnValue(true);
     mockNftMetadataService.suggestions.mockReset().mockResolvedValue(['Color', 'Hat']);
     mockOrdinalsService.suggestions.mockReset().mockResolvedValue(['Background', 'Hat']);
     
@@ -174,6 +180,7 @@ describe('DiscordService - Enhanced Tests', () => {
   });
 
   describe('Initialization', () => {
+    afterEach(() => { jest.useRealTimers(); });
     it('should be defined', () => {
       expect(service).toBeDefined();
     });
@@ -234,11 +241,118 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockClient.login).toHaveBeenCalledTimes(0); // Should not be called again
     });
 
-    it('should handle bot initialization errors', async () => {
-      // This test verifies error handling in the login process
-      // We skip the actual promise rejection test due to the complex async nature
-      // of the initializeBot method with event listeners
-      expect(true).toBe(true); // Placeholder for complex async error handling
+    it('waits for the same in-progress login when initialization is requested twice', async () => {
+      (service as any).client = null;
+      let readyCallback: Function;
+      mockClient.on.mockImplementation((event, callback) => {
+        if (event === 'ready') readyCallback = callback;
+      });
+      const first = service.initializeBot();
+      const second = service.initializeBot();
+      let completed = false;
+      void second.then(() => { completed = true; });
+      await Promise.resolve();
+      expect(completed).toBe(false);
+      expect(mockClient.login).toHaveBeenCalledTimes(1);
+      readyCallback(mockClient);
+      await Promise.all([first, second]);
+    });
+
+    it('installs working button handlers after a gateway connection taking longer than ten seconds', async () => {
+      jest.useFakeTimers();
+      (service as any).client = null;
+      let readyCallback: Function;
+      let interactionCallback: Function;
+      mockClient.on.mockImplementation((event, callback) => {
+        if (event === 'ready') readyCallback = callback;
+        if (event === 'interactionCreate') interactionCallback = callback;
+      });
+      const testFlag = jest.replaceProperty(EnvironmentConfig, 'IS_TEST', false);
+      const enabledFlag = jest.replaceProperty(EnvironmentConfig, 'DISCORD_ENABLED', 1);
+      try {
+        const pending = service.onModuleInit();
+        await jest.advanceTimersByTimeAsync(15_000);
+        expect(mockClient.destroy).not.toHaveBeenCalled();
+        readyCallback(mockClient);
+        await pending;
+        expect(service.isReady()).toBe(true);
+        const interaction = {
+          isAutocomplete: () => false, isChatInputCommand: () => false, isButton: () => true,
+          customId: 'requestVerification',
+          guild: { id: 'guild123' }, channel: { id: 'channel123' },
+          deferReply: jest.fn().mockResolvedValue({}),
+        };
+        mockVerificationService.getRulesForChannel.mockResolvedValue([{ id: 1 }]);
+        await interactionCallback(interaction);
+        expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 64 });
+        expect(mockDiscordVerificationService.requestVerification).toHaveBeenCalledWith(interaction);
+      } finally {
+        enabledFlag.restore();
+        testFlag.restore();
+      }
+    });
+
+    it('closes a timed-out connection and ignores a late ready event', async () => {
+      jest.useFakeTimers();
+      (service as any).client = null;
+      let readyCallback: Function;
+      mockClient.on.mockImplementation((event, callback) => {
+        if (event === 'ready') readyCallback = callback;
+      });
+      const rejected = expect(service.initializeBot()).rejects.toThrow('timed out after 60 seconds');
+      await jest.advanceTimersByTimeAsync(CONSTANTS.DISCORD_INITIALIZATION_TIMEOUT);
+      await rejected;
+      expect(mockClient.destroy).toHaveBeenCalledTimes(1);
+      expect((service as any).client).toBeNull();
+      readyCallback(mockClient);
+      expect(mockDiscordVerificationService.initialize).not.toHaveBeenCalled();
+      expect(service.isReady()).toBe(false);
+    });
+
+    it('cleans up a failed login and permits another initialization attempt', async () => {
+      (service as any).client = null;
+      mockClient.login.mockRejectedValueOnce(new Error('Gateway unavailable'));
+      await expect(service.initializeBot()).rejects.toThrow('Gateway unavailable');
+      expect(mockClient.destroy).toHaveBeenCalledTimes(1);
+      let readyCallback: Function;
+      mockClient.on.mockImplementation((event, callback) => {
+        if (event === 'ready') readyCallback = callback;
+      });
+      const retry = service.initializeBot();
+      readyCallback(mockClient);
+      await retry;
+      expect(mockClient.login).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails application startup when the enabled Discord bot cannot initialize', async () => {
+      const testFlag = jest.replaceProperty(EnvironmentConfig, 'IS_TEST', false);
+      const enabledFlag = jest.replaceProperty(EnvironmentConfig, 'DISCORD_ENABLED', 1);
+      const initialization = jest.spyOn(service, 'initializeBot').mockRejectedValue(new Error('Gateway unavailable'));
+      try {
+        await expect(service.onModuleInit()).rejects.toThrow('Gateway unavailable');
+        expect(mockClient.on).not.toHaveBeenCalledWith('interactionCreate', expect.any(Function));
+      } finally {
+        initialization.mockRestore();
+        enabledFlag.restore();
+        testFlag.restore();
+      }
+    });
+
+    it('reports readiness only when startup completed and the Discord gateway is ready', async () => {
+      const testFlag = jest.replaceProperty(EnvironmentConfig, 'IS_TEST', false);
+      const enabledFlag = jest.replaceProperty(EnvironmentConfig, 'DISCORD_ENABLED', 1);
+      const initialization = jest.spyOn(service, 'initializeBot').mockResolvedValue();
+      try {
+        expect(service.isReady()).toBe(false);
+        await service.onModuleInit();
+        expect(service.isReady()).toBe(true);
+        mockClient.isReady.mockReturnValue(false);
+        expect(service.isReady()).toBe(false);
+      } finally {
+        initialization.mockRestore();
+        enabledFlag.restore();
+        testFlag.restore();
+      }
     });
   });
 
@@ -345,6 +459,17 @@ describe('DiscordService - Enhanced Tests', () => {
       await service.createSlashCommands();
       
       expect(mockClient.on).toHaveBeenCalledWith('interactionCreate', expect.any(Function));
+    });
+
+    it('installs verification handlers before command registration finishes and does not duplicate them', async () => {
+      let finishRegistration: (value: object) => void;
+      mockRest.put.mockReturnValueOnce(new Promise(resolve => { finishRegistration = resolve; }));
+      const pending = service.createSlashCommands();
+      expect(mockClient.on).toHaveBeenCalledWith('interactionCreate', expect.any(Function));
+      finishRegistration({});
+      await pending;
+      await service.createSlashCommands();
+      expect(mockClient.on.mock.calls.filter(([event]) => event === 'interactionCreate')).toHaveLength(1);
     });
   });
 

@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 import dotenv from 'dotenv';
+import { EnvironmentConfig } from './config/environment.config';
+import { DiscordService } from './services/discord.service';
 
 // Load environment configuration
 dotenv.config();
@@ -22,12 +24,21 @@ dotenv.config();
  */
 @Injectable()
 export class AppService {
+  constructor(@Optional() private readonly discordSvc?: DiscordService) {}
+
   /**
    * Get basic application health and status information
    * 
    * @returns Object containing application status and essential info only
    */
   getHealth() {
+    if (EnvironmentConfig.DISCORD_ENABLED && !EnvironmentConfig.IS_TEST && !this.discordSvc?.isReady()) {
+      throw new ServiceUnavailableException({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        discord: 'unavailable',
+      });
+    }
     const baseHealth = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
