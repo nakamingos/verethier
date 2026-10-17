@@ -13,6 +13,7 @@
   font-display: swap;
 }
 :root {
+  scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
   --ase-text: #c0c0c0;
@@ -276,6 +277,28 @@ form > label {
 .portal-heading {
   margin-bottom: 2.5rem;
 }
+.portal-feedback {
+  position: fixed;
+  top: max(1.2rem, env(safe-area-inset-top));
+  right: max(1.2rem, env(safe-area-inset-right));
+  width: min(52rem, calc(100% - 2.4rem));
+  max-height: min(40svh, 32rem);
+  overflow: auto;
+  z-index: 30;
+  box-shadow: 0 6px 18px #0006;
+}
+.portal-feedback .notice {
+  margin: 0;
+}
+.portal-feedback p {
+  margin: 0;
+}
+.portal-feedback .actions {
+  justify-content: flex-end;
+}
+.portal-feedback .notice button {
+  margin-left: 0;
+}
 .eyebrow {
   color: var(--ase-dim);
   font-size: 1.6rem;
@@ -340,6 +363,46 @@ form > label {
 .portal-content {
   min-width: 0;
 }
+.portal-content.is-loading {
+  opacity: 0.5;
+}
+.server-placeholder {
+  min-height: 68rem;
+}
+.placeholder-line {
+  display: block;
+  height: 2rem;
+  background: var(--ase-editor);
+  border-radius: 3px;
+  margin-bottom: 1.5rem;
+}
+.placeholder-title {
+  width: 45%;
+  height: 3rem;
+}
+.placeholder-tabs,
+.placeholder-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.placeholder-tabs .placeholder-line {
+  width: 10rem;
+  height: 4rem;
+}
+.placeholder-toolbar .placeholder-line {
+  flex: 1;
+  min-width: 15rem;
+  height: 6rem;
+}
+.placeholder-card {
+  min-height: 26rem;
+  margin: 0;
+}
+.placeholder-card .placeholder-line:nth-child(2) {
+  width: 65%;
+}
 .community-title {
   justify-content: flex-start;
   margin: 0 0 1.5rem;
@@ -399,10 +462,23 @@ form > label {
   align-items: stretch;
 }
 .rule-card {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   min-width: 0;
   position: relative;
   scroll-margin-top: 2rem;
+}
+.rule-card-footer {
+  margin-top: auto;
+}
+.rule-card-group {
+  display: flex;
+  align-items: flex-end;
+  min-height: 3.8rem;
+}
+.rule-card-group .combined-badge {
+  max-width: 100%;
 }
 .rule-card.editing {
   z-index: 5;
@@ -553,6 +629,15 @@ form > label {
 .history-row p {
   width: 100%;
   margin: 0;
+}
+.activity-results {
+  height: clamp(32rem, 60svh, 64rem);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 0.8rem;
+}
+.activity-results[aria-busy='true'] {
+  opacity: 0.5;
 }
 .pagination {
   display: flex;

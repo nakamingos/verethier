@@ -18,6 +18,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   servers: any[] = [];
   invite = '';
   selected = '';
+  loadingServer = '';
   data: any = null;
   tab = 'rules';
   filter = '';
@@ -27,7 +28,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   draft: any = {};
   mode = 'collection';
   review = false;
-  activity: any = { items: [], page: 1, pages: 1, total: 0 };
+  activity: any = { items: [], page: 1, pages: 1, total: 0, kind: 'roles' };
   activityKind = 'roles';
   memberId = '';
   memberQuery = '';
@@ -68,6 +69,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         const first =
           this.servers.find((s) => s.id === remembered && s.installed) ||
           this.servers.find((s) => s.installed);
+        this.ready = true;
         if (first) await this.select(first.id);
       }
     } catch (e) {
@@ -107,6 +109,16 @@ export class AdminComponent implements OnInit, OnDestroy {
   failure(e: any) {
     this.error = e?.message || 'Something went wrong. Please try again.';
   }
+  dismissFeedback() {
+    this.error = '';
+    this.notice = '';
+  }
+  get loadingServerName() {
+    return (
+      this.servers.find((server) => server.id === this.loadingServer)?.name ||
+      'community'
+    );
+  }
   async run(work: () => Promise<void>) {
     if (this.busy) return;
     this.busy = true;
@@ -123,21 +135,28 @@ export class AdminComponent implements OnInit, OnDestroy {
   async select(id: string) {
     await this.run(async () => {
       this.resetMemberSearch();
-      this.memberQuery = '';
-      this.groupFilter = '';
-      this.selected = id;
-      this.data = null;
-      this.editor = null;
-      this.member = null;
-      this.undo = null;
-      this.tab = 'rules';
-      this.data = await this.api('/servers/' + id);
-      this.rebuildGroups();
-      this.messageChannel =
-        this.data.settings.verification_channel_id ||
-        this.data.channels[0]?.id ||
-        '';
-      sessionStorage.setItem('bouncer-admin-server', id);
+      this.suggestionEpoch++;
+      this.loadingServer = id;
+      try {
+        // Keep the current server visible and inert until its replacement is ready.
+        // Commit the ID and data together so controls never target another server.
+        const data = await this.api('/servers/' + id);
+        this.selected = id;
+        this.data = data;
+        this.memberQuery = '';
+        this.groupFilter = '';
+        this.editor = null;
+        this.member = null;
+        this.undo = null;
+        this.tab = 'rules';
+        this.messageUrl = '';
+        this.rebuildGroups();
+        this.messageChannel =
+          data.settings.verification_channel_id || data.channels[0]?.id || '';
+        sessionStorage.setItem('bouncer-admin-server', id);
+      } finally {
+        this.loadingServer = '';
+      }
     });
   }
   async reload() {
@@ -454,9 +473,21 @@ export class AdminComponent implements OnInit, OnDestroy {
     await this.run(() => this.loadActivity(this.activity.page + direction));
   }
   async loadActivity(page = this.activity.page) {
-    this.activity = await this.api(
-      `/servers/${this.selected}/activity?kind=${this.activityKind}&page=${page}`,
-    );
+    const kind = this.activityKind;
+    try {
+      const data = await this.api(
+        `/servers/${this.selected}/activity?kind=${kind}&page=${page}`,
+      );
+      this.activity = { ...data, kind };
+      requestAnimationFrame(() => {
+        const entries =
+          document.querySelector<HTMLElement>('.activity-results');
+        if (entries) entries.scrollTop = 0;
+      });
+    } catch (error) {
+      this.activityKind = this.activity.kind;
+      throw error;
+    }
   }
   private resetMemberSearch() {
     clearTimeout(this.memberSearchTimer);

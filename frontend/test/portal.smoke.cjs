@@ -39,6 +39,13 @@ const base = {
       let holdEdit = false,
         releaseEdit,
         editEntered;
+      let holdServer = true,
+        releaseServer,
+        serverEntered;
+      let denyOtherServer = true;
+      const initialServerStarted = new Promise((resolve) => {
+        serverEntered = resolve;
+      });
       let rules = [
           structuredClone(base),
           {
@@ -89,10 +96,27 @@ const base = {
             };
           else if (p === '/servers')
             data = {
-              servers: [{ id: server, name: 'NoMoreLabs', installed: true }],
+              servers: [
+                { id: server, name: 'NoMoreLabs', installed: true },
+                {
+                  id: '999999999999999999',
+                  name: 'Another community',
+                  installed: true,
+                },
+              ],
               invite: 'https://discord.com/oauth2/authorize',
             };
-          else if (p === `/servers/${server}`)
+          else if (
+            p === `/servers/${server}` ||
+            p === '/servers/999999999999999999'
+          ) {
+            if (holdServer) {
+              holdServer = false;
+              serverEntered();
+              await new Promise((resolve) => {
+                releaseServer = resolve;
+              });
+            }
             data = {
               server: { id: server, name: 'NoMoreLabs' },
               rules,
@@ -111,24 +135,56 @@ const base = {
               ],
               diagnostics: [],
             };
-          else if (p.endsWith('/suggestions'))
+            if (p.endsWith('/999999999999999999')) {
+              if (denyOtherServer) {
+                status = 503;
+                data = {
+                  message: 'This community could not be loaded. Try again.',
+                };
+              } else {
+                data = {
+                  ...data,
+                  server: {
+                    id: '999999999999999999',
+                    name: 'Another community',
+                  },
+                  rules: [
+                    {
+                      ...structuredClone(base),
+                      id: 6,
+                      server_id: '999999999999999999',
+                      role_name: 'Other collectors',
+                    },
+                  ],
+                };
+              }
+            }
+          } else if (p.endsWith('/suggestions'))
             data = { values: ['pizza-comrades', 'yonder'] };
-          else if (p.endsWith('/activity'))
+          else if (p.endsWith('/activity')) {
+            const number = Number(url.searchParams.get('page') || 1);
             data = {
-              items: [
-                {
-                  id: 'a1',
+              items: Array.from(
+                { length: number === 3 ? 5 : 20 },
+                (_, index) => ({
+                  id: 'a' + index,
+                  user_name:
+                    number === 2
+                      ? 'A collector with a long display name ' + index
+                      : 'Collector ' + index,
+                  role_name: 'Comrade',
+                  status: 'active',
                   kind: 'edit',
                   after_rule: base,
                   reversible: true,
                   created_at: new Date().toISOString(),
-                },
-              ],
+                }),
+              ),
               page: Number(url.searchParams.get('page') || 1),
               pages: 3,
               total: 45,
             };
-          else if (p.endsWith('/edit')) {
+          } else if (p.endsWith('/edit')) {
             if (holdEdit) {
               holdEdit = false;
               editEntered();
@@ -233,10 +289,133 @@ const base = {
         return route.abort();
       });
       await page.goto('https://bouncer.test/admin');
+      await initialServerStarted;
+      await page.locator('.server-placeholder').waitFor();
+      assert.equal(
+        await page
+          .locator('link[rel="preload"][as="font"]')
+          .getAttribute('href'),
+        '/assets/fonts/pizzascript.woff2',
+      );
+      await page.screenshot({
+        path: `${artifacts}/loading-${width}.png`,
+        fullPage: true,
+      });
+      releaseServer();
       await page
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
       await page.evaluate(() => document.fonts.ready);
+      const paneSize = await page.locator('.portal-content').boundingBox();
+      holdServer = true;
+      const refreshStarted = new Promise((resolve) => {
+        serverEntered = resolve;
+      });
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'NoMoreLabs', exact: true })
+        .click();
+      await refreshStarted;
+      assert.equal(
+        await page.locator('.rule-card').count(),
+        4,
+        'keep current rules while refreshing',
+      );
+      assert.equal(
+        await page.locator('.portal-content').getAttribute('inert'),
+        '',
+      );
+      assert.deepEqual(
+        await page.locator('.portal-content').boundingBox(),
+        paneSize,
+        'refresh should not collapse the page',
+      );
+      releaseServer();
+      await page.waitForFunction(
+        () => !document.querySelector('.portal-content').hasAttribute('inert'),
+      );
+      assert.deepEqual(
+        await page.locator('.portal-content').boundingBox(),
+        paneSize,
+      );
+      holdServer = true;
+      const failedServerStarted = new Promise((resolve) => {
+        serverEntered = resolve;
+      });
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'Another community', exact: true })
+        .click();
+      await failedServerStarted;
+      assert.equal(
+        await page.locator('.community-title h2').textContent(),
+        'NoMoreLabs',
+      );
+      assert.equal(
+        await page.locator('.portal-content').getAttribute('inert'),
+        '',
+      );
+      releaseServer();
+      await page
+        .getByRole('alert')
+        .filter({ hasText: 'could not be loaded' })
+        .waitFor();
+      assert.equal(
+        await page.locator('.server-list button.selected').textContent(),
+        ' NoMoreLabs ',
+      );
+      assert.deepEqual(
+        await page.locator('.portal-content').boundingBox(),
+        paneSize,
+        'failure notification should not move content',
+      );
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      assert.equal(await page.locator('.portal-feedback').count(), 0);
+      assert.deepEqual(
+        await page.locator('.portal-content').boundingBox(),
+        paneSize,
+        'dismissing feedback should not move content',
+      );
+      denyOtherServer = false;
+      holdServer = true;
+      const switchStarted = new Promise((resolve) => {
+        serverEntered = resolve;
+      });
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'Another community', exact: true })
+        .click();
+      await switchStarted;
+      assert.equal(
+        await page.locator('.community-title h2').textContent(),
+        'NoMoreLabs',
+      );
+      assert.equal(
+        (
+          await page.locator('.server-list button.selected').textContent()
+        ).trim(),
+        'NoMoreLabs',
+      );
+      releaseServer();
+      await page
+        .getByRole('heading', { name: 'Another community', exact: true })
+        .waitFor();
+      assert.equal(
+        (
+          await page.locator('.server-list button.selected').textContent()
+        ).trim(),
+        'Another community',
+      );
+      await page
+        .getByRole('heading', { name: 'Other collectors', exact: true })
+        .waitFor();
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'NoMoreLabs', exact: true })
+        .click();
+      await page
+        .getByRole('heading', { name: 'NoMoreLabs', exact: true })
+        .waitFor();
       const themeSize = await page
         .getByRole('button', { name: 'Light theme', exact: true })
         .boundingBox();
@@ -302,6 +481,21 @@ const base = {
       assert.ok(
         Math.max(...cardHeights) - Math.min(...cardHeights) < 1,
         'all rule cards should have equal heights',
+      );
+      const actionInsets = await page
+        .locator('.rule-card')
+        .evaluateAll((cards) =>
+          cards.map(
+            (card) =>
+              card.getBoundingClientRect().bottom -
+              card
+                .querySelector('.rule-card-footer .actions')
+                .getBoundingClientRect().bottom,
+          ),
+        );
+      assert.ok(
+        Math.max(...actionInsets) - Math.min(...actionInsets) < 1,
+        'actions should align at the bottom of every card',
       );
       const editSize = await page
         .locator('#rule-1')
@@ -395,10 +589,26 @@ const base = {
         'save button height must stay stable while checking',
       );
       releaseEdit();
+      const titleBeforeNotice = await page
+        .locator('.community-title')
+        .evaluate((el) => el.getBoundingClientRect().top + scrollY);
       await page
         .getByRole('status')
         .filter({ hasText: 'Rule saved' })
         .waitFor();
+      assert.equal(
+        await page
+          .locator('.community-title')
+          .evaluate((el) => el.getBoundingClientRect().top + scrollY),
+        titleBeforeNotice,
+        'success notification should not move content',
+      );
+      assert.equal(
+        await page
+          .locator('.portal-feedback')
+          .evaluate((el) => getComputedStyle(el).position),
+        'fixed',
+      );
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
       await page.getByRole('button', { name: 'Redo', exact: true }).waitFor();
       await page
@@ -471,8 +681,41 @@ const base = {
       await page
         .getByRole('button', { name: 'Audit Log', exact: true })
         .click();
+      await page.getByText('1 / 3 · 45 entries').waitFor();
+      const pager = await page.locator('.pagination').evaluate((el) => ({
+        top: el.getBoundingClientRect().top + scrollY,
+        height: el.getBoundingClientRect().height,
+      }));
+      await page
+        .locator('.activity-results')
+        .evaluate((el) => (el.scrollTop = 200));
       await page.getByRole('button', { name: 'Next →', exact: true }).click();
       await page.getByText('2 / 3 · 45 entries').waitFor();
+      assert.deepEqual(
+        await page.locator('.pagination').evaluate((el) => ({
+          top: el.getBoundingClientRect().top + scrollY,
+          height: el.getBoundingClientRect().height,
+        })),
+        pager,
+        'long rows should not move pagination',
+      );
+      await page.waitForFunction(
+        () => document.querySelector('.activity-results').scrollTop === 0,
+      );
+      await page.getByRole('button', { name: 'Next →', exact: true }).click();
+      await page.getByText('3 / 3 · 45 entries').waitFor();
+      assert.deepEqual(
+        await page.locator('.pagination').evaluate((el) => ({
+          top: el.getBoundingClientRect().top + scrollY,
+          height: el.getBoundingClientRect().height,
+        })),
+        pager,
+        'short pages should not move pagination',
+      );
+      await page.screenshot({
+        path: `${artifacts}/audit-${width}.png`,
+        fullPage: true,
+      });
       await page
         .getByRole('button', { name: 'Member Lookup', exact: true })
         .click();

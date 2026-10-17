@@ -10,25 +10,76 @@
       </button>
     }
   </div>
-  @if (error) {
-    <div role="alert" class="notice danger">{{ error }}</div>
+  @if (error || notice || (loadingServer && data)) {
+    <aside class="portal-feedback" aria-label="Notifications">
+      <div
+        class="notice"
+        [class.danger]="!!error"
+        [attr.role]="error ? 'alert' : 'status'"
+        aria-atomic="true"
+      >
+        <p>{{ error || notice || 'Loading ' + loadingServerName + '…' }}</p>
+        @if (!loadingServer) {
+          <div class="actions">
+            @if (undo && notice && !error) {
+              <button (click)="reverse()" [disabled]="busy">
+                <span class="button-label"
+                  ><span aria-hidden="true">Undo</span
+                  ><span aria-hidden="true">Redo</span
+                  ><span>{{ undoLabel }}</span></span
+                >
+              </button>
+            }
+            <button type="button" (click)="dismissFeedback()">Dismiss</button>
+          </div>
+        }
+      </div>
+    </aside>
   }
-  @if (notice) {
-    <div role="status" class="notice">
-      {{ notice }}
-      @if (undo) {
-        <button (click)="reverse()" [disabled]="busy">
-          <span class="button-label"
-            ><span aria-hidden="true">Undo</span
-            ><span aria-hidden="true">Redo</span
-            ><span>{{ undoLabel }}</span></span
-          >
-        </button>
-      }
-    </div>
-  }
+  <ng-template #serverPlaceholder>
+    <section class="server-placeholder" role="status" aria-busy="true">
+      <p class="muted">
+        {{
+          loadingServer
+            ? 'Loading ' + loadingServerName + '…'
+            : 'Loading your control room…'
+        }}
+      </p>
+      <div aria-hidden="true">
+        <div class="placeholder-line placeholder-title"></div>
+        <div class="placeholder-tabs">
+          @for (item of [1, 2, 3, 4]; track item) {
+            <span class="placeholder-line"></span>
+          }
+        </div>
+        <div class="placeholder-toolbar">
+          @for (item of [1, 2, 3]; track item) {
+            <span class="placeholder-line"></span>
+          }
+        </div>
+        <div class="rule-list">
+          @for (item of [1, 2, 3, 4]; track item) {
+            <div class="panel placeholder-card">
+              <span class="placeholder-line"></span
+              ><span class="placeholder-line"></span
+              ><span class="placeholder-line"></span>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+  </ng-template>
   @if (!ready) {
-    <p role="status">Loading your control room…</p>
+    <div class="portal-layout" aria-busy="true">
+      <aside class="panel server-list" aria-hidden="true">
+        <h2>Servers</h2>
+        <div class="placeholder-line"></div>
+        <div class="placeholder-line"></div>
+      </aside>
+      <div class="portal-content">
+        <ng-container [ngTemplateOutlet]="serverPlaceholder" />
+      </div>
+    </div>
   } @else if (!user) {
     <div class="panel welcome">
       <p class="eyebrow">Bouncer for your server</p>
@@ -89,7 +140,12 @@
           </p>
         }
       </aside>
-      <div class="portal-content" [attr.aria-busy]="busy">
+      <div
+        class="portal-content"
+        [attr.aria-busy]="busy"
+        [attr.inert]="loadingServer && data ? '' : null"
+        [class.is-loading]="loadingServer && data"
+      >
         @if (data) {
           <div class="community-title">
             @if (data.server.icon) {
@@ -569,37 +625,41 @@
                     <span class="badge">{{ minimum(rule) }}</span>
                   </div>
                   <p class="selection-text">{{ describe(rule) }}</p>
-                  @if (groupFor(rule); as group) {
-                    <button
-                      class="combined-badge"
-                      (click)="showGroup(group.key)"
-                      [disabled]="busy"
-                      [attr.aria-pressed]="activeGroup?.key === group.key"
-                    >
-                      Combined · {{ group.rules.length }} rules ↗
-                    </button>
-                  }
-                  <div class="actions">
-                    <button
-                      (click)="edit(rule)"
-                      [disabled]="busy"
-                      [attr.aria-expanded]="editor?.id === rule.id"
-                      [attr.aria-controls]="'edit-rule-' + rule.id"
-                    >
-                      <span class="button-label"
-                        ><span aria-hidden="true">Collapse</span
-                        ><span aria-hidden="true">Edit</span
-                        ><span>{{
-                          editor?.id === rule.id ? 'Collapse' : 'Edit'
-                        }}</span></span
-                      ></button
-                    ><button
-                      class="danger-text"
-                      (click)="remove(rule)"
-                      [disabled]="busy"
-                    >
-                      Delete
-                    </button>
+                  <div class="rule-card-footer">
+                    <div class="rule-card-group">
+                      @if (groupFor(rule); as group) {
+                        <button
+                          class="combined-badge"
+                          (click)="showGroup(group.key)"
+                          [disabled]="busy"
+                          [attr.aria-pressed]="activeGroup?.key === group.key"
+                        >
+                          Combined · {{ group.rules.length }} rules ↗
+                        </button>
+                      }
+                    </div>
+                    <div class="actions">
+                      <button
+                        (click)="edit(rule)"
+                        [disabled]="busy"
+                        [attr.aria-expanded]="editor?.id === rule.id"
+                        [attr.aria-controls]="'edit-rule-' + rule.id"
+                      >
+                        <span class="button-label"
+                          ><span aria-hidden="true">Collapse</span
+                          ><span aria-hidden="true">Edit</span
+                          ><span>{{
+                            editor?.id === rule.id ? 'Collapse' : 'Edit'
+                          }}</span></span
+                        ></button
+                      ><button
+                        class="danger-text"
+                        (click)="remove(rule)"
+                        [disabled]="busy"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   @if (editor?.id === rule.id) {
                     <div
@@ -839,13 +899,14 @@
             }
           }
           @if (tab === 'audit') {
-            <section class="panel">
+            <section class="panel activity-panel">
               <div class="toolbar">
                 <h2>Activity</h2>
                 <label
                   >Show<select
                     [(ngModel)]="activityKind"
                     (ngModelChange)="switchTab('audit')"
+                    [disabled]="busy"
                   >
                     <option value="roles">Role assignments</option>
                     <option value="changes">Rule changes</option>
@@ -855,54 +916,65 @@
                   Refresh
                 </button>
               </div>
-              @for (item of activity.items; track item.id) {
-                <div class="history-row">
-                  @if (activityKind === 'roles') {
-                    <strong>{{ item.user_name || item.user_id }}</strong
-                    ><span>{{ item.role_name || item.role_id }}</span
-                    ><span class="badge">{{ item.status }}</span>
-                  } @else if (activityKind === 'changes') {
-                    <strong
-                      >{{ item.kind }} · Rule
-                      {{ item.after_rule?.id || item.before_rule?.id }}</strong
-                    ><span>{{
-                      item.after_rule?.role_name || item.before_rule?.role_name
-                    }}</span>
-                    @if (item.reversible) {
-                      <button (click)="reverse(item)" [disabled]="busy">
-                        Reverse
-                      </button>
-                    }
-                  } @else {
-                    <strong>{{
-                      item.user_id
-                        ? 'Member ' + item.user_id
-                        : 'Role ' + item.role_id
-                    }}</strong
-                    ><span class="badge">{{ item.status }}</span>
-                    @if (item.status === 'failed') {
-                      <button (click)="retry(item)" [disabled]="busy">
-                        Retry check
-                      </button>
-                    }
-                    @if (item.result) {
-                      <span
-                        >{{ item.result.verified || 0 }} eligible ·
-                        {{ item.result.revoked || 0 }} ineligible ·
-                        {{ item.result.errors || 0 }} unavailable</span
-                      >
-                      @if (item.result.error) {
-                        <p>{{ item.result.error }}</p>
+              <div
+                class="activity-results"
+                role="region"
+                aria-label="Activity entries"
+                tabindex="0"
+                [attr.aria-busy]="busy"
+              >
+                @for (item of activity.items; track item.id) {
+                  <div class="history-row">
+                    @if (activity.kind === 'roles') {
+                      <strong>{{ item.user_name || item.user_id }}</strong
+                      ><span>{{ item.role_name || item.role_id }}</span
+                      ><span class="badge">{{ item.status }}</span>
+                    } @else if (activity.kind === 'changes') {
+                      <strong
+                        >{{ item.kind }} · Rule
+                        {{
+                          item.after_rule?.id || item.before_rule?.id
+                        }}</strong
+                      ><span>{{
+                        item.after_rule?.role_name ||
+                          item.before_rule?.role_name
+                      }}</span>
+                      @if (item.reversible) {
+                        <button (click)="reverse(item)" [disabled]="busy">
+                          Reverse
+                        </button>
+                      }
+                    } @else {
+                      <strong>{{
+                        item.user_id
+                          ? 'Member ' + item.user_id
+                          : 'Role ' + item.role_id
+                      }}</strong
+                      ><span class="badge">{{ item.status }}</span>
+                      @if (item.status === 'failed') {
+                        <button (click)="retry(item)" [disabled]="busy">
+                          Retry check
+                        </button>
+                      }
+                      @if (item.result) {
+                        <span
+                          >{{ item.result.verified || 0 }} eligible ·
+                          {{ item.result.revoked || 0 }} ineligible ·
+                          {{ item.result.errors || 0 }} unavailable</span
+                        >
+                        @if (item.result.error) {
+                          <p>{{ item.result.error }}</p>
+                        }
                       }
                     }
-                  }
-                  <time>{{
-                    item.updated_at || item.created_at | date: 'medium'
-                  }}</time>
-                </div>
-              } @empty {
-                <p>No activity yet.</p>
-              }
+                    <time>{{
+                      item.updated_at || item.created_at | date: 'medium'
+                    }}</time>
+                  </div>
+                } @empty {
+                  <p>No activity yet.</p>
+                }
+              </div>
               <div class="pagination">
                 <button
                   (click)="pageActivity(-1)"
@@ -922,7 +994,7 @@
             </section>
           }
         } @else if (busy) {
-          <p role="status">Loading server…</p>
+          <ng-container [ngTemplateOutlet]="serverPlaceholder" />
         } @else {
           <section class="panel">
             <h2>Choose your community</h2>
