@@ -34,11 +34,12 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
   const apiRequests = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleErrors.push(message.text().replace(/(?:https?:\/\/|wss?:\/\/|wc:)[^\s]+/gi, '[link]')); });
-  let proof, typedData, signatures = 0;
+  let proof, typedData, signatureGate, signatures = 0;
   if (injected) {
     await page.exposeFunction('__testSign', async data => {
       signatures++;
       typedData = data;
+      if (signatureGate) await signatureGate;
       return account.signTypedData(data);
     });
     await page.addInitScript(({ address }) => {
@@ -115,7 +116,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
   await page.goto(origin + entry);
   if (entry.startsWith('/wallet-check')) await page.getByRole('heading', { name: 'Wallet connection check' }).waitFor();
   else await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
-  return { context, page, errors, consoleErrors, socketMethods, apiRequests, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
+  return { context, page, errors, consoleErrors, socketMethods, apiRequests, holdSignature() { let release; signatureGate = new Promise(resolve => { release = resolve; }); return () => { signatureGate = undefined; release(); }; }, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
 }
 
 async function restorePreviousWalletConnectConnection(page) {
@@ -149,10 +150,31 @@ async function restorePreviousWalletConnectConnection(page) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} injected wallet connection`;
       const test = await setup(browser, mobile, true);
       const { page } = test;
+      await page.evaluate(() => document.fonts.ready);
+      const smallText = await page.locator('.user-tag .warn,.step-1 .sub,.wallet-choice button').evaluateAll(elements => elements.map(el=>Number.parseFloat(getComputedStyle(el).fontSize)));
+      assert.ok(smallText.every(size=>size>=16), 'verification helper text must be at least 16px');
       await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet', { exact: true }).last().click();
       await page.getByRole('button', { name: 'Sign Message', exact: true }).waitFor({ state: 'visible' });
+      const signSize = await page.getByRole('button', {name:'Sign Message',exact:true}).boundingBox();
+      const releaseSignature = test.holdSignature();
+      let releaseVerification;
+      const verificationGate = new Promise(resolve => { releaseVerification = resolve; });
+      await page.route('**/api/verify-signature', async route => {
+        await verificationGate;
+        return route.fallback();
+      });
       await page.getByRole('button', { name: 'Sign Message', exact: true }).click();
+      await page.getByRole('button', {name:'Signing...',exact:true}).waitFor();
+      const signingSize = await page.getByRole('button', {name:'Signing...',exact:true}).boundingBox();
+      assert.equal(signSize.width, signingSize.width, 'signature button width must stay stable');
+      assert.equal(signSize.height, signingSize.height, 'signature button height must stay stable');
+      releaseSignature();
+      await page.getByRole('button', {name:'Verifying...',exact:true}).waitFor();
+      const verifyingSize = await page.getByRole('button', {name:'Verifying...',exact:true}).boundingBox();
+      assert.equal(signSize.width, verifyingSize.width, 'verification button width must stay stable');
+      assert.equal(signSize.height, verifyingSize.height, 'verification button height must stay stable');
+      releaseVerification();
       await page.locator('.step-3.active').waitFor();
       assert.equal(test.proof.data.walletType, 'evm');
       assert.equal(test.proof.data.address.toLowerCase(), account.address.toLowerCase());

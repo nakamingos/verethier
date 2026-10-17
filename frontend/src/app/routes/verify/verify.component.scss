@@ -6,8 +6,6 @@
   flex-direction: column;
 
   font-family: $secondary-font-stack;
-  font-weight: 400;
-  font-size: 1.4rem;
 }
 
 .user-info-wrapper {
@@ -54,7 +52,7 @@
     display: flex;
     flex-direction: column;
 
-    font-size: 1.4rem;
+    font-size: 1.6rem;
     font-weight: 500;
 
     .tag {
@@ -62,7 +60,7 @@
     }
 
     .warn {
-      font-size: .8rem;
+      font-size: 1.6rem;
       opacity: .7;
     }
   }
@@ -88,7 +86,7 @@
     margin-bottom: 1rem;
 
     button {
-      font-size: 1rem;
+      font-size: 1.6rem;
       opacity: .65;
       &[aria-pressed='true'] { opacity: 1; }
     }
@@ -118,7 +116,7 @@
     }
 
     button {
-      font-size: 1rem;
+      font-size: 1.6rem;
       opacity: .65;
       &[aria-pressed='true'] { opacity: 1; }
     }
@@ -176,7 +174,7 @@
     }
 
     .sub {
-      font-size: 1rem;
+      font-size: 1.6rem;
       padding-bottom: 1rem;
       line-height: 1.5;
 
@@ -225,7 +223,7 @@
   background-color: rgba(var(--magma), 1);
   box-shadow: .3rem .3rem 0 0 rgba(var(--black), 1);
 
-  font-size: 1.2rem;
+  font-size: 1.6rem;
 
   @media (max-width: $mobile) {
     margin: 1rem 0;

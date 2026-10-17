@@ -7,7 +7,11 @@
     <a class="button" routerLink="/admin">Control room</a
     ><a class="button" routerLink="/help">Help</a
     ><button type="button" (click)="toggleTheme()" [attr.aria-pressed]="light">
-      {{ light ? 'Dark' : 'Light' }} theme
+      <span class="button-label">
+        <span aria-hidden="true">Light theme</span>
+        <span aria-hidden="true">Dark theme</span>
+        <span>{{ light ? 'Dark' : 'Light' }} theme</span>
+      </span>
     </button>
   </nav>
 </header>

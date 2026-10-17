@@ -115,6 +115,16 @@ a.button {
   text-decoration: none;
   white-space: normal;
 }
+// Stack state labels so the longest one reserves the button's dimensions.
+.button-label {
+  display: grid;
+}
+.button-label > span {
+  grid-area: 1 / 1;
+}
+.button-label > [aria-hidden='true'] {
+  visibility: hidden;
+}
 button:hover,
 a.button:hover {
   background: var(--ase-hover);
@@ -177,7 +187,7 @@ textarea {
 }
 label {
   display: block;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   color: var(--ase-dim);
 }
 label input,
@@ -224,7 +234,7 @@ form > label {
   text-decoration: none;
 }
 .brand-header .brand-subtitle {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   color: var(--ase-dim);
   margin: 0;
 }
@@ -235,7 +245,7 @@ form > label {
   flex-wrap: wrap;
 }
 .brand-header .button {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   min-height: 3.2rem;
 }
 .route-content {
@@ -252,7 +262,7 @@ form > label {
   gap: 2rem;
   flex-wrap: wrap;
   color: var(--ase-dim);
-  font-size: 1.3rem;
+  font-size: 1.6rem;
 }
 .portal-heading,
 .section-heading,
@@ -268,7 +278,7 @@ form > label {
 }
 .eyebrow {
   color: var(--ase-dim);
-  font-size: 1.3rem;
+  font-size: 1.6rem;
   margin: 0 0 0.5rem;
 }
 .panel {
@@ -294,7 +304,7 @@ form > label {
 }
 .muted {
   color: var(--ase-dim);
-  font-size: 1.4rem;
+  font-size: 1.6rem;
 }
 .portal-layout {
   display: grid;
@@ -342,7 +352,7 @@ form > label {
   border: 1px solid var(--ase-border);
   border-radius: 3px;
   background: var(--ase-editor);
-  font-size: 1.3rem;
+  font-size: 1.6rem;
   padding: 0.25rem 0.7rem;
   white-space: normal;
 }
@@ -416,7 +426,7 @@ form > label {
   box-shadow: none;
 }
 .combined-badge {
-  font-size: 1.35rem;
+  font-size: 1.6rem;
   min-height: 3rem;
   color: var(--ase-selected);
 }
@@ -473,7 +483,7 @@ form > label {
 }
 .member-matches small {
   display: block;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
   color: var(--ase-dim);
 }
 .selection-text,
@@ -482,7 +492,7 @@ form > label {
   word-break: break-word;
 }
 .selection-text {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   max-height: 12rem;
   overflow: auto;
 }
@@ -536,7 +546,7 @@ form > label {
   overflow-wrap: anywhere;
 }
 .history-row time {
-  font-size: 1.3rem;
+  font-size: 1.6rem;
   color: var(--ase-dim);
   margin-left: auto;
 }
@@ -550,7 +560,7 @@ form > label {
   justify-content: space-between;
   gap: 1rem;
   margin-top: 2rem;
-  font-size: 1.4rem;
+  font-size: 1.6rem;
 }
 .pagination span {
   text-align: center;
@@ -579,7 +589,7 @@ app-verify .steps-wrapper .step .title {
   font-size: 2rem;
 }
 app-verify .steps-wrapper .step .sub {
-  font-size: 1.55rem;
+  font-size: 1.6rem;
 }
 app-verify .steps-wrapper .step .sub.success {
   color: var(--ase-selected);
@@ -601,13 +611,13 @@ app-verify .steps-wrapper.unisat-launch {
   min-height: 40rem;
 }
 app-verify .steps-wrapper .wallet-choice button {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
 }
 app-verify .user-info-wrapper .user-tag {
   font-size: 1.8rem;
 }
 app-verify .user-info-wrapper .user-tag .warn {
-  font-size: 1.2rem;
+  font-size: 1.6rem;
 }
 @media (max-width: 800px) {
   .brand-header {
@@ -679,6 +689,6 @@ app-verify .user-info-wrapper .user-tag .warn {
     visibility: hidden;
   }
   app-verify .steps-wrapper .step .actions button {
-    font-size: 1.4rem;
+    font-size: 1.6rem;
   }
 }
