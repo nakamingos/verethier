@@ -126,6 +126,41 @@ export class DynamicRoleService {
     return this.reverifyAssignments(assignments, 'scheduled');
   }
 
+  /** An explicit admin role change may move earlier qualifiers to a new role. */
+  async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[]): Promise<{ verified: number; revoked: number; errors: number }> {
+    const rule = await this.dbSvc.getRuleForServer(ruleId, serverId);
+    // A newer edit carries this audience forward in its own durable job.
+    if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, errors: 0 };
+    const rules = await this.dbSvc.getRoleMappings(serverId);
+    const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled',
+      ordinalNeedsNumbers: rules.some(candidate => candidate.asset_type === 'ordinal' && candidate.inscription_criteria?.kind === 'numbers') };
+    const existing = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
+    const result = await this.reverifyAssignments(existing, 'scheduled', context);
+    const alreadyChecked = new Set(existing.map(assignment => assignment.user_id));
+    const discordContext: RoleSyncContext = new Map();
+    for (const userId of new Set(memberIds)) {
+      if (alreadyChecked.has(userId)) continue;
+      try {
+        const checked = await this.verificationEngine.evaluateRuleGroup(userId, rule, context);
+        if (checked.status === 'unavailable') { result.errors++; continue; }
+        if (checked.status !== 'passed') continue;
+        const history = await this.dbSvc.getEarnedRoleAssignments({ serverId, userId });
+        const matched = checked.results.find(item => item.isValid);
+        // Persist the earned entitlement first. If Discord fails, the durable
+        // retry and ordinary earned-role repair can both finish this grant.
+        await this.dbSvc.trackRoleAssignment({ userId, serverId, roleId,
+          ruleId: String(matched?.ruleId || rule.id), roleName: rule.role_name || '', serverName: rule.server_name,
+          userName: history.find(item => item.user_name)?.user_name || '',
+          verificationData: { role_change_rule_id: rule.id, last_check_status: 'passed',
+            matching_asset_count: matched?.matchingAssetCount } });
+        const granted = await this.discordVerificationSvc.addUserRoleDynamic(userId, serverId, roleId, discordContext);
+        if (!granted) throw new Error('Role move pending Discord retry.');
+        result.verified++;
+      } catch { result.errors++; Logger.warn(`Role move for rule ${ruleId} is pending retry.`); }
+    }
+    return result;
+  }
+
   private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled', sharedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
     let verified = 0;
     let revoked = 0;
