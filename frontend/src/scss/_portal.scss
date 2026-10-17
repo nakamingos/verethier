@@ -37,6 +37,7 @@
     #202125,
     #2c2c30
   );
+  @include pixel-server-menu();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
@@ -81,6 +82,16 @@
     #2c2c30,
     #aaa,
     #eee
+  );
+  @include pixel-server-menu(
+    #e0e0e0,
+    #eee,
+    #aaa,
+    #fff,
+    #c6c6c6,
+    #eee,
+    #aaa,
+    #2c2c30
   );
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
@@ -465,6 +476,10 @@ app-root:has(app-admin) .app-footer {
   position: sticky;
   top: 1.5rem;
   padding: 1rem;
+  border-image-source: var(--pixel-server-panel);
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
+  color: var(--ase-server-text);
 }
 .server-list h2 {
   padding: 0.5rem 1rem;
@@ -475,9 +490,26 @@ app-root:has(app-admin) .app-footer {
   display: flex;
   justify-content: flex-start;
   width: 100%;
-  margin-bottom: 0.6rem;
+  margin-bottom: -2px;
+  padding-bottom: 0.85rem;
+  border-image-source: var(--pixel-server-button);
+  border-image-slice: 6 6 8 6 fill;
+  border-image-width: 6px 6px 8px 6px;
+  color: var(--ase-server-text);
   overflow-wrap: anywhere;
   text-align: left;
+}
+.server-list button:hover,
+.server-list .button:hover {
+  border-image-source: var(--pixel-server-button-hover);
+}
+.server-list button.selected,
+.server-list button.selected:hover {
+  border-image-source: var(--pixel-server-button-selected);
+  color: var(--ase-server-text);
+}
+.server-list .placeholder-line {
+  background: var(--ase-server-placeholder);
 }
 .server-list img,
 .community-title img {
@@ -485,6 +517,10 @@ app-root:has(app-admin) .app-footer {
   height: 3rem;
   object-fit: cover;
   border-radius: 3px;
+}
+.server-list img {
+  flex-shrink: 0;
+  border-radius: 0;
 }
 .portal-content {
   min-width: 0;
@@ -864,6 +900,10 @@ app-verify .user-info-wrapper .user-tag .warn {
   font-size: 1.6rem;
 }
 @media (forced-colors: active) {
+  .server-list,
+  .server-list button,
+  .server-list .button,
+  .server-list button.selected,
   button,
   a.button,
   input,
@@ -883,6 +923,7 @@ app-verify .user-info-wrapper .user-tag .warn {
     color: CanvasText;
   }
   button.selected,
+  .server-list button.selected,
   button[aria-pressed='true'] {
     border-color: Highlight;
   }
