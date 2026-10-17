@@ -58,10 +58,10 @@ describe('one-time Ordinals role grants', () => {
       expect.arrayContaining([expect.objectContaining({ combinedAssetCount: 10, combinedRuleIds: [1, 2] })]));
   });
 
-  it('does not grant a shared role based solely on EVM holdings', async () => {
+  it('honors an independently passing EVM path for a role also available through Ordinals', async () => {
     ownership.count.mockImplementation(async rule => rule.asset_type === 'ordinal' ? 0n : 10n);
     await runOrdinalRoleGrants(saved, [rule(1), rule(2, { asset_type: 'ethscription' })], true, deps);
-    expect(deps.add).not.toHaveBeenCalled();
+    expect(deps.add).toHaveBeenCalledWith('member', 'role');
   });
 
   it('grants the shared minimum when EVM holdings already meet it and Ordinals also contribute', async () => {
@@ -106,10 +106,19 @@ describe('one-time Ordinals role grants', () => {
     expect(deps.record).toHaveBeenCalledWith(expect.objectContaining({ event: 'tracking_failed', roleId: 'role' }));
   });
 
-  it('keeps channel scopes and minimums separate while including ALL-channel rules', () => {
+  it('keeps channel scopes separate and includes alternative minimums and ALL-channel rules', () => {
     const rules = [rule(1, { min_items: 10 }), rule(2, { min_items: 10, asset_type: 'ethscription', channel_id: 'other' }),
       rule(3, { min_items: 5, asset_type: 'ethscription' }), rule(4, { channel_id: 'ALL', role_id: 'global' })];
-    expect(ordinalGrantGroups(rules).map(group => group.map(rule => rule.id))).toEqual([[1, 4], [4]]);
+    expect(ordinalGrantGroups(rules).map(group => group.map(rule => rule.id))).toEqual([[1, 3, 4], [4]]);
+  });
+
+  it('evaluates a different minimum as an alternative without combining its count', async () => {
+    ownership.count.mockImplementation(async rule => rule.asset_type === 'ordinal' ? 3n : 4n);
+    await runOrdinalRoleGrants(saved, [rule(1, { min_items: 10 }), rule(2, { asset_type: 'ethscription', min_items: 5 })], true, deps);
+    expect(deps.add).not.toHaveBeenCalled();
+    ownership.count.mockImplementation(async rule => rule.asset_type === 'ordinal' ? 3n : 5n);
+    await runOrdinalRoleGrants(saved, [rule(1, { min_items: 10 }), rule(2, { asset_type: 'ethscription', min_items: 5 })], true, deps);
+    expect(deps.add).toHaveBeenCalledWith('member', 'role');
   });
 
   it('keeps each member’s live ownership context separate', async () => {

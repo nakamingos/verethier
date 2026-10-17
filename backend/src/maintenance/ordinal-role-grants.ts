@@ -18,11 +18,10 @@ export function ordinalGrantGroups(rules: VerifierRole[]): VerifierRole[][] {
   if (!channels.length) channels.push('ALL');
   return channels.map(channel => {
     const scoped = rules.filter(rule => rule.channel_id === channel || rule.channel_id === 'ALL');
-    const groups = new Set(scoped.filter(rule => rule.asset_type === 'ordinal')
-      .map(rule => JSON.stringify([rule.role_id, rule.min_items || 1])));
-    // Include the other collectible rules contributing to the same minimum.
-    return scoped.filter(rule => rule.asset_type !== 'erc20'
-      && groups.has(JSON.stringify([rule.role_id, rule.min_items || 1])));
+    const roles = new Set(scoped.filter(rule => rule.asset_type === 'ordinal').map(rule => rule.role_id));
+    // Include alternative paths for these roles. The engine combines only
+    // collectible rules with the same minimum and evaluates other paths alone.
+    return scoped.filter(rule => roles.has(rule.role_id));
   }).filter(group => group.length);
 }
 
@@ -40,7 +39,6 @@ export async function runOrdinalRoleGrants(
     summary.users++;
     let member: GrantMember | null;
     let checks: VerificationResult[] = [];
-    const batches: VerificationResult[][] = [];
     try {
       member = await deps.member(saved.userId);
       if (!member) { summary.absentMembers++; return; }
@@ -52,7 +50,6 @@ export async function runOrdinalRoleGrants(
       const context: NftCheckContext = { checks: new Map(), ordinalWork: { priority: 'background' } };
       for (const group of pending) {
         const results = (await deps.verify(saved.userId, saved.address, group, context)).results;
-        batches.push(results);
         checks.push(...results);
       }
     } catch {
@@ -65,17 +62,12 @@ export async function runOrdinalRoleGrants(
     if (unavailable.length) deps.record({ event: 'checks_unavailable', userId: saved.userId, ruleIds: unavailable.map(check => check.ruleId) });
 
     const eligible = new Map<string, VerificationResult>();
-    for (const batch of batches) for (const check of batch) {
-      // A passing shared group must actually include confirmed Ordinals holdings.
-      // An unrelated EVM qualification alone must not become a grant in this pass.
-      if (check.status !== 'unavailable' && check.rule?.asset_type === 'ordinal'
-        && BigInt(check.matchingAssetCount || 0) > 0n
-        && check.ownershipDetails?.source !== 'collection-upper-bound') {
-        const passing = check.isValid ? check : batch.find(other => other.isValid
-          && other.rule?.role_id === check.rule.role_id
-          && String(other.rule.min_items || 1) === String(check.rule.min_items || 1));
-        if (passing) eligible.set(check.rule.role_id, passing);
-      }
+    for (const check of checks) {
+      // These rules are already limited to Ordinals roles and their shared
+      // minimums. Honor any passing path, exactly as interactive verification.
+      if (check.isValid && check.status !== 'unavailable' && check.rule
+        && check.ownershipDetails?.source !== 'collection-upper-bound'
+        && (!eligible.has(check.rule.role_id) || check.rule.asset_type === 'ordinal')) eligible.set(check.rule.role_id, check);
     }
     if (apply && eligible.size) {
       try { member = await deps.member(saved.userId); }

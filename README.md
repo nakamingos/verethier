@@ -162,6 +162,9 @@ Use `--retry-report FILE` to retry only members with failed/unavailable checks
 in an earlier journal, or `--user DISCORD_USER_ID` to check one saved holder.
 Use `--collections-only` to restrict the Ordinals scope to collection rules and
 their shared collectible minimums, skipping specific inscription selections.
+Use `--shared-evm-only` to check only the EVM paths of those shared roles, without
+an Ordinals ownership lookup. The candidate members still need a saved Bitcoin
+wallet; roles available only through EVM rules remain outside this command.
 
 - [Backend README](backend/README.md)
 - [Frontend README](frontend/README.md)
