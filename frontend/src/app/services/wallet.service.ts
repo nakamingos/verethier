@@ -19,10 +19,10 @@ import { env } from '@/../env/env';
 import { evmWalletMetadata, projectId } from './evm-wallet.config';
 
 const themeVariables = {
-  '--apkt-font-family': 'Montserrat, sans-serif',
-  '--apkt-accent': '#00FF73',
+  '--apkt-font-family': 'Pizzascript, monospace',
+  '--apkt-accent': '#e1b85f',
   '--apkt-z-index': 99999,
-  '--apkt-border-radius-master': '0px',
+  '--apkt-border-radius-master': '3px',
 };
 
 export interface EvmWalletConnection {

@@ -43,7 +43,8 @@ export class DynamicRoleService {
     Logger.log('🔄 Starting scheduled role re-verification');
     
     try {
-      const earnedAssignments = await this.getEarnedRoleAssignments();
+      const disabled = await this.dbSvc.getDisabledBackgroundServers();
+      const earnedAssignments = (await this.getEarnedRoleAssignments()).filter(assignment => assignment && !disabled.has(assignment.server_id));
       Logger.log(`Found ${earnedAssignments.length} previously earned role assignments to verify`);
       
       let verifiedCount = 0;
@@ -113,9 +114,9 @@ export class DynamicRoleService {
   }
 
   /** Restriction changes only reconcile previously earned roles in the administrator's server. */
-  async reverifyUserInServer(userId: string, serverId: string): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyUserInServer(userId: string, serverId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
     const assignments = await this.dbSvc.getEarnedRoleAssignments({ userId, serverId });
-    return this.reverifyAssignments(assignments);
+    return this.reverifyAssignments(assignments, undefined, context);
   }
 
   async reverifyRoleInServer(serverId: string, roleId: string): Promise<{ verified: number; revoked: number; errors: number }> {
@@ -125,11 +126,11 @@ export class DynamicRoleService {
     return this.reverifyAssignments(assignments, 'scheduled');
   }
 
-  private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled'): Promise<{ verified: number; revoked: number; errors: number }> {
+  private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled', sharedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
     let verified = 0;
     let revoked = 0;
     let errors = 0;
-    const context: NftCheckContext = { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
+    const context: NftCheckContext = sharedContext || { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
     const discordContext: RoleSyncContext = new Map();
 
     for (const assignment of assignments) {

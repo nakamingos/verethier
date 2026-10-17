@@ -104,7 +104,7 @@ describe('Ordinals ownership counts', () => {
   it('shares provider requests across role assignments and servers for one scheduled run', async () => {
     request.mockResolvedValue(summary());
     const assignments = ['guild', 'other-guild'].map((server, index) => ({ id: String(index), user_id: 'user', server_id: server, role_id: 'holder' }));
-    const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue(assignments), getRoleMappings: jest.fn().mockResolvedValue([rule]),
+    const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue(assignments), getRoleMappings: jest.fn().mockResolvedValue([rule]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const ownership = new AssetOwnershipService({} as any, {} as any, service);
     const engine = new VerificationEngine(db as any, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
@@ -136,7 +136,7 @@ describe('Ordinals ownership counts', () => {
 
   it('retains roles and successful check timestamps when the provider is unavailable', async () => {
     request.mockRejectedValue(new Error('unavailable'));
-    const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'holder' }]),
+    const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'holder' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn().mockResolvedValue(true) };

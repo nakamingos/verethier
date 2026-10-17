@@ -139,7 +139,7 @@ describe('persistent Ordinals collection catalogs', () => {
 
   it('refreshes metadata before scheduled role evaluation and keeps checks running if refresh fails', async () => {
     const sequence: string[] = [];
-    const dbRoles: any = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'role' }]),
+    const dbRoles: any = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'role' }]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn() };
     const engine: any = { evaluateRole: jest.fn(async () => { sequence.push('evaluate'); return { status: 'passed', results: [] }; }) };
     const discord: any = { addUserRoleDynamic: jest.fn().mockResolvedValue(true) };

@@ -1,3 +1,4 @@
+import { DynamicRoleService } from './dynamic-role.service';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleLabel } from '@/utils/nft-rule.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
@@ -35,6 +36,7 @@ export class VerifyService {
     private readonly dbSvc: DbService,
     private readonly verificationSvc: VerificationService,
     @Optional() private readonly ordinalRequests?: OrdinalsRequestScheduler,
+    @Optional() private readonly earnedRoles?: DynamicRoleService,
   ) {}
 
   /**
@@ -66,7 +68,7 @@ export class VerifyService {
     walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>,
   ) {
     const { address, walletOwnershipTransferred } = walletVerification;
-    const ownershipContext: NftCheckContext = { checks: new Map() };
+    const ownershipContext: NftCheckContext = { checks: new Map(), provenAddresses: new Map([[payload.userId, address]]) };
     
     // Get the message data associated with the nonce for message-based verification
     const { channelId } = walletVerification.nonceContext
@@ -103,6 +105,7 @@ export class VerifyService {
       const { validRules } = verificationResult;
       
       const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
+      await this.reconcileEarned(payload, ownershipContext);
       const hasMatchingAssets = validRules.length > 0;
 
       if (!hasMatchingAssets) {
@@ -169,6 +172,7 @@ export class VerifyService {
     const { validRules } = verificationResult;
     
     if (validRules.length === 0) {
+      await this.reconcileEarned(payload, ownershipContext);
       const errorMsg = verificationResult.results?.some(result => result.status === 'unavailable' || result.error)
         ? 'Collection verification is temporarily unavailable. Please try again.'
         : 'Address does not meet any verification requirements';
@@ -177,6 +181,7 @@ export class VerifyService {
     }
 
     const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
+    await this.reconcileEarned(payload, ownershipContext);
 
     // Send verification complete message with role assignment details
     try {
@@ -202,6 +207,13 @@ export class VerifyService {
       walletOwnershipTransferred,
       assignedRoles: [...new Set(roleResults.map(r => r.roleId))]
     };
+  }
+
+  private async reconcileEarned(payload: DecodedData, context: NftCheckContext): Promise<void> {
+    // A fresh manual proof also checks earned roles. Shared ownership reads avoid
+    // repeating provider work; alternative rules and all saved wallets still apply.
+    try { await this.earnedRoles?.reverifyUserInServer(payload.userId, payload.discordId, context); }
+    catch { Logger.warn('Earned-role reconciliation unavailable; existing roles retained for retry.'); }
   }
 
   private async assignVerifiedRoles(payload: DecodedData, result: BulkVerificationResult) {

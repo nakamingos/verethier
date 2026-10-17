@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "test:wallet-smoke": "node test/wallet-connection.smoke.cjs"
+    "test:wallet-smoke": "node test/wallet-connection.smoke.cjs",
+    "test:portal-smoke": "node test/portal.smoke.cjs"
   },
   "private": true,
   "engines": {

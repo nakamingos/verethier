@@ -1,0 +1,26 @@
+{
+  admin off
+  auto_https off
+}
+:{$PORT:8080} {
+  encode gzip zstd
+  @api path /api/*
+  handle @api {
+    reverse_proxy https://bouncer-be.up.railway.app {
+      header_up Host bouncer-be.up.railway.app
+      # Forwarding headers are not used as authorization or trusted for rate limits.
+      header_up -X-Forwarded-For
+      header_up -Forwarded
+    }
+  }
+  handle {
+    root * /app/dist/frontend/browser
+    try_files {path} /index.html
+    file_server
+    header X-Content-Type-Options nosniff
+    header Referrer-Policy strict-origin-when-cross-origin
+    header X-Frame-Options DENY
+    @html path / /index.html /admin /member /help /verify/* /wallet-check
+    header @html Cache-Control "no-cache"
+  }
+}

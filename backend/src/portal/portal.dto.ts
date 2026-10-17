@@ -1,0 +1,64 @@
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+
+export class PortalRuleDto {
+  @IsIn(['ethscription', 'ordinal', 'nft', 'erc20']) asset_type: string;
+  @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) role_id?: string;
+  @IsOptional() @IsString() @MaxLength(100) role_name?: string;
+  @IsOptional() @IsString() @MaxLength(100) slug?: string;
+  @IsOptional() @IsString() @MaxLength(100) attribute_key?: string;
+  @IsOptional() @IsString() @MaxLength(100) attribute_value?: string;
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  min_items?: number;
+  @IsOptional() @IsString() @MaxLength(360) min_balance?: string;
+  @IsOptional() @IsString() @MaxLength(42) contract_address?: string;
+  @IsOptional() @IsIn(['ethereum', 'robinhood']) network?: string;
+  @IsOptional() @IsString() @MaxLength(6000) token_ids?: string;
+  @IsOptional() @IsString() @MaxLength(100) collection_name?: string;
+  @IsOptional() @IsString() @MaxLength(6000) inscription_ids?: string;
+  @IsOptional() @IsString() @MaxLength(6000) inscription_numbers?: string;
+  @IsOptional() @IsString() @MaxLength(100) label?: string;
+  @IsUUID() request_id: string;
+}
+
+export class PortalEditDto {
+  @IsString() @MaxLength(32000) version: string;
+  @IsObject() inputs: Record<string, string>;
+  @IsUUID() request_id: string;
+}
+
+export class PortalDeleteDto {
+  @IsString() @MaxLength(32000) version: string;
+  @IsUUID() request_id: string;
+}
+
+export class PortalActionDto {
+  @IsUUID() request_id: string;
+}
+
+export class PortalSettingsDto {
+  @IsBoolean() background_checks_enabled: boolean;
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) verification_channel_id?:
+    | string
+    | null;
+}
+
+export class PortalMessageDto {
+  @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
+  @IsIn(['refresh', 'new', 'recover']) action: string;
+}

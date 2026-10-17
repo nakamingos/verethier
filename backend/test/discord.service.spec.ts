@@ -361,7 +361,7 @@ describe('DiscordService - Enhanced Tests', () => {
   describe('Slash Commands Registration', () => {
     it('registers wallet restriction commands with a required address and bounded optional reason', async () => {
       await service.registerSlashCommands();
-      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const block = setup.options.find(option => option.name === 'block-wallet');
       const unblock = setup.options.find(option => option.name === 'unblock-wallet');
       expect(block.options).toEqual([
@@ -373,7 +373,7 @@ describe('DiscordService - Enhanced Tests', () => {
     });
     it('registers an optional asset-type filter for list-rules', async () => {
       await service.registerSlashCommands();
-      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const list = setup.options.find(option => option.name === 'list-rules');
       expect(list.options).toHaveLength(1);
       expect(list.options[0]).toEqual(expect.objectContaining({
@@ -390,7 +390,7 @@ describe('DiscordService - Enhanced Tests', () => {
 
     it('registers focused rule commands with valid required options', async () => {
       await service.registerSlashCommands();
-      const setup = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
         'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
@@ -428,7 +428,7 @@ describe('DiscordService - Enhanced Tests', () => {
 
     it('registers one verification command with required channel/action and Administrator permissions', async () => {
       await service.registerSlashCommands();
-      const command = mockRest.put.mock.calls.at(-1)[1].body[0].toJSON();
+      const command = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const actual = jest.requireActual('discord.js');
       expect(command.default_member_permissions).toBe(actual.PermissionFlagsBits.Administrator.toString());
       expect(command.options.some(option => ['recover-verification', 'refresh-verification'].includes(option.name))).toBe(false);

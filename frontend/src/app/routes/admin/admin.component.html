@@ -1,0 +1,730 @@
+<section class="portal">
+  <div class="portal-heading">
+    <div>
+      <p class="eyebrow">Control room</p>
+      <h1>Community settings</h1>
+    </div>
+    @if (user) {
+      <button (click)="logout()" [disabled]="busy">
+        Sign out · {{ user.name }}
+      </button>
+    }
+  </div>
+  @if (error) {
+    <div role="alert" class="notice danger">{{ error }}</div>
+  }
+  @if (notice) {
+    <div role="status" class="notice">
+      {{ notice }}
+      @if (undo) {
+        <button (click)="reverse()" [disabled]="busy">{{ undoLabel }}</button>
+      }
+    </div>
+  }
+  @if (!ready) {
+    <p role="status">Loading your control room…</p>
+  } @else if (!user) {
+    <div class="panel welcome">
+      <p class="eyebrow">Bouncer for your server</p>
+      <h2>Your rules. Your community.</h2>
+      <p>
+        Set collection requirements, manage verification, and help members with
+        their roles.
+      </p>
+      @if (configured) {
+        <a class="button primary" href="/api/portal/auth/login?return_to=/admin"
+          >Sign in with Discord</a
+        >
+      } @else {
+        <p>
+          Discord sign-in is being configured. Your existing verification links
+          still work.
+        </p>
+      }
+      <p class="muted">
+        Only server owners and administrators can change server settings.
+      </p>
+    </div>
+  } @else {
+    <div class="portal-layout">
+      <aside class="panel server-list">
+        <h2>Servers</h2>
+        @for (server of servers; track server.id) {
+          @if (server.installed) {
+            <button
+              [class.selected]="selected === server.id"
+              (click)="select(server.id)"
+              [disabled]="busy"
+            >
+              @if (server.icon) {
+                <img [src]="server.icon" alt="" />
+              }
+              {{ server.name }}
+            </button>
+          } @else {
+            <a
+              class="button"
+              [href]="server.invite"
+              target="_blank"
+              rel="noopener"
+              >+ {{ server.name }}</a
+            >
+          }
+        }
+        @if (invite) {
+          <a class="button" [href]="invite" target="_blank" rel="noopener"
+            >+ Add Bouncer</a
+          >
+        }
+        @if (!servers.length) {
+          <p>
+            No administrator servers found. Sign in again after your permissions
+            change.
+          </p>
+        }
+      </aside>
+      <div class="portal-content" [attr.aria-busy]="busy">
+        @if (data) {
+          <div class="community-title">
+            @if (data.server.icon) {
+              <img [src]="data.server.icon" alt="" />
+            }
+            <h2>{{ data.server.name }}</h2>
+            <span class="badge">{{ data.rules.length }} rules</span>
+          </div>
+          <nav class="tabs" aria-label="Server settings">
+            @for (
+              item of [
+                ['rules', 'Rules'],
+                ['settings', 'Bot Settings'],
+                ['members', 'Member Lookup'],
+                ['audit', 'Audit Log'],
+              ];
+              track item[0]
+            ) {
+              <button
+                [class.selected]="tab === item[0]"
+                (click)="switchTab(item[0])"
+                [disabled]="busy"
+              >
+                {{ item[1] }}
+              </button>
+            }
+          </nav>
+          @if (data.diagnostics.length) {
+            <details class="notice warning">
+              <summary>{{ data.diagnostics.length }} setup issue(s)</summary>
+              @for (issue of data.diagnostics; track issue) {
+                <p>{{ issue }}</p>
+              }
+            </details>
+          }
+          @if (tab === 'rules') {
+            <div class="toolbar">
+              <label
+                >Asset type<select [(ngModel)]="filter">
+                  <option value="">All assets</option>
+                  <option value="ordinal">Ordinals</option>
+                  <option value="ethscription">Ethscriptions</option>
+                  <option value="nft">NFTs</option>
+                  <option value="erc20">Tokens</option>
+                </select></label
+              ><label
+                >Find a rule<input
+                  [(ngModel)]="query"
+                  placeholder="Role or collection…" /></label
+              ><button class="primary" (click)="create()" [disabled]="busy">
+                + Add rule
+              </button>
+            </div>
+            @if (editor) {
+              <section class="panel rule-editor">
+                <div class="section-heading">
+                  <h2>
+                    {{
+                      editor.new ? 'Create a rule' : 'Edit rule ' + editor.id
+                    }}
+                  </h2>
+                  <button (click)="editor = null" [disabled]="busy">
+                    Cancel
+                  </button>
+                </div>
+                <datalist id="slug-suggestions">
+                  @for (value of suggestions['slug'] || []; track value) {
+                    <option [value]="value"></option>
+                  }
+                </datalist>
+                <datalist id="key-suggestions">
+                  @for (
+                    value of suggestions['attribute_key'] || [];
+                    track value
+                  ) {
+                    <option [value]="value"></option>
+                  }
+                </datalist>
+                <datalist id="value-suggestions">
+                  @for (
+                    value of suggestions['attribute_value'] || [];
+                    track value
+                  ) {
+                    <option [value]="value"></option>
+                  }
+                </datalist>
+                <form
+                  #ruleForm="ngForm"
+                  (ngSubmit)="ruleForm.valid && (review = true)"
+                >
+                  @if (editor.new) {
+                    <div class="form-grid">
+                      <label
+                        >Asset type<select
+                          name="asset"
+                          [(ngModel)]="draft.asset_type"
+                          (ngModelChange)="changeAsset()"
+                        >
+                          <option value="ordinal">Ordinals</option>
+                          <option value="ethscription">Ethscriptions</option>
+                          <option value="nft">NFTs</option>
+                          <option value="erc20">Tokens (ERC-20)</option>
+                        </select></label
+                      >
+                      <label
+                        >Verification channel<select
+                          name="channel"
+                          [(ngModel)]="draft.channel_id"
+                          required
+                        >
+                          @for (channel of data.channels; track channel.id) {
+                            <option [value]="channel.id">
+                              #{{ channel.name }}
+                            </option>
+                          }
+                        </select></label
+                      >
+                      <label
+                        >Discord role<select
+                          name="role"
+                          [(ngModel)]="draft.role_id"
+                        >
+                          <option value="">Create a new role</option>
+                          @for (role of data.roles; track role.id) {
+                            <option
+                              [value]="role.id"
+                              [disabled]="!role.manageable"
+                            >
+                              {{ role.name }}
+                            </option>
+                          }
+                        </select></label
+                      >
+                      @if (!draft.role_id) {
+                        <label
+                          >New role name<input
+                            name="roleName"
+                            [(ngModel)]="draft.role_name"
+                            required
+                            maxlength="100"
+                            placeholder="Collectors"
+                        /></label>
+                      }
+                      @if (
+                        draft.asset_type === 'ordinal' ||
+                        draft.asset_type === 'ethscription'
+                      ) {
+                        <label
+                          >Match by<select name="mode" [(ngModel)]="mode">
+                            <option value="collection">Collection</option>
+                            <option value="ids">
+                              Inscription IDs / hashes
+                            </option>
+                            <option value="numbers">
+                              Global inscription numbers
+                            </option>
+                          </select></label
+                        >
+                        @if (mode === 'collection') {
+                          <label
+                            >Collection slug<input
+                              name="slug"
+                              [(ngModel)]="draft.slug"
+                              list="slug-suggestions"
+                              (focus)="suggest('slug')"
+                              placeholder="pizza-comrades"
+                              [required]="draft.asset_type === 'ordinal'"
+                          /></label>
+                        } @else {
+                          <label class="wide"
+                            >{{
+                              mode === 'ids'
+                                ? 'Inscription IDs / hashes'
+                                : 'Inscription numbers and ranges'
+                            }}<textarea
+                              [name]="mode"
+                              [(ngModel)]="
+                                draft[
+                                  mode === 'ids'
+                                    ? 'inscription_ids'
+                                    : 'inscription_numbers'
+                                ]
+                              "
+                              required
+                              rows="3"
+                              maxlength="6000"
+                              [placeholder]="
+                                mode === 'ids'
+                                  ? 'Comma-separated IDs'
+                                  : '1,2,10-20'
+                              "
+                            ></textarea></label
+                          ><label
+                            >Label (optional)<input
+                              name="label"
+                              [(ngModel)]="draft.label"
+                              maxlength="100"
+                              placeholder="A name to recognize this selection"
+                          /></label>
+                        }
+                      }
+                      @if (
+                        draft.asset_type === 'nft' ||
+                        draft.asset_type === 'erc20'
+                      ) {
+                        <label
+                          >Network<select
+                            name="network"
+                            [(ngModel)]="draft.network"
+                          >
+                            <option value="ethereum">Ethereum</option>
+                            <option value="robinhood">Robinhood</option>
+                          </select></label
+                        >
+                        <label
+                          >Contract address<input
+                            name="contract"
+                            [(ngModel)]="draft.contract_address"
+                            required
+                            maxlength="42"
+                            placeholder="0x…"
+                        /></label>
+                        @if (draft.asset_type === 'nft') {
+                          <label
+                            >Token IDs (optional)<input
+                              name="tokenIds"
+                              [(ngModel)]="draft.token_ids"
+                              placeholder="1,2,10-20" /></label
+                          ><label
+                            >Collection name (optional)<input
+                              name="collectionName"
+                              [(ngModel)]="draft.collection_name"
+                              maxlength="100"
+                          /></label>
+                        }
+                      }
+                      @if (
+                        draft.asset_type !== 'erc20' &&
+                        (draft.asset_type === 'nft' || mode === 'collection')
+                      ) {
+                        <label
+                          >Attribute key (optional)<input
+                            name="key"
+                            [(ngModel)]="draft.attribute_key"
+                            list="key-suggestions"
+                            (focus)="suggest('attribute_key')"
+                            placeholder="ALL" /></label
+                        ><label
+                          >Attribute value (optional)<input
+                            name="value"
+                            [(ngModel)]="draft.attribute_value"
+                            list="value-suggestions"
+                            (focus)="suggest('attribute_value')"
+                            placeholder="ALL"
+                        /></label>
+                      }
+                      @if (draft.asset_type === 'erc20') {
+                        <label
+                          >Minimum token balance<input
+                            name="balance"
+                            [(ngModel)]="draft.min_balance"
+                            required
+                            inputmode="decimal"
+                            placeholder="1000 or 0.5"
+                        /></label>
+                      } @else {
+                        <label
+                          >Minimum items<input
+                            name="minimum"
+                            type="number"
+                            [(ngModel)]="draft.min_items"
+                            required
+                            min="1"
+                            step="1"
+                        /></label>
+                      }
+                    </div>
+                    <p class="muted">
+                      One collection per rule. Rules with the same role and
+                      minimum combine collectible counts across collections and
+                      protocols. An item counts once.
+                    </p>
+                    @if (draft.asset_type === 'nft') {
+                      <p class="muted">
+                        ERC-721 supports one specific token ID or any token. For
+                        ERC-1155, a blank ID list checks IDs 0–99.
+                      </p>
+                    }
+                  } @else {
+                    <div class="form-grid">
+                      @for (field of editor.fields; track field.key) {
+                        <label [class.wide]="field.list"
+                          >{{ field.label }}
+                          @if (field.list) {
+                            <textarea
+                              [name]="field.key"
+                              [(ngModel)]="inputs[field.key]"
+                              rows="3"
+                              [maxlength]="field.maxLength || 8000"
+                            ></textarea>
+                          } @else {
+                            <input
+                              [name]="field.key"
+                              [(ngModel)]="inputs[field.key]"
+                              [required]="field.required || false"
+                              [maxlength]="field.maxLength || 8000"
+                            />
+                          }
+                        </label>
+                      }
+                    </div>
+                  }
+                  @if (!review) {
+                    <button
+                      class="primary"
+                      type="submit"
+                      [disabled]="busy || !ruleForm.valid"
+                    >
+                      Review changes
+                    </button>
+                  }
+                </form>
+                @if (review) {
+                  <div class="notice">
+                    <h3>Ready to save?</h3>
+                    <p>
+                      {{
+                        editor.new
+                          ? 'Create this rule with the requirements above.'
+                          : 'Replace this rule’s requirements with the values above.'
+                      }}
+                      Previously earned roles will be checked against all
+                      remaining rules and saved wallets. New qualifiers still
+                      need to verify.
+                    </p>
+                    <div class="actions">
+                      <button
+                        class="primary"
+                        (click)="save()"
+                        [disabled]="busy || !ruleForm.valid"
+                      >
+                        {{
+                          busy ? 'Checking requirements…' : 'Save rule'
+                        }}</button
+                      ><button (click)="review = false" [disabled]="busy">
+                        Keep editing
+                      </button>
+                    </div>
+                  </div>
+                }
+              </section>
+            }
+            <div class="rule-list">
+              @for (rule of rules; track rule.id) {
+                <article class="panel rule-card">
+                  <div class="section-heading">
+                    <div>
+                      <p class="eyebrow">
+                        {{ rule.asset_type }} · #{{ rule.id }} · #{{
+                          channelName(rule.channel_id)
+                        }}
+                      </p>
+                      <h3>{{ rule.role_name || rule.role_id }}</h3>
+                    </div>
+                    <span class="badge">{{ minimum(rule) }}</span>
+                  </div>
+                  <p class="selection-text">{{ describe(rule) }}</p>
+                  @if (shared(rule)) {
+                    <p class="muted">
+                      Combines with other rules for this role and minimum.
+                    </p>
+                  }
+                  <div class="actions">
+                    <button (click)="edit(rule)" [disabled]="busy">Edit</button
+                    ><button
+                      class="danger-text"
+                      (click)="remove(rule)"
+                      [disabled]="busy"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              } @empty {
+                <div class="panel">
+                  <h3>No rules here yet.</h3>
+                  <p>Add a rule to tell Bouncer who can earn a role.</p>
+                </div>
+              }
+            </div>
+          }
+          @if (tab === 'settings') {
+            <section class="panel">
+              <h2>Background role checks</h2>
+              <form (ngSubmit)="settings()">
+                <label class="checkbox"
+                  ><input
+                    type="checkbox"
+                    name="background"
+                    [(ngModel)]="data.settings.background_checks_enabled"
+                  />
+                  Check previously earned roles every six hours</label
+                >
+                <p>
+                  Restores eligible earned roles and removes proven failures.
+                  New qualifiers need to verify. Provider outages retain
+                  existing roles.
+                </p>
+                <p class="muted">
+                  When disabled, explicit verification, rule changes and member
+                  repairs can still update roles.
+                </p>
+                <label
+                  >Default verification channel<select
+                    name="defaultChannel"
+                    [(ngModel)]="data.settings.verification_channel_id"
+                  >
+                    <option [ngValue]="null">No default</option>
+                    @for (channel of data.channels; track channel.id) {
+                      <option [value]="channel.id">#{{ channel.name }}</option>
+                    }
+                  </select></label
+                ><button class="primary" type="submit" [disabled]="busy">
+                  Save settings
+                </button>
+              </form>
+            </section>
+            <section class="panel">
+              <h2>Verification message</h2>
+              <p>
+                Every verification message in a channel uses that channel’s
+                current rules.
+              </p>
+              <form (ngSubmit)="message()">
+                <div class="form-grid">
+                  <label
+                    >Channel<select
+                      name="messageChannel"
+                      [(ngModel)]="messageChannel"
+                    >
+                      @for (channel of data.channels; track channel.id) {
+                        <option [value]="channel.id">
+                          #{{ channel.name }}
+                        </option>
+                      }
+                    </select></label
+                  ><label
+                    >Action<select
+                      name="messageAction"
+                      [(ngModel)]="messageAction"
+                    >
+                      <option value="refresh">Refresh existing</option>
+                      <option value="new">Create another message</option>
+                      <option value="recover">Recover missing</option>
+                    </select></label
+                  >
+                </div>
+                <button type="submit" [disabled]="busy">Update message</button>
+                @if (messageUrl) {
+                  <a [href]="messageUrl" target="_blank" rel="noopener"
+                    >Open in Discord ↗</a
+                  >
+                }
+              </form>
+            </section>
+            <section class="panel">
+              <div class="section-heading">
+                <h2>Setup check</h2>
+                <button (click)="select(selected)" [disabled]="busy">
+                  Check again
+                </button>
+              </div>
+              @if (!data.diagnostics.length) {
+                <p>
+                  Roles and channels are accessible. Use Recover missing above
+                  if a verification message was deleted.
+                </p>
+              }
+              @for (issue of data.diagnostics; track issue) {
+                <p>{{ issue }}</p>
+              }
+              <p class="muted">
+                Rename channels freely. Keep Bouncer above the roles it assigns.
+              </p>
+            </section>
+          }
+          @if (tab === 'members') {
+            <section class="panel">
+              <h2>Member Lookup</h2>
+              <p>
+                Look up a server member’s saved wallets and previously earned
+                roles.
+              </p>
+              <form class="toolbar" (ngSubmit)="lookup()">
+                <label
+                  >Discord user ID<input
+                    name="memberId"
+                    [(ngModel)]="memberId"
+                    required
+                    pattern="[0-9]{17,22}"
+                    placeholder="Right-click member → Copy User ID" /></label
+                ><button type="submit" [disabled]="busy">Look up</button>
+              </form>
+            </section>
+            @if (member) {
+              <section class="panel">
+                <div class="section-heading">
+                  <h2>{{ member.name }}</h2>
+                  <div class="actions">
+                    <button (click)="lookup(true)" [disabled]="busy">
+                      Check roles</button
+                    ><button class="primary" (click)="fix()" [disabled]="busy">
+                      Fix earned roles
+                    </button>
+                  </div>
+                </div>
+                <p class="muted">
+                  Checks current holdings only when requested. Fix checks all
+                  saved wallets and alternative rules; it preserves roles when a
+                  provider is unavailable.
+                </p>
+                <h3>Saved wallets</h3>
+                @for (wallet of member.wallets; track wallet.address) {
+                  <p class="address">
+                    {{ wallet.wallet_type }} · {{ wallet.address }}
+                  </p>
+                } @empty {
+                  <p>No wallets saved.</p>
+                }
+                <h3>Previously earned roles</h3>
+                @for (role of member.roles; track role.id) {
+                  <div class="history-row">
+                    <strong>{{ role.name }}</strong
+                    ><span>{{
+                      role.held ? 'In Discord' : 'Missing in Discord'
+                    }}</span
+                    ><span class="badge">{{
+                      role.status.replace('_', ' ')
+                    }}</span>
+                    @if (role.reason) {
+                      <p>{{ role.reason }}</p>
+                    }
+                  </div>
+                } @empty {
+                  <p>No earned roles on file. Ask this member to verify.</p>
+                }
+              </section>
+            }
+          }
+          @if (tab === 'audit') {
+            <section class="panel">
+              <div class="toolbar">
+                <h2>Activity</h2>
+                <label
+                  >Show<select
+                    [(ngModel)]="activityKind"
+                    (ngModelChange)="switchTab('audit')"
+                  >
+                    <option value="roles">Role assignments</option>
+                    <option value="changes">Rule changes</option>
+                    <option value="jobs">Role checks</option>
+                  </select></label
+                ><button (click)="switchTab('audit')" [disabled]="busy">
+                  Refresh
+                </button>
+              </div>
+              @for (item of activity.items; track item.id) {
+                <div class="history-row">
+                  @if (activityKind === 'roles') {
+                    <strong>{{ item.user_name || item.user_id }}</strong
+                    ><span>{{ item.role_name || item.role_id }}</span
+                    ><span class="badge">{{ item.status }}</span>
+                  } @else if (activityKind === 'changes') {
+                    <strong
+                      >{{ item.kind }} · Rule
+                      {{ item.after_rule?.id || item.before_rule?.id }}</strong
+                    ><span>{{
+                      item.after_rule?.role_name || item.before_rule?.role_name
+                    }}</span>
+                    @if (item.reversible) {
+                      <button (click)="reverse(item)" [disabled]="busy">
+                        Reverse
+                      </button>
+                    }
+                  } @else {
+                    <strong>{{
+                      item.user_id
+                        ? 'Member ' + item.user_id
+                        : 'Role ' + item.role_id
+                    }}</strong
+                    ><span class="badge">{{ item.status }}</span>
+                    @if (item.status === 'failed') {
+                      <button (click)="retry(item)" [disabled]="busy">
+                        Retry check
+                      </button>
+                    }
+                    @if (item.result) {
+                      <span
+                        >{{ item.result.verified || 0 }} eligible ·
+                        {{ item.result.revoked || 0 }} ineligible ·
+                        {{ item.result.errors || 0 }} unavailable</span
+                      >
+                      @if (item.result.error) {
+                        <p>{{ item.result.error }}</p>
+                      }
+                    }
+                  }
+                  <time>{{
+                    item.updated_at || item.created_at | date: 'medium'
+                  }}</time>
+                </div>
+              } @empty {
+                <p>No activity yet.</p>
+              }
+              <div class="pagination">
+                <button
+                  (click)="pageActivity(-1)"
+                  [disabled]="busy || activity.page <= 1"
+                >
+                  ← Previous</button
+                ><span
+                  >{{ activity.page }} / {{ activity.pages }} ·
+                  {{ activity.total }} entries</span
+                ><button
+                  (click)="pageActivity(1)"
+                  [disabled]="busy || activity.page >= activity.pages"
+                >
+                  Next →
+                </button>
+              </div>
+            </section>
+          }
+        } @else if (busy) {
+          <p role="status">Loading server…</p>
+        } @else {
+          <section class="panel">
+            <h2>Choose your community</h2>
+            <p>Select a server or add Bouncer to get started.</p>
+          </section>
+        }
+      </div>
+    </div>
+  }
+</section>

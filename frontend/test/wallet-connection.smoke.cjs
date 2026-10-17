@@ -267,7 +267,7 @@ async function restorePreviousWalletConnectConnection(page) {
       assert(new URL(handoff).searchParams.get('uri').startsWith('wc:'), 'Handoff must contain a WalletConnect pairing URI');
       assert.equal(await page.locator('w3m-email-login-widget').count(), 0);
       assert.equal(await page.locator('w3m-social-login-widget').count(), 0);
-      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--apkt-tokens-core-backgroundAccentPrimary').trim().toUpperCase()), '#00FF73');
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--apkt-tokens-core-backgroundAccentPrimary').trim().toUpperCase()), '#E1B85F');
       assert.deepEqual(test.errors, []);
       await page.screenshot({ path: path.join(artifacts, previousConnection ? 'rainbow-after-saved-session.png' : 'rainbow-mobile.png'), fullPage: true });
       // Dismissing an unapproved request must allow another wallet choice.
