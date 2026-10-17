@@ -1,10 +1,14 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import {
+  PixelSelectComponent,
+  SelectChoice,
+} from '../../components/pixel-select/pixel-select.component';
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PixelSelectComponent],
   templateUrl: './admin.component.html',
 })
 export class AdminComponent implements OnInit, OnDestroy {
@@ -52,6 +56,65 @@ export class AdminComponent implements OnInit, OnDestroy {
   messageAction = 'refresh';
   undo: any = null;
   undoLabel = 'Undo';
+  readonly assetFilterChoices: SelectChoice[] = [
+    { value: '', label: 'All assets' },
+    { value: 'ordinal', label: 'Ordinals' },
+    { value: 'ethscription', label: 'Ethscriptions' },
+    { value: 'nft', label: 'NFTs' },
+    { value: 'erc20', label: 'Tokens' },
+  ];
+  readonly assetChoices: SelectChoice[] = [
+    ...this.assetFilterChoices.slice(1, 4),
+    { value: 'erc20', label: 'Tokens (ERC-20)' },
+  ];
+  readonly matchChoices: SelectChoice[] = [
+    { value: 'collection', label: 'Collection' },
+    { value: 'ids', label: 'Inscription IDs / hashes' },
+    { value: 'numbers', label: 'Global inscription numbers' },
+  ];
+  readonly networkChoices: SelectChoice[] = [
+    { value: 'ethereum', label: 'Ethereum' },
+    { value: 'robinhood', label: 'Robinhood' },
+  ];
+  readonly messageActionChoices: SelectChoice[] = [
+    { value: 'refresh', label: 'Refresh existing' },
+    { value: 'new', label: 'Create another message' },
+    { value: 'recover', label: 'Recover missing' },
+  ];
+  readonly activityChoices: SelectChoice[] = [
+    { value: 'roles', label: 'Role assignments' },
+    { value: 'changes', label: 'Rule changes' },
+    { value: 'jobs', label: 'Role checks' },
+  ];
+  get channelChoices(): SelectChoice[] {
+    return (this.data?.channels || []).map((channel: any) => ({
+      value: channel.id,
+      label: '#' + channel.name,
+    }));
+  }
+  get defaultChannelChoices(): SelectChoice[] {
+    return [{ value: null, label: 'No default' }, ...this.channelChoices];
+  }
+  get roleChoices(): SelectChoice[] {
+    return [
+      { value: '', label: 'Create a new role' },
+      ...(this.data?.roles || []).map((role: any) => ({
+        value: role.id,
+        label: role.name,
+        disabled: !role.manageable,
+      })),
+    ];
+  }
+  get groupChoices(): SelectChoice[] {
+    return [
+      { value: '', label: 'All rules' },
+      { value: 'combined', label: 'Combined rules only' },
+      ...this.combinedGroups.map((group) => ({
+        value: group.key,
+        label: `${group.roleName} · ${group.minimum} items · #${this.channelName(group.channelId)}`,
+      })),
+    ];
+  }
   async ngOnInit() {
     try {
       const session = await this.api('/session');

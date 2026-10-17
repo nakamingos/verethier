@@ -190,14 +190,11 @@
               <div class="toolbar">
                 <label
                   >Asset type<span class="select-control"
-                    ><select [(ngModel)]="filter" [disabled]="!!activeGroup">
-                      <option value="">All assets</option>
-                      <option value="ordinal">Ordinals</option>
-                      <option value="ethscription">Ethscriptions</option>
-                      <option value="nft">NFTs</option>
-                      <option value="erc20">Tokens</option>
-                    </select></span
-                  ></label
+                    ><app-pixel-select
+                      [(ngModel)]="filter"
+                      [disabled]="!!activeGroup"
+                      [options]="assetFilterChoices"
+                      label="Asset type" /></span></label
                 ><label
                   >Find a rule<input
                     [(ngModel)]="query"
@@ -205,21 +202,11 @@
                     placeholder="Role or collection…" /></label
                 ><label
                   >Rule group<span class="select-control"
-                    ><select
+                    ><app-pixel-select
                       [ngModel]="groupFilter"
                       (ngModelChange)="showGroup($event)"
-                    >
-                      <option value="">All rules</option>
-                      <option value="combined">Combined rules only</option>
-                      @for (group of combinedGroups; track group.key) {
-                        <option [value]="group.key">
-                          {{ group.roleName }} · {{ group.minimum }} items · #{{
-                            channelName(group.channelId)
-                          }}
-                        </option>
-                      }
-                    </select></span
-                  ></label
+                      [options]="groupChoices"
+                      label="Rule group" /></span></label
                 ><button class="primary" (click)="create()" [disabled]="busy">
                   + Add rule
                 </button>
@@ -265,53 +252,30 @@
                       <div class="form-grid">
                         <label
                           >Asset type<span class="select-control"
-                            ><select
+                            ><app-pixel-select
                               name="asset"
                               [(ngModel)]="draft.asset_type"
                               (ngModelChange)="changeAsset()"
-                            >
-                              <option value="ordinal">Ordinals</option>
-                              <option value="ethscription">
-                                Ethscriptions
-                              </option>
-                              <option value="nft">NFTs</option>
-                              <option value="erc20">Tokens (ERC-20)</option>
-                            </select></span
-                          ></label
-                        >
+                              [options]="assetChoices"
+                              label="Asset type" /></span
+                        ></label>
                         <label
                           >Verification channel<span class="select-control"
-                            ><select
+                            ><app-pixel-select
                               name="channel"
                               [(ngModel)]="draft.channel_id"
                               required
-                            >
-                              @for (
-                                channel of data.channels;
-                                track channel.id
-                              ) {
-                                <option [value]="channel.id">
-                                  #{{ channel.name }}
-                                </option>
-                              }
-                            </select></span
-                          ></label
-                        >
+                              [options]="channelChoices"
+                              label="Verification channel" /></span
+                        ></label>
                         <label
                           >Discord role<span class="select-control"
-                            ><select name="role" [(ngModel)]="draft.role_id">
-                              <option value="">Create a new role</option>
-                              @for (role of data.roles; track role.id) {
-                                <option
-                                  [value]="role.id"
-                                  [disabled]="!role.manageable"
-                                >
-                                  {{ role.name }}
-                                </option>
-                              }
-                            </select></span
-                          ></label
-                        >
+                            ><app-pixel-select
+                              name="role"
+                              [(ngModel)]="draft.role_id"
+                              [options]="roleChoices"
+                              label="Discord role" /></span
+                        ></label>
                         @if (!draft.role_id) {
                           <label
                             >New role name<input
@@ -328,17 +292,12 @@
                         ) {
                           <label
                             >Match by<span class="select-control"
-                              ><select name="mode" [(ngModel)]="mode">
-                                <option value="collection">Collection</option>
-                                <option value="ids">
-                                  Inscription IDs / hashes
-                                </option>
-                                <option value="numbers">
-                                  Global inscription numbers
-                                </option>
-                              </select></span
-                            ></label
-                          >
+                              ><app-pixel-select
+                                name="mode"
+                                [(ngModel)]="mode"
+                                [options]="matchChoices"
+                                label="Match by" /></span
+                          ></label>
                           @if (mode === 'collection') {
                             <label
                               >Collection slug<input
@@ -388,15 +347,12 @@
                         ) {
                           <label
                             >Network<span class="select-control"
-                              ><select
+                              ><app-pixel-select
                                 name="network"
                                 [(ngModel)]="draft.network"
-                              >
-                                <option value="ethereum">Ethereum</option>
-                                <option value="robinhood">Robinhood</option>
-                              </select></span
-                            ></label
-                          >
+                                [options]="networkChoices"
+                                label="Network" /></span
+                          ></label>
                           <label
                             >Contract address<input
                               name="contract"
@@ -476,19 +432,12 @@
                       <div class="form-grid">
                         <label
                           >Discord role<span class="select-control"
-                            ><select name="editRole" [(ngModel)]="editRoleId">
-                              <option value="">Create a new role</option>
-                              @for (role of data.roles; track role.id) {
-                                <option
-                                  [value]="role.id"
-                                  [disabled]="!role.manageable"
-                                >
-                                  {{ role.name }}
-                                </option>
-                              }
-                            </select></span
-                          ></label
-                        >
+                            ><app-pixel-select
+                              name="editRole"
+                              [(ngModel)]="editRoleId"
+                              [options]="roleChoices"
+                              label="Discord role" /></span
+                        ></label>
                         @if (!editRoleId) {
                           <label
                             >New role name<input
@@ -724,18 +673,11 @@
                   </p>
                   <label
                     >Default verification channel<span class="select-control"
-                      ><select
+                      ><app-pixel-select
                         name="defaultChannel"
                         [(ngModel)]="data.settings.verification_channel_id"
-                      >
-                        <option [ngValue]="null">No default</option>
-                        @for (channel of data.channels; track channel.id) {
-                          <option [value]="channel.id">
-                            #{{ channel.name }}
-                          </option>
-                        }
-                      </select></span
-                    ></label
+                        [options]="defaultChannelChoices"
+                        label="Default verification channel" /></span></label
                   ><button class="primary" type="submit" [disabled]="busy">
                     Save settings
                   </button>
@@ -751,29 +693,19 @@
                   <div class="form-grid">
                     <label
                       >Channel<span class="select-control"
-                        ><select
+                        ><app-pixel-select
                           name="messageChannel"
                           [(ngModel)]="messageChannel"
-                        >
-                          @for (channel of data.channels; track channel.id) {
-                            <option [value]="channel.id">
-                              #{{ channel.name }}
-                            </option>
-                          }
-                        </select></span
-                      ></label
+                          [options]="channelChoices"
+                          label="Channel" /></span></label
                     ><label
                       >Action<span class="select-control"
-                        ><select
+                        ><app-pixel-select
                           name="messageAction"
                           [(ngModel)]="messageAction"
-                        >
-                          <option value="refresh">Refresh existing</option>
-                          <option value="new">Create another message</option>
-                          <option value="recover">Recover missing</option>
-                        </select></span
-                      ></label
-                    >
+                          [options]="messageActionChoices"
+                          label="Action" /></span
+                    ></label>
                   </div>
                   <button type="submit" [disabled]="busy">
                     Update message
@@ -941,16 +873,12 @@
                   <h2>Activity</h2>
                   <label
                     >Show<span class="select-control"
-                      ><select
+                      ><app-pixel-select
                         [(ngModel)]="activityKind"
                         (ngModelChange)="switchTab('audit')"
                         [disabled]="busy"
-                      >
-                        <option value="roles">Role assignments</option>
-                        <option value="changes">Rule changes</option>
-                        <option value="jobs">Role checks</option>
-                      </select></span
-                    ></label
+                        [options]="activityChoices"
+                        label="Show" /></span></label
                   ><button (click)="switchTab('audit')" [disabled]="busy">
                     Refresh
                   </button>

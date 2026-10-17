@@ -1,0 +1,47 @@
+<button
+  #trigger
+  type="button"
+  class="pixel-select-trigger"
+  role="combobox"
+  aria-haspopup="listbox"
+  [attr.aria-label]="label"
+  [attr.aria-expanded]="isOpen"
+  [attr.aria-controls]="id"
+  [attr.aria-activedescendant]="
+    isOpen && active >= 0 ? id + '-' + active : null
+  "
+  [attr.aria-required]="required || null"
+  [disabled]="disabled"
+  (click)="toggle()"
+  (keydown)="keydown($event)"
+  (blur)="touched()"
+>
+  <span class="pixel-select-value">{{ selectedLabel }}</span>
+  <span class="pixel-select-arrow" aria-hidden="true"></span>
+</button>
+<!-- Cancel the surrounding label's click activation after an option is chosen. -->
+<div
+  #menu
+  class="pixel-select-menu"
+  popover="auto"
+  role="listbox"
+  [id]="id"
+  [attr.aria-label]="label"
+  (toggle)="onToggle($event)"
+  (mousedown)="$event.preventDefault()"
+  (click)="$event.preventDefault()"
+>
+  @for (option of options; track option.value; let index = $index) {
+    <div
+      role="option"
+      [id]="id + '-' + index"
+      [attr.aria-selected]="option.value === value"
+      [attr.aria-disabled]="option.disabled || null"
+      [class.active]="active === index"
+      (pointermove)="hover(index)"
+      (click)="choose(index)"
+    >
+      {{ option.label }}
+    </div>
+  }
+</div>

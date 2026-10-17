@@ -200,6 +200,68 @@ $pixel-server-button-selected: (
   '.DDDDDDDDDDDDDD.'
 );
 
+// Dropdown field, focused picker and arrow sampled from the source theme.
+$pixel-select-field: (
+  '............',
+  '..HHHHHHHH..',
+  '.HSEEEEEESH.',
+  '.HEKSSSSKEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HESFFFFSEH.',
+  '.HSEEEEEESH.',
+  '..HHHHHHHH..',
+  '............'
+);
+$pixel-select-picker: (
+  '..EEEEEEEEEEEE..',
+  '.EHHHHHHHHHHHHE.',
+  'EHKEEEEEEEEEEKHE',
+  'EHEDSSSSSSSSSEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHKEEEEEEEEEEKHE',
+  '.EHHHHHHHHHHHHE.',
+  '..EEEEEEEEEEEE..'
+);
+$pixel-select-button: (
+  '..EEEEEEEEEE..',
+  '.EFHHHHHHHHFE.',
+  'EFHFFFFFFFFHFE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHHFFFFFFFFHHE',
+  'ESHHHHHHHHHHSE',
+  'FESSSSSSSSSSEF',
+  '.FEEEEEEEEEEF.',
+  '..FFFFFFFFFF..'
+);
+$pixel-select-arrow: (
+  '.........',
+  '.........',
+  'HHHHHHHHH',
+  'SHHHHHHHS',
+  '.SHHHHHS.',
+  '..SHHHS..',
+  '...SHS...',
+  '....S....'
+);
+
 @function pixel-frame($face, $edge, $highlight, $shade, $kind: 'raised') {
   $rows: $pixel-raised;
   @if $kind == 'inset' {
@@ -409,6 +471,55 @@ $pixel-server-button-selected: (
   --pixel-card-highlight: #{pixel-card-frame($inside, $accent, $outside)};
   --pixel-card-open: #{pixel-card-frame($inside, $accent, $outside, 'open')};
   --pixel-card-lower: #{pixel-card-frame($inside, $accent, $outside, 'lower')};
+}
+
+@mixin pixel-dropdowns(
+  $face: #292b30,
+  $band: #41444a,
+  $shade: #202125,
+  $menu: #41444a,
+  $text: #c0c0c0
+) {
+  --pixel-select-field: #{pixel-grid(
+      $pixel-select-field,
+      (
+        'E': #000,
+        'F': $face,
+        'H': $band,
+        'S': $shade,
+        'K': #101114,
+      )
+    )};
+  --pixel-select-picker: #{pixel-grid(
+      $pixel-select-picker,
+      (
+        'E': #000,
+        'F': $menu,
+        'H': #4069c2,
+        'S': $shade,
+        'K': #2a4185,
+        'D': #101114,
+      )
+    )};
+  --pixel-select-button: #{pixel-grid(
+      $pixel-select-button,
+      (
+        'E': #000,
+        'F': $face,
+        'H': $band,
+        'S': $shade,
+      )
+    )};
+  --pixel-select-arrow: #{pixel-grid(
+      $pixel-select-arrow,
+      (
+        'H': $text,
+        'S': $face,
+      )
+    )};
+  --ase-select-menu: #{$menu};
+  --ase-select-text: #{$text};
+  --ase-select-focus: #4069c2;
 }
 
 @mixin pixel-surface($frame) {
