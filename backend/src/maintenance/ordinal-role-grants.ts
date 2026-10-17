@@ -40,6 +40,7 @@ export async function runOrdinalRoleGrants(
     summary.users++;
     let member: GrantMember | null;
     let checks: VerificationResult[] = [];
+    const batches: VerificationResult[][] = [];
     try {
       member = await deps.member(saved.userId);
       if (!member) { summary.absentMembers++; return; }
@@ -50,7 +51,9 @@ export async function runOrdinalRoleGrants(
       // Live ownership is shared within this member's checks, never across members.
       const context: NftCheckContext = { checks: new Map(), ordinalWork: { priority: 'background' } };
       for (const group of pending) {
-        checks.push(...(await deps.verify(saved.userId, saved.address, group, context)).results);
+        const results = (await deps.verify(saved.userId, saved.address, group, context)).results;
+        batches.push(results);
+        checks.push(...results);
       }
     } catch {
       summary.errors++;
@@ -62,12 +65,17 @@ export async function runOrdinalRoleGrants(
     if (unavailable.length) deps.record({ event: 'checks_unavailable', userId: saved.userId, ruleIds: unavailable.map(check => check.ruleId) });
 
     const eligible = new Map<string, VerificationResult>();
-    for (const check of checks) {
+    for (const batch of batches) for (const check of batch) {
       // A passing shared group must actually include confirmed Ordinals holdings.
       // An unrelated EVM qualification alone must not become a grant in this pass.
-      if (check.isValid && check.status !== 'unavailable' && check.rule?.asset_type === 'ordinal'
+      if (check.status !== 'unavailable' && check.rule?.asset_type === 'ordinal'
         && BigInt(check.matchingAssetCount || 0) > 0n
-        && check.ownershipDetails?.source !== 'collection-upper-bound') eligible.set(check.rule.role_id, check);
+        && check.ownershipDetails?.source !== 'collection-upper-bound') {
+        const passing = check.isValid ? check : batch.find(other => other.isValid
+          && other.rule?.role_id === check.rule.role_id
+          && String(other.rule.min_items || 1) === String(check.rule.min_items || 1));
+        if (passing) eligible.set(check.rule.role_id, passing);
+      }
     }
     if (apply && eligible.size) {
       try { member = await deps.member(saved.userId); }

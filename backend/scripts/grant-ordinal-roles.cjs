@@ -9,6 +9,7 @@ async function main() {
   const { values } = parseArgs({ options: {
     server: { type: 'string' }, apply: { type: 'boolean', default: false },
     report: { type: 'string' }, 'data-workdir': { type: 'string' }, 'retry-report': { type: 'string' }, user: { type: 'string' },
+    'collections-only': { type: 'boolean', default: false },
   } });
   if (!/^\d{17,20}$/.test(values.server || '')) {
     throw new MaintenanceError('Use --server DISCORD_SERVER_ID [--apply] [--report FILE] [--data-workdir LINKED_HOLDINGS_PROJECT]. The default is a dry run.');
@@ -66,7 +67,7 @@ async function main() {
   const manageable = role => role && role.id !== serverId && !role.managed
     && (role.position < highest.position || (role.position === highest.position && BigInt(role.id) > BigInt(highest.id)));
 
-  const rules = await linked.rules(serverId);
+  const rules = (await linked.rules(serverId)).filter(rule => !values['collections-only'] || rule.asset_type !== 'ordinal' || !rule.inscription_criteria);
   if (!ordinalGrantGroups(rules).length) throw new MaintenanceError('This server has no Ordinals rules.');
   const wallets = await linked.wallets();
   const retryUsers = values['retry-report'] ? new Set(require('node:fs').readFileSync(resolve(values['retry-report']), 'utf8')
