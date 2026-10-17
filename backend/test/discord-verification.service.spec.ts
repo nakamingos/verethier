@@ -297,6 +297,26 @@ describe('DiscordVerificationService', () => {
   });
 
   describe('addUserRole', () => {
+    it('reads the member once per run and refreshes tracking without re-adding an existing role', async () => {
+      const guild = mockClient.guilds.cache.get('guild-id');
+      const member = {
+        ...mockGuildMember,
+        roles: { cache: { has: (roleId: string) => roleId === 'held' }, add: jest.fn() },
+      };
+      member.roles.add.mockResolvedValue(member);
+      guild.members.fetch.mockResolvedValueOnce(member as any);
+      service.tempMessages['test-nonce'] = mockInteraction as any;
+      const context = new Map();
+      const data = { last_check_status: 'passed', matched_rule_ids: [1] };
+      const existing = await service.addUserRole('user-id', 'held', 'guild-id', 'test-nonce', '1', data, context);
+      await service.addUserRole('user-id', 'new', 'guild-id', 'test-nonce', '2', data, context);
+      expect(existing.wasAlreadyAssigned).toBe(true);
+      expect(guild.members.fetch).toHaveBeenCalledTimes(1);
+      expect(member.roles.add).toHaveBeenCalledTimes(1);
+      expect(mockDbService.trackRoleAssignment).toHaveBeenCalledTimes(2);
+      expect(mockDbService.trackRoleAssignment).toHaveBeenCalledWith(expect.objectContaining({ roleId: 'held', verificationData: data }));
+    });
+
     it('should add role to user successfully', async () => {
       const nonce = 'test-nonce';
       service.tempMessages[nonce] = mockInteraction as any;

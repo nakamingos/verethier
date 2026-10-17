@@ -50,6 +50,7 @@ describe('DataService', () => {
         recorder.range = [start, end];
         return builder;
       }),
+      order: jest.fn(() => builder),
       then: (onFulfilled: (value: { data: any; error: any }) => unknown, onRejected?: (reason: any) => unknown) =>
         Promise.resolve(result).then(onFulfilled, onRejected),
       catch: (onRejected: (reason: any) => unknown) =>
@@ -89,9 +90,9 @@ describe('DataService', () => {
 
   it('counts all matching items even when their trait key capitalization differs', async () => {
     queueQuery({data: [
-      {hashId: '1', attributes_new: {values: {EyeColor: 'Gold Crown'}}},
-      {hashId: '2', attributes_new: {values: {EYECOLOR: 'GOLD CROWN'}}},
-      {hashId: '3', attributes_new: {values: {eyecolor: 'Silver Crown'}}},
+      {hashId: '1', slug: 'pizza-comrades', attributes_new: {values: {EyeColor: 'Gold Crown'}}},
+      {hashId: '2', slug: 'pizza-comrades', attributes_new: {values: {EYECOLOR: 'GOLD CROWN'}}},
+      {hashId: '3', slug: 'pizza-comrades', attributes_new: {values: {eyecolor: 'Silver Crown'}}},
     ], error: null});
     expect(await service.checkAssetOwnershipWithCriteria('0x123', 'pizza-comrades', 'eyecolor', 'gold crown', 1)).toBe(2);
   });
@@ -127,8 +128,7 @@ describe('DataService', () => {
 
     expect(result).toBe(1);
     expect(query.table).toBe('ethscriptions');
-    expect(query.select).toContain('attributes_new!inner');
-    expect(query.eq).toContainEqual(['slug', 'test-collection']);
+    expect(query.select).toContain('attributes_new(values)');
   });
 
   it('keeps category-only rules on the attribute-filtered path during batch checks', async () => {
@@ -158,7 +158,59 @@ describe('DataService', () => {
     ]);
 
     expect(result.get(0)).toBe(1);
-    expect(query.select).toContain('attributes_new!inner');
-    expect(query.eq).toContainEqual(['slug', 'test-collection']);
+    expect(query.select).toContain('attributes_new(values)');
+  });
+
+  it('shares one fresh inventory across parallel rules, stacked wallets, and later recommendations', async () => {
+    const context = { checks: new Map() };
+    const query = queueQuery({ data: [
+      { hashId: '0xA', slug: 'one', attributes_new: { values: { Crown: 'Gold' } } },
+      { hashId: '0xB', slug: 'one', attributes_new: null },
+      { hashId: '0xC', slug: 'two', attributes_new: { values: { Crown: 'Silver' } } },
+    ], error: null });
+    expect(await Promise.all([
+      service.checkAssetOwnershipWithCriteria(['0xABC', '0xDEF'], 'one', 'ALL', 'ALL', 1, context),
+      service.checkAssetOwnershipWithCriteria(['0xdef', '0xabc', '0xABC'], 'one', 'crown', 'gold', 1, context),
+      service.checkAssetOwnershipWithCriteria(['0xabc', '0xdef'], 'two', 'ALL', 'ALL', 2, context),
+    ])).toEqual([2, 1, 0]);
+    expect(await service.matchingAssetIdsWithCriteria(['0xdef', '0xabc'], 'ALL', 'ALL', 'ALL', 1, context))
+      .toEqual(['0xa', '0xb', '0xc']);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    expect(query.or).toContain('owner.eq.0xabc');
+    expect(query.or).toContain('owner.eq.0xdef');
+    expect(query.or).toContain('and(owner.eq.0xd3418772623be1a3cc6b6d45cb46420cedd9154a,prevOwner.eq.0xabc)');
+
+    queueQuery({ data: [], error: null });
+    expect(await service.checkAssetOwnershipWithCriteria(['0xabc', '0xdef'], 'one', 'ALL', 'ALL', 1, { checks: new Map() })).toBe(0);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads beyond the Supabase row limit before evaluating counts', async () => {
+    const rows = Array.from({ length: 1001 }, (_, index) => ({ hashId: String(index), slug: 'one', attributes_new: null }));
+    const pages = [0, 500, 1000].map(offset => queueQuery({ data: rows.slice(offset, offset + 500), error: null }));
+    expect(await service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'ALL', 'ALL', 1001)).toBe(1001);
+    expect(pages.map(page => page.range)).toEqual([[0, 499], [500, 999], [1000, 1499]]);
+  });
+
+  it('rejects a partial inventory for every rule when a later page fails', async () => {
+    queueQuery({ data: Array.from({ length: 500 }, (_, index) => ({ hashId: String(index), slug: 'one', attributes_new: null })), error: null });
+    queueQuery({ data: null, error: { message: 'unavailable' } });
+    const context = { checks: new Map() };
+    const results = await Promise.allSettled([
+      service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'ALL', 'ALL', 1, context),
+      service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'Crown', 'Gold', 1, context),
+    ]);
+    expect(results.every(result => result.status === 'rejected')).toBe(true);
+    await expect(service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'ALL', 'ALL', 1, context)).rejects.toThrow('unavailable');
+    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps inventories separate when server wallet restrictions allow different wallets', async () => {
+    queueQuery({ data: [{ hashId: 'a', slug: 'one', attributes_new: null }], error: null });
+    queueQuery({ data: [], error: null });
+    const context = { checks: new Map() };
+    expect(await service.checkAssetOwnershipWithCriteria(['0xabc', '0xdef'], 'one', 'ALL', 'ALL', 1, context)).toBe(1);
+    expect(await service.checkAssetOwnershipWithCriteria(['0xdef'], 'one', 'ALL', 'ALL', 1, context)).toBe(0);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
   });
 });

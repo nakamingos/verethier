@@ -29,7 +29,7 @@ export class AssetOwnershipService {
     const criteria = inscriptionCriteria(rule);
     if (criteria && !this.ethscriptionsSvc) throw new Error('Ethscriptions verification is not configured.');
     const ids = criteria ? await this.ethscriptionsSvc.matchingIds(evm, criteria, context)
-      : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL');
+      : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1, context);
     return new Map(ids.map(id => [id.toLowerCase(), 1n]));
   }
 
@@ -57,6 +57,7 @@ export class AssetOwnershipService {
     const count = await this.dataSvc.checkAssetOwnershipWithCriteria(
       [...new Set(evmAddresses.map(address => address.toLowerCase()))],
       rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1,
+      context,
     );
     return BigInt(count);
   }

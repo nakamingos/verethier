@@ -3,7 +3,9 @@ import { nftRuleLabel } from '@/utils/nft-rule.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { NonceService }  from './nonce.service';
-import { DiscordVerificationService } from './discord-verification.service';
+import { DiscordVerificationService, RoleSyncContext } from './discord-verification.service';
+import { BulkVerificationResult } from './verification-engine.service';
+import { VerifierRole } from '@/models/verifier-role.interface';
 import { DataService }   from './data.service';
 import { DbService }     from './db.service';
 import { VerificationService } from './verification.service';
@@ -48,12 +50,14 @@ export class VerifyService {
     signature: string
   ) {
     // Verify the wallet signature and extract the signing address
-    const walletVerification = await this.walletSvc.verifySignature(payload, signature);
+    const startedAt = Date.now();
+    const walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
     const finish = this.ordinalRequests?.beginVerification();
     try {
       return await this.completeVerification(payload, walletVerification);
     } finally {
       finish?.();
+      Logger.log(`Verification total: user=${payload.userId}; ${Date.now() - startedAt}ms`);
     }
   }
 
@@ -65,7 +69,7 @@ export class VerifyService {
     const ownershipContext: NftCheckContext = { checks: new Map() };
     
     // Get the message data associated with the nonce for message-based verification
-    const { messageId, channelId } = walletVerification.nonceContext
+    const { channelId } = walletVerification.nonceContext
       || await this.nonceSvc.getNonceData(payload.userId, payload.nonce);
     
     // Invalidate the nonce after retrieving the data to prevent replay attacks
@@ -78,10 +82,9 @@ export class VerifyService {
       Logger.debug(`Channel-based verification for channelId: ${channelId}`);
       
       // Get ALL rules that apply to this channel
-      const rules = await this.verificationSvc.getRulesForChannel(
-        payload.discordId,
-        channelId
-      );
+      const rules = await this.timed(payload.userId, 'rules', () => this.verificationSvc.getRulesForChannel(
+        payload.discordId, channelId
+      ));
       
       if (!rules || rules.length === 0) {
         Logger.warn(`No rules found for channelId: ${channelId}`);
@@ -95,53 +98,13 @@ export class VerifyService {
       // Use the unified verification engine to verify the user against all rules
       const ruleIds = rules.map(rule => rule.id);
       ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers');
-      const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext);
-      const { validRules, matchingAssetCounts } = verificationResult;
+      const verificationResult = await this.timed(payload.userId, 'eligibility', () =>
+        this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext, rules));
+      const { validRules } = verificationResult;
       
-      const roleResults = [];
-      let hasMatchingAssets = validRules.length > 0;
-      
-      for (const rule of validRules) {
-        if (!rule.role_id) {
-          Logger.warn(`Rule ${rule.id} has no role_id, skipping`);
-          continue;
-        }
-        
-        const assetCount = matchingAssetCounts.get(rule.id.toString()) || 0;
-        Logger.debug(`Processing valid rule ${rule.id}: ${assetCount} matching assets`);
-        
-        try {
-          Logger.debug(`Assigning role: ${rule.role_id} to user: ${payload.userId}`);
+      const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
+      const hasMatchingAssets = validRules.length > 0;
 
-          const roleResult = await this.discordVerificationSvc.addUserRole(
-            payload.userId,
-            rule.role_id,
-            payload.discordId,
-            payload.nonce,
-            rule.id.toString(), // Keep the representative rule for existing tracking.
-            {
-              last_check_status: 'passed',
-              matched_rule_ids: validRules.filter(match => match.role_id === rule.role_id).map(match => match.id),
-              rule_checks: (verificationResult.results || []).filter(check => check.rule?.role_id === rule.role_id),
-            }
-          );
-
-          // Role assignment and tracking is handled by assignRole() method
-          // No need for additional tracking here
-
-          if (roleResult) {
-            roleResults.push({
-              ...roleResult,
-              matchingCount: assetCount,
-            });
-          }
-          Logger.debug(`✅ Role assigned for rule ${rule.id} (${rule.slug})`);
-        } catch (error) {
-          Logger.error(`❌ Failed to assign role ${rule.role_id}:`, error.message);
-          // Continue with other roles even if one fails - don't add to roleResults
-        }
-      }
-      
       if (!hasMatchingAssets) {
         if (verificationResult.results?.some(result => result.status === 'unavailable' || result.error)) {
           const errorMsg = 'Collection verification is temporarily unavailable. Please try again.';
@@ -161,27 +124,27 @@ export class VerifyService {
       
       // Send verification complete message with role assignment details
       try {
-        await this.discordVerificationSvc.sendVerificationComplete(
+        await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
           payload.discordId,
           payload.nonce,
           roleResults,
           address,
           ownershipContext // Reuse ownership reads for role recommendations.
-        );
+        ));
       } catch (error) {
         Logger.error('Failed to send verification complete message:', error);
         // Log the error but don't fail the verification process
       }
       
-      const totalAssigned = roleResults.length;
-      const newlyAssigned = roleResults.filter(r => !r.wasAlreadyAssigned).length;
+      const totalAssigned = new Set(roleResults.map(result => result.roleId)).size;
+      const newlyAssigned = new Set(roleResults.filter(r => !r.wasAlreadyAssigned).map(result => result.roleId)).size;
       
       Logger.log(`Verification completed (${newlyAssigned} new roles, ${totalAssigned - newlyAssigned} existing roles)`);
       return { 
         message: `Verification successful (message-based) - ${newlyAssigned} new roles assigned, ${totalAssigned - newlyAssigned} existing roles`, 
         address,
         walletOwnershipTransferred,
-        assignedRoles: roleResults.map(r => r.roleId)
+        assignedRoles: [...new Set(roleResults.map(r => r.roleId))]
       };
     }
 
@@ -190,7 +153,7 @@ export class VerifyService {
     Logger.debug(`Unified verification path for address: ${address}`);
     
     // Get all rules for the current guild using the unified verification service
-    const rules = await this.verificationSvc.getAllRulesForServer(payload.discordId);
+    const rules = await this.timed(payload.userId, 'rules', () => this.verificationSvc.getAllRulesForServer(payload.discordId));
     
     if (!rules || rules.length === 0) {
       const errorMsg = 'No verification rules found for this server';
@@ -201,8 +164,9 @@ export class VerifyService {
     // Use unified verification engine to check all rules
     const ruleIds = rules.map(rule => rule.id);
     ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers');
-    const verificationResult = await this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext);
-    const { validRules, matchingAssetCounts } = verificationResult;
+    const verificationResult = await this.timed(payload.userId, 'eligibility', () =>
+      this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext, rules));
+    const { validRules } = verificationResult;
     
     if (validRules.length === 0) {
       const errorMsg = verificationResult.results?.some(result => result.status === 'unavailable' || result.error)
@@ -212,64 +176,73 @@ export class VerifyService {
       throw new Error(errorMsg);
     }
 
-    const roleResults = [];
-    for (const rule of validRules) {
-      const assetCount = matchingAssetCounts.get(rule.id.toString()) || 0;
-      Logger.debug(`Unified verification: Assigning role ${rule.role_id} for rule ${rule.id}: ${assetCount} matching assets`);
-      
-      try {
-        const roleResult = await this.discordVerificationSvc.addUserRole(
-          payload.userId,
-          rule.role_id,
-          payload.discordId,
-          payload.nonce,
-          rule.id.toString(), // Keep the representative rule for existing tracking.
-          {
-            last_check_status: 'passed',
-            matched_rule_ids: validRules.filter(match => match.role_id === rule.role_id).map(match => match.id),
-            rule_checks: (verificationResult.results || []).filter(check => check.rule?.role_id === rule.role_id),
-          }
-        );
+    const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
 
-        // Role assignment and tracking is handled by addUserRole() method
-        // No need for additional tracking here
-
-        if (roleResult) {
-          roleResults.push({
-            ...roleResult,
-            matchingCount: assetCount,
-          });
-        }
-        Logger.debug(`✅ Unified verification: Successfully assigned role: ${rule.role_id} for rule ${rule.id}`);
-      } catch (error) {
-        Logger.error(`❌ Failed to assign role ${rule.role_id} for rule ${rule.id}:`, error.message);
-        // Continue with other roles even if one fails - don't add to roleResults
-      }
-    }
-    
     // Send verification complete message with role assignment details
     try {
-      await this.discordVerificationSvc.sendVerificationComplete(
+      await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
         payload.discordId,
         payload.nonce,
         roleResults,
         address,
         ownershipContext // Reuse ownership reads for role recommendations.
-      );
+      ));
     } catch (error) {
       Logger.error('Failed to send verification complete message:', error);
       // Log the error but don't fail the verification process
     }
     
-    const totalAssigned = roleResults.length;
-    const newlyAssigned = roleResults.filter(r => !r.wasAlreadyAssigned).length;
+    const totalAssigned = new Set(roleResults.map(result => result.roleId)).size;
+    const newlyAssigned = new Set(roleResults.filter(r => !r.wasAlreadyAssigned).map(result => result.roleId)).size;
     
     Logger.log(`Verification completed (${newlyAssigned} new roles, ${totalAssigned - newlyAssigned} existing roles)`);
     return { 
       message: `Verification successful - ${newlyAssigned} new roles assigned, ${totalAssigned - newlyAssigned} existing roles`, 
       address,
       walletOwnershipTransferred,
-      assignedRoles: roleResults.map(r => r.roleId)
+      assignedRoles: [...new Set(roleResults.map(r => r.roleId))]
     };
+  }
+
+  private async assignVerifiedRoles(payload: DecodedData, result: BulkVerificationResult) {
+    return this.timed(payload.userId, 'role assignment and tracking', async () => {
+      const groups = new Map<string, VerifierRole[]>();
+      for (const rule of result.validRules) {
+        if (!rule.role_id) continue;
+        if (!groups.has(rule.role_id)) groups.set(rule.role_id, []);
+        groups.get(rule.role_id).push(rule);
+      }
+      const roleResults = [];
+      const members: RoleSyncContext = new Map();
+      for (const [roleId, matches] of groups) {
+        try {
+          const roleResult = await this.discordVerificationSvc.addUserRole(
+            payload.userId, roleId, payload.discordId, payload.nonce, matches[0].id.toString(),
+            {
+              last_check_status: 'passed',
+              matched_rule_ids: matches.map(rule => rule.id),
+              rule_checks: (result.results || []).filter(check => check.rule?.role_id === roleId),
+            }, members
+          );
+          if (!roleResult) continue;
+          // Preserve every matching rule in the existing success-message layout.
+          // The assignment and its database record are each updated only once.
+          for (const rule of matches) roleResults.push({
+            ...roleResult,
+            ruleId: rule.id.toString(),
+            matchingCount: result.matchingAssetCounts.get(rule.id.toString()) || 0,
+          });
+        } catch (error) {
+          Logger.error(`Failed to assign role ${roleId}:`, error.message);
+        }
+      }
+      return roleResults;
+    });
+  }
+
+  private async timed<T>(userId: string, stage: string, work: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    try { return await work(); }
+    finally { Logger.log(`Verification ${stage}: user=${userId}; ${Date.now() - startedAt}ms`); }
   }
 }

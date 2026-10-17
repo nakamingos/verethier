@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { AppLogger } from '@/utils/app-logger.util';
 import { CONSTANTS } from '@/constants';
+import type { NftCheckContext } from './nft-ownership.service';
+import type { EthscriptionAsset } from '@/models/ethscription-ownership.interface';
 
 // Validate environment on service load
 EnvironmentConfig.validate();
@@ -461,8 +463,8 @@ export class DataService {
    * @param minItems - Minimum required assets (minimum 1, even if 0 is passed)
    * @returns Number of matching assets, or 0 if requirements not met
    */
-  async checkAssetOwnershipWithCriteria(address: string | string[], slug?: string, attributeKey?: string, attributeValue?: string, minItems = 1): Promise<number> {
-    const ids = await this.matchingAssetIdsWithCriteria(address, slug, attributeKey, attributeValue);
+  async checkAssetOwnershipWithCriteria(address: string | string[], slug?: string, attributeKey?: string, attributeValue?: string, minItems = 1, context?: NftCheckContext): Promise<number> {
+    const ids = await this.matchingAssetIdsWithCriteria(address, slug, attributeKey, attributeValue, 1, context);
     return ids.length >= minItems ? ids.length : 0;
   }
 
@@ -471,88 +473,53 @@ export class DataService {
     slug?: string,
     attributeKey?: string,
     attributeValue?: string,
-    minItems: number = 1
+    minItems: number = 1,
+    context?: NftCheckContext
   ): Promise<string[]> {
-    // Handle both single address and array of addresses (for wallet stacking)
-    const addresses = Array.isArray(address) ? address : [address];
-    const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
-    const marketAddress = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
-    
     if (slug?.includes(',')) throw new Error('Use one collection per rule.');
+    const wallets = [...new Set((Array.isArray(address) ? address : [address]).map(wallet => wallet.toLowerCase()))].sort();
+    if (!wallets.length) return [];
+    const inventories: Map<string, Promise<EthscriptionAsset[]>> = context
+      ? (context.ethscriptionAssets ||= new Map()) : new Map();
+    const key = JSON.stringify(wallets);
+    // Cache the promise before awaiting it, so parallel rules share one read.
+    // A failed read stays failed for this run rather than becoming an empty wallet.
+    if (!inventories.has(key)) inventories.set(key, this.readEthscriptionAssets(wallets));
+    const assets = await inventories.get(key);
     const collection = slug?.trim();
-    const filterCollection = collection && collection !== 'ALL' && collection !== 'all-collections';
+    const scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
+      ? assets.filter(asset => asset.slug === collection) : assets;
+    const matching: EthscriptionAsset[] = this.hasAttributeCriteria(attributeKey, attributeValue)
+      ? this.filterByAttributes(scoped, attributeKey || 'ALL', attributeValue) : scoped;
+    return [...new Set(matching.map(asset => asset.hashId.toLowerCase()))];
+  }
 
-    // Early return for simple ownership check (no attribute filtering)
-    const hasAttributeFilter = this.hasAttributeCriteria(attributeKey, attributeValue);
-    Logger.log(
-      `🔍 DETAILED CHECK - Has attribute filter: ${hasAttributeFilter} (attributeKey="${attributeKey}", attributeValue="${attributeValue}")`
-    );
-    
-    if (!hasAttributeFilter) {
-      Logger.log(`🔍 DETAILED CHECK - Using simple ownership check (no attribute filter)`);
-      
-      // Build ownership condition for all addresses
-      // For each address: owner.eq.address OR (owner.eq.market AND prevOwner.eq.address)
-      const ownershipConditions = normalizedAddresses.map(addr => 
-        `owner.eq.${addr},and(owner.eq.${marketAddress},prevOwner.eq.${addr})`
-      ).join(',');
-      
-      let query = supabase
-        .from('ethscriptions')
-        .select('hashId, owner, prevOwner, slug')
-        .or(ownershipConditions);
-
-      if (filterCollection) query = query.eq('slug', collection);
-
-      const { data, error } = await query;
-      if (error) {
-        throw new Error(error.message);
-      }
-      
-      Logger.log(`🔍 DETAILED CHECK - Simple query returned ${data.length} assets across ${normalizedAddresses.length} wallet(s) and ${collection || 'ALL'}`);
-      return [...new Set(data.map(item => item.hashId.toLowerCase()))];
-    }
-
-    Logger.log(`🔍 DETAILED CHECK - Using attribute filtering query`);
-    
-    // For attribute filtering, build ownership condition for all addresses
-    const ownershipConditions = normalizedAddresses.map(addr => 
-      `owner.eq.${addr},and(owner.eq.${marketAddress},prevOwner.eq.${addr})`
+  private async readEthscriptionAssets(wallets: string[]): Promise<EthscriptionAsset[]> {
+    const startedAt = Date.now();
+    const market = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
+    const pageSize = 500;
+    const assets: EthscriptionAsset[] = [];
+    const ownership = wallets.map(wallet =>
+      `owner.eq.${wallet},and(owner.eq.${market},prevOwner.eq.${wallet})`
     ).join(',');
-    
-    // Use optimized JOIN query
-    let joinQuery = supabase
-      .from('ethscriptions')
-      .select(`
-        hashId, 
-        owner, 
-        prevOwner, 
-        slug, 
-        sha,
-        attributes_new!inner(sha, values)
-      `)
-      .or(ownershipConditions);
-
-    if (filterCollection) joinQuery = joinQuery.eq('slug', collection);
-
-    const { data: joinedData, error: joinError } = await joinQuery;
-
-    if (joinError) {
-      throw new Error(`Failed to query with join: ${joinError.message}`);
+    let pages = 0;
+    try {
+      for (let offset = 0; ; offset += pageSize) {
+        // A left join retains assets without metadata for collection/count rules.
+        const { data, error } = await supabase.from('ethscriptions')
+          .select('hashId, slug, attributes_new(values)')
+          .or(ownership)
+          .order('hashId', { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        pages++;
+        if (error) throw new Error(`Failed to fetch ethscriptions: ${error.message}`);
+        if (!Array.isArray(data)) throw new Error('Failed to fetch ethscriptions.');
+        assets.push(...data as unknown as EthscriptionAsset[]);
+        if (data.length < pageSize) return assets;
+      }
+    } finally {
+      this.logger.log(`Ethscriptions holdings: ${Date.now() - startedAt}ms; wallets=${wallets.length}; assets=${assets.length}; pages=${pages}`);
     }
-
-    if (!joinedData || joinedData.length === 0) {
-      Logger.debug(`No ethscriptions found with attributes for user`);
-      return [];
-    }
-
-    // Optimized attribute filtering
-    const matchingItems = this.filterByAttributes(joinedData, attributeKey, attributeValue);
-    const matchingCount = matchingItems.length;
-    
-    Logger.debug(`Found ${matchingCount} matching ethscriptions with ${attributeKey}=${attributeValue} across ${normalizedAddresses.length} wallet(s) and ${collection || 'ALL'}`);
-    
-    return [...new Set(matchingItems.map(item => item.hashId.toLowerCase()))];
   }
 
   /**

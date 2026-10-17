@@ -91,7 +91,7 @@ export class VerificationEngine {
       checkedRule = rule;
 
       // Get ALL wallet addresses for this user (for wallet stacking)
-      const userAddresses = await this.userAddressService.getUserAddresses(userId);
+      const userAddresses = await this.addressesForRun(userId, run);
       
       // Ensure the current address is included in the list (handles race condition)
       // If the user just verified with this address, it might not be in DB yet
@@ -189,11 +189,22 @@ export class VerificationEngine {
     // not force every later member onto a numbered (potentially paid) lookup.
     if (context.ordinalMode !== 'scheduled'
       && rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
-    const verificationPromises = ruleIds.map(ruleId =>
-      this.verifyUser(userId, ruleId, address, context, ruleMap.get(ruleId.toString()))
-    );
+    const timings = new Map<string, { startedAt: number; endedAt: number; rules: number }>();
+    const verificationPromises = ruleIds.map(ruleId => {
+      const rule = ruleMap.get(ruleId.toString());
+      const type = rule?.asset_type || 'ethscription';
+      if (!timings.has(type)) timings.set(type, { startedAt: Date.now(), endedAt: 0, rules: 0 });
+      const timing = timings.get(type);
+      timing.rules++;
+      return this.verifyUser(userId, ruleId, address, context, rule).finally(() => { timing.endedAt = Date.now(); });
+    });
     
     const results = await Promise.all(verificationPromises);
+    if (context.ordinalMode !== 'scheduled') {
+      for (const [type, timing] of timings) {
+        Logger.log(`Verification ownership: user=${userId}; asset=${type}; ${timing.endedAt - timing.startedAt}ms; rules=${timing.rules}`);
+      }
+    }
     await this.combineCounts(userId, address, results, context, rules);
     
     const validRules: VerifierRole[] = [];
@@ -247,7 +258,7 @@ export class VerificationEngine {
           continue;
         }
         const owned = new Map<string, bigint>();
-        const addresses = [...await this.userAddressService.getUserAddresses(userId)];
+        const addresses = [...await this.addressesForRun(userId, context)];
         if (!addresses.includes(address.toLowerCase())) addresses.push(address.toLowerCase());
         for (const check of checks) {
           try {
@@ -271,6 +282,12 @@ export class VerificationEngine {
         else if (unavailable) result.error = 'Combined ownership check is temporarily unavailable.';
       }
     }
+  }
+
+  private addressesForRun(userId: string, context: NftCheckContext): Promise<string[]> {
+    const reads = context.userAddresses ||= new Map();
+    if (!reads.has(userId)) reads.set(userId, this.userAddressService.getUserAddresses(userId));
+    return reads.get(userId);
   }
 
   /**

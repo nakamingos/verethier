@@ -195,12 +195,13 @@ describe('VerifyService', () => {
     expect(finishVerification).toHaveBeenCalledTimes(1);
     const ownershipContext = mockVerificationService.verifyUserBulk.mock.calls[0][3];
     expect(ownershipContext.checks).toBeInstanceOf(Map);
-    expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc', ownershipContext);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
+    expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc', ownershipContext, mockRules);
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map));
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [{
       roleId: 'test-role-id',
       roleName: 'Test Role',
       wasAlreadyAssigned: false,
+      ruleId: '1',
       matchingCount: 2
     }], '0xabc', ownershipContext);
     expect(result.message).toContain('message-based');
@@ -251,13 +252,13 @@ describe('VerifyService', () => {
     const result = await service.verifySignatureFlow(payload as any, 'sig');
     
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(2);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }));
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map));
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map));
     expect(mockDiscordVerificationService.sendVerificationComplete).toHaveBeenCalledWith('guild123', 'nonce123', [
-      { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 5 },
-      { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, matchingCount: 3 }
+      { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, ruleId: '1', matchingCount: 5 },
+      { roleId: 'test-role-id', roleName: 'Test Role', wasAlreadyAssigned: false, ruleId: '2', matchingCount: 3 }
     ], '0xabc', mockVerificationService.verifyUserBulk.mock.calls[0][3]);
-    expect(result.assignedRoles).toEqual(['test-role-id', 'test-role-id']);
+    expect(result.assignedRoles).toEqual(['test-role-id']);
   });
 
   it('handles message-based verification when no rules found', async () => {
@@ -364,7 +365,7 @@ describe('VerifyService', () => {
     
     // Should only assign the first role
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(1);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }));
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-123', 'guild123', 'nonce123', '1', expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map));
     expect(result.assignedRoles).toEqual(['test-role-id']);
   });
 
@@ -454,7 +455,7 @@ describe('VerifyService', () => {
     
     // Should only process the second rule
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(1);
-    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }));
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledWith('user123', 'role-456', 'guild123', 'nonce123', '2', expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map));
     expect(result.assignedRoles).toEqual(['role-456']);
   });
 
@@ -525,7 +526,39 @@ describe('VerifyService', () => {
       'guild123',
       'nonce123',
       '1',
-      expect.objectContaining({ last_check_status: 'passed' })
+      expect.objectContaining({ last_check_status: 'passed' }), expect.any(Map)
     );
+  });
+
+  it.each([true, false])('assigns shared roles once and preserves every matching rule (channel=%s)', async channel => {
+    mockNonceService.getNonceData.mockResolvedValue({ channelId: channel ? 'channel' : null });
+    mockWalletService.verifySignature.mockResolvedValue({ address: '0xabc', walletOwnershipTransferred: false });
+    const rules = [
+      { id: 1, role_id: 'shared', asset_type: 'ethscription', min_items: 10 },
+      { id: 2, role_id: 'shared', asset_type: 'ordinal', min_items: 10 },
+      { id: 3, role_id: 'other', asset_type: 'ethscription', min_items: 1 },
+    ];
+    const checks = rules.map(rule => ({ rule, ruleId: rule.id, isValid: true }));
+    mockVerificationService.getRulesForChannel.mockResolvedValue(rules);
+    mockVerificationService.getAllRulesForServer.mockResolvedValue(rules);
+    mockVerificationService.verifyUserBulk.mockResolvedValue({
+      validRules: rules, invalidRules: [], results: checks,
+      matchingAssetCounts: new Map([['1', 10], ['2', 10], ['3', 1]]),
+    });
+    mockDiscordVerificationService.addUserRole.mockImplementation(async (_user, roleId) => ({
+      roleId, roleName: roleId, wasAlreadyAssigned: roleId === 'other',
+    }));
+    const result = await service.verifySignatureFlow({ userId: 'user', discordId: 'server', nonce: 'nonce' } as any, 'sig');
+    expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(2);
+    expect(mockDiscordVerificationService.addUserRole.mock.calls[0][5]).toEqual({
+      last_check_status: 'passed', matched_rule_ids: [1, 2], rule_checks: checks.slice(0, 2),
+    });
+    expect(mockDiscordVerificationService.addUserRole.mock.calls[0][6])
+      .toBe(mockDiscordVerificationService.addUserRole.mock.calls[1][6]);
+    const displayed = mockDiscordVerificationService.sendVerificationComplete.mock.calls[0][2];
+    expect(displayed.map(role => role.ruleId)).toEqual(['1', '2', '3']);
+    expect(result.assignedRoles).toEqual(['shared', 'other']);
+    expect(result.message).toContain('1 new roles assigned, 1 existing roles');
+    expect(mockVerificationService.verifyUserBulk.mock.calls[0][4]).toBe(rules);
   });
 });
