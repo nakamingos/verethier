@@ -30,6 +30,7 @@ export interface NftCheckContext {
   ordinalInventories?: Map<string, Promise<Map<string, number>>>;
   ordinalWalletInventories?: Map<string, Promise<OrdinalWalletInventory>>;
   ordinalCatalogs?: Map<string, Promise<OrdinalCollectionSnapshot>>;
+  /** Prefer sharing a numbered inventory; ID-only rules can still fall back independently. */
   ordinalNeedsNumbers?: boolean;
   ethscriptionOwners?: Map<string, Promise<EthscriptionOwnership>>;
   ethscriptionInventories?: Map<string, Promise<Map<string, EthscriptionOwnership>>>;
