@@ -2,8 +2,7 @@
 h2 { font-size: 2.1rem; }
 p { margin: 1.2rem 0; }
 nav, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
-a { color: #000; text-decoration: underline; }
+a { color: var(--ase-link); text-decoration: underline; }
 [aria-current='page'] { font-weight: bold; }
 button, .wallet-launch { font-size: 1.6rem; }
-.wallet-launch { display: inline-block; padding: .5rem 1rem; background: #ff04b4; }
-textarea { display: block; width: 100%; height: 18rem; margin-top: 1rem; padding: .75rem; box-sizing: border-box; font: 1.6rem/1.5 monospace; background: #fff; color: #000; }
+textarea { display: block; width: 100%; height: 18rem; margin-top: 1rem; padding: .75rem; box-sizing: border-box; font: 1.6rem/1.5 monospace; }
