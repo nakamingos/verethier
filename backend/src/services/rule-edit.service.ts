@@ -1,7 +1,7 @@
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Injectable } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
-import { inscriptionCriteria } from '@/utils/inscription-rule.util';
+import { inscriptionCriteria, normalizeRuleLabel, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { nftTrait } from '@/utils/nft-trait.util';
 import { ordinalCollectionId, ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { parseTokenBalance } from '@/utils/erc20-rule.util';
@@ -33,6 +33,9 @@ export class RuleEditService {
     const criteria = inscriptionCriteria(before);
     if (criteria) {
       const selection = inputs.selection?.trim();
+      candidate.rule_label = normalizeRuleLabel(inputs.label ?? before.rule_label);
+      const parsed = parseInscriptionCriteria(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, before.asset_type === 'ordinal' ? 'ordinal' : 'ethscription');
+      if (candidate.min_items === before.min_items && JSON.stringify(parsed) === JSON.stringify(criteria)) return candidate;
       const prepared = before.asset_type === 'ordinal'
         ? await this.ordinals.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items)
         : await this.ethscriptions.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items);

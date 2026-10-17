@@ -395,7 +395,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(rules.map(rule => rule.name)).toEqual([
         'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([5, 9, 8, 8]);
+      expect(rules.map(rule => rule.options.length)).toEqual([5, 9, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -416,6 +416,11 @@ describe('DiscordService - Enhanced Tests', () => {
         for (const name of ['inscription_ids', 'inscription_numbers']) {
           expect(rule.options.find(option => option.name === name).max_length).toBe(6000);
         }
+      }
+      for (const rule of [ordinals, ethscriptions]) {
+        const index = rule.options.findIndex(option => option.name === 'inscription_numbers');
+        expect(rule.options[index + 1]).toMatchObject({name: 'label', max_length: 100});
+        expect(rule.options[index + 1].required).not.toBe(true);
       }
       expect(ordinals.options.find(option => option.name === 'slug').autocomplete).toBe(true);
       expect(ethscriptions.options.find(option => option.name === 'slug').autocomplete).toBe(true);

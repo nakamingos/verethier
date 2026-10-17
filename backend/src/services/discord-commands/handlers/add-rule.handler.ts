@@ -1,3 +1,4 @@
+import { normalizeRuleLabel } from '@/utils/inscription-rule.util';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
@@ -155,6 +156,11 @@ export class AddRuleHandler {
     const network = interaction.options.getString('network');
     const inscriptionIds = interaction.options.getString('inscription_ids');
     const inscriptionNumbers = interaction.options.getString('inscription_numbers');
+    const label = interaction.options.getString('label');
+    if (label != null && inscriptionIds == null && inscriptionNumbers == null) {
+      await interaction.editReply({content: AdminFeedback.simple('Use label with inscription_ids or inscription_numbers. Collection rules use slug.', true)});
+      return null;
+    }
     if (assetType === 'erc20') {
       try {
         if (!this.tokensSvc) throw new Error('Token verification is not configured.');
@@ -172,6 +178,7 @@ export class AddRuleHandler {
     }
     if (inscriptionIds != null || inscriptionNumbers != null) {
       try {
+        const ruleLabel = normalizeRuleLabel(label);
         if (!['ordinal', 'ethscription'].includes(assetType)) throw new Error('Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.');
         if (interaction.options.getString('slug') != null || attributeKey !== 'ALL' || attributeValue !== 'ALL'
           || contract || tokenIds != null || name != null || network != null) {
@@ -182,6 +189,7 @@ export class AddRuleHandler {
         const assetFields = assetType === 'ordinal'
           ? await this.ordinalsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems)
           : await this.ethscriptionsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems);
+        assetFields.rule_label = ruleLabel;
         return { channel, roleName, slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems, assetFields };
       } catch (error) {
         await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the selected inscriptions. Please try again.', true) });

@@ -432,6 +432,12 @@ describe('DbService (Unit Tests)', () => {
       min_items: 1
     };
 
+    it('preserves an inscription label when undo restores the removed rule', async () => {
+      mockSupabaseClient.single.mockResolvedValue({data: {id: 42}, error: null});
+      await service.restoreRuleWithOriginalId({...mockRuleData, asset_type: 'ordinal', chain_id: null, slug: null,
+        attribute_key: 'ALL', attribute_value: 'ALL', rule_label: 'Krampus Knows', inscription_criteria: {kind: 'numbers', ranges: [[123,123]]}});
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({rule_label: 'Krampus Knows', slug: null}));
+    });
     it('should restore rule with original ID when no conflict exists', async () => {
       // Mock successful insert
       mockSupabaseClient.single.mockResolvedValueOnce({

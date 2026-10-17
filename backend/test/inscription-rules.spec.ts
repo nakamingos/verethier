@@ -1,3 +1,4 @@
+import { normalizeRuleLabel } from '../src/utils/inscription-rule.util';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { VerifierRole } from '../src/models/verifier-role.interface';
 import { NftCheckContext } from '../src/services/nft-ownership.service';
@@ -153,5 +154,20 @@ describe('Specific Ordinals ownership', () => {
     request.mockResolvedValue([{ id: id(1), currentAddress: other }]);
     await scheduler.performScheduledReverification();
     expect(discord.removeUserRole).toHaveBeenCalledWith('user', 'guild', 'special', expect.any(Map));
+  });
+});
+
+describe('specific-inscription labels', () => {
+  it('preserves human-readable names and allows clearing the label', () => {
+    expect(normalizeRuleLabel('  Pizza Comrades — Gold Crowns  ')).toBe('Pizza Comrades — Gold Crowns');
+    expect(normalizeRuleLabel(' ')).toBeNull();
+    for (const label of ['a'.repeat(101), 'first\nsecond', 'first\tsecond']) expect(() => normalizeRuleLabel(label)).toThrow('one line');
+  });
+  it('shows an escaped label while retaining the exact selection and minimum semantics', () => {
+    const rule: any = {asset_type: 'ordinal', slug: null, attribute_key: 'ALL', attribute_value: 'ALL', min_items: 1,
+      inscription_criteria: {kind: 'numbers', ranges: [[123,123], [456,456]]}, rule_label: '**Gold Crowns**'};
+    expect(inscriptionRuleScope(rule)).toContain('Label: \\*\\*Gold Crowns\\*\\*');
+    expect(inscriptionRuleScope(rule)).toContain('123, 456');
+    expect(inscriptionCriteria(rule)).toEqual(rule.inscription_criteria);
   });
 });

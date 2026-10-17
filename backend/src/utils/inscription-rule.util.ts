@@ -1,9 +1,17 @@
+import { escapeMarkdown } from 'discord.js';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
 
 export const ETHSCRIPTION_ID = /^0x[0-9a-f]{64}$/;
 const MAX_SELECTIONS = 1000;
 const CANONICAL_ID = /^[0-9a-f]{64}i(0|[1-9]\d*)$/;
+
+export function normalizeRuleLabel(value?: string | null): string | null {
+  const label = value?.trim();
+  if (!label) return null;
+  if (label.length > 100 || /[\u0000-\u001f\u007f]/u.test(label)) throw new Error('Rule labels must be one line and at most 100 characters.');
+  return label;
+}
 
 export function parseInscriptionCriteria(ids?: string | null, numbers?: string | null, assetType: 'ordinal' | 'ethscription' = 'ordinal'): InscriptionCriteria | null {
   if (ids == null && numbers == null) return null;
@@ -68,5 +76,6 @@ export function inscriptionRuleScope(rule: Partial<VerifierRole>, style: 'detail
     ? `${entries.length} selected${criteria.kind === 'numbers' ? ` range${entries.length === 1 ? '' : 's'}` : ''}`
     : entries.slice(0, limit).map(entry => entry.length > 100 ? entry.slice(0, 99) + '…' : entry).join(', ')
       + (entries.length > limit ? ` (+${entries.length - limit} more)` : '');
-  return `${rule.asset_type === 'ordinal' ? 'Inscription' : 'Ethscription'} ${criteria.kind === 'ids' ? 'IDs' : 'numbers'}: ${selection} · ${rule.asset_type === 'ordinal' ? 'Bitcoin · Ordinals' : 'Ethereum · Ethscriptions'}`;
+  const label = rule.rule_label ? `Label: ${escapeMarkdown(rule.rule_label)} · ` : '';
+  return `${label}${rule.asset_type === 'ordinal' ? 'Inscription' : 'Ethscription'} ${criteria.kind === 'ids' ? 'IDs' : 'numbers'}: ${selection} · ${rule.asset_type === 'ordinal' ? 'Bitcoin · Ordinals' : 'Ethereum · Ethscriptions'}`;
 }

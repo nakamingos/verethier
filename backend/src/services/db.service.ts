@@ -1118,7 +1118,7 @@ export class DbService {
           attribute_value: removedRule.attribute_value,
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
-          ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria } : {}),
+          ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria, rule_label: removedRule.rule_label ?? null } : {}),
           ...(['nft', 'ordinal', 'erc20'].includes(removedRule.asset_type) ? {
             asset_type: removedRule.asset_type, chain_id: removedRule.chain_id,
             contract_address: removedRule.contract_address, token_standard: removedRule.token_standard,

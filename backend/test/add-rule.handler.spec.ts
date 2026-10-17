@@ -525,6 +525,22 @@ describe('AddRuleHandler', () => {
         getString: jest.fn(key => inputs[key] ?? null), getInteger: jest.fn().mockReturnValue(1) },
       deferReply: jest.fn(), editReply: jest.fn(), followUp: jest.fn() } as any;
     }
+    it.each(['ordinal', 'ethscription'] as const)('saves an optional display label for %s IDs without a collection lookup', async assetType => {
+      const provider = assetType === 'ordinal' ? mockOrdinalsService : mockEthscriptionsService;
+      const selectedId = assetType === 'ordinal' ? id : ethHash;
+      provider.prepareInscriptionRule.mockResolvedValue({asset_type: assetType, slug: null, inscription_criteria: {kind: 'ids', ids: [selectedId]}});
+      const result = await (handler as any).validateInputParams(interactionFor({inscription_ids: selectedId, label: '  Gold Crown Specials  '}), assetType);
+      expect(result.assetFields).toMatchObject({rule_label: 'Gold Crown Specials', slug: null});
+      expect(mockDataService.getAllSlugs).not.toHaveBeenCalled();
+      const invalid = interactionFor({label: 'a'.repeat(101)});
+      await (handler as any).validateInputParams(invalid, assetType);
+      expect(invalid.editReply).toHaveBeenCalledWith({content: expect.stringContaining('100 characters')});
+    });
+    it('requires IDs or numbers when a label is supplied', async () => {
+      const interaction = interactionFor({inscription_ids: null, slug: 'pizza-comrades', label: 'Special'});
+      expect(await (handler as any).validateInputParams(interaction, 'ordinal')).toBeNull();
+      expect(interaction.editReply).toHaveBeenCalledWith({content: expect.stringContaining('Use label with inscription_ids or inscription_numbers')});
+    });
     it.each(['ordinal', 'ethscription'] as const)('saves %s selections through duplicate detection, confirmation, and undo', async assetType => {
       const criteria = { kind: 'ids', ids: [assetType === 'ordinal' ? id : ethHash] };
       const fields = { asset_type: assetType, slug: null, chain_id: assetType === 'ordinal' ? null : 1,
