@@ -1,3 +1,4 @@
+import { normalizeCollectionSlug } from './collection-input.util';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria, inscriptionRuleScope } from './inscription-rule.util';
 import { createHash } from 'node:crypto';
@@ -51,7 +52,7 @@ export function usableOrdinalTraitSnapshot(rule: Partial<VerifierRole>, now = Da
 }
 
 export function ordinalCollectionId(value: string): string {
-  const id = value?.trim().toLowerCase();
+  const id = normalizeCollectionSlug(value);
   if (!id || id === 'all' || !/^[a-z0-9][a-z0-9._-]{0,99}$/.test(id)) {
     throw new Error('Enter one Ordinals collection slug, such as pizza-comrades.');
   }

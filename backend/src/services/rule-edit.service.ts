@@ -1,3 +1,4 @@
+import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Injectable } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria } from '@/utils/inscription-rule.util';
@@ -38,8 +39,8 @@ export class RuleEditService {
       candidate.inscription_criteria = prepared.inscription_criteria;
       return candidate;
     }
-    candidate.attribute_key = inputs.attribute_key?.trim() || 'ALL';
-    candidate.attribute_value = inputs.attribute_value?.trim() || 'ALL';
+    candidate.attribute_key = normalizeCriteriaOption(inputs.attribute_key);
+    candidate.attribute_value = normalizeCriteriaOption(inputs.attribute_value);
     if (before.asset_type === 'nft') {
       const trait = nftTrait(candidate);
       const prepared = await this.nfts.prepareRule(before.contract_address, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id);
@@ -50,7 +51,7 @@ export class RuleEditService {
       await this.nfts.validateTraits(candidate);
       return candidate;
     }
-    candidate.slug = inputs.slug?.trim() || 'ALL';
+    candidate.slug = normalizeCollectionSlug(inputs.slug) || 'ALL';
     if (before.asset_type === 'ordinal') {
       const trait = ordinalTrait(candidate);
       candidate.slug = ordinalCollectionId(candidate.slug);
@@ -67,6 +68,11 @@ export class RuleEditService {
     }
     const validated = await validateEthscriptionCriteria(this.data, candidate.slug, candidate.attribute_key, candidate.attribute_value);
     if (!validated.isValid) throw new Error(validated.message);
+    if (validated.criteria) {
+      candidate.slug = validated.criteria.slug;
+      candidate.attribute_key = validated.criteria.attributeKey;
+      candidate.attribute_value = validated.criteria.attributeValue;
+    }
     return candidate;
   }
 

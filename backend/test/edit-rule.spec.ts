@@ -99,6 +99,22 @@ describe('Rule edit validation', () => {
     await expect(service.prepare(base, { ...inputs(base), slug: 'missing' })).rejects.toThrow('does not exist');
     await expect(service.prepare(base, { ...inputs(base), attribute_value: 'Rare' })).rejects.toThrow('without specifying');
   });
+  it('saves canonical Ethscription criteria and preserves role names and trait spacing', async () => {
+    const { editor: service, data } = editor();
+    data.getAllSlugs.mockResolvedValue(['Pizza-Comrades']);
+    data.getAttributeKeys.mockResolvedValue(['EyeColor']);
+    data.getAllAttributeValues.mockResolvedValue(['Gold Crown']);
+    const result = await service.prepare({...base, role_name: 'Gold Crown Holders'}, {...inputs(base), slug: ' PIZZA   COMRADES ', attribute_key: ' eyecolor ', attribute_value: ' gold crown '});
+    expect(result).toMatchObject({slug: 'Pizza-Comrades', attribute_key: 'EyeColor', attribute_value: 'Gold Crown', role_name: 'Gold Crown Holders'});
+  });
+  it('normalizes Ordinals slug edits before deciding whether metadata needs refreshing', async () => {
+    const { editor: service, ordinals } = editor();
+    const before = {...ordinal, ordinal_trait_snapshot: snapshot()};
+    const result = await service.prepare(before, {...inputs(before), slug: ' PIZZA   COMRADES '});
+    expect(result.slug).toBe('pizza-comrades');
+    expect(ordinals.prepareRule).not.toHaveBeenCalled();
+    expect(ordinals.prepareTraitSnapshot).not.toHaveBeenCalled();
+  });
   it('rejects multiple collections and uses a single collection field', async () => {
     await expect(editor().editor.prepare(base, { ...inputs(base), slug: 'other, comrades' })).rejects.toThrow('one collection per rule');
     expect(ruleEditFields(base)[0]).toMatchObject({ label: 'Collection slug' });

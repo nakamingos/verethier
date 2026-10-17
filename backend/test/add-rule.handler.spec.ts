@@ -39,6 +39,8 @@ const mockDiscordService = {
 
 const mockDataService = {
   getAllSlugs: jest.fn(),
+  getAttributeKeys: jest.fn(),
+  getAllAttributeValues: jest.fn(),
 };
 
 const mockRemovalUndoInteractionHandler = {
@@ -135,6 +137,18 @@ describe('AddRuleHandler', () => {
     
     // Setup default mock return values
     mockDataService.getAllSlugs.mockResolvedValue(['test-collection', 'another-collection', 'example-slug']);
+  });
+
+  it('saves canonical collection/trait spelling when creation input uses spaces and different case', async () => {
+    mockDataService.getAllSlugs.mockResolvedValue(['Pizza-Comrades']);
+    mockDataService.getAttributeKeys.mockResolvedValue(['EyeColor']);
+    mockDataService.getAllAttributeValues.mockResolvedValue(['Gold Crown']);
+    const values = {role: 'Gold Crown Holders', slug: ' PIZZA   COMRADES ', attribute_key: ' eyecolor ', attribute_value: ' gold crown '};
+    const interaction = { options: { getChannel: () => ({id: 'channel'}), getString: key => values[key] ?? null, getInteger: () => 10 }, editReply: jest.fn() };
+    expect(await (handler as any).validateInputParams(interaction, 'ethscription')).toMatchObject({
+      roleName: 'Gold Crown Holders', slug: 'Pizza-Comrades', attributeKey: 'EyeColor', attributeValue: 'Gold Crown', minItems: 10,
+    });
+    expect(interaction.editReply).not.toHaveBeenCalled();
   });
 
   describe('handle', () => {

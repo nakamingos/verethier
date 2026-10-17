@@ -1,3 +1,4 @@
+import { normalizeCollectionSlug, normalizeCriteriaOption, matchCaseInsensitive } from '@/utils/collection-input.util';
 import { Logger } from '@nestjs/common';
 import type { DataService } from '../../data.service';
 import { ChatInputCommandInteraction, TextChannel } from 'discord.js';
@@ -23,9 +24,9 @@ export async function validateRuleInputParams(interaction: ChatInputCommandInter
 } | null> {
   const channel = interaction.options.getChannel('channel') as TextChannel;
   const roleName = interaction.options.getString('role');
-  const slug = interaction.options.getString('slug') || 'ALL';
-  const attributeKey = interaction.options.getString('attribute_key') || 'ALL';
-  const attributeValue = interaction.options.getString('attribute_value') || 'ALL';
+  const slug = normalizeCollectionSlug(interaction.options.getString('slug')) || 'ALL';
+  const attributeKey = normalizeCriteriaOption(interaction.options.getString('attribute_key'));
+  const attributeValue = normalizeCriteriaOption(interaction.options.getString('attribute_value'));
   const minItems = interaction.options.getInteger('min_items') || 1;
 
   if (!channel || !roleName) {
@@ -48,84 +49,48 @@ export function formatAttribute(key: string, value: string): string {
   return 'ALL';
 }
 
-export async function validateEthscriptionCriteria(dataSvc: DataService, slug: string, attributeKey: string, attributeValue: string): Promise<{ isValid: boolean; message: string }> {
+export async function resolveEthscriptionSlug(dataSvc: DataService, input: string): Promise<string | undefined> {
+  const normalized = normalizeCollectionSlug(input);
+  if (!normalized || normalized === 'all') return 'ALL';
+  return matchCaseInsensitive(await dataSvc.getAllSlugs(), normalized);
+}
 
+export interface EthscriptionCriteriaValidation {
+  isValid: boolean;
+  message: string;
+  criteria?: { slug: string; attributeKey: string; attributeValue: string };
+}
+
+export async function validateEthscriptionCriteria(dataSvc: DataService, slug: string, attributeKey: string, attributeValue: string): Promise<EthscriptionCriteriaValidation> {
+  slug = normalizeCollectionSlug(slug) || 'all';
+  attributeKey = normalizeCriteriaOption(attributeKey);
+  attributeValue = normalizeCriteriaOption(attributeValue);
   if (slug.includes(',')) return {
     isValid: false,
     message: 'Use one collection per rule. Add another rule with the same role and minimum to combine holdings.'
   };
-
-  // If all options are 'ALL', no validation needed
-  if (slug === 'ALL' && attributeKey === 'ALL' && attributeValue === 'ALL') {
-    return { isValid: true, message: '' };
-  }
-
   try {
-    if (slug !== 'ALL') {
-      const availableSlugs = await dataSvc.getAllSlugs();
-      if (!availableSlugs.includes(slug)) return {
-        isValid: false, message: `Collection "${slug}" does not exist in the marketplace database.`
-      };
-    }
-
-    // Validate attribute key exists for the selected collection
+    const canonicalSlug = await resolveEthscriptionSlug(dataSvc, slug);
+    if (!canonicalSlug) return { isValid: false, message: `Collection "${slug}" does not exist in the marketplace database.` };
+    slug = canonicalSlug;
     if (attributeKey !== 'ALL') {
-      if (slug === 'ALL') {
-        // If no specific collection, check if attribute key exists across all collections
-        const allKeys = await dataSvc.getAttributeKeys('ALL');
-        if (!allKeys.includes(attributeKey)) {
-          return {
-            isValid: false,
-            message: `Attribute key "${attributeKey}" does not exist in any collection.`
-          };
-        }
-      } else {
-        // Check if attribute key exists for the specific collection
-        const keysForCollection = await dataSvc.getAttributeKeys(slug);
-        if (!keysForCollection.includes(attributeKey)) {
-          return {
-            isValid: false,
-            message: `Attribute key "${attributeKey}" does not exist for collection "${slug}".`
-          };
-        }
-      }
+      const keys = await dataSvc.getAttributeKeys(slug);
+      const canonicalKey = matchCaseInsensitive(keys, attributeKey);
+      if (!canonicalKey) return { isValid: false, message: `Attribute key "${attributeKey}" does not exist for collection "${slug}".` };
+      attributeKey = canonicalKey;
     }
-
-    // Validate attribute value exists for the selected key and collection
     if (attributeValue !== 'ALL') {
-      if (attributeKey === 'ALL') {
-        return {
-          isValid: false,
-          message: 'Cannot specify an attribute value without specifying an attribute key first.'
-        };
-      }
-
-      let valuesForKey: string[];
-      if (slug === 'ALL') {
-        // Get ALL values across all collections for this attribute key (not just rarest 25)
-        valuesForKey = await dataSvc.getAllAttributeValues(attributeKey, 'ALL');
-      } else {
-        // Get ALL values for specific collection and attribute key (not just rarest 25)
-        valuesForKey = await dataSvc.getAllAttributeValues(attributeKey, slug);
-      }
-
-      // Values from getAllAttributeValues are already clean (no count suffix)
-      if (!valuesForKey.includes(attributeValue)) {
-        const keyLocation = slug === 'ALL' ? 'any collection' : `collection "${slug}"`;
-        return {
-          isValid: false,
-          message: `Attribute value "${attributeValue}" does not exist for attribute key "${attributeKey}" in ${keyLocation}.`
-        };
-      }
+      if (attributeKey === 'ALL') return {
+        isValid: false, message: 'Cannot specify an attribute value without specifying an attribute key first.'
+      };
+      const values = await dataSvc.getAllAttributeValues(attributeKey, slug);
+      const canonicalValue = matchCaseInsensitive(values, attributeValue);
+      if (!canonicalValue) return { isValid: false, message: `Attribute value "${attributeValue}" does not exist for attribute key "${attributeKey}" in collection "${slug}".` };
+      attributeValue = canonicalValue;
     }
-
-    return { isValid: true, message: '' };
-
+    return { isValid: true, message: '', criteria: { slug, attributeKey, attributeValue } };
   } catch (error) {
     Logger.error('Error validating input combinations:', error);
-    return {
-      isValid: false,
-      message: 'Error validating options against database. Please try again.'
-    };
+    return { isValid: false, message: 'Error validating options against database. Please try again.' };
   }
 }
