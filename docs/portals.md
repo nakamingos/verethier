@@ -10,6 +10,8 @@ Edit opens beneath the selected rule, extending its card. Combined badges and th
 
 Cards keep equal heights, a reserved group-badge slot and actions aligned at the bottom. Changing button labels reserve their largest size. Notifications use a fixed, dismissible area with Undo/Redo. Server loading retains the current view, makes it inert, and replaces the server ID and data together only after a successful response; initial loads show static placeholders. Audit results scroll within a stable area so pagination stays in place. The primary font is preloaded to reduce text reflow.
 
+Shared buttons, fields, cards, badges and notifications use stepped pixel corners with beveled edges in both themes. Nine-slice SVG frames keep the corner steps fixed without changing control dimensions or clipping editors, suggestions or keyboard focus. Selects retain native menus and keyboard behavior, with a decorative pixel arrow. High-contrast mode uses system colors and plain borders.
+
 Member Lookup accepts Discord IDs, usernames and server nicknames without case sensitivity. Suggestions show the username and ID to distinguish shared names. Only an exact, unique name or a selected member resolves; Bouncer confirms current server membership before exposing saved information. Direct ID lookup remains available if Discord member search is unavailable.
 
 Member Lookup loads saved information first. Check Roles fetches current ownership. Fix queues reconciliation of previously earned roles only. Provider uncertainty retains roles. Background checks default to enabled; disabling them skips scheduled role checks for that server. Explicit verification, rule changes and requested repairs still reconcile earned roles. New qualifiers must verify.
