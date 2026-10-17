@@ -64,6 +64,14 @@ describe('one-time Ordinals role grants', () => {
     expect(deps.add).not.toHaveBeenCalled();
   });
 
+  it('grants the shared minimum when EVM holdings already meet it and Ordinals also contribute', async () => {
+    ownership.count.mockImplementation(async rule => rule.asset_type === 'ordinal' ? 3n : 10n);
+    await runOrdinalRoleGrants(saved, [rule(1, { min_items: 10 }), rule(2, { asset_type: 'ethscription', min_items: 10 })], true, deps);
+    expect(deps.add).toHaveBeenCalledWith('member', 'role');
+    expect(deps.track).toHaveBeenCalledWith('member', 'Member', expect.objectContaining({ id: 2 }),
+      expect.arrayContaining([expect.objectContaining({ ruleId: 2, isValid: true })]));
+  });
+
   it('respects wallet blocks and leaves roles alone on failed or unavailable checks', async () => {
     allowedAddresses.mockResolvedValue([]);
     await runOrdinalRoleGrants(saved, [rule(1)], true, deps);

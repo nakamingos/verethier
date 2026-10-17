@@ -160,6 +160,8 @@ written under `backend/temp` (or the path supplied with `--report`). This does
 not enable recurring grants or start another bot/scheduled role monitor.
 Use `--retry-report FILE` to retry only members with failed/unavailable checks
 in an earlier journal, or `--user DISCORD_USER_ID` to check one saved holder.
+Use `--collections-only` to restrict the Ordinals scope to collection rules and
+their shared collectible minimums, skipping specific inscription selections.
 
 - [Backend README](backend/README.md)
 - [Frontend README](frontend/README.md)
