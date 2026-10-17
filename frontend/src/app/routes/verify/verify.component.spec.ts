@@ -242,7 +242,7 @@ describe('Verification page wallet choice', () => {
     expect(button).toBeTruthy(); button.click(); expect(bitcoin.openUniSatMobile).toHaveBeenCalledTimes(1);
     expect(bitcoin.connect).not.toHaveBeenCalled();
     bitcoin.isUniSatAvailable.and.returnValue(true); fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.step-1 .actions button').textContent).toBe('Connect');
+    expect(fixture.nativeElement.querySelector('.step-1 .actions button .button-label > span:not([aria-hidden])').textContent).toBe('Connect');
   });
 
   it('selects UniSat automatically inside its browser for an Ordinals-only channel', () => {

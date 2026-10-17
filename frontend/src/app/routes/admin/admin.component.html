@@ -17,7 +17,13 @@
     <div role="status" class="notice">
       {{ notice }}
       @if (undo) {
-        <button (click)="reverse()" [disabled]="busy">{{ undoLabel }}</button>
+        <button (click)="reverse()" [disabled]="busy">
+          <span class="button-label"
+            ><span aria-hidden="true">Undo</span
+            ><span aria-hidden="true">Redo</span
+            ><span>{{ undoLabel }}</span></span
+          >
+        </button>
       }
     </div>
   }
@@ -486,9 +492,13 @@
                         (click)="save()"
                         [disabled]="busy || !ruleForm.valid"
                       >
-                        {{
-                          busy ? 'Checking requirements…' : 'Save rule'
-                        }}</button
+                        <span class="button-label"
+                          ><span aria-hidden="true">Checking requirements…</span
+                          ><span aria-hidden="true">Save rule</span
+                          ><span>{{
+                            busy ? 'Checking requirements…' : 'Save rule'
+                          }}</span></span
+                        ></button
                       ><button (click)="review = false" [disabled]="busy">
                         Keep editing
                       </button>
@@ -576,7 +586,13 @@
                       [attr.aria-expanded]="editor?.id === rule.id"
                       [attr.aria-controls]="'edit-rule-' + rule.id"
                     >
-                      {{ editor?.id === rule.id ? 'Collapse' : 'Edit' }}</button
+                      <span class="button-label"
+                        ><span aria-hidden="true">Collapse</span
+                        ><span aria-hidden="true">Edit</span
+                        ><span>{{
+                          editor?.id === rule.id ? 'Collapse' : 'Edit'
+                        }}</span></span
+                      ></button
                     ><button
                       class="danger-text"
                       (click)="remove(rule)"

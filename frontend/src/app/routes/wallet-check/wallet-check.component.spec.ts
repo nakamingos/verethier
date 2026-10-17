@@ -60,7 +60,7 @@ describe('Wallet signing diagnostics', () => {
     expect(fixture.nativeElement.querySelector('textarea').disabled).toBeFalse();
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
     expect(buttons.find(button => button.textContent?.trim() === 'Test signature')?.disabled).toBeTrue();
-    expect(buttons.find(button => button.textContent?.trim() === 'Copy connection details')?.disabled).toBeFalse();
+    expect(buttons.find(button => button.querySelector('.button-label > span:not([aria-hidden])')?.textContent?.trim() === 'Copy connection details')?.disabled).toBeFalse();
     finish({ signature, address });
     await pending;
     expect(page.busy()).toBeFalse();

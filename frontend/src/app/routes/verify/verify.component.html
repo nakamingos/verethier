@@ -1,6 +1,5 @@
 @if (routeData$ | async; as data) {
   <div class="user-info-wrapper">
-
     <div class="avatar-wrapper">
       <div class="server-avatar">
         <img [src]="data.discordIcon" />
@@ -30,44 +29,149 @@
     <p>{{ data | json }}</p>
   </div> -->
 
-  @if ((state$ | async); as state) {
-    <div class="steps-wrapper" [class.bitcoin-wallets]="state.walletType === 'bitcoin' && !state.messageVerified" [class.unisat-launch]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat' && !bitcoinWalletSvc.isUniSatAvailable() && !state.messageVerified">
+  @if (state$ | async; as state) {
+    <div
+      class="steps-wrapper"
+      [class.bitcoin-wallets]="
+        state.walletType === 'bitcoin' && !state.messageVerified
+      "
+      [class.unisat-launch]="
+        state.walletType === 'bitcoin' &&
+        state.bitcoinProvider === 'unisat' &&
+        !bitcoinWalletSvc.isUniSatAvailable() &&
+        !state.messageVerified
+      "
+    >
       @if (state.walletTypes.includes('bitcoin') && !state.messageVerified) {
         <div class="wallet-choice" role="group" aria-label="Wallet">
           @if (state.walletTypes.includes('evm')) {
-            <button type="button" [attr.aria-pressed]="state.walletType === 'evm'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('evm')">Ethereum</button>
+            <button
+              type="button"
+              [attr.aria-pressed]="state.walletType === 'evm'"
+              [disabled]="
+                state.walletConnecting ||
+                state.messageSigning ||
+                state.verificationSubmitting
+              "
+              (click)="selectWallet('evm')"
+            >
+              Ethereum
+            </button>
           }
-          <button type="button" aria-label="Bitcoin" [attr.aria-pressed]="state.walletType === 'bitcoin'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin')">Bitcoin</button>
+          <button
+            type="button"
+            aria-label="Bitcoin"
+            [attr.aria-pressed]="state.walletType === 'bitcoin'"
+            [disabled]="
+              state.walletConnecting ||
+              state.messageSigning ||
+              state.verificationSubmitting
+            "
+            (click)="selectWallet('bitcoin')"
+          >
+            Bitcoin
+          </button>
         </div>
       }
 
       <div
         class="step-1 step"
         [class.disabled]="state.walletConnecting"
-        [class.active]="!state.walletConnected">
-
+        [class.active]="!state.walletConnected"
+      >
         <div class="label">
           <span>1</span>
         </div>
 
         <div class="content">
-          <div class="title">{{ state.walletType === 'bitcoin' ? (state.bitcoinProvider === 'unisat' ? 'Connect your UniSat wallet' : 'Connect your Xverse wallet') : 'Connect your wallet' }}</div>
+          <div class="title">
+            {{
+              state.walletType === 'bitcoin'
+                ? state.bitcoinProvider === 'unisat'
+                  ? 'Connect your UniSat wallet'
+                  : 'Connect your Xverse wallet'
+                : 'Connect your wallet'
+            }}
+          </div>
           @if (state.walletType === 'bitcoin') {
-            <div class="bitcoin-wallet-choice" role="group" aria-label="Bitcoin wallet">
-              <button type="button" aria-label="Bitcoin with Xverse" [attr.aria-pressed]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'xverse'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin', 'xverse')">Xverse</button>
-              <button type="button" aria-label="Bitcoin with UniSat" [attr.aria-pressed]="state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('bitcoin', 'unisat')">UniSat</button>
+            <div
+              class="bitcoin-wallet-choice"
+              role="group"
+              aria-label="Bitcoin wallet"
+            >
+              <button
+                type="button"
+                aria-label="Bitcoin with Xverse"
+                [attr.aria-pressed]="
+                  state.walletType === 'bitcoin' &&
+                  state.bitcoinProvider === 'xverse'
+                "
+                [disabled]="
+                  state.walletConnecting ||
+                  state.messageSigning ||
+                  state.verificationSubmitting
+                "
+                (click)="selectWallet('bitcoin', 'xverse')"
+              >
+                Xverse
+              </button>
+              <button
+                type="button"
+                aria-label="Bitcoin with UniSat"
+                [attr.aria-pressed]="
+                  state.walletType === 'bitcoin' &&
+                  state.bitcoinProvider === 'unisat'
+                "
+                [disabled]="
+                  state.walletConnecting ||
+                  state.messageSigning ||
+                  state.verificationSubmitting
+                "
+                (click)="selectWallet('bitcoin', 'unisat')"
+              >
+                UniSat
+              </button>
             </div>
-            <div class="sub">Use your Bitcoin mainnet Ordinals address (bc1p…).</div>
+            <div class="sub">
+              Use your Bitcoin mainnet Ordinals address (bc1p…).
+            </div>
           }
           @if (state.connectedAddress) {
-            <div class="sub">Connected: <span class="pink">{{ formatAddress(state.connectedAddress) }}</span></div>
+            <div class="sub">
+              Connected:
+              <span class="pink">{{
+                formatAddress(state.connectedAddress)
+              }}</span>
+            </div>
           }
           <div class="actions">
-            @if (state.walletType === 'bitcoin' && state.bitcoinProvider === 'unisat' && !bitcoinWalletSvc.isUniSatAvailable()) {
-              <button type="button" (click)="openUniSatMobile()">Open in UniSat app</button>
-              <div class="sub mobile-wallet-help">On mobile, open this page in UniSat. On desktop, use the UniSat browser extension.</div>
+            @if (
+              state.walletType === 'bitcoin' &&
+              state.bitcoinProvider === 'unisat' &&
+              !bitcoinWalletSvc.isUniSatAvailable()
+            ) {
+              <button type="button" (click)="openUniSatMobile()">
+                Open in UniSat app
+              </button>
+              <div class="sub mobile-wallet-help">
+                On mobile, open this page in UniSat. On desktop, use the UniSat
+                browser extension.
+              </div>
             } @else {
-              <button (click)="connect()" [disabled]="state.walletConnecting">{{ state.walletConnecting ? 'Connecting...' : state.walletConnected ? 'Connected' : 'Connect' }}</button>
+              <button (click)="connect()" [disabled]="state.walletConnecting">
+                <span class="button-label"
+                  ><span aria-hidden="true">Connecting...</span
+                  ><span aria-hidden="true">Connected</span
+                  ><span aria-hidden="true">Connect</span
+                  ><span>{{
+                    state.walletConnecting
+                      ? 'Connecting...'
+                      : state.walletConnected
+                        ? 'Connected'
+                        : 'Connect'
+                  }}</span></span
+                >
+              </button>
             }
           </div>
         </div>
@@ -76,38 +180,71 @@
       <div
         class="step-2 step"
         [class.active]="state.walletConnected && !state.messageVerified"
-        [class.disabled]="state.messageSigning || state.verificationSubmitting">
-
+        [class.disabled]="state.messageSigning || state.verificationSubmitting"
+      >
         <div class="label">
           <span>2</span>
         </div>
         <div class="content">
           <div class="title">Verify Ownership.</div>
           <div class="sub">
-            Sign a message with your wallet to check your collection for eligible roles in the <span class="pink">{{ data.discordName }}</span> Server.
+            Sign a message with your wallet to check your collection for
+            eligible roles in the
+            <span class="pink">{{ data.discordName }}</span> Server.
             <br />
             Verification may take up to a minute.
             @if (state.connectedAddress) {
               <br />
-              Connected wallet: <span class="pink">{{ formatAddress(state.connectedAddress) }}</span>
+              Connected wallet:
+              <span class="pink">{{
+                formatAddress(state.connectedAddress)
+              }}</span>
             }
           </div>
           <div class="actions">
-            <button 
+            <button
               (click)="verify(data)"
-              [disabled]="!state.walletConnected || state.messageSigning || state.verificationSubmitting || state.messageVerified">
-              @if (state.messageSigning) {
-                Signing...
-              } @else if (state.verificationSubmitting) {
-                Verifying...
-              } @else if (state.messageVerified) {
-                Verified
-              } @else {
-                Sign Message
-              }
+              [disabled]="
+                !state.walletConnected ||
+                state.messageSigning ||
+                state.verificationSubmitting ||
+                state.messageVerified
+              "
+            >
+              <span class="button-label">
+                <span aria-hidden="true">Sign Message</span>
+                <span aria-hidden="true">Signing...</span>
+                <span aria-hidden="true">Verifying...</span>
+                <span aria-hidden="true">Verified</span>
+                <span>
+                  @if (state.messageSigning) {
+                    Signing...
+                  } @else if (state.verificationSubmitting) {
+                    Verifying...
+                  } @else if (state.messageVerified) {
+                    Verified
+                  } @else {
+                    Sign Message
+                  }
+                </span>
+              </span>
             </button>
-            @if (state.walletType === 'evm' && state.walletConnected && !state.messageVerified) {
-              <button type="button" (click)="connect()" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting">Change wallet</button>
+            @if (
+              state.walletType === 'evm' &&
+              state.walletConnected &&
+              !state.messageVerified
+            ) {
+              <button
+                type="button"
+                (click)="connect()"
+                [disabled]="
+                  state.walletConnecting ||
+                  state.messageSigning ||
+                  state.verificationSubmitting
+                "
+              >
+                Change wallet
+              </button>
             }
           </div>
         </div>
@@ -118,7 +255,10 @@
           <ng-template [ngTemplateOutlet]="checkIcon" />
         </div>
         <div class="content">
-          <div class="title">You've been verified! You can safely close this window & return to discord.</div>
+          <div class="title">
+            You've been verified! You can safely close this window & return to
+            discord.
+          </div>
           @if (state.successMessage) {
             <div class="sub success">{{ state.successMessage }}</div>
           }
@@ -127,19 +267,25 @@
     </div>
 
     @if (state.errorMessage; as error) {
-      <div
-        class="error-message"
-        [innerText]="error">
-      </div>
+      <div class="error-message" [innerText]="error"></div>
     }
   }
-}
-@else {
+} @else {
   @if ((state$ | async)?.errorMessage; as error) {
     <div class="error-message" [innerText]="error"></div>
   }
 }
 
 <ng-template #checkIcon>
-  <svg height="20" viewBox="0 0 24 20" width="24" xmlns="http://www.w3.org/2000/svg"><path d="m8 16v4h-4v-4zm-4-4v4h-4v-4zm8 0v4h-4v-4zm4-4v4h-4v-4zm4-4v4h-4v-4zm4-4v4h-4v-4z" fill-rule="evenodd"/></svg>
+  <svg
+    height="20"
+    viewBox="0 0 24 20"
+    width="24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="m8 16v4h-4v-4zm-4-4v4h-4v-4zm8 0v4h-4v-4zm4-4v4h-4v-4zm4-4v4h-4v-4zm4-4v4h-4v-4z"
+      fill-rule="evenodd"
+    />
+  </svg>
 </ng-template>

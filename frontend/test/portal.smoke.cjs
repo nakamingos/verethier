@@ -35,7 +35,10 @@ const base = {
     args: ['--no-sandbox'],
   });
   try {
-    for (const width of [1280, 393]) {
+    for (const width of [1280, 393, 320]) {
+      let holdEdit = false,
+        releaseEdit,
+        editEntered;
       let rules = [
           structuredClone(base),
           {
@@ -126,6 +129,13 @@ const base = {
               total: 45,
             };
           else if (p.endsWith('/edit')) {
+            if (holdEdit) {
+              holdEdit = false;
+              editEntered();
+              await new Promise((resolve) => {
+                releaseEdit = resolve;
+              });
+            }
             assert.equal(request.postDataJSON().version, 'version1');
             data = { id: 'a' + ++actions, kind: 'edit' };
             rules[0] = {
@@ -226,6 +236,42 @@ const base = {
       await page
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      const themeSize = await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .boundingBox();
+      await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .click();
+      const darkSize = await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
+        .boundingBox();
+      assert.equal(
+        themeSize.width,
+        darkSize.width,
+        'theme button width must stay stable',
+      );
+      assert.equal(
+        themeSize.height,
+        darkSize.height,
+        'theme button height must stay stable',
+      );
+      await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
+        .click();
+      const smallText = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll(
+            '.eyebrow,.badge,.muted,label,.app-footer,.brand-header button',
+          ),
+        ]
+          .filter((el) => el.getClientRects().length)
+          .map((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+      );
+      assert.ok(
+        smallText.every((size) => size >= 16),
+        'small text must be at least 16px',
+      );
       await page
         .getByRole('combobox', { name: /^Asset type/ })
         .selectOption('ordinal');
@@ -257,6 +303,10 @@ const base = {
         Math.max(...cardHeights) - Math.min(...cardHeights) < 1,
         'all rule cards should have equal heights',
       );
+      const editSize = await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Edit', exact: true })
+        .boundingBox();
       await page
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
@@ -267,6 +317,20 @@ const base = {
       const mutationsBeforeCollapse = requests.filter(
         (request) => request.method === 'POST',
       ).length;
+      const collapseSize = await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Collapse', exact: true })
+        .boundingBox();
+      assert.equal(
+        editSize.width,
+        collapseSize.width,
+        'Edit/Collapse width must stay stable',
+      );
+      assert.equal(
+        editSize.height,
+        collapseSize.height,
+        'Edit/Collapse height must stay stable',
+      );
       await page
         .locator('#rule-1')
         .getByRole('button', { name: 'Collapse', exact: true })
@@ -308,7 +372,29 @@ const base = {
       });
       await page.getByLabel('Minimum items', { exact: true }).fill('12');
       await page.getByRole('button', { name: 'Review changes' }).click();
+      const saveSize = await page
+        .getByRole('button', { name: 'Save rule', exact: true })
+        .boundingBox();
+      holdEdit = true;
+      const editStarted = new Promise((resolve) => {
+        editEntered = resolve;
+      });
       await page.getByRole('button', { name: 'Save rule' }).click();
+      await editStarted;
+      const checkingSize = await page
+        .getByRole('button', { name: 'Checking requirements…', exact: true })
+        .boundingBox();
+      assert.equal(
+        saveSize.width,
+        checkingSize.width,
+        'save button width must stay stable while checking',
+      );
+      assert.equal(
+        saveSize.height,
+        checkingSize.height,
+        'save button height must stay stable while checking',
+      );
+      releaseEdit();
       await page
         .getByRole('status')
         .filter({ hasText: 'Rule saved' })
