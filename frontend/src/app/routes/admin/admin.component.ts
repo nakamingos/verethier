@@ -170,6 +170,7 @@ export class AdminComponent implements OnInit {
     return (
       this.data.rules.filter(
         (x: any) =>
+          x.channel_id === r.channel_id &&
           x.role_id === r.role_id &&
           x.min_items === r.min_items &&
           x.asset_type !== 'erc20',
