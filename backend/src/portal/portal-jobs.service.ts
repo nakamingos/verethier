@@ -46,9 +46,17 @@ export class PortalJobsService {
             if (result.error) Logger.warn('Portal job lease renewal failed.');
           });
       }, 30000);
-      const result = job.user_id
-        ? await this.roles.reverifyUserInServer(job.user_id, job.server_id)
-        : await this.roles.reverifyRoleInServer(job.server_id, job.role_id);
+      const result =
+        job.rule_id && Array.isArray(job.member_ids)
+          ? await this.roles.reverifyRoleChangeInServer(
+              job.server_id,
+              job.role_id,
+              String(job.rule_id),
+              job.member_ids,
+            )
+          : job.user_id
+            ? await this.roles.reverifyUserInServer(job.user_id, job.server_id)
+            : await this.roles.reverifyRoleInServer(job.server_id, job.role_id);
       const status = result.errors
         ? job.attempts < 3
           ? 'pending'

@@ -122,7 +122,10 @@
           @if (tab === 'rules') {
             <div class="toolbar">
               <label
-                >Asset type<select [(ngModel)]="filter">
+                >Asset type<select
+                  [(ngModel)]="filter"
+                  [disabled]="!!activeGroup"
+                >
                   <option value="">All assets</option>
                   <option value="ordinal">Ordinals</option>
                   <option value="ethscription">Ethscriptions</option>
@@ -132,12 +135,28 @@
               ><label
                 >Find a rule<input
                   [(ngModel)]="query"
+                  [disabled]="!!activeGroup"
                   placeholder="Role or collection…" /></label
+              ><label
+                >Rule group<select
+                  [ngModel]="groupFilter"
+                  (ngModelChange)="showGroup($event)"
+                >
+                  <option value="">All rules</option>
+                  <option value="combined">Combined rules only</option>
+                  @for (group of combinedGroups; track group.key) {
+                    <option [value]="group.key">
+                      {{ group.roleName }} · {{ group.minimum }} items · #{{
+                        channelName(group.channelId)
+                      }}
+                    </option>
+                  }
+                </select></label
               ><button class="primary" (click)="create()" [disabled]="busy">
                 + Add rule
               </button>
             </div>
-            @if (editor) {
+            <ng-template #ruleEditor>
               <section class="panel rule-editor">
                 <div class="section-heading">
                   <h2>
@@ -145,7 +164,7 @@
                       editor.new ? 'Create a rule' : 'Edit rule ' + editor.id
                     }}
                   </h2>
-                  <button (click)="editor = null" [disabled]="busy">
+                  <button (click)="closeEditor()" [disabled]="busy">
                     Cancel
                   </button>
                 </div>
@@ -364,7 +383,8 @@
                     <p class="muted">
                       One collection per rule. In the same verification channel,
                       rules with the same role and minimum combine collectible
-                      counts across collections and protocols. An item counts once.
+                      counts across collections and protocols. An item counts
+                      once.
                     </p>
                     @if (draft.asset_type === 'nft') {
                       <p class="muted">
@@ -374,6 +394,32 @@
                     }
                   } @else {
                     <div class="form-grid">
+                      <label
+                        >Discord role<select
+                          name="editRole"
+                          [(ngModel)]="editRoleId"
+                        >
+                          <option value="">Create a new role</option>
+                          @for (role of data.roles; track role.id) {
+                            <option
+                              [value]="role.id"
+                              [disabled]="!role.manageable"
+                            >
+                              {{ role.name }}
+                            </option>
+                          }
+                        </select></label
+                      >
+                      @if (!editRoleId) {
+                        <label
+                          >New role name<input
+                            name="editRoleName"
+                            [(ngModel)]="editRoleName"
+                            required
+                            maxlength="100"
+                            placeholder="Collectors"
+                        /></label>
+                      }
                       @for (field of editor.fields; track field.key) {
                         <label [class.wide]="field.list"
                           >{{ field.label }}
@@ -409,6 +455,19 @@
                 @if (review) {
                   <div class="notice">
                     <h3>Ready to save?</h3>
+                    @if (changedRole) {
+                      <p class="role-change-preview">
+                        <strong
+                          >{{ editor.role_name || editor.role_id }} →
+                          {{ targetRoleName }}</strong
+                        ><br />Previous holders will be checked against this
+                        rule’s new group and receive the new role when eligible.
+                        The old role is checked against its remaining rules.
+                        Changes to the combined count groups take effect after
+                        saving.
+                      </p>
+                    }
+
                     <p>
                       {{
                         editor.new
@@ -416,8 +475,10 @@
                           : 'Replace this rule’s requirements with the values above.'
                       }}
                       Previously earned roles will be checked against all
-                      remaining rules and saved wallets. New qualifiers still
-                      need to verify.
+                      remaining rules and saved wallets.
+                      @if (!changedRole) {
+                        New qualifiers still need to verify.
+                      }
                     </p>
                     <div class="actions">
                       <button
@@ -435,10 +496,57 @@
                   </div>
                 }
               </section>
+            </ng-template>
+            @if (editor?.new) {
+              <ng-container [ngTemplateOutlet]="ruleEditor" />
+            }
+            @if (activeGroup; as group) {
+              <section
+                class="notice combined-navigation"
+                aria-label="Combined rule group"
+              >
+                <div class="section-heading">
+                  <div>
+                    <h2>
+                      {{ group.roleName }} · {{ group.minimum }} total items
+                    </h2>
+                    <p>
+                      Combine holdings from these {{ group.rules.length }} rules
+                      in #{{ channelName(group.channelId) }}. Each asset counts
+                      once.
+                    </p>
+                  </div>
+                  <button (click)="showGroup('')" [disabled]="busy">
+                    Back to all rules
+                  </button>
+                </div>
+                <nav aria-label="Contributing rules">
+                  @for (contributor of group.rules; track contributor.id) {
+                    <a
+                      [href]="'#rule-' + contributor.id"
+                      (click)="jumpToRule($event, contributor.id)"
+                      >{{
+                        contributor.rule_label ||
+                          contributor.collection_name ||
+                          contributor.slug ||
+                          contributor.asset_type
+                      }}
+                      · #{{ contributor.id }}</a
+                    >
+                  }
+                </nav>
+              </section>
             }
             <div class="rule-list">
               @for (rule of rules; track rule.id) {
-                <article class="panel rule-card">
+                <article
+                  class="panel rule-card"
+                  [id]="'rule-' + rule.id"
+                  tabindex="-1"
+                  [class.editing]="editor?.id === rule.id"
+                  [class.group-highlight]="activeGroup?.key === groupKey(rule)"
+                  (keydown.escape)="closeEditor()"
+                >
                   <div class="section-heading">
                     <div>
                       <p class="eyebrow">
@@ -451,13 +559,24 @@
                     <span class="badge">{{ minimum(rule) }}</span>
                   </div>
                   <p class="selection-text">{{ describe(rule) }}</p>
-                  @if (shared(rule)) {
-                    <p class="muted">
-                      Combines with other rules for this role and minimum.
-                    </p>
+                  @if (groupFor(rule); as group) {
+                    <button
+                      class="combined-badge"
+                      (click)="showGroup(group.key)"
+                      [disabled]="busy"
+                      [attr.aria-pressed]="activeGroup?.key === group.key"
+                    >
+                      Combined · {{ group.rules.length }} rules ↗
+                    </button>
                   }
                   <div class="actions">
-                    <button (click)="edit(rule)" [disabled]="busy">Edit</button
+                    <button
+                      (click)="edit(rule)"
+                      [disabled]="busy"
+                      [attr.aria-expanded]="editor?.id === rule.id"
+                      [attr.aria-controls]="'edit-rule-' + rule.id"
+                    >
+                      Edit</button
                     ><button
                       class="danger-text"
                       (click)="remove(rule)"
@@ -466,6 +585,16 @@
                       Delete
                     </button>
                   </div>
+                  @if (editor?.id === rule.id) {
+                    <div
+                      class="inline-rule-editor"
+                      [id]="'edit-rule-' + rule.id"
+                      role="region"
+                      [attr.aria-label]="'Edit rule ' + rule.id"
+                    >
+                      <ng-container [ngTemplateOutlet]="ruleEditor" />
+                    </div>
+                  }
                 </article>
               } @empty {
                 <div class="panel">
@@ -578,15 +707,75 @@
                 roles.
               </p>
               <form class="toolbar" (ngSubmit)="lookup()">
-                <label
-                  >Discord user ID<input
-                    name="memberId"
-                    [(ngModel)]="memberId"
+                <div class="member-search">
+                  <label for="member-lookup">Username or user ID</label>
+                  <input
+                    id="member-lookup"
+                    name="memberQuery"
+                    [(ngModel)]="memberQuery"
+                    (ngModelChange)="queueMemberSearch()"
+                    (focus)="
+                      memberFocused = true;
+                      memberMatchesOpen = memberMatches.length > 0
+                    "
+                    (blur)="closeMemberMatches()"
+                    (keydown)="memberSearchKey($event)"
                     required
-                    pattern="[0-9]{17,22}"
-                    placeholder="Right-click member → Copy User ID" /></label
-                ><button type="submit" [disabled]="busy">Look up</button>
+                    maxlength="100"
+                    autocomplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-controls="member-matches"
+                    [attr.aria-expanded]="memberMatchesOpen"
+                    [attr.aria-activedescendant]="
+                      memberMatchIndex >= 0
+                        ? 'member-match-' + memberMatchIndex
+                        : null
+                    "
+                    placeholder="Type a username or paste an ID"
+                  />
+                  @if (memberMatchesOpen) {
+                    <div
+                      id="member-matches"
+                      class="member-matches"
+                      role="listbox"
+                      aria-label="Server members"
+                    >
+                      @for (
+                        match of memberMatches;
+                        track match.id;
+                        let index = $index
+                      ) {
+                        <button
+                          type="button"
+                          tabindex="-1"
+                          role="option"
+                          [id]="'member-match-' + index"
+                          [attr.aria-selected]="memberMatchIndex === index"
+                          (pointerdown)="$event.preventDefault()"
+                          (click)="chooseMember(match)"
+                        >
+                          <img [src]="match.avatar" alt="" /><span
+                            >{{ match.name
+                            }}<small
+                              >&#64;{{ match.username }} · {{ match.id }}</small
+                            ></span
+                          >
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+                <button type="submit" [disabled]="busy">Look up</button>
               </form>
+              <p class="muted" role="status">
+                {{
+                  memberSearching
+                    ? 'Searching members…'
+                    : memberSearchError ||
+                      'Usernames and server nicknames are case insensitive. Choose a suggestion if names overlap.'
+                }}
+              </p>
             </section>
             @if (member) {
               <section class="panel">

@@ -422,6 +422,18 @@ export class VerificationEngine {
    */
   async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
     const rules = (await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
+    return this.evaluateRoleRules(userId, rules, context);
+  }
+
+  /** Role moves grant through the changed channel/count group, not unrelated paths. */
+  async evaluateRuleGroup(userId: string, rule: VerifierRole, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
+    const rules = rule.asset_type === 'erc20' ? [rule] : (await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
+      candidate.role_id === rule.role_id && candidate.channel_id === rule.channel_id && candidate.asset_type !== 'erc20'
+      && (candidate.min_items || 1) === (rule.min_items || 1));
+    return this.evaluateRoleRules(userId, rules, context);
+  }
+
+  private async evaluateRoleRules(userId: string, rules: VerifierRole[], context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
     if (!rules.length) return { status: 'failed', results: [] };
     const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
     const proven = context?.provenAddresses?.get(userId);

@@ -36,7 +36,27 @@ const base = {
   });
   try {
     for (const width of [1280, 393]) {
-      let rules = [structuredClone(base)],
+      let rules = [
+          structuredClone(base),
+          {
+            ...structuredClone(base),
+            id: 2,
+            asset_type: 'ethscription',
+            slug: 'comrades',
+          },
+          {
+            ...structuredClone(base),
+            id: 3,
+            min_items: 1,
+            role_name: 'Single item',
+          },
+          {
+            ...structuredClone(base),
+            id: 4,
+            asset_type: 'erc20',
+            role_name: 'Token holder',
+          },
+        ],
         actions = 0;
       const requests = [],
         errors = [];
@@ -78,7 +98,14 @@ const base = {
                 background_checks_enabled: true,
               },
               channels: [{ id: channel, name: 'verify-collections' }],
-              roles: [{ id: role, name: 'Comrade', manageable: true }],
+              roles: [
+                { id: role, name: 'Comrade', manageable: true },
+                {
+                  id: '666666666666666666',
+                  name: 'New Comrade',
+                  manageable: true,
+                },
+              ],
               diagnostics: [],
             };
           else if (p.endsWith('/suggestions'))
@@ -104,6 +131,14 @@ const base = {
             rules[0] = {
               ...base,
               min_items: Number(request.postDataJSON().inputs.min_items),
+              ...(request.postDataJSON().role_id === '666666666666666666'
+                ? { role_id: '666666666666666666', role_name: 'New Comrade' }
+                : request.postDataJSON().role_name
+                  ? {
+                      role_id: '777777777777777777',
+                      role_name: request.postDataJSON().role_name,
+                    }
+                  : {}),
             };
           } else if (p.endsWith('/reverse')) {
             data = { id: 'a' + ++actions, kind: 'reverse' };
@@ -115,12 +150,29 @@ const base = {
             assert.equal(body.slug, 'yonder');
             rules.push({
               ...base,
-              id: 2,
+              id: 5,
               role_name: body.role_name,
               slug: body.slug,
               min_items: body.min_items,
             });
-          } else if (p.includes('/members/'))
+          } else if (p.endsWith('/members'))
+            data = {
+              members: [
+                {
+                  id: '555555555555555555',
+                  name: 'Collector',
+                  username: 'collector',
+                  avatar: '/assets/icon.svg',
+                },
+                {
+                  id: '888888888888888888',
+                  name: 'Collector',
+                  username: 'other',
+                  avatar: '/assets/icon.svg',
+                },
+              ],
+            };
+          else if (p.includes('/members/'))
             data = {
               id: '555555555555555555',
               name: 'Collector',
@@ -174,7 +226,50 @@ const base = {
       await page
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
-      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page
+        .getByRole('combobox', {name: /^Asset type/})
+        .selectOption('ordinal');
+      await page.locator('#rule-1 .combined-badge').click();
+      assert.equal(await page.locator('.rule-card').count(), 2);
+      assert.equal(
+        await page.getByRole('combobox', {name: /^Asset type/}).isDisabled(),
+        true,
+      );
+      await page
+        .getByRole('navigation', { name: 'Contributing rules' })
+        .getByRole('link', { name: 'comrades · #2', exact: true })
+        .click();
+      await page.waitForFunction(() => document.activeElement?.id === 'rule-2');
+      await page.getByRole('button', { name: 'Back to all rules' }).click();
+      assert.equal(
+        await page.getByRole('combobox', {name: /^Asset type/}).inputValue(),
+        'ordinal',
+      );
+      await page.getByRole('combobox', {name: /^Asset type/}).selectOption('');
+      await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Edit', exact: true })
+        .click();
+      await page
+        .getByRole('region', { name: 'Edit rule 1', exact: true })
+        .waitFor();
+      assert.equal(await page.locator('#rule-1 #edit-rule-1').count(), 1);
+      const editor = await page.locator('#edit-rule-1').boundingBox();
+      const below = await page.locator('#rule-3').boundingBox();
+      if (width > 800)
+        assert.ok(
+          editor.y + editor.height > below.y,
+          'editor should overlap the next row',
+        );
+      else
+        assert.ok(
+          editor.y + editor.height <= below.y + 1,
+          'mobile editor should expand within its card',
+        );
+      await page.screenshot({
+        path: `${artifacts}/inline-editor-${width}.png`,
+        fullPage: true,
+      });
       await page.getByLabel('Minimum items', { exact: true }).fill('12');
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByRole('button', { name: 'Save rule' }).click();
@@ -182,6 +277,49 @@ const base = {
         .getByRole('status')
         .filter({ hasText: 'Rule saved' })
         .waitFor();
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      await page.getByRole('button', { name: 'Redo', exact: true }).waitFor();
+      await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Edit', exact: true })
+        .click();
+      await page
+        .getByRole('combobox', {name: /^Discord role/})
+        .selectOption('666666666666666666');
+      await page.getByRole('button', { name: 'Review changes' }).click();
+      await page.getByText('Comrade → New Comrade', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Save rule' }).click();
+      await page
+        .getByRole('heading', { name: 'New Comrade', exact: true })
+        .waitFor();
+      assert.ok(
+        requests.some(
+          (r) =>
+            r.path.endsWith('/edit') && r.body.role_id === '666666666666666666',
+        ),
+      );
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      await page.getByRole('button', { name: 'Redo', exact: true }).waitFor();
+      await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Edit', exact: true })
+        .click();
+      await page.getByRole('combobox', {name: /^Discord role/}).selectOption('');
+      await page
+        .getByLabel('New role name', { exact: true })
+        .fill('Created role');
+      await page.getByRole('button', { name: 'Review changes' }).click();
+      await page.getByText('Comrade → Created role', { exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Save rule' }).click();
+      await page
+        .getByRole('heading', { name: 'Created role', exact: true })
+        .waitFor();
+      assert.ok(
+        requests.some(
+          (r) =>
+            r.path.endsWith('/edit') && r.body.role_name === 'Created role',
+        ),
+      );
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
       await page.getByRole('button', { name: 'Redo', exact: true }).waitFor();
       await page
@@ -214,7 +352,23 @@ const base = {
       await page
         .getByRole('button', { name: 'Member Lookup', exact: true })
         .click();
-      await page.getByLabel('Discord user ID').fill('555555555555555555');
+      await page.getByLabel('Username or user ID').fill('COLLECTOR');
+      await page.getByRole('listbox', { name: 'Server members' }).waitFor();
+      assert.equal(await page.getByRole('option').count(), 2);
+      assert.ok(requests.some((r) => r.path.endsWith('/members')));
+      await page.getByLabel('Username or user ID').press('ArrowDown');
+      await page.getByLabel('Username or user ID').press('Enter');
+      await page
+        .getByRole('heading', { name: 'Collector', exact: true })
+        .waitFor();
+      assert.ok(
+        requests.some((r) => r.path.endsWith('/members/555555555555555555')),
+      );
+      await page.screenshot({
+        path: `${artifacts}/member-${width}.png`,
+        fullPage: true,
+      });
+      await page.getByLabel('Username or user ID').fill('555555555555555555');
       await page.getByRole('button', { name: 'Look up', exact: true }).click();
       await page
         .getByRole('heading', { name: 'Collector', exact: true })

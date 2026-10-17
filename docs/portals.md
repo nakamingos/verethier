@@ -6,9 +6,17 @@ Open `https://bouncer.up.railway.app/admin` and sign in with Discord. Only serve
 
 The control room provides rules with asset filters and search, create/edit/delete forms, review before saving, Undo/Redo, bot settings, verification-message controls, member lookup and paginated activity. Rules keep today's asset capabilities and count-combining behavior. The existing `/setup` commands remain available. `/help` and `/join` are member-facing shortcuts; Discord may need a reload after commands refresh.
 
+Edit opens beneath the selected rule, extending its card. Combined badges and the Rule group filter show the collectible rules sharing a channel, role and minimum. A group view includes all contributors across asset types and provides links to each rule. ERC-20 balances do not combine with collectible counts.
+
+Member Lookup accepts Discord IDs, usernames and server nicknames without case sensitivity. Suggestions show the username and ID to distinguish shared names. Only an exact, unique name or a selected member resolves; Bouncer confirms current server membership before exposing saved information. Direct ID lookup remains available if Discord member search is unavailable.
+
 Member Lookup loads saved information first. Check Roles fetches current ownership. Fix queues reconciliation of previously earned roles only. Provider uncertainty retains roles. Background checks default to enabled; disabling them skips scheduled role checks for that server. Explicit verification, rule changes and requested repairs still reconcile earned roles. New qualifiers must verify.
 
 Rule changes from both interfaces queue durable checks. A dashboard rule mutation, its revision and its check job commit together. Stale edits are rejected. Undo/Redo reverses the definition and evaluates current ownership, including alternative rules and saved wallets. Restoring a deleted rule preserves its ID. Undoing a new rule does not delete its Discord role.
+
+The dashboard can also change a rule's role or create a missing role. The review shows the old and new roles. This explicit administrator action automatically checks previous holders of the old role against the changed rule's new channel/minimum group and grants the new role when eligible. Existing holders of the new role retain their alternative qualifying paths. The old role is checked against its remaining rules before removal. This does not grant roles to unrelated members. Undo/Redo uses fresh checks and the same audience; a created Discord role remains available after Undo.
+
+Role-change jobs add `rule_id` and `member_ids` to the existing reconciliation table. The audience is captured in the same transaction as the edit and carried forward across rapid edits and reversals, including pending or interrupted moves. These columns contain the affected Discord IDs, not wallet metadata or collection inventories. They retain the table's backend-only access.
 
 Role checks display pending/running/completed/failed states and results in Audit Log → Role checks. Interrupted jobs use leases; unavailable checks retry at five-minute intervals, up to three attempts. Failed jobs have a Retry check action. The bot never treats an unavailable provider as a zero balance.
 

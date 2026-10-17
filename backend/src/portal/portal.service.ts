@@ -313,30 +313,12 @@ export class PortalService {
     // Provider preparation can be slow. Recheck the actor before changing Discord or the database.
     guild = await this.access(session, server);
     const channel = await this.channel(guild, input.channel_id);
-    await guild.roles.fetch();
-    if (!!input.role_id === !!input.role_name?.trim())
-      throw new BadRequestException('Choose a role or enter a new role name.');
-    const name = normalizeRoleName(input.role_name?.trim() || '');
-    let role = input.role_id
-      ? guild.roles.cache.get(input.role_id)
-      : guild.roles.cache.find(
-          (r) => r.name.toLowerCase() === name.toLowerCase(),
-        );
-    if (input.role_id && !role)
-      throw new BadRequestException('This role no longer exists.');
-    if (!role) {
-      if (!name || name.length > 100)
-        throw new BadRequestException('Enter a role name of 1–100 characters.');
-      role = await guild.roles.create({
-        name,
-        color: 'Blue',
-        reason: `Bouncer dashboard: ${session.user.id}`,
-      });
-    }
-    if (!role.editable || role.managed || role.id === guild.id)
-      throw new BadRequestException(
-        'Bouncer must be above the selected role and have Manage Roles.',
-      );
+    const role = await this.targetRole(
+      guild,
+      input.role_id,
+      input.role_name,
+      session.user.id,
+    );
     const candidate = {
       server_id: server,
       server_name: guild.name,
@@ -376,9 +358,69 @@ export class PortalService {
     )
       throw new BadRequestException('Invalid rule fields.');
     const before = await this.rule(server, id, input.version);
-    const after = await this.edits.prepare(before, input.inputs);
-    await this.access(session, server);
+    const fields = ruleEditFields(before);
+    const sameCriteria =
+      fields.every((field) => input.inputs[field.key] === field.value) &&
+      Object.keys(input.inputs).every((key) =>
+        fields.some((field) => field.key === key),
+      );
+    const after = sameCriteria
+      ? { ...before }
+      : await this.edits.prepare(before, input.inputs);
+    const guild = await this.access(session, server);
+    if (input.role_id !== undefined || input.role_name !== undefined) {
+      const role = await this.targetRole(
+        guild,
+        input.role_id,
+        input.role_name,
+        session.user.id,
+      );
+      after.role_id = role.id;
+      after.role_name = role.name;
+    }
+    if (
+      this.edits.duplicates(after, await this.rules.getRoleMappings(server))
+        .exact
+    )
+      throw new ConflictException('This exact rule already exists.');
+    if (ruleEditVersion(before) === ruleEditVersion(after))
+      throw new BadRequestException('No rule requirements changed.');
     return this.mutate(session, server, input.request_id, before, after);
+  }
+
+  private async targetRole(
+    guild: Guild,
+    roleId: string | undefined,
+    roleName: string | undefined,
+    actor: string,
+  ) {
+    if (!!roleId === !!roleName?.trim())
+      throw new BadRequestException('Choose a role or enter a new role name.');
+    await guild.roles.fetch();
+    const name = normalizeRoleName(roleName?.trim() || '');
+    let role = roleId
+      ? guild.roles.cache.get(roleId)
+      : guild.roles.cache.find(
+          (candidate) => candidate.name.toLowerCase() === name.toLowerCase(),
+        );
+    if (roleId && !role)
+      throw new BadRequestException(
+        'This role no longer exists. Choose another role.',
+      );
+    if (!role) {
+      if (!name || name.length > 100)
+        throw new BadRequestException('Enter a role name of 1–100 characters.');
+      role = await guild.roles.create({
+        name,
+        color: 'Blue',
+        reason: `Bouncer dashboard: ${actor}`,
+      });
+    }
+    if (!role.editable || role.managed || role.id === guild.id)
+      throw new BadRequestException(
+        'Bouncer must be above the selected role and have Manage Roles.',
+      );
+    return role;
   }
   async remove(
     session: PortalSession,
@@ -404,7 +446,7 @@ export class PortalService {
     id: string,
     request: string,
   ) {
-    await this.access(session, server);
+    const guild = await this.access(session, server);
     const replay = await this.replay(session, server, request);
     if (replay) return replay;
     const { data, error } = await this.db
@@ -417,6 +459,18 @@ export class PortalService {
     if (!data) throw new NotFoundException('Action not found.');
     if (!['create', 'edit', 'delete', 'reverse'].includes(data.kind))
       throw new BadRequestException('This action cannot be reversed.');
+    if (
+      data.before_rule &&
+      data.after_rule &&
+      data.before_rule.role_id !== data.after_rule.role_id
+    ) {
+      await this.targetRole(
+        guild,
+        data.before_rule.role_id,
+        undefined,
+        session.user.id,
+      );
+    }
     return this.mutate(
       session,
       server,
@@ -540,6 +594,101 @@ export class PortalService {
       pages: Math.max(1, Math.ceil((count || 0) / 20)),
     };
   }
+  private memberQuery(input: string): string {
+    if (typeof input !== 'string' || input.trim().length > 100)
+      throw new BadRequestException('Enter a username or Discord user ID.');
+    return input
+      .trim()
+      .replace(/^<@!?(\d{17,22})>$/, '$1')
+      .replace(/^@/, '')
+      .normalize('NFC')
+      .toLowerCase();
+  }
+
+  private memberNames(member: any): string[] {
+    return [member.user.username, member.user.globalName, member.nickname]
+      .filter(Boolean)
+      .map((name) => name.normalize('NFC').toLowerCase());
+  }
+
+  async memberSuggestions(
+    session: PortalSession,
+    server: string,
+    query: string,
+  ) {
+    const guild = await this.access(session, server);
+    const text = this.memberQuery(query);
+    if (text.length < 2) return { members: [] };
+    let members;
+    try {
+      if (snowflake(text))
+        members = [await guild.members.fetch({ user: text, force: true })];
+      else
+        members = [
+          ...(
+            await guild.members.search({ query: text, limit: 25, cache: false })
+          ).values(),
+        ];
+    } catch (error) {
+      if (error?.code === 10007) return { members: [] };
+      throw new ServiceUnavailableException(
+        'Member search is temporarily unavailable. You can still enter a Discord user ID.',
+      );
+    }
+    return {
+      members: members.map((member) => ({
+        id: member.id,
+        name: member.displayName,
+        username: member.user.username,
+        avatar: member.displayAvatarURL({ size: 64 }),
+      })),
+    };
+  }
+
+  private async resolveMember(guild: Guild, input: string) {
+    const text = this.memberQuery(input);
+    let id = text;
+    if (!snowflake(id)) {
+      if (text.length < 2)
+        throw new BadRequestException(
+          'Enter at least two characters or a Discord user ID.',
+        );
+      let results;
+      try {
+        results = await guild.members.search({
+          query: text,
+          limit: 100,
+          cache: false,
+        });
+      } catch {
+        throw new ServiceUnavailableException(
+          'Member search is temporarily unavailable. Try their Discord user ID.',
+        );
+      }
+      const exact = [...results.values()].filter((member) =>
+        this.memberNames(member).includes(text),
+      );
+      if (exact.length > 1)
+        throw new BadRequestException(
+          'Several members use that name. Choose a member from the suggestions.',
+        );
+      if (exact.length !== 1)
+        throw new NotFoundException(
+          'No exact name match. Choose a suggestion or enter their Discord user ID.',
+        );
+      id = exact[0].id;
+    }
+    try {
+      return await guild.members.fetch({ user: id, force: true });
+    } catch (error) {
+      if (error?.code === 10007)
+        throw new NotFoundException('This member is not in this server.');
+      throw new ServiceUnavailableException(
+        'Could not confirm this member’s current membership. Please try again.',
+      );
+    }
+  }
+
   async member(
     session: PortalSession,
     server: string,
@@ -547,13 +696,8 @@ export class PortalService {
     check: boolean,
   ) {
     const guild = await this.access(session, server);
-    if (!snowflake(id))
-      throw new BadRequestException('Enter a Discord user ID.');
-    const member = await guild.members
-      .fetch({ user: id, force: true })
-      .catch(() => null);
-    if (!member)
-      throw new NotFoundException('This member is not in this server.');
+    const member = await this.resolveMember(guild, id);
+    id = member.id;
     const assignments = await this.rules.getEarnedRoleAssignments({
       userId: id,
       serverId: server,
@@ -594,6 +738,7 @@ export class PortalService {
     return {
       id,
       name: member.displayName,
+      username: member.user.username,
       avatar: member.displayAvatarURL(),
       wallets: wallets || [],
       roles,
@@ -605,7 +750,8 @@ export class PortalService {
     id: string,
     request: string,
   ) {
-    await this.member(session, server, id, false);
+    const member = await this.member(session, server, id, false);
+    id = member.id;
     const { data, error } = await this.db
       .from('verifier_reconciliation_jobs')
       .insert({ id: request, server_id: server, user_id: id })
@@ -636,7 +782,7 @@ export class PortalService {
     await this.access(session, server);
     const prior = await this.db
       .from('verifier_reconciliation_jobs')
-      .select('role_id,user_id,status')
+      .select('role_id,user_id,status,rule_id,member_ids')
       .eq('server_id', server)
       .eq('id', id)
       .maybeSingle();
@@ -650,6 +796,8 @@ export class PortalService {
         server_id: server,
         role_id: prior.data.role_id,
         user_id: prior.data.user_id,
+        rule_id: prior.data.rule_id,
+        member_ids: prior.data.member_ids,
       })
       .select('id,status')
       .single();

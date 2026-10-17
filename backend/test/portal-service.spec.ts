@@ -15,7 +15,7 @@ describe('Portal server boundaries', () => {
     guild = {
       id: server,
       ownerId: '333333333333333333',
-      members: { fetch: jest.fn() },
+      members: { fetch: jest.fn(), search: jest.fn() },
       channels: { fetch: jest.fn() },
     };
     const discord = {
@@ -67,7 +67,9 @@ describe('Portal server boundaries', () => {
   it('does not reveal wallet information for nonmembers', async () => {
     guild.members.fetch
       .mockResolvedValueOnce({ id: user, permissions: { has: () => true } })
-      .mockRejectedValueOnce(new Error('Unknown member'));
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Unknown member'), { code: 10007 }),
+      );
     await expect(
       service.member(session, server, '555555555555555555', false),
     ).rejects.toThrow('not in this server');
@@ -90,6 +92,99 @@ describe('Portal server boundaries', () => {
       }),
     ).rejects.toThrow('this server');
     expect(db.from).not.toHaveBeenCalled();
+  });
+  it('normalizes member autocomplete and returns only suggestion fields', async () => {
+    guild.members.fetch.mockResolvedValue({
+      id: user,
+      permissions: { has: () => true },
+    });
+    guild.members.search.mockResolvedValue(
+      new Map([
+        [
+          'member',
+          {
+            id: '555555555555555555',
+            displayName: 'Collector',
+            user: { username: 'collector' },
+            displayAvatarURL: () => '/avatar',
+            private: 'hidden',
+          },
+        ],
+      ]),
+    );
+    expect(
+      await service.memberSuggestions(session, server, ' @CoLLeCtOr '),
+    ).toEqual({
+      members: [
+        {
+          id: '555555555555555555',
+          name: 'Collector',
+          username: 'collector',
+          avatar: '/avatar',
+        },
+      ],
+    });
+    expect(guild.members.search).toHaveBeenCalledWith({
+      query: 'collector',
+      limit: 25,
+      cache: false,
+    });
+    expect(db.from).not.toHaveBeenCalled();
+  });
+  it('checks administration before searching names', async () => {
+    guild.members.fetch.mockResolvedValue({
+      id: user,
+      permissions: { has: () => false },
+    });
+    await expect(
+      service.memberSuggestions(session, server, 'collector'),
+    ).rejects.toThrow('Administrator');
+    expect(guild.members.search).not.toHaveBeenCalled();
+  });
+  it('resolves an exact case-insensitive name and confirms membership by ID', async () => {
+    const target = {
+      id: '555555555555555555',
+      user: { username: 'collector' },
+      nickname: 'Collector',
+    };
+    guild.members.search.mockResolvedValue(new Map([[target.id, target]]));
+    guild.members.fetch.mockResolvedValue(target);
+    expect(await (service as any).resolveMember(guild, 'COLLECTOR')).toBe(
+      target,
+    );
+    expect(guild.members.fetch).toHaveBeenCalledWith({
+      user: target.id,
+      force: true,
+    });
+  });
+  it('rejects ambiguous nicknames before loading private member data', async () => {
+    guild.members.fetch.mockResolvedValue({
+      id: user,
+      permissions: { has: () => true },
+    });
+    guild.members.search.mockResolvedValue(
+      new Map(
+        ['1', '2'].map((id) => [
+          id,
+          { id, user: { username: 'user' + id }, nickname: 'Collector' },
+        ]),
+      ),
+    );
+    await expect(
+      service.member(session, server, 'COLLECTOR', false),
+    ).rejects.toThrow('Several members');
+    expect(db.from).not.toHaveBeenCalled();
+  });
+  it('keeps direct ID lookup available when name search is down', async () => {
+    guild.members.search.mockRejectedValue(new Error('network'));
+    const member = { id: '555555555555555555' };
+    guild.members.fetch.mockResolvedValue(member);
+    expect(await (service as any).resolveMember(guild, member.id)).toBe(member);
+    expect(guild.members.search).not.toHaveBeenCalled();
+    guild.members.fetch.mockRejectedValue(new Error('network'));
+    await expect(
+      (service as any).resolveMember(guild, member.id),
+    ).rejects.toThrow('Could not confirm');
   });
   it('omits collection trait inventories from dashboard rule payloads', () => {
     const rule = {

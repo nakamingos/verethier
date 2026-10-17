@@ -214,6 +214,17 @@ export class PortalController {
       kind,
     );
   }
+  @Get('servers/:server/members') async members(
+    @Req() req: Request,
+    @Param('server') server: string,
+    @Query('query') query = '',
+  ) {
+    return this.portal.memberSuggestions(
+      await this.auth.session(req),
+      server,
+      query,
+    );
+  }
   @Get('servers/:server/members/:id') async member(
     @Req() req: Request,
     @Param('server') server: string,
