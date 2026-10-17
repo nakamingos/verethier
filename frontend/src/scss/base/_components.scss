@@ -24,10 +24,6 @@ a.button {
 
   color: rgba(var(--highlight), 1);
   background-color: rgba(var(--button-color), 1);
-
-  &:active {
-    transform: translate(0, 1px);
-  }
 }
 
 ul {
