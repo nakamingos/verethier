@@ -181,6 +181,32 @@ async function restorePreviousWalletConnectConnection(page) {
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));
       await test.context.close();
     }
+    currentScenario = 'AppKit signing diagnostics';
+    {
+      const test = await setup(browser, true, true, '/wallet-check');
+      const { page } = test;
+      await page.getByRole('button', { name: 'Start connection', exact: true }).click();
+      await page.getByText('Test Wallet', { exact: true }).last().click();
+      await page.getByRole('button', { name: 'Test signature', exact: true }).waitFor();
+      assert.equal(test.signatures, 0, 'Restoring or connecting must not sign automatically');
+      await page.getByRole('button', { name: 'Test signature', exact: true }).click();
+      await page.getByText('Signature received successfully', { exact: true }).waitFor();
+      assert.equal(test.typedData.domain.name, 'Bouncer Wallet Check');
+      assert.equal(test.typedData.primaryType, 'WalletCheck');
+      const firstChallenge = test.typedData.message.Challenge;
+      await page.getByRole('button', { name: 'Test signature', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('textarea').value.match(/Signature received/g)?.length === 2);
+      assert.equal(test.signatures, 2);
+      assert.notEqual(test.typedData.message.Challenge, firstChallenge);
+      const report = await page.getByRole('textbox', { name: 'Connection details', exact: true }).inputValue();
+      assert(!report.includes(account.address));
+      assert(!report.includes(firstChallenge));
+      assert(!report.includes(test.typedData.message.Challenge));
+      assert.deepEqual(test.apiRequests, [], 'Signing diagnostics must not call the verification API');
+      assert.deepEqual(test.errors, []);
+      console.log(JSON.stringify({ scenario: 'appkit-signing-diagnostics', result: 'passed' }));
+      await test.context.close();
+    }
     for (const direct of [false, true]) {
       currentScenario = direct ? 'direct diagnostics' : 'AppKit diagnostics';
       const test = await setup(browser, true, false, '/wallet-check' + (direct ? '?mode=direct' : ''));
