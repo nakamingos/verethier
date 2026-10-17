@@ -2,6 +2,13 @@ const { chromium } = require('playwright-core');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+async function chooseOption(page, control, name) {
+  await control.click();
+  await page
+    .getByRole('listbox')
+    .getByRole('option', { name, exact: true })
+    .click();
+}
 const root = path.resolve(__dirname, '../dist/frontend/browser');
 const artifacts = fs.mkdtempSync('/tmp/bouncer-portal-smoke-');
 const server = '111111111111111111',
@@ -72,6 +79,7 @@ const base = {
         errors = [];
       const context = await browser.newContext({
         viewport: { width, height: 900 },
+        hasTouch: width <= 800,
       });
       const page = await context.newPage();
       page.on('pageerror', (e) => errors.push(e.message));
@@ -128,10 +136,23 @@ const base = {
               roles: [
                 { id: role, name: 'Comrade', manageable: true },
                 {
+                  id: '777777777777777777',
+                  name: 'Cannot assign',
+                  manageable: false,
+                },
+                {
                   id: '666666666666666666',
                   name: 'New Comrade',
                   manageable: true,
                 },
+                ...Array.from({ length: 30 }, (_, index) => ({
+                  id: '8000000000000000' + String(index).padStart(2, '0'),
+                  name:
+                    'Additional community role ' +
+                    (index + 1) +
+                    ' with a longer name',
+                  manageable: true,
+                })),
               ],
               diagnostics: [],
             };
@@ -306,6 +327,128 @@ const base = {
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
       await page.evaluate(() => document.fonts.ready);
+      const assetPicker = page.getByRole('combobox', {
+        name: 'Asset type',
+        exact: true,
+      });
+      await assetPicker.hover();
+      const closedPicker = await assetPicker.boundingBox();
+      await page.mouse.down();
+      assert.deepEqual(
+        await assetPicker.boundingBox(),
+        closedPicker,
+        'holding a dropdown does not move or resize it',
+      );
+      await page.mouse.up();
+      await page
+        .getByRole('listbox', { name: 'Asset type', exact: true })
+        .waitFor();
+      assert.deepEqual(
+        await assetPicker.boundingBox(),
+        closedPicker,
+        'opening a dropdown does not change its dimensions',
+      );
+      assert.equal(await assetPicker.getAttribute('aria-expanded'), 'true');
+      const popupBox = await page.getByRole('listbox').boundingBox();
+      assert.ok(
+        popupBox.x >= 0 && popupBox.x + popupBox.width <= width,
+        'popup fits viewport',
+      );
+      await page.screenshot({
+        path: `${artifacts}/dropdown-open-${width}.png`,
+      });
+      await assetPicker.press('ArrowDown');
+      await assetPicker.press('Escape');
+      assert.equal(
+        (await assetPicker.textContent()).trim(),
+        'All assets',
+        'Escape cancels pending selection',
+      );
+      await assetPicker.press('n');
+      await assetPicker.press('Enter');
+      assert.equal(
+        (await assetPicker.textContent()).trim(),
+        'NFTs',
+        'type-ahead and Enter select an option',
+      );
+      await chooseOption(page, assetPicker, 'All assets');
+      await assetPicker.press('ArrowDown');
+      await assetPicker.press('ArrowDown');
+      await assetPicker.press('Tab');
+      assert.equal(
+        (await assetPicker.textContent()).trim(),
+        'Ordinals',
+        'Tab commits keyboard selection',
+      );
+      await chooseOption(page, assetPicker, 'All assets');
+      await assetPicker.click();
+      await page
+        .getByRole('heading', { name: 'Community settings', exact: true })
+        .click();
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('[role=combobox]')
+            ?.getAttribute('aria-expanded') === 'false',
+      );
+      assert.equal(
+        (await assetPicker.textContent()).trim(),
+        'All assets',
+        'outside click preserves selection',
+      );
+      await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .click();
+      await assetPicker.click();
+      await page.screenshot({
+        path: `${artifacts}/dropdown-light-${width}.png`,
+      });
+      await assetPicker.press('Escape');
+      await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
+        .click();
+      await page
+        .getByRole('navigation', { name: 'Server settings' })
+        .getByRole('button', { name: 'Bot Settings', exact: true })
+        .click();
+      const defaultChannel = page.getByRole('combobox', {
+        name: 'Default verification channel',
+        exact: true,
+      });
+      await chooseOption(page, defaultChannel, '#verify-collections');
+      await chooseOption(page, defaultChannel, 'No default');
+      await page
+        .getByRole('button', { name: 'Save settings', exact: true })
+        .click();
+      await page.getByText('Settings saved.', { exact: true }).waitFor();
+      assert.ok(
+        requests.some(
+          (r) =>
+            r.path.endsWith('/settings') &&
+            r.body?.verification_channel_id === null,
+        ),
+        'null default channel remains null in submitted settings',
+      );
+      await page
+        .getByRole('navigation', { name: 'Server settings' })
+        .getByRole('button', { name: 'Rules', exact: true })
+        .click();
+
+      if (width <= 800) {
+        await assetPicker.tap();
+        await page
+          .getByRole('option', { name: 'Ethscriptions', exact: true })
+          .tap();
+        assert.equal(
+          (await assetPicker.textContent()).trim(),
+          'Ethscriptions',
+          'touch selects an option',
+        );
+        await assetPicker.tap();
+        await page
+          .getByRole('option', { name: 'All assets', exact: true })
+          .tap();
+      }
       const paneSize = await page.locator('.portal-content').boundingBox();
       holdServer = true;
       const refreshStarted = new Promise((resolve) => {
@@ -451,9 +594,11 @@ const base = {
         smallText.every((size) => size >= 16),
         'small text must be at least 16px',
       );
-      await page
-        .getByRole('combobox', { name: /^Asset type/ })
-        .selectOption('ordinal');
+      await chooseOption(
+        page,
+        page.getByRole('combobox', { name: /^Asset type/ }),
+        'Ordinals',
+      );
       await page.locator('#rule-1 .combined-badge').click();
       assert.equal(await page.locator('.rule-card').count(), 2);
       assert.equal(
@@ -467,12 +612,18 @@ const base = {
       await page.waitForFunction(() => document.activeElement?.id === 'rule-2');
       await page.getByRole('button', { name: 'Back to all rules' }).click();
       assert.equal(
-        await page.getByRole('combobox', { name: /^Asset type/ }).inputValue(),
-        'ordinal',
+        (
+          await page
+            .getByRole('combobox', { name: /^Asset type/ })
+            .textContent()
+        ).trim(),
+        'Ordinals',
       );
-      await page
-        .getByRole('combobox', { name: /^Asset type/ })
-        .selectOption('');
+      await chooseOption(
+        page,
+        page.getByRole('combobox', { name: /^Asset type/ }),
+        'All assets',
+      );
       const cardHeights = await page
         .locator('.rule-card')
         .evaluateAll((cards) =>
@@ -615,9 +766,44 @@ const base = {
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
-      await page
-        .getByRole('combobox', { name: /^Discord role/ })
-        .selectOption('666666666666666666');
+      const rolePicker = page.getByRole('combobox', {
+        name: 'Discord role',
+        exact: true,
+      });
+      await rolePicker.click();
+      assert.equal(
+        await page
+          .getByRole('option', { name: 'Cannot assign', exact: true })
+          .getAttribute('aria-disabled'),
+        'true',
+      );
+      await rolePicker.press('ArrowDown');
+      const activeRole = await rolePicker.getAttribute('aria-activedescendant');
+      assert.equal(
+        (await page.locator('#' + activeRole).textContent()).trim(),
+        'New Comrade',
+        'keyboard skips unassignable roles',
+      );
+      await rolePicker.press('End');
+      const lastRoleId = await rolePicker.getAttribute('aria-activedescendant');
+      const longMenu = await page.getByRole('listbox').boundingBox();
+      const lastRole = await page.locator('#' + lastRoleId).boundingBox();
+      assert.ok(
+        longMenu.y >= 0 && longMenu.y + longMenu.height <= 901,
+        'long menus fit the viewport',
+      );
+      assert.ok(
+        lastRole.y >= longMenu.y &&
+          lastRole.y + lastRole.height <= longMenu.y + longMenu.height,
+        'keyboard keeps the focused option visible in a long menu',
+      );
+      await rolePicker.press('Home');
+      await rolePicker.press('Escape');
+      await chooseOption(
+        page,
+        page.getByRole('combobox', { name: /^Discord role/ }),
+        'New Comrade',
+      );
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByText('Comrade → New Comrade', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Save rule' }).click();
@@ -636,9 +822,11 @@ const base = {
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
-      await page
-        .getByRole('combobox', { name: /^Discord role/ })
-        .selectOption('');
+      await chooseOption(
+        page,
+        page.getByRole('combobox', { name: /^Discord role/ }),
+        'Create a new role',
+      );
       await page
         .getByLabel('New role name', { exact: true })
         .fill('Created role');

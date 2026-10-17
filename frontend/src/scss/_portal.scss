@@ -39,6 +39,7 @@
   );
   @include pixel-server-menu();
   @include pixel-cards();
+  @include pixel-dropdowns();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
@@ -95,6 +96,7 @@
     #2c2c30
   );
   @include pixel-cards(#eee, #aaa, #e0e0e0);
+  @include pixel-dropdowns(#eee, #aaa, #c6c6c6, #eee, #2c2c30);
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
   --ase-text: #2c2c30;
@@ -228,45 +230,93 @@ textarea {
   padding: 0.8rem 1rem;
   @include pixel-surface(var(--pixel-inset));
 }
-select {
-  appearance: none;
-  padding-right: 3.4rem;
-}
 .select-control {
   display: block;
   position: relative;
   margin: 0.45rem 0 1rem;
 }
-.select-control::after {
+app-pixel-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+button.pixel-select-trigger,
+button.pixel-select-trigger:hover {
+  display: flex;
+  gap: 0;
+  justify-content: stretch;
+  width: 100%;
+  height: 4.4rem;
+  min-height: 4.4rem;
+  padding: 0;
+  border: 0;
+  border-image: none;
+  background: none;
+  color: var(--ase-select-text);
+  text-align: left;
+}
+button.pixel-select-trigger:focus-visible {
+  outline-color: var(--ase-select-focus);
+  outline-offset: 2px;
+}
+.pixel-select-value {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: calc(100% - 4px);
+  padding: 0.6rem 0.9rem;
+  border: 1px solid transparent;
+  border-image: var(--pixel-select-field) 8 fill / 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pixel-select-arrow {
+  display: grid;
+  place-items: center;
+  flex: 0 0 4.4rem;
+  height: 100%;
+  border: 1px solid transparent;
+  margin-left: -4px;
+  border-image: var(--pixel-select-button) 8 8 12 8 fill / 8px 8px 12px 8px;
+}
+.pixel-select-arrow::after {
   content: '';
-  position: absolute;
-  pointer-events: none;
-  right: 1.3rem;
-  top: calc(50% - 3px);
-  width: 10px;
-  height: 6px;
-  background: var(--ase-text);
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% 2px,
-    80% 2px,
-    80% 4px,
-    60% 4px,
-    60% 100%,
-    40% 100%,
-    40% 4px,
-    20% 4px,
-    20% 2px,
-    0 2px
-  );
+  width: 18px;
+  height: 16px;
+  background: var(--pixel-select-arrow) center / contain no-repeat;
 }
-.select-control:has(select:disabled)::after {
+.pixel-select-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  border-image: var(--pixel-select-picker) 8 fill / 8px;
+  background: var(--ase-select-menu);
+  color: var(--ase-select-text);
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1.4;
+  max-height: min(32rem, calc(100dvh - 16px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 3px 0 #0006;
+}
+.pixel-select-menu [role='option'] {
+  padding: 0.7rem 0.9rem;
+  min-height: 3.8rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.pixel-select-menu [role='option'].active {
+  background: var(--ase-selected);
+  color: #41444a;
+}
+.pixel-select-menu [aria-disabled='true'] {
   opacity: 0.5;
-}
-select option {
-  background: var(--ase-editor);
-  color: var(--ase-text);
+  cursor: not-allowed;
 }
 textarea {
   resize: vertical;
@@ -949,9 +999,25 @@ app-verify .user-info-wrapper .user-tag .warn {
   :focus-visible {
     outline-color: Highlight;
   }
-  .select-control::after {
-    background: CanvasText;
+  .pixel-select-value,
+  .pixel-select-arrow,
+  .pixel-select-menu {
+    border-image: none;
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .pixel-select-menu [role='option'].active {
+    background: Highlight;
+    color: HighlightText;
     forced-color-adjust: none;
+  }
+  .pixel-select-arrow::after {
+    background: CanvasText;
+    clip-path: polygon(0 25%, 100% 25%, 100% 50%, 50% 100%, 0 50%);
+  }
+  button.pixel-select-trigger:focus-visible {
+    outline-color: Highlight;
   }
   .workspace-surface {
     background: Canvas;
