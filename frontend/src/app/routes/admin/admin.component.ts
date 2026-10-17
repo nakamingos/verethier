@@ -149,6 +149,11 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.member = null;
         this.undo = null;
         this.tab = 'rules';
+        requestAnimationFrame(() => {
+          document
+            .querySelector<HTMLElement>('.workspace-tabs')
+            ?.scrollTo({ left: 0 });
+        });
         this.messageUrl = '';
         this.rebuildGroups();
         this.messageChannel =
