@@ -188,7 +188,6 @@ $pixel-tab-current: (
   $gold-hover-low: color.mix(black, $accent-hover, 35%);
   --pixel-face: #{pixel-frame($face, $edge, $high, $low)};
   --pixel-hover: #{pixel-frame($hover, $edge, $hover-high, $hover-low)};
-  --pixel-pressed: #{pixel-frame($face, $edge, $low, $high)};
   --pixel-primary: #{pixel-frame($accent, $edge, $gold-high, $gold-low)};
   --pixel-primary-hover: #{pixel-frame(
       $accent-hover,
@@ -196,7 +195,6 @@ $pixel-tab-current: (
       $gold-hover-high,
       $gold-hover-low
     )};
-  --pixel-primary-pressed: #{pixel-frame($accent, $edge, $gold-low, $gold-high)};
   --pixel-inset: #{pixel-frame(
       $editor,
       $edge,
@@ -208,7 +206,6 @@ $pixel-tab-current: (
   --pixel-accent: #{pixel-frame($face, $accent, $high, $low, 'panel')};
   --pixel-choice: #{pixel-frame($face, $accent, $high, $low)};
   --pixel-choice-hover: #{pixel-frame($hover, $accent, $hover-high, $hover-low)};
-  --pixel-choice-pressed: #{pixel-frame($face, $accent, $low, $high)};
   --pixel-open: #{pixel-frame($face, $accent, $high, $low, 'open')};
   --pixel-lower: #{pixel-frame($face, $accent, $high, $low, 'lower')};
   --pixel-danger: #{pixel-frame(

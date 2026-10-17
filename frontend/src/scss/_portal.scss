@@ -173,10 +173,6 @@ a.button:hover {
   border-image-source: var(--pixel-hover);
   text-decoration: none;
 }
-button:active,
-a.button:active {
-  border-image-source: var(--pixel-pressed);
-}
 button.primary,
 a.button.primary,
 button.selected {
@@ -188,11 +184,6 @@ a.button.primary:hover,
 button.selected:hover {
   border-image-source: var(--pixel-primary-hover);
 }
-button.primary:active,
-a.button.primary:active,
-button.selected:active {
-  border-image-source: var(--pixel-primary-pressed);
-}
 button:disabled {
   opacity: 0.5;
   cursor: wait;
@@ -202,9 +193,6 @@ button[aria-pressed='true']:not(.primary):not(.selected) {
 }
 button[aria-pressed='true']:not(.primary):not(.selected):hover {
   border-image-source: var(--pixel-choice-hover);
-}
-button[aria-pressed='true']:not(.primary):not(.selected):active {
-  border-image-source: var(--pixel-choice-pressed);
 }
 :focus-visible {
   outline: 2px solid var(--ase-selected);
@@ -568,16 +556,10 @@ app-root:has(app-admin) .app-footer {
 .tabs button:hover {
   border-image-source: var(--pixel-tab);
 }
-.tabs button:active {
-  border-image-source: var(--pixel-tab);
-}
 .tabs button.selected {
   border-image-source: var(--pixel-tab-current);
 }
 .tabs button.selected:hover {
-  border-image-source: var(--pixel-tab-current);
-}
-.tabs button.selected:active {
   border-image-source: var(--pixel-tab-current);
 }
 .workspace-tabs {
