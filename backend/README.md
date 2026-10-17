@@ -87,6 +87,8 @@ For example: `/setup verification channel:#verify action:refresh`. Refresh and r
 
 All messages use the channel's existing rules. These actions require Administrator permissions and do not change rules, linked wallets, or assigned roles. This command cleanup needs no database migration.
 
+Verification links use a dedicated in-memory cache, separate from autocomplete and other cached data. Its 10,000-entry limit accommodates nonce records and their latest-link markers without letting autocomplete warming evict active links. The original expiry, replacement, and single-use checks still apply. Restarting the backend clears pending links and Discord interactions; members must request a fresh link after a restart. No database storage or migration is required for link caching.
+
 ## Ethscriptions Verification
 
 Collection and trait rules share one paginated read of linked wallets' holdings and attributes from the existing market database. This data stays in the verification context in memory and is reused for combined counts and recommendations. A fresh verification reads ownership again; Bouncer does not copy Ethscriptions metadata into its database. Missing attributes do not exclude an asset from collection-wide counts, and failed pages make the check unavailable rather than using a partial count.
