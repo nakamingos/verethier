@@ -1,6 +1,8 @@
 import { OrdinalWalletInventoryService } from '../src/services/ordinal-wallet-inventory.service';
 import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 import { EnvironmentConfig } from '../src/config/environment.config';
+import { AssetOwnershipService } from '../src/services/asset-ownership.service';
+import { VerificationEngine } from '../src/services/verification-engine.service';
 import vectors from './fixtures/bip322-taproot.json';
 
 const wallet = vectors.valid[0].address;
@@ -122,6 +124,133 @@ describe('ordered Ordinals wallet ownership providers', () => {
     expect(inventory.numbers.get(id(100))).toBe(-1);
     expect(await service.inventory(wallet, context, true, xverse)).toBe(inventory);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares a successful numbered lookup across concurrent ID and number checks without extra requests', async () => {
+    const context = { ...run(), ordinalNeedsNumbers: true };
+    fetchMock.mockResolvedValue(response({ data: [{ inscription_id: id(1), inscription_number: 1, owner_address: wallet }] }));
+    const inventories = await Promise.all([
+      service.inventory(wallet, context, false, xverse),
+      service.inventory(wallet, context, true, xverse),
+      service.inventory(wallet, context, false, xverse),
+    ]);
+    expect(inventories.every(inventory => inventory === inventories[0])).toBe(true);
+    expect(inventories[0].numbers.get(id(1))).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(xverse).not.toHaveBeenCalled();
+  });
+
+  it.each(['subfrost', 'sandshrew'])('rescues ID checks through %s after numbered providers fail', async provider => {
+    db.reserveOrdinalProviderRequest.mockResolvedValue(false);
+    xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
+    if (provider === 'sandshrew') {
+      const healthy = fetchMock.getMockImplementation();
+      fetchMock.mockImplementation((url, options) => String(url).includes('subfrost')
+        ? Promise.resolve(response({}, 503)) : healthy(url, options));
+    }
+    const context = { ...run(), ordinalNeedsNumbers: true };
+    const checks = await Promise.allSettled([
+      service.inventory(wallet, context, false, xverse),
+      service.inventory(wallet, context, true, xverse),
+      service.inventory(wallet, context, false, xverse),
+    ]);
+    expect(checks[1].status).toBe('rejected');
+    expect(checks[0].status).toBe('fulfilled');
+    expect(checks[2]).toEqual(checks[0]);
+    const inventory = await service.inventory(wallet, context, false, xverse);
+    expect(inventory.provider).toBe(provider);
+    expect([...inventory.ids]).toEqual([id(1)]);
+    expect(inventory.numbers).toBeUndefined();
+    const requestsBefore = fetchMock.mock.calls.length;
+    await expect(service.inventory(wallet, context, true, xverse)).rejects.toThrow('unavailable');
+    expect(fetchMock).toHaveBeenCalledTimes(requestsBefore);
+    expect(xverse).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.body
+      && JSON.parse(options.body as string).method === 'ord_address')).toHaveLength(1);
+  });
+
+  it('rescues an ID check after a previously failed numbered check in a scheduled run', async () => {
+    db.reserveOrdinalProviderRequest.mockResolvedValue(false);
+    xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
+    const context = { ...run(), ordinalMode: 'scheduled' };
+    await expect(service.inventory(wallet, context, true, xverse)).rejects.toThrow('unavailable');
+    expect((await service.inventory(wallet, context, false, xverse)).provider).toBe('subfrost');
+    expect(xverse).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps both capabilities unavailable when every provider fails and shares the failed ID rescue', async () => {
+    fetchMock.mockResolvedValue(response({}, 503));
+    xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
+    const context = { ...run(), ordinalNeedsNumbers: true };
+    const checks = await Promise.allSettled([
+      service.inventory(wallet, context, false, xverse),
+      service.inventory(wallet, context, true, xverse),
+    ]);
+    expect(checks.map(check => check.status)).toEqual(['rejected', 'rejected']);
+    const requestsBefore = fetchMock.mock.calls.length;
+    await expect(service.inventory(wallet, context, false, xverse)).rejects.toThrow('unavailable');
+    expect(fetchMock).toHaveBeenCalledTimes(requestsBefore);
+    expect(xverse).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards partial numbered pages before accepting a complete empty ID inventory', async () => {
+    xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
+    const healthy = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((url, options) => {
+      if (String(url).includes('ordiscan')) return Promise.resolve(String(url).endsWith('page=1')
+        ? response({ data: Array.from({ length: 100 }, (_, i) => ({ inscription_id: id(i), inscription_number: i, owner_address: wallet })) })
+        : response({}, 503));
+      if (JSON.parse(options.body as string).method === 'ord_address') {
+        return Promise.resolve(response({ jsonrpc: '2.0', id: 1, result: { inscriptions: [] } }));
+      }
+      return healthy(url, options);
+    });
+    const context = { ...run(), ordinalNeedsNumbers: true };
+    const inventory = await service.inventory(wallet, context, false, xverse);
+    expect(inventory.provider).toBe('subfrost');
+    expect(inventory.ids.size).toBe(0);
+    expect(inventory.numbers).toBeUndefined();
+    await expect(service.inventory(wallet, context, true, xverse)).rejects.toThrow('unavailable');
+  });
+
+  it.each(['interactive', 'scheduled'])('verifies collection, trait, and exact-ID rules while number rules stay unavailable (%s)', async mode => {
+    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_PROVIDER', 'ordnet');
+    db.reserveOrdinalProviderRequest.mockResolvedValue(false);
+    xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
+    const catalog = { snapshot: jest.fn().mockResolvedValue({
+      slug: 'test', fetched_at: new Date().toISOString(),
+      items: new Map([[id(1), { owner: null, traits: [{ type: 'Crown', value: 'Gold' }] }]]),
+    }) };
+    const ordinal = new OrdinalsOwnershipService({} as any, db, requests, catalog as any, service);
+    jest.spyOn(ordinal as any, 'readInventory').mockImplementation(xverse);
+    const rule = (ruleId: number, roleId: string, extra = {}) => ({
+      id: ruleId, server_id: 'server', channel_id: 'channel', role_id: roleId,
+      asset_type: 'ordinal', slug: 'test', min_items: 1, attribute_key: 'ALL', attribute_value: 'ALL', ...extra,
+    } as any);
+    const rules = [
+      rule(4, 'numbers', { slug: null, inscription_criteria: { kind: 'numbers', ranges: [[1, 10]] } }),
+      rule(1, 'collection'),
+      rule(2, 'trait', { attribute_key: 'Crown', attribute_value: 'Gold' }),
+      rule(3, 'ids', { slug: null, inscription_criteria: { kind: 'ids', ids: [id(1)] } }),
+    ];
+    const ownership = new AssetOwnershipService(undefined, undefined, ordinal);
+    const engine = new VerificationEngine({} as any, ownership,
+      { getUserAddresses: async () => [wallet] } as any,
+      { allowedAddresses: async (_server, addresses) => addresses } as any);
+    const context = { ...run(), ...(mode === 'scheduled' ? { ordinalMode: 'scheduled' } : {}) };
+    const result = await engine.verifyUserBulk('member', rules.map(rule => rule.id), wallet, rules, context);
+    expect(result.validRules.map(rule => rule.role_id)).toEqual(['collection', 'trait', 'ids']);
+    expect(result.results.find(check => check.ruleId === 4)).toEqual(expect.objectContaining({
+      isValid: false, status: 'unavailable',
+    }));
+    for (const eligible of rules.slice(1)) {
+      expect(result.matchingAssetCounts.get(String(eligible.id))).toBe(1);
+      expect([...await ordinal.matchingAssets(eligible, [wallet], context)]).toEqual([[id(1), 1n]]);
+    }
+    await expect(ordinal.matchingAssets(rules[0], [wallet], context)).rejects.toThrow('unavailable');
+    expect(xverse).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.body
+      && JSON.parse(options.body as string).method === 'ord_address')).toHaveLength(1);
   });
 
   it.each(['wrong owner', 'missing number', 'duplicate number', 'duplicate ID', 'partial failure'])('rejects %s in a numbered inventory and goes to Xverse', async problem => {

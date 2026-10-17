@@ -20,13 +20,21 @@ export class OrdinalWalletInventoryService {
   constructor(private readonly requests: OrdinalsRequestScheduler, private readonly db: DbService) {}
 
   inventory(wallet: string, context: NftCheckContext, numbers: boolean, xverse: NumberInventory): Promise<OrdinalWalletInventory> {
-    const needNumbers = numbers || context.ordinalNeedsNumbers === true;
     context.ordinalWalletInventories ||= new Map();
-    const key = JSON.stringify([wallet, needNumbers]);
-    const numbered = context.ordinalWalletInventories.get(JSON.stringify([wallet, true]));
-    if (!needNumbers && numbered) return numbered;
-    if (!context.ordinalWalletInventories.has(key)) context.ordinalWalletInventories.set(key,
-      this.lookup(wallet, needNumbers, ordinalRequestWork(context), xverse));
+    const key = JSON.stringify([wallet, numbers]);
+    if (!context.ordinalWalletInventories.has(key)) {
+      const work = ordinalRequestWork(context);
+      const numbered = numbers ? undefined : context.ordinalWalletInventories.get(JSON.stringify([wallet, true]));
+      // Prefer one numbered inventory when a run needs both capabilities, but
+      // never make ID-only checks depend on a successful numbered lookup.
+      const result = !numbers && (numbered || context.ordinalNeedsNumbers)
+        ? (numbered || this.inventory(wallet, context, true, xverse))
+          .catch(() => this.lookup(wallet, false, work, xverse))
+        : this.lookup(wallet, numbers, work, xverse);
+      // Keep the two promises separate: ID fallback must not satisfy a number
+      // rule, and parallel ID rules/recommendations must share the same rescue.
+      context.ordinalWalletInventories.set(key, result);
+    }
     return context.ordinalWalletInventories.get(key);
   }
 
