@@ -76,34 +76,40 @@ $pixel-panel: (
   '.EEEEEEEEEEEE.'
 );
 $pixel-tab: (
-  '..EEEEEEEEEE..',
-  '.EFHHHHHHHHFE.',
-  'EFHFFFFFFFFHFE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'ESSSSSSSSSSSSE',
-  'EEEEEEEEEEEEEE'
+  '..EEEEEEEEE...',
+  '.EFHHHHHHHFE..',
+  'EFHFFFFFFFHFE.',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF',
+  'EHFFFFFFFFFHEF'
+);
+$pixel-tab-current: (
+  '..EEEEEEEEEEE...',
+  '.EFHHHHHHHHHFE..',
+  'EFHFFFFFFFFFHFE.',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'EHFFFFFFFFFFFHES',
+  'FHFFFFFFFFFFFHFE',
+  'HFFFFFFFFFFFFFHH'
 );
 
 @function pixel-frame($face, $edge, $highlight, $shade, $kind: 'raised') {
   $rows: $pixel-raised;
   @if $kind == 'inset' {
     $rows: $pixel-inset;
-  } @else if $kind == 'tab' or $kind == 'tab-open' {
-    $rows: $pixel-tab;
-    @if $kind == 'tab-open' {
-      $rows: list.set-nth($rows, 15, 'EHFFFFFFFFFFHE');
-      $rows: list.set-nth($rows, 16, 'EHFFFFFFFFFFHE');
-    }
   } @else if $kind == 'panel' or $kind == 'open' or $kind == 'lower' {
     $rows: $pixel-panel;
     @if $kind == 'open' {
@@ -122,19 +128,25 @@ $pixel-tab: (
     'K': color.mix(black, $face, 55%),
     'D': #0006,
   );
-  $svg: "<svg xmlns='http://www.w3.org/2000/svg' width='28' height='32' viewBox='0 0 14 16' shape-rendering='crispEdges'>";
+  @return pixel-grid($rows, $colors);
+}
+
+@function pixel-grid($rows, $colors) {
+  $width: string.length(list.nth($rows, 1));
+  $height: list.length($rows);
+  $svg: "<svg xmlns='http://www.w3.org/2000/svg' width='#{$width * 2}' height='#{$height * 2}' viewBox='0 0 #{$width} #{$height}' shape-rendering='crispEdges'>";
   @each $symbol, $fill in $colors {
     $path: '';
     @for $y from 1 through list.length($rows) {
       $row: list.nth($rows, $y);
-      @if string.length($row) != 14 {
-        @error 'Pixel frame rows must be 14 cells wide.';
+      @if string.length($row) != $width {
+        @error 'Pixel frame rows must have equal widths.';
       }
       $x: 1;
-      @while $x <= 14 {
+      @while $x <= $width {
         @if string.slice($row, $x, $x) == $symbol {
           $start: $x;
-          @while $x <= 14 and string.slice($row, $x, $x) == $symbol {
+          @while $x <= $width and string.slice($row, $x, $x) == $symbol {
             $x: $x + 1;
           }
           $run: $x - $start;
@@ -206,24 +218,42 @@ $pixel-tab: (
       color.mix(black, $danger-bg, 25%),
       'panel'
     )};
-  --pixel-tab: #{pixel-frame($face, $edge, $high, $low, 'tab')};
-  --pixel-tab-hover: #{pixel-frame(
-      $hover,
-      $edge,
-      $hover-high,
-      $hover-low,
-      'tab'
-    )};
-  --pixel-tab-pressed: #{pixel-frame($face, $edge, $low, $high, 'tab')};
-  --pixel-tab-current: #{pixel-frame(
-      $workspace,
-      $edge,
-      color.mix(white, $workspace, 16%),
-      color.mix(black, $workspace, 25%),
-      'tab-open'
-    )};
   --ase-workspace: #{$workspace};
-  --ase-workspace-highlight: #{color.mix(white, $workspace, 16%)};
+}
+
+// Tab faces/rims come from direct PNG pixel samples. Label/strip colors use
+// the original theme.xml values. Keep these explicit rather than mixing tints.
+@mixin pixel-tabs(
+  $face,
+  $rim,
+  $text,
+  $current-face,
+  $current-rim,
+  $current-text,
+  $shadow,
+  $strip
+) {
+  --pixel-tab: #{pixel-grid(
+      $pixel-tab,
+      (
+        'E': #000,
+        'F': $face,
+        'H': $rim,
+      )
+    )};
+  --pixel-tab-current: #{pixel-grid(
+      $pixel-tab-current,
+      (
+        'E': #000,
+        'F': $current-face,
+        'H': $current-rim,
+        'S': $shadow,
+      )
+    )};
+  --ase-tab-text: #{$text};
+  --ase-tab-current-text: #{$current-text};
+  --ase-tab-strip: #{$strip};
+  --ase-workspace-highlight: #{$current-rim};
 }
 
 @mixin pixel-surface($frame) {

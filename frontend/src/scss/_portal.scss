@@ -27,6 +27,16 @@
     #492d32,
     #333333
   );
+  @include pixel-tabs(
+    #202125,
+    #2f3136,
+    #7d7d7d,
+    #333333,
+    #575757,
+    #c0c0c0,
+    #202125,
+    #2c2c30
+  );
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
@@ -61,6 +71,16 @@
     #8e2635,
     #f5d7dd,
     #e0e0e0
+  );
+  @include pixel-tabs(
+    #c6c6c6,
+    #eee,
+    #636d79,
+    #e0e0e0,
+    #fff,
+    #2c2c30,
+    #aaa,
+    #eee
   );
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
@@ -329,13 +349,16 @@ app-root:has(app-admin) {
   min-height: 100svh;
   background: var(--ase-workspace);
 }
+body:has(app-admin) {
+  background: var(--ase-tab-strip);
+}
 .route-content:has(app-admin) {
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: none;
   padding: 3rem 0 0;
-  background: var(--ase-bg);
+  background: var(--ase-tab-strip);
   flex: 1;
 }
 app-admin {
@@ -537,13 +560,16 @@ app-root:has(app-admin) .app-footer {
   border-bottom: 1px solid var(--ase-border);
 }
 .tabs button {
+  border-image-slice: 8 10 4 8 fill;
+  border-image-width: 8px 10px 4px 8px;
   border-image-source: var(--pixel-tab);
+  color: var(--ase-tab-text);
 }
 .tabs button:hover {
-  border-image-source: var(--pixel-tab-hover);
+  border-image-source: var(--pixel-tab);
 }
 .tabs button:active {
-  border-image-source: var(--pixel-tab-pressed);
+  border-image-source: var(--pixel-tab);
 }
 .tabs button.selected {
   border-image-source: var(--pixel-tab-current);
@@ -559,6 +585,7 @@ app-root:has(app-admin) .app-footer {
   z-index: 1;
   flex-wrap: nowrap;
   align-items: flex-end;
+  gap: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -569,11 +596,15 @@ app-root:has(app-admin) .app-footer {
 }
 .workspace-tabs button {
   flex-shrink: 0;
+  min-height: 2.6rem;
+  padding-block: 0.2rem;
+  font-size: 2rem;
+  line-height: 1;
 }
 .workspace-tabs button.selected {
-  // Extend the open bottom across the surface's outline and highlight.
+  // The final two sprite rows form the flared feet across the workspace rim.
   border-image-outset: 0 0 4px;
-  color: var(--ase-text);
+  color: var(--ase-tab-current-text);
 }
 .workspace-tabs button.selected:focus-visible {
   outline-offset: -6px;
@@ -909,6 +940,9 @@ app-verify .user-info-wrapper .user-tag .warn {
   }
   .workspace-surface {
     padding-top: 1.8rem;
+  }
+  .workspace-tabs button {
+    min-height: 3.8rem;
   }
   app-admin .welcome {
     width: calc(100% - 2.4rem);
