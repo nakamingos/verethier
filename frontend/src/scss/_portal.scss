@@ -242,43 +242,56 @@ app-pixel-select {
 }
 button.pixel-select-trigger,
 button.pixel-select-trigger:hover {
+  position: relative;
   display: flex;
   gap: 0;
   justify-content: stretch;
   width: 100%;
-  height: 4.4rem;
-  min-height: 4.4rem;
+  height: 4rem;
+  min-height: 4rem;
   padding: 0;
   border: 0;
   border-image: none;
   background: none;
   color: var(--ase-select-text);
+  font-size: 1.8rem;
+  line-height: 1.25;
   text-align: left;
 }
 button.pixel-select-trigger:focus-visible {
-  outline-color: var(--ase-select-focus);
-  outline-offset: 2px;
+  outline: none;
+}
+button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
+  .pixel-select-text {
+  text-decoration: underline;
+  text-decoration-color: var(--ase-selected);
+  text-underline-offset: 3px;
 }
 .pixel-select-value {
-  display: block;
-  flex: 1;
+  position: absolute;
+  inset: 2px 0;
+  display: flex;
+  align-items: center;
   min-width: 0;
-  height: calc(100% - 4px);
-  padding: 0.6rem 0.9rem;
+  padding: 0 4.6rem 0 1rem;
   border: 1px solid transparent;
   border-image: var(--pixel-select-field) 8 fill / 8px;
+}
+.pixel-select-text {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .pixel-select-arrow {
+  position: absolute;
+  inset: 0 0 0 auto;
   display: grid;
   place-items: center;
-  flex: 0 0 4.4rem;
+  width: 4rem;
   height: 100%;
   border: 1px solid transparent;
-  margin-left: -4px;
-  border-image: var(--pixel-select-button) 8 8 12 8 fill / 8px 8px 12px 8px;
+  border-image: var(--pixel-select-button) 6 6 8 6 fill / 6px 6px 8px 6px;
 }
 .pixel-select-arrow::after {
   content: '';
@@ -290,23 +303,26 @@ button.pixel-select-trigger:focus-visible {
   position: fixed;
   inset: auto;
   margin: 0;
-  padding: 6px;
-  border: 1px solid transparent;
+  padding: 0;
+  border: 6px solid transparent;
   border-radius: 0;
   border-image: var(--pixel-select-picker) 8 fill / 8px;
   background: var(--ase-select-menu);
+  background-clip: padding-box;
   color: var(--ase-select-text);
   font: inherit;
-  font-size: 1.6rem;
-  line-height: 1.4;
+  font-size: 1.8rem;
+  line-height: 1.25;
   max-height: min(32rem, calc(100dvh - 16px));
   overflow: auto;
   overscroll-behavior: contain;
-  box-shadow: 0 3px 0 #0006;
+  box-shadow: none;
 }
 .pixel-select-menu [role='option'] {
-  padding: 0.7rem 0.9rem;
-  min-height: 3.8rem;
+  display: flex;
+  align-items: center;
+  padding: 0.3rem 0.8rem;
+  min-height: 3rem;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
@@ -1016,8 +1032,9 @@ app-verify .user-info-wrapper .user-tag .warn {
     background: CanvasText;
     clip-path: polygon(0 25%, 100% 25%, 100% 50%, 50% 100%, 0 50%);
   }
-  button.pixel-select-trigger:focus-visible {
-    outline-color: Highlight;
+  button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
+    .pixel-select-text {
+    text-decoration-color: Highlight;
   }
   .workspace-surface {
     background: Canvas;

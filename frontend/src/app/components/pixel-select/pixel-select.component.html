@@ -16,7 +16,9 @@
   (keydown)="keydown($event)"
   (blur)="touched()"
 >
-  <span class="pixel-select-value">{{ selectedLabel }}</span>
+  <span class="pixel-select-value"
+    ><span class="pixel-select-text">{{ selectedLabel }}</span></span
+  >
   <span class="pixel-select-arrow" aria-hidden="true"></span>
 </button>
 <!-- Cancel the surrounding label's click activation after an option is chosen. -->
