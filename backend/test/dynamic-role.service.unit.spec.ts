@@ -369,7 +369,8 @@ describe('DynamicRoleService', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map), ordinalMode: 'scheduled' })
       );
       expect(mockDbService.updateLastVerified).toHaveBeenCalledWith('assignment123');
     });
@@ -429,7 +430,8 @@ describe('DynamicRoleService', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1 // Default value
+        1,
+        expect.objectContaining({ checks: expect.any(Map), ordinalMode: 'scheduled' })
       );
     });
   });
@@ -530,7 +532,8 @@ describe('DynamicRoleService', () => {
         'ALL',
         'ALL',
         'ALL',
-        1 // Default value for undefined min_items
+        1,
+        expect.objectContaining({ checks: expect.any(Map), ordinalMode: 'scheduled' })
       );
     });
 
@@ -552,7 +555,8 @@ describe('DynamicRoleService', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map), ordinalMode: 'scheduled' })
       );
       
       mockUserAddressService.getUserAddresses.mockResolvedValue(['address123']);

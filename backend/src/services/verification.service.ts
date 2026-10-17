@@ -56,9 +56,10 @@ export class VerificationService {
     userId: string,
     ruleIds: (string | number)[],
     address: string,
-    context?: NftCheckContext
+    context?: NftCheckContext,
+    loadedRules?: VerifierRole[]
   ): Promise<BulkVerificationResult> {
-    if (context) return this.verificationEngine.verifyUserBulk(userId, ruleIds, address, undefined, context);
+    if (context || loadedRules) return this.verificationEngine.verifyUserBulk(userId, ruleIds, address, loadedRules, context);
     return await this.verificationEngine.verifyUserBulk(userId, ruleIds, address);
   }
 

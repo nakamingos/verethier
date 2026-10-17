@@ -128,7 +128,8 @@ describe('SimpleRoleMonitorService', () => {
         'test-collection',
         'trait',
         'rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
     });
 

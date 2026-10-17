@@ -87,6 +87,12 @@ For example: `/setup verification channel:#verify action:refresh`. Refresh and r
 
 All messages use the channel's existing rules. These actions require Administrator permissions and do not change rules, linked wallets, or assigned roles. This command cleanup needs no database migration.
 
+## Ethscriptions Verification
+
+Collection and trait rules share one paginated read of linked wallets' holdings and attributes from the existing market database. This data stays in the verification context in memory and is reused for combined counts and recommendations. A fresh verification reads ownership again; Bouncer does not copy Ethscriptions metadata into its database. Missing attributes do not exclude an asset from collection-wide counts, and failed pages make the check unavailable rather than using a partial count.
+
+Each Discord role is assigned and tracked once per verification, with all matching rules retained in its history and success-message details. Roles the member already holds still have their tracking refreshed. Backend logs report timings for wallet verification, rule loading, each asset type's rule checks, eligibility, role updates, and completion/recommendations. No database migration is required.
+
 ## NFT Trait Rules
 
 Use `/setup add-nft-rule` with the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.

@@ -520,14 +520,15 @@ export class DiscordVerificationService {
     guildId: string,
     nonce: string,
     ruleId?: string,
-    verificationData?: any
+    verificationData?: any,
+    context?: RoleSyncContext
   ): Promise<VerificationRoleResult> {
     if (!this.client) throw new Error('Discord bot not initialized');
 
     const guild = this.client.guilds.cache.get(guildId);
     if (!guild) throw new Error('Guild not found');
 
-    const member = await guild.members.fetch(userId);
+    const member = await this.fetchRoleSyncMember(guild, userId, context);
     if (!member) throw new Error('Member not found');
 
     const role = guild.roles.cache.get(roleId);
@@ -543,8 +544,10 @@ export class DiscordVerificationService {
     // We can use the already fetched member as Discord.js handles caching appropriately
     const wasAlreadyAssigned = member.roles.cache.has(roleId);
 
-    // Add the role - Discord will handle this gracefully if user already has it
-    await member.roles.add(role);
+    if (!wasAlreadyAssigned) {
+      const updated = await member.roles.add(role);
+      context?.set(`${guildId}:${userId}`, Promise.resolve(updated));
+    }
 
     // Always track role assignment - the trackRoleAssignment method handles existing records properly
     // This ensures that revoked roles get reactivated when users re-verify
@@ -972,14 +975,16 @@ export class DiscordVerificationService {
         return [];
       }
 
-      const userAddresses = await this.userAddressService.getUserAddresses(userId);
+      const context: NftCheckContext = ownershipContext || { checks: new Map() };
+      const addressReads = context.userAddresses ||= new Map();
+      if (!addressReads.has(userId)) addressReads.set(userId, this.userAddressService.getUserAddresses(userId));
+      const userAddresses = await addressReads.get(userId);
       const normalizedAddress = address.toLowerCase();
       const addressesToCheck = userAddresses.includes(normalizedAddress)
         ? userAddresses
         : [...userAddresses, normalizedAddress];
 
       const remainingRules = [];
-      const context: NftCheckContext = ownershipContext || { checks: new Map() };
       const allowedAddresses = await this.walletBlocks.allowedAddresses(guildId, addressesToCheck, context);
       for (const rule of unassignedRules) {
         try {

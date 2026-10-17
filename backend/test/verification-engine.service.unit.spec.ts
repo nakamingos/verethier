@@ -104,6 +104,16 @@ describe('VerificationEngine', () => {
   });
 
   describe('verifyUser', () => {
+    it('reuses loaded rules and wallet addresses within a run but reads wallets again on a fresh run', async () => {
+      const rules = [mockRule, mockModernRule];
+      mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
+      await service.verifyUserBulk('user123', [1, 2], 'address123', rules);
+      expect(mockDbService.getRuleById).not.toHaveBeenCalled();
+      expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledTimes(1);
+      await service.verifyUserBulk('user123', [1, 2], 'address123', rules);
+      expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledTimes(2);
+    });
+
     it('should successfully verify user with rule', async () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
@@ -115,7 +125,8 @@ describe('VerificationEngine', () => {
         'test_collection',
         'test_attribute',
         'ALL',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
       expect(result.isValid).toBe(true);
       expect(result.matchingAssetCount).toBe(5);
@@ -140,7 +151,8 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
       expect(result.isValid).toBe(true);
       expect(result.matchingAssetCount).toBe(3);
@@ -312,7 +324,8 @@ describe('VerificationEngine', () => {
         'test_collection',
         'test_attribute', 
         'ALL',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
       expect(result.isValid).toBe(true);
     });
@@ -340,7 +353,8 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
       expect(result.isValid).toBe(true);
     });
@@ -390,7 +404,8 @@ describe('VerificationEngine', () => {
         'some-collection',
         'ALL',
         'ALL',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
       expect(result.isValid).toBe(true);
     });
@@ -435,7 +450,8 @@ describe('VerificationEngine', () => {
         'cool-cats',
         'trait_type',
         'Rare',
-        1
+        1,
+        expect.objectContaining({ checks: expect.any(Map) })
       );
     });
 
