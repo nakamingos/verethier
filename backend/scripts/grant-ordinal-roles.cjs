@@ -10,6 +10,7 @@ async function main() {
     server: { type: 'string' }, apply: { type: 'boolean', default: false },
     report: { type: 'string' }, 'data-workdir': { type: 'string' }, 'retry-report': { type: 'string' }, user: { type: 'string' },
     'collections-only': { type: 'boolean', default: false },
+    'shared-evm-only': { type: 'boolean', default: false },
   } });
   if (!/^\d{17,20}$/.test(values.server || '')) {
     throw new MaintenanceError('Use --server DISCORD_SERVER_ID [--apply] [--report FILE] [--data-workdir LINKED_HOLDINGS_PROJECT]. The default is a dry run.');
@@ -36,6 +37,7 @@ async function main() {
   const { OrdinalsRequestScheduler } = require('../dist/services/ordinals-request-scheduler.service');
   const { OrdinalsOwnershipService } = require('../dist/services/ordinals-ownership.service');
   const { EthscriptionsOwnershipService } = require('../dist/services/ethscriptions-ownership.service');
+  const { Erc20OwnershipService } = require('../dist/services/erc20-ownership.service');
   const { AssetOwnershipService } = require('../dist/services/asset-ownership.service');
   const { VerificationEngine } = require('../dist/services/verification-engine.service');
   const { runOrdinalRoleGrants, ordinalGrantGroups } = require('../dist/maintenance/ordinal-role-grants');
@@ -49,7 +51,7 @@ async function main() {
   const catalog = new OrdinalCollectionCacheService(db, ordnet, requests);
   const ordinals = new OrdinalsOwnershipService(ordnet, db, requests, catalog, new OrdinalWalletInventoryService(requests, db));
   const engine = new VerificationEngine(db, new AssetOwnershipService(linked.data, new NftOwnershipService(new NftMetadataService(db)),
-    ordinals, new EthscriptionsOwnershipService()), linked.addresses, linked.blocks);
+    ordinals, new EthscriptionsOwnershipService(), new Erc20OwnershipService()), linked.addresses, linked.blocks);
   const rest = new REST({ version: '10', timeout: 15000 }).setToken(process.env.DISCORD_BOT_TOKEN);
   const serverId = values.server;
   let bot, guild, roles, botMember;
@@ -108,7 +110,10 @@ async function main() {
           record({ event: 'bitcoin_wallet_no_longer_saved', userId });
           return { userId, address, totalRules: 0, validRules: [], invalidRules: [], matchingAssetCounts: new Map(), results: [] };
         }
-        const result = await engine.verifyUserBulk(userId, rules.map(rule => rule.id), currentAddress, rules, context);
+        // Groups are selected from the Ordinals mappings before this filter.
+        // This scope proves shared roles from saved EVM holdings alone.
+        const checkedRules = values['shared-evm-only'] ? rules.filter(rule => rule.asset_type !== 'ordinal') : rules;
+        const result = await engine.verifyUserBulk(userId, checkedRules.map(rule => rule.id), currentAddress, checkedRules, context);
         const databaseErrors = result.results.filter(check => check.error?.startsWith('Linked database query failed')).map(check => check.error);
         if (databaseErrors.length) record({ event: 'database_check_failure', userId, errors: [...new Set(databaseErrors)] });
         return result;
