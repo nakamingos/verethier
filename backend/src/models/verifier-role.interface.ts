@@ -17,6 +17,7 @@ export interface NftRuleFields {
   attribute_value?: string | null;
   ordinal_trait_snapshot?: OrdinalTraitSnapshot | null;
   inscription_criteria?: InscriptionCriteria | null;
+  rule_label?: string | null;
 }
 
 export interface VerifierRole extends NftRuleFields {

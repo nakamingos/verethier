@@ -8,7 +8,7 @@ import { DynamicRoleService } from '../src/services/dynamic-role.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { parseInscriptionCriteria } from '../src/utils/inscription-rule.util';
 import { ordinalTraitHash } from '../src/utils/ordinal-rule.util';
-import { compactTokenIds, ruleEditFields, ruleEditVersion, splitRuleEditList } from '../src/utils/rule-edit.util';
+import { compactTokenIds, ruleCriteriaKey, ruleEditFields, ruleEditVersion, splitRuleEditList } from '../src/utils/rule-edit.util';
 
 const base: VerifierRole = {
   id: 173, server_id: 'guild', server_name: 'Guild', channel_id: 'verify', channel_name: 'Verify',
@@ -119,6 +119,16 @@ describe('Rule edit validation', () => {
     await expect(editor().editor.prepare(base, { ...inputs(base), slug: 'other, comrades' })).rejects.toThrow('one collection per rule');
     expect(ruleEditFields(base)[0]).toMatchObject({ label: 'Collection slug' });
     expect(ruleEditFields(base)[0].list).toBeUndefined();
+  });
+  it('keeps labels separate from eligibility and avoids ownership calls for a label-only edit', async () => {
+    const {editor: service, ordinals} = editor();
+    const result = await service.prepare(numbers, {...inputs(numbers), label: '  Krampus Knows  '});
+    expect(result.rule_label).toBe('Krampus Knows');
+    expect(result.inscription_criteria).toEqual(numbers.inscription_criteria);
+    expect(ruleCriteriaKey(result)).toBe(ruleCriteriaKey(numbers));
+    expect(ruleEditVersion(result)).not.toBe(ruleEditVersion(numbers));
+    expect(ordinals.prepareInscriptionRule).not.toHaveBeenCalled();
+    expect(await service.prepare(result, {...inputs(result), label: ''})).toMatchObject({rule_label: null});
   });
   it('uses existing NFT contract/network validation and refreshes token selection', async () => {
     const { editor: service, nfts } = editor(); const result = await service.prepare(nft, { ...inputs(nft), token_ids: '1,3' });
@@ -234,6 +244,24 @@ describe('Prefilled edit forms and confirmation', () => {
     const modal = h.interaction({ customId: 'edit-rule-form-session', fields: { getTextInputValue: key => values[key] } });
     await h.handler.handleModal(modal); await h.handler.handleButton(h.button());
     expect(h.db.editRule.mock.calls[0][1].inscription_criteria).toEqual({ kind: 'ids', ids });
+  });
+  it('saves, undoes, and redoes label-only edits without rechecking member roles', async () => {
+    const h = harness(numbers); await h.start(); const preview = await h.preview({label: 'Krampus Knows'});
+    expect(preview.editReply.mock.calls[0][0].embeds[0].toJSON().description).toContain('Only the label changes');
+    await h.handler.handleButton(h.button());
+    expect(h.db.editRule.mock.calls[0][1].rule_label).toBe('Krampus Knows');
+    await h.handler.handleButton(h.interaction({customId: 'edit-rule-undo-session-1'}));
+    expect(h.db.editRule.mock.calls[1][1].rule_label ?? null).toBeNull();
+    await h.handler.handleButton(h.interaction({customId: 'edit-rule-redo-session-2'}));
+    expect(h.db.editRule.mock.calls[2][1].rule_label).toBe('Krampus Knows');
+    expect(h.roles.reverifyRoleInServer).not.toHaveBeenCalled();
+    expect(h.ordinals.prepareInscriptionRule).not.toHaveBeenCalled();
+  });
+  it('lets admins find an inscription rule by its label in the edit selector', async () => {
+    const h = harness({...numbers, rule_label: 'Krampus Knows'});
+    const interaction = h.interaction({options: {getFocused: () => 'krampus'}, respond: jest.fn()});
+    await h.handler.autocomplete(interaction);
+    expect(interaction.respond).toHaveBeenCalledWith([{name: expect.stringContaining('Krampus Knows'), value: '173'}]);
   });
   it('saves the original row and immediately rechecks all previous holders of its role', async () => {
     const h = harness(numbers); await h.start(); await h.preview({ selection: '97305462,97308505-97308527' });

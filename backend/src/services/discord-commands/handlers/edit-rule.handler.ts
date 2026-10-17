@@ -8,7 +8,7 @@ import { DbService } from '../../db.service';
 import { DynamicRoleService } from '../../dynamic-role.service';
 import { RuleEditService } from '../../rule-edit.service';
 import { VerifierRole } from '@/models/verifier-role.interface';
-import { ruleEditFields, ruleEditSummary, ruleEditVersion, splitRuleEditList } from '@/utils/rule-edit.util';
+import { ruleCriteriaKey, ruleEditFields, ruleEditSummary, ruleEditVersion, splitRuleEditList } from '@/utils/rule-edit.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 
@@ -68,8 +68,8 @@ export class EditRuleHandler {
     try {
       const search = String(interaction.options.getFocused()).toLowerCase().trim();
       const rules = await this.db.getRoleMappings(interaction.guildId);
-      await interaction.respond(rules.filter(rule => `${rule.id} ${rule.role_name || ''} ${rule.slug || rule.collection_name || ''}`.toLowerCase().includes(search))
-        .sort((a, b) => b.id - a.id).slice(0, 25).map(rule => ({ name: `${rule.id} · ${rule.role_name || 'Role'} · ${rule.asset_type || 'ethscription'}`.replace(/[\r\n\t]/g, ' ').slice(0, 100), value: String(rule.id) })));
+      await interaction.respond(rules.filter(rule => `${rule.id} ${rule.role_name || ''} ${rule.slug || rule.collection_name || ''} ${rule.rule_label || ''}`.toLowerCase().includes(search))
+        .sort((a, b) => b.id - a.id).slice(0, 25).map(rule => ({ name: `${rule.id} · ${rule.role_name || 'Role'}${rule.rule_label ? ' · ' + rule.rule_label : ''} · ${rule.asset_type || 'ethscription'}`.replace(/[\r\n\t]/g, ' ').slice(0, 100), value: String(rule.id) })));
     } catch { await interaction.respond([]); }
   }
 
@@ -95,7 +95,7 @@ export class EditRuleHandler {
       this.renewSession(key, session, this.TTL);
       const oldText = ruleEditSummary(session.before), newText = ruleEditSummary(after);
       const long = escapeMarkdown(oldText).length > 1000 || escapeMarkdown(newText).length > 1000;
-      let description = `Rule **${after.id}** · <#${after.channel_id}> · <@&${after.role_id}>\nReview the changes, then Save or Cancel. Previously earned roles will be rechecked.`;
+      let description = `Rule **${after.id}** · <#${after.channel_id}> · <@&${after.role_id}>\nReview the changes, then Save or Cancel. ${ruleCriteriaKey(after) === ruleCriteriaKey(session.before) ? 'Only the label changes; verification requirements stay the same.' : 'Previously earned roles will be rechecked.'}`;
       if (conflicts.shared.length) description += `\nThese requirements also match rule(s) ${conflicts.shared.slice(0, 5).map(rule => rule.id).join(', ')} for other roles.`;
       if (long) description += '\nComplete before/after values are attached.';
       const embed = AdminFeedback.info('Review Rule Edit', description, [
@@ -176,6 +176,17 @@ export class EditRuleHandler {
     const title = action === 'undo' ? 'Rule Edit Undone' : action === 'redo' ? 'Rule Edit Redone' : 'Rule Updated';
     const status = action === 'undo' ? 'now uses its original requirements' : action === 'redo' ? 'now uses its edited requirements' : 'was saved';
     const nextStage = action === 'undo' ? 'undone' : 'saved';
+    if (ruleCriteriaKey(expected) === ruleCriteriaKey(saved)) {
+      session.stage = nextStage;
+      this.renewSession(key, session, this.UNDO_TTL);
+      const labelStatus = action === 'undo' ? 'label was restored' : action === 'redo' ? 'label change was reapplied' : 'label was saved';
+      const embed = AdminFeedback.success(title, `Rule **${saved.id}** ${labelStatus}. Verification requirements stay the same.`);
+      embed.setFooter({text: 'Undo/Redo is available for 5 minutes after each action.'});
+      try {
+        await interaction.editReply({content: '', embeds: [embed], components: [this.historyButton(key, session)], attachments: [], allowedMentions: {parse: []}});
+      } catch (error) { this.logger.warn(`Rule ${saved.id} label ${action} applied; final reply failed: ${error.message}`); }
+      return;
+    }
     try {
       await interaction.editReply({ content: '', embeds: [AdminFeedback.success(title, `Rule **${saved.id}** ${status}. Rechecking members who previously earned <@&${saved.role_id}>…`)],
         components: [], attachments: [], allowedMentions: { parse: [] } });
