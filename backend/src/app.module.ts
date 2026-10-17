@@ -25,7 +25,7 @@ import { RemovalUndoInteractionHandler } from '@/services/discord-commands/inter
 import { RestoreUndoInteractionHandler } from '@/services/discord-commands/interactions/restore-undo.interaction';
 import { RuleConfirmationInteractionHandler } from '@/services/discord-commands/interactions/rule-confirmation.interaction';
 import { DuplicateRuleConfirmationInteractionHandler } from '@/services/discord-commands/interactions/duplicate-rule-confirmation.interaction';
-import { NonceService } from '@/services/nonce.service';
+import { NonceModule } from './nonce.module';
 import { WalletService } from '@/services/wallet.service';
 import { DbService } from '@/services/db.service';
 import { DataService } from './services/data.service';
@@ -75,6 +75,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
   imports: [
     // High-performance caching layer
     CacheModule.register(),
+    NonceModule,
     
     // Scheduled task management for automated operations
     ScheduleModule.forRoot(),
@@ -158,7 +159,6 @@ import { EnvironmentConfig } from '@/config/environment.config';
     VerifyService,              // Request orchestration
 
     // Security and authentication
-    NonceService,               // Cryptographic nonce management
     WalletService,              // EIP-712 signature verification
 
     // Data access layer
