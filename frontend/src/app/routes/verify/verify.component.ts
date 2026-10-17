@@ -45,6 +45,7 @@ export class VerifyComponent {
 
   routeData$!: Observable<DecodedData | null>;
   private evmAccount?: GetAccountReturnType;
+  private errorSource: 'connection' | 'verification' | null = null;
 
   state$: BehaviorSubject<State> = new BehaviorSubject<State>({
     walletType: 'evm',
@@ -91,7 +92,8 @@ export class VerifyComponent {
         if (window.location.hostname === 'localhost') {
           // Error already handled by UI feedback
         }
-        this.setState({ errorMessage: 'This verification link is no longer active. Please return to Discord and request a new one.' });
+        this.setState({ errorMessage: this.rateLimitMessage(err)
+          || 'This verification link is no longer active. Please return to Discord and request a new one.' });
         return of(null);
       }),
       shareReplay({ bufferSize: 1, refCount: true }),
@@ -111,7 +113,16 @@ export class VerifyComponent {
       takeUntilDestroyed(),
     ).subscribe();
     this.walletSvc.connectionErrors$.pipe(takeUntilDestroyed()).subscribe(errorMessage => {
-      if (this.state$.value.walletType === 'evm') this.setState({ errorMessage });
+      const state = this.state$.value;
+      if (state.walletType !== 'evm') return;
+      // AppKit can repeat CONNECT_SUCCESS while reusing an approved session.
+      // Those notifications may clear a picker error, never a signing/API error.
+      if (errorMessage === null) {
+        if (this.errorSource === 'connection') this.setState({ errorMessage: null });
+      } else if (!state.messageSigning && !state.verificationSubmitting && !state.messageVerified
+        && this.errorSource !== 'verification') {
+        this.setState({ errorMessage }, 'connection');
+      }
     });
     this.bitcoinWalletSvc.address$.pipe(takeUntilDestroyed()).subscribe(address => {
       if (this.state$.value.walletType === 'bitcoin') {
@@ -292,6 +303,8 @@ export class VerifyComponent {
               errorMessage = error.statusText;
             }
 
+            errorMessage = this.rateLimitMessage(error) || errorMessage;
+
             if (
               errorMessage.includes('already verified by another user') &&
               this.state$.value.connectedAddress
@@ -312,8 +325,9 @@ export class VerifyComponent {
     } catch (error) {
       // Handle wallet signing errors
       const responseError = error instanceof HttpErrorResponse ? error.error : null;
-      const errorMessage = typeof responseError === 'string' ? responseError : responseError?.message
-        || (error instanceof Error ? error.message : 'Failed to sign message with wallet');
+      const errorMessage = this.rateLimitMessage(error)
+        || (typeof responseError === 'string' ? responseError : responseError?.message
+          || (error instanceof Error ? error.message : 'Failed to sign message with wallet'));
       this.setState({ 
         messageSigning: false,
         verificationSubmitting: false,
@@ -331,11 +345,21 @@ export class VerifyComponent {
    * @param state - The partial state object containing the properties to update.
    * @returns void
    */
-  setState(state: Partial<State>): void {
+  setState(state: Partial<State>, errorSource: 'connection' | 'verification' = 'verification'): void {
+    if (state.errorMessage !== undefined) this.errorSource = state.errorMessage ? errorSource : null;
     this.state$.next({
       ...this.state$.value,
       ...state
     });
+  }
+
+  private rateLimitMessage(error: unknown): string | null {
+    if (!(error instanceof HttpErrorResponse) || error.status !== 429) return null;
+    const seconds = Math.ceil(Math.max(0, ...[
+      'Retry-After', 'Retry-After-short', 'Retry-After-medium', 'Retry-After-long',
+    ].map(header => Number(error.headers.get(header))).filter(Number.isFinite)));
+    const wait = seconds > 0 ? `${seconds} second${seconds === 1 ? '' : 's'}` : 'a moment';
+    return `Too many requests right now. Please wait ${wait} and try again.`;
   }
 
   selectWallet(walletType: 'evm' | 'bitcoin', bitcoinProvider?: BitcoinWalletProvider): void {

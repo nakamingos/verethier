@@ -141,6 +141,66 @@ describe('Verification page wallet choice', () => {
     expect(fixture.componentInstance.state$.value.errorMessage).toBeNull();
   });
 
+  it('keeps a signing error visible when AppKit reports an already-connected wallet again', async () => {
+    const fixture = page(['evm']);
+    const component = fixture.componentInstance;
+    ethereum.connectedState$.next({ isConnected: true, isConnecting: false });
+    ethereum.signTypedMessage.and.rejectWith(new Error('A signature request is already pending.'));
+    await component.verify(data);
+    ethereum.connectionErrors$.next(null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('A signature request is already pending.');
+    http.expectNone(request => request.url.endsWith('/verify-signature'));
+  });
+
+  it('keeps a verification rejection visible through repeated connection notifications', async () => {
+    const fixture = page(['evm']);
+    const component = fixture.componentInstance;
+    ethereum.connectedState$.next({ isConnected: true, isConnecting: false });
+    const pending = component.verify(data);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    http.expectOne(request => request.url.endsWith('/verify-signature')).flush(
+      { message: 'This verification link is no longer active.' }, { status: 400, statusText: 'Bad Request' },
+    );
+    await pending;
+    ethereum.connectionErrors$.next('Late connection notification');
+    ethereum.connectionErrors$.next(null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('This verification link is no longer active.');
+    expect(fixture.nativeElement.textContent).not.toContain('Late connection notification');
+    expect(component.state$.value.messageVerified).toBeFalse();
+  });
+
+  it('explains a rate-limited context request without claiming the link has expired', () => {
+    const fixture = TestBed.createComponent(VerifyComponent);
+    fixture.detectChanges();
+    http.expectOne(request => request.url.endsWith('/verification-context')).flush(
+      { message: 'ThrottlerException: Too Many Requests' }, { status: 429, statusText: 'Too Many Requests' },
+    );
+    ethereum.connectionErrors$.next(null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Too many requests right now. Please wait a moment and try again.');
+    expect(fixture.nativeElement.textContent).not.toContain('no longer active');
+    expect(ethereum.connect).not.toHaveBeenCalled();
+  });
+
+  it('shows a rate-limit retry delay and preserves it when a wallet session refreshes', async () => {
+    const fixture = page(['evm']);
+    const component = fixture.componentInstance;
+    ethereum.connectedState$.next({ isConnected: true, isConnecting: false });
+    const pending = component.verify(data);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    http.expectOne(request => request.url.endsWith('/verify-signature')).flush(
+      { message: 'ThrottlerException: Too Many Requests' },
+      { status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After-short': '2' } },
+    );
+    await pending;
+    ethereum.connectionErrors$.next(null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Too many requests right now. Please wait 2 seconds and try again.');
+    expect(component.state$.value.verificationSubmitting).toBeFalse();
+  });
+
   it('offers a small choice in mixed channels and resets the previous connection', async () => {
     const fixture = page(['evm', 'bitcoin']);
     expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
