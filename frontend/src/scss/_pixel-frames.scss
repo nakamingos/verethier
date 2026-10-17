@@ -98,8 +98,12 @@ $pixel-tab: (
   $rows: $pixel-raised;
   @if $kind == 'inset' {
     $rows: $pixel-inset;
-  } @else if $kind == 'tab' {
+  } @else if $kind == 'tab' or $kind == 'tab-open' {
     $rows: $pixel-tab;
+    @if $kind == 'tab-open' {
+      $rows: list.set-nth($rows, 15, 'EHFFFFFFFFFFHE');
+      $rows: list.set-nth($rows, 16, 'EHFFFFFFFFFFHE');
+    }
   } @else if $kind == 'panel' or $kind == 'open' or $kind == 'lower' {
     $rows: $pixel-panel;
     @if $kind == 'open' {
@@ -159,7 +163,8 @@ $pixel-tab: (
   $accent,
   $accent-hover,
   $danger,
-  $danger-bg
+  $danger-bg,
+  $workspace
 ) {
   $high: color.mix(white, $face, 11%);
   $low: color.mix(black, $face, 25%);
@@ -210,27 +215,15 @@ $pixel-tab: (
       'tab'
     )};
   --pixel-tab-pressed: #{pixel-frame($face, $edge, $low, $high, 'tab')};
-  --pixel-tab-selected: #{pixel-frame(
-      $accent,
+  --pixel-tab-current: #{pixel-frame(
+      $workspace,
       $edge,
-      $gold-high,
-      $gold-low,
-      'tab'
+      color.mix(white, $workspace, 16%),
+      color.mix(black, $workspace, 25%),
+      'tab-open'
     )};
-  --pixel-tab-selected-hover: #{pixel-frame(
-      $accent-hover,
-      $edge,
-      $gold-hover-high,
-      $gold-hover-low,
-      'tab'
-    )};
-  --pixel-tab-selected-pressed: #{pixel-frame(
-      $accent,
-      $edge,
-      $gold-low,
-      $gold-high,
-      'tab'
-    )};
+  --ase-workspace: #{$workspace};
+  --ase-workspace-highlight: #{color.mix(white, $workspace, 16%)};
 }
 
 @mixin pixel-surface($frame) {

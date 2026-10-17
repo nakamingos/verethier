@@ -12,6 +12,8 @@ Cards keep equal heights, a reserved group-badge slot and actions aligned at the
 
 Shared controls use solid two-pixel border bands in both themes: raised buttons with two short corner cuts and a lower ledge, recessed fields, shallow card frames, and tabs with square bottoms. Nine-slice SVG frames keep the corner steps fixed without changing control dimensions or clipping editors, suggestions or keyboard focus. Selects retain native menus and keyboard behavior, with a decorative pixel arrow. High-contrast mode uses system colors and plain borders.
 
+The admin tabs join a shared workspace surface that spans the screen. The server menu and every tab's content sit inside it, with the menu remaining sticky on desktop. Content retains a readable maximum width; on mobile the tabs scroll in one row so the active tab stays connected to the surface. Initial loading uses the same outer layout.
+
 Border geometry is adapted from the [Aseprite Default Dark theme](https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme/dark) by David Capello, Ilija Melentijevic and Nicolas Desilets, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bouncer reconstructs the frames as SVG grids, recolors them to its themes, and adds card/editor variants; it does not bundle the source sprite sheet or icons.
 
 Member Lookup accepts Discord IDs, usernames and server nicknames without case sensitivity. Suggestions show the username and ID to distinguish shared names. Only an exact, unique name or a selected member resolves; Bouncer confirms current server membership before exposing saved information. Direct ID lookup remains available if Discord member search is unavailable.

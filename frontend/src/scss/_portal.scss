@@ -24,7 +24,8 @@
     #e1b85f,
     #edc86f,
     #ef9ca8,
-    #492d32
+    #492d32,
+    #333333
   );
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
@@ -58,7 +59,8 @@
     #e1b85f,
     #edc86f,
     #8e2635,
-    #f5d7dd
+    #f5d7dd,
+    #e0e0e0
   );
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
@@ -323,6 +325,48 @@ form > label {
   margin: auto;
   padding: 3rem 2rem;
 }
+app-root:has(app-admin) {
+  min-height: 100svh;
+  background: var(--ase-workspace);
+}
+.route-content:has(app-admin) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  padding: 3rem 0 0;
+  background: var(--ase-bg);
+  flex: 1;
+}
+app-admin {
+  display: flex;
+  flex: 1;
+  --workspace-gutter: 2rem;
+}
+app-admin .portal {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+app-admin .portal-heading,
+.workspace-tabs,
+.workspace-surface > .portal-layout {
+  width: 100%;
+  max-width: 132rem;
+  margin-inline: auto;
+  padding-inline: var(--workspace-gutter);
+}
+.workspace-surface {
+  flex: 1;
+  padding-block: 2.4rem 3rem;
+  background: var(--ase-workspace);
+  border-top: 2px solid #000;
+  box-shadow: inset 0 2px 0 var(--ase-workspace-highlight);
+}
+app-admin .welcome {
+  width: calc(100% - 4rem);
+}
 .app-footer {
   max-width: 132rem;
   margin: 2rem auto;
@@ -333,6 +377,12 @@ form > label {
   flex-wrap: wrap;
   color: var(--ase-dim);
   font-size: 1.6rem;
+}
+app-root:has(app-admin) .app-footer {
+  width: 100%;
+  max-width: 132rem;
+  margin: 0 auto;
+  padding-block: 2rem;
 }
 .portal-heading,
 .section-heading,
@@ -445,16 +495,11 @@ form > label {
   width: 45%;
   height: 3rem;
 }
-.placeholder-tabs,
 .placeholder-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
   margin-bottom: 1.5rem;
-}
-.placeholder-tabs .placeholder-line {
-  width: 10rem;
-  height: 4rem;
 }
 .placeholder-toolbar .placeholder-line {
   flex: 1;
@@ -501,13 +546,37 @@ form > label {
   border-image-source: var(--pixel-tab-pressed);
 }
 .tabs button.selected {
-  border-image-source: var(--pixel-tab-selected);
+  border-image-source: var(--pixel-tab-current);
 }
 .tabs button.selected:hover {
-  border-image-source: var(--pixel-tab-selected-hover);
+  border-image-source: var(--pixel-tab-current);
 }
 .tabs button.selected:active {
-  border-image-source: var(--pixel-tab-selected-pressed);
+  border-image-source: var(--pixel-tab-current);
+}
+.workspace-tabs {
+  position: relative;
+  z-index: 1;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  scroll-padding-inline: var(--workspace-gutter);
+  margin-bottom: -4px;
+  padding-block: 5px 4px;
+  border: 0;
+}
+.workspace-tabs button {
+  flex-shrink: 0;
+}
+.workspace-tabs button.selected {
+  // Extend the open bottom across the surface's outline and highlight.
+  border-image-outset: 0 0 4px;
+  color: var(--ase-text);
+}
+.workspace-tabs button.selected:focus-visible {
+  outline-offset: -6px;
 }
 .toolbar {
   display: flex;
@@ -811,6 +880,15 @@ app-verify .user-info-wrapper .user-tag .warn {
     background: CanvasText;
     forced-color-adjust: none;
   }
+  .workspace-surface {
+    background: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+  .workspace-tabs button.selected {
+    border-bottom-color: Canvas;
+    color: Highlight;
+  }
 }
 @media (max-width: 800px) {
   .brand-header {
@@ -822,6 +900,19 @@ app-verify .user-info-wrapper .user-tag .warn {
   }
   .route-content {
     padding: 2rem 1.2rem;
+  }
+  .route-content:has(app-admin) {
+    padding: 2rem 0 0;
+  }
+  app-admin {
+    --workspace-gutter: 1.2rem;
+  }
+  .workspace-surface {
+    padding-top: 1.8rem;
+  }
+  app-admin .welcome {
+    width: calc(100% - 2.4rem);
+    margin-inline: auto;
   }
   .portal-layout {
     grid-template-columns: 1fr;
