@@ -75,6 +75,26 @@ $pixel-panel: (
   'ESSSSSSSSSSSSE',
   '.EEEEEEEEEEEE.'
 );
+// The card reference uses the source editor_selected frame, with its center
+// filled using the editor face rather than the transparent source sprite.
+$pixel-card: (
+  'OEEEEEEEEEEEEEEO',
+  'EHHHHHHHHHHHHHHE',
+  'EHFEEEEEEEEEEFHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHEFFFFFFFFFFEHE',
+  'EHFEEEEEEEEEEFHE',
+  'EHHHHHHHHHHHHHHE',
+  'OEEEEEEEEEEEEEEO'
+);
 $pixel-tab: (
   '..EEEEEEEEE...',
   '.EFHHHHHHHFE..',
@@ -184,15 +204,8 @@ $pixel-server-button-selected: (
   $rows: $pixel-raised;
   @if $kind == 'inset' {
     $rows: $pixel-inset;
-  } @else if $kind == 'panel' or $kind == 'open' or $kind == 'lower' {
+  } @else if $kind == 'panel' {
     $rows: $pixel-panel;
-    @if $kind == 'open' {
-      $rows: list.set-nth($rows, 15, 'EHFFFFFFFFFFSE');
-      $rows: list.set-nth($rows, 16, 'EHFFFFFFFFFFSE');
-    } @else if $kind == 'lower' {
-      $rows: list.set-nth($rows, 1, 'EHFFFFFFFFFFSE');
-      $rows: list.set-nth($rows, 2, 'EHFFFFFFFFFFSE');
-    }
   }
   $colors: (
     'E': $edge,
@@ -276,12 +289,9 @@ $pixel-server-button-selected: (
       color.mix(black, $editor, 25%),
       'inset'
     )};
-  --pixel-panel: #{pixel-frame($face, $edge, $high, $low, 'panel')};
   --pixel-accent: #{pixel-frame($face, $accent, $high, $low, 'panel')};
   --pixel-choice: #{pixel-frame($face, $accent, $high, $low)};
   --pixel-choice-hover: #{pixel-frame($hover, $accent, $hover-high, $hover-low)};
-  --pixel-open: #{pixel-frame($face, $accent, $high, $low, 'open')};
-  --pixel-lower: #{pixel-frame($face, $accent, $high, $low, 'lower')};
   --pixel-danger: #{pixel-frame(
       $danger-bg,
       $danger,
@@ -365,6 +375,40 @@ $pixel-server-button-selected: (
     )};
   --ase-server-text: #{$text};
   --ase-server-placeholder: #{$button-face};
+}
+
+@function pixel-card-frame($inside, $band, $outside, $kind: 'closed') {
+  $rows: $pixel-card;
+  @if $kind == 'open' {
+    @for $row from 14 through 16 {
+      $rows: list.set-nth($rows, $row, 'EHEFFFFFFFFFFEHE');
+    }
+  } @else if $kind == 'lower' {
+    @for $row from 1 through 3 {
+      $rows: list.set-nth($rows, $row, 'EHEFFFFFFFFFFEHE');
+    }
+  }
+  @return pixel-grid(
+    $rows,
+    (
+      'E': #000,
+      'F': $inside,
+      'H': $band,
+      'O': $outside,
+    )
+  );
+}
+
+@mixin pixel-cards(
+  $inside: #202125,
+  $band: #41444a,
+  $outside: #333333,
+  $accent: #e1b85f
+) {
+  --pixel-card: #{pixel-card-frame($inside, $band, $outside)};
+  --pixel-card-highlight: #{pixel-card-frame($inside, $accent, $outside)};
+  --pixel-card-open: #{pixel-card-frame($inside, $accent, $outside, 'open')};
+  --pixel-card-lower: #{pixel-card-frame($inside, $accent, $outside, 'lower')};
 }
 
 @mixin pixel-surface($frame) {

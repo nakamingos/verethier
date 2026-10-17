@@ -38,6 +38,7 @@
     #2c2c30
   );
   @include pixel-server-menu();
+  @include pixel-cards();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
@@ -93,6 +94,7 @@
     #aaa,
     #2c2c30
   );
+  @include pixel-cards(#eee, #aaa, #e0e0e0);
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
   --ase-text: #2c2c30;
@@ -448,7 +450,9 @@ app-root:has(app-admin) .app-footer {
 .panel {
   padding: 2rem;
   border: 1px solid var(--ase-border);
-  @include pixel-surface(var(--pixel-panel));
+  @include pixel-surface(var(--pixel-card));
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
   margin-bottom: 1.5rem;
 }
 .welcome {
@@ -490,7 +494,8 @@ app-root:has(app-admin) .app-footer {
   display: flex;
   justify-content: flex-start;
   width: 100%;
-  margin-bottom: -2px;
+  // Share the bottom outline/shadow with the next button's top outline.
+  margin-bottom: -4px;
   padding-bottom: 0.85rem;
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
@@ -498,6 +503,12 @@ app-root:has(app-admin) .app-footer {
   color: var(--ase-server-text);
   overflow-wrap: anywhere;
   text-align: left;
+}
+.server-list > :is(button, .button):last-child {
+  margin-bottom: 0;
+}
+.server-list :is(button, .button):focus-visible {
+  outline-offset: -6px;
 }
 .server-list button:hover,
 .server-list .button:hover {
@@ -682,7 +693,7 @@ app-root:has(app-admin) .app-footer {
 }
 .rule-card.editing {
   z-index: 5;
-  border-image-source: var(--pixel-open);
+  border-image-source: var(--pixel-card-open);
 }
 .inline-rule-editor {
   position: absolute;
@@ -691,7 +702,9 @@ app-root:has(app-admin) .app-footer {
   right: -1px;
   border: 1px solid transparent;
   border-top: 0;
-  @include pixel-surface(var(--pixel-lower));
+  @include pixel-surface(var(--pixel-card-lower));
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
   filter: drop-shadow(0 3px 0 #0006);
 }
 .inline-rule-editor .rule-editor {
@@ -717,10 +730,10 @@ app-root:has(app-admin) .app-footer {
   @include pixel-surface(var(--pixel-inset));
 }
 .rule-card.group-highlight {
-  border-image-source: var(--pixel-accent);
+  border-image-source: var(--pixel-card-highlight);
 }
 .rule-card.group-highlight.editing {
-  border-image-source: var(--pixel-open);
+  border-image-source: var(--pixel-card-open);
 }
 .member-search {
   position: relative;
@@ -792,7 +805,7 @@ app-root:has(app-admin) .app-footer {
   grid-column: 1/-1;
 }
 .rule-editor {
-  border-image-source: var(--pixel-accent);
+  border-image-source: var(--pixel-card-highlight);
 }
 .notice {
   padding: 1.4rem 1.6rem;
