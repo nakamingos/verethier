@@ -21,6 +21,8 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  /** Addresses proven by a fresh signature in this run, including a link whose DB write is retrying. */
+  provenAddresses?: Map<string, string>;
   userAddresses?: Map<string, Promise<string[]>>;
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;
   walletBlocks?: Map<string, Promise<Set<string>>>;

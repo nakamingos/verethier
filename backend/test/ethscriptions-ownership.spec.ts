@@ -109,7 +109,7 @@ describe('Global Ethscription ownership', () => {
   });
   it('retains the role if either inventory fails, and removes it after a complete non-match', async () => {
     const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-10', 'ethscription') };
-    const db = { getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
+    const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };

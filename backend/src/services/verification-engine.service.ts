@@ -423,9 +423,10 @@ export class VerificationEngine {
   async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
     const rules = (await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
     if (!rules.length) return { status: 'failed', results: [] };
-    const addresses = await this.userAddressService.getUserAddresses(userId);
-    if (!addresses.length) return { status: 'failed', results: [] };
-    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), addresses[0], rules, context);
+    const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
+    const proven = context?.provenAddresses?.get(userId);
+    if (!addresses.length && !proven) return { status: 'failed', results: [] };
+    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), proven || addresses[0], rules, context);
     return {
       status: checked.results.some(result => result.isValid) ? 'passed'
         : checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',

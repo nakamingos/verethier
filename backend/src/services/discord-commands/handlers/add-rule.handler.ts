@@ -1,5 +1,4 @@
-import { normalizeRuleLabel } from '@/utils/inscription-rule.util';
-import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
+import { prepareRuleCriteria } from '../../rule-create.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { 
@@ -23,13 +22,10 @@ import { NftOwnershipService } from '../../nft-ownership.service';
 import { OrdinalsOwnershipService } from '../../ordinals-ownership.service';
 import { EthscriptionsOwnershipService } from '../../ethscriptions-ownership.service';
 import { NftRuleFields } from '@/models/verifier-role.interface';
-import { getNftNetworkId } from '@/utils/nft-network.util';
-import { nftTrait } from '@/utils/nft-trait.util';
-import { ordinalTrait } from '@/utils/ordinal-rule.util';
 import { RuleCreationAssetType } from '@/utils/rule-command.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { RuleConfirmationInteractionHandler } from '../interactions/rule-confirmation.interaction';
-import { validateRuleInputParams, formatAttribute, validateEthscriptionCriteria } from '../utils/rule-validation.util';
+import { formatAttribute, validateEthscriptionCriteria } from '../utils/rule-validation.util';
 import { findOrCreateRole } from '../utils/role-management.util';
 import { DuplicateRuleConfirmationInteractionHandler } from '../interactions/duplicate-rule-confirmation.interaction';
 
@@ -132,138 +128,23 @@ export class AddRuleHandler {
   } | null> {
     const channel = interaction.options.getChannel('channel') as TextChannel;
     const roleName = interaction.options.getString('role');
-    let slug = normalizeCollectionSlug(interaction.options.getString('slug')) || 'ALL';
-    if (slug === 'all') slug = 'ALL';
-    let attributeKey = normalizeCriteriaOption(interaction.options.getString('attribute_key'));
-    let attributeValue = normalizeCriteriaOption(interaction.options.getString('attribute_value'));
-    const minItems = interaction.options.getInteger('min_items') ?? 1;
-
     if (!channel || !roleName) {
-      await interaction.editReply({
-        content: AdminFeedback.simple('Channel and role are required.', true)
-      });
+      await interaction.editReply({ content: AdminFeedback.simple('Channel and role are required.', true) });
       return null;
     }
-
-    if (!Number.isSafeInteger(minItems) || minItems < 1) {
-      await interaction.editReply({ content: AdminFeedback.simple('Minimum items must be a positive whole number.', true) });
-      return null;
-    }
-    const assetType = selectedAssetType || interaction.options.getString('asset_type') || 'ethscription';
-    const contract = interaction.options.getString('contract_address');
-    const tokenIds = interaction.options.getString('token_ids');
-    const name = interaction.options.getString('collection_name');
-    const network = interaction.options.getString('network');
-    const inscriptionIds = interaction.options.getString('inscription_ids');
-    const inscriptionNumbers = interaction.options.getString('inscription_numbers');
-    const label = interaction.options.getString('label');
-    if (label != null && inscriptionIds == null && inscriptionNumbers == null) {
-      await interaction.editReply({content: AdminFeedback.simple('Use label with inscription_ids or inscription_numbers. Collection rules use slug.', true)});
-      return null;
-    }
-    if (assetType === 'erc20') {
-      try {
-        if (!this.tokensSvc) throw new Error('Token verification is not configured.');
-        if (!contract || slug !== 'ALL' || attributeKey !== 'ALL' || attributeValue !== 'ALL'
-          || tokenIds != null || name != null || inscriptionIds != null || inscriptionNumbers != null
-          || interaction.options.getInteger('min_items') != null) throw new Error('Token rules use contract_address, min_balance, and optional network. Leave collection, NFT, and inscription options empty.');
-        const minimum = interaction.options.getString('min_balance');
-        if (!minimum) throw new Error('Enter min_balance as a positive token amount, such as 1000 or 0.5.');
-        const assetFields = await this.tokensSvc.prepareRule(contract, minimum, getNftNetworkId(network || 'ethereum'));
-        return { channel, roleName, slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems: null, assetFields };
-      } catch (error) {
-        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the token contract.', true) });
-        return null;
-      }
-    }
-    if (inscriptionIds != null || inscriptionNumbers != null) {
-      try {
-        const ruleLabel = normalizeRuleLabel(label);
-        if (!['ordinal', 'ethscription'].includes(assetType)) throw new Error('Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.');
-        if (interaction.options.getString('slug') != null || attributeKey !== 'ALL' || attributeValue !== 'ALL'
-          || contract || tokenIds != null || name != null || network != null) {
-          throw new Error('Specific inscription rules use IDs or numbers with min_items. Leave slug, attributes, and NFT options empty.');
-        }
-        if (assetType === 'ordinal' && !this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
-        if (assetType === 'ethscription' && !this.ethscriptionsSvc) throw new Error('Specific Ethscription verification is not configured.');
-        const assetFields = assetType === 'ordinal'
-          ? await this.ordinalsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems)
-          : await this.ethscriptionsSvc.prepareInscriptionRule(inscriptionIds, inscriptionNumbers, minItems);
-        assetFields.rule_label = ruleLabel;
-        return { channel, roleName, slug: null, attributeKey: 'ALL', attributeValue: 'ALL', minItems, assetFields };
-      } catch (error) {
-        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the selected inscriptions. Please try again.', true) });
-        return null;
-      }
-    }
-    if (assetType === 'ordinal') {
-      if (contract || tokenIds != null || name != null || network != null) {
-        await interaction.editReply({ content: AdminFeedback.simple('Ordinals rules use slug, optional attributes, and min_items. Leave NFT network and contract options empty.', true) });
-        return null;
-      }
-      try {
-        if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
-        const trait = ordinalTrait({ attribute_key: attributeKey, attribute_value: attributeValue });
-        const assetFields = await this.ordinalsSvc.prepareRule(slug);
-        if (trait.enabled) assetFields.ordinal_trait_snapshot = await this.ordinalsSvc.prepareTraitSnapshot({
-          ...assetFields, attribute_key: trait.key, attribute_value: trait.value,
-        });
-        return { channel, roleName, slug: assetFields.slug, attributeKey: trait.key, attributeValue: trait.value, minItems, assetFields };
-      } catch (error) {
-        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the Ordinals collection. Please try again.', true) });
-        return null;
-      }
-    }
-    if (assetType === 'nft') {
-      if (!contract || slug !== 'ALL') {
-        await interaction.editReply({ content: AdminFeedback.simple('NFT rules require contract_address. Leave slug empty.', true) });
-        return null;
-      }
-      try {
-        const trait = nftTrait({ attribute_key: attributeKey, attribute_value: attributeValue });
-        const assetFields = await this.nftSvc.prepareRule(contract, tokenIds, name, getNftNetworkId(network || 'ethereum'));
-        if (assetFields.token_standard === 'erc721' && assetFields.token_ids && minItems !== 1) {
-          throw new Error('A specific ERC-721 token rule requires min_items:1.');
-        }
-        await this.nftSvc.validateTraits({ ...assetFields, attribute_key: trait.key, attribute_value: trait.value });
-        return { channel, roleName, slug, attributeKey: trait.key, attributeValue: trait.value, minItems, assetFields };
-      } catch (error) {
-        await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not check the NFT contract. Please try again.', true) });
-        return null;
-      }
-    }
-    if (assetType !== 'ethscription' || contract || tokenIds != null || name != null || network != null) {
-      await interaction.editReply({ content: AdminFeedback.simple('Use /setup add-nft-rule for network, contract_address, token_ids, or collection_name.', true) });
-      return null;
-    }
-
-    // Validate input combinations against database
     try {
-      const validationResult = await this.validateInputCombinations(slug, attributeKey, attributeValue);
-      if (!validationResult.isValid) {
-        await interaction.editReply({
-          embeds: [AdminFeedback.error(
-            '⚠️ Invalid Option Combination',
-            validationResult.message,
-            [
-              '**Discord Autocomplete Limitation**: Options may appear available even when they don\'t match',
-              '**Solution**: Select options in order (Collection → Attribute Key → Attribute Value)',
-              '**Tip**: Leave fields empty to allow ALL values for that criteria'
-            ]
-          )]
-        });
-        return null;
-      }
-      if (validationResult.criteria) ({ slug, attributeKey, attributeValue } = validationResult.criteria);
+      const fields = ['slug', 'attribute_key', 'attribute_value', 'contract_address', 'token_ids', 'collection_name',
+        'network', 'inscription_ids', 'inscription_numbers', 'label', 'min_balance'];
+      const input: any = { asset_type: selectedAssetType || interaction.options.getString('asset_type') || 'ethscription',
+        min_items: interaction.options.getInteger('min_items') ?? undefined };
+      for (const field of fields) input[field] = interaction.options.getString(field) ?? undefined;
+      const criteria = await prepareRuleCriteria(input, { data: this.dataSvc, nfts: this.nftSvc,
+        ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc });
+      return { channel, roleName, ...criteria, slug: input.asset_type === 'nft' ? 'ALL' : criteria.slug, assetFields: input.asset_type === 'ethscription' && !criteria.assetFields.inscription_criteria ? undefined : criteria.assetFields };
     } catch (error) {
-      this.logger.error('Error validating input combinations:', error);
-      await interaction.editReply({
-        content: AdminFeedback.simple('Error validating options. Please try again.', true)
-      });
+      await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not validate this rule. Please try again.', true) });
       return null;
     }
-
-    return { channel, roleName, slug, attributeKey, attributeValue, minItems };
   }
 
   /**

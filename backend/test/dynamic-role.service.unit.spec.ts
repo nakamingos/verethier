@@ -62,6 +62,7 @@ describe('DynamicRoleService', () => {
   beforeEach(async () => {
     const mockDbServiceValue = {
       getRuleById: jest.fn(),
+      getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()),
       getRoleMappings: jest.fn().mockImplementation(async () => {
         const rule = await mockDbServiceValue.getRuleById('rule123');
         return rule ? [{ ...rule, role_id: 'role123' }] : [];
@@ -129,6 +130,25 @@ describe('DynamicRoleService', () => {
     if (loggerSpy && loggerSpy.mockRestore) {
       loggerSpy.mockRestore();
     }
+  });
+
+  it('skips disabled servers on scheduled runs but permits explicit earned-role repair',async()=>{
+    mockDbService.getDisabledBackgroundServers.mockResolvedValue(new Set(['server123']));
+    mockDbService.getEarnedRoleAssignments.mockResolvedValue([mockActiveAssignment] as any);
+    mockDbService.getRuleById.mockResolvedValue({...mockRule,min_items:1} as any);
+    mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(true as any);
+    await service.performScheduledReverification();
+    expect(mockDiscordVerificationService.addUserRoleDynamic).not.toHaveBeenCalled();
+    expect(mockDiscordVerificationService.removeUserRole).not.toHaveBeenCalled();
+    await service.reverifyUserInServer('user123','server123');
+    expect(mockDiscordVerificationService.addUserRoleDynamic).toHaveBeenCalled();
+    expect(mockDbService.getEarnedRoleAssignments).toHaveBeenLastCalledWith({userId:'user123',serverId:'server123'});
+  });
+  it('fails closed when scheduled settings cannot be read',async()=>{
+    mockDbService.getDisabledBackgroundServers.mockRejectedValueOnce(new Error('database unavailable'));
+    await service.performScheduledReverification();
+    expect(mockDbService.getEarnedRoleAssignments).not.toHaveBeenCalled();
+    expect(mockDiscordVerificationService.removeUserRole).not.toHaveBeenCalled();
   });
 
   describe('performScheduledReverification', () => {

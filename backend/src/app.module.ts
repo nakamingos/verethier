@@ -1,3 +1,8 @@
+import { PortalThrottleGuard } from './portal/portal-throttle.guard';
+import { PortalController } from './portal/portal.controller';
+import { PortalAuthService } from './portal/portal-auth.service';
+import { PortalService } from './portal/portal.service';
+import { PortalJobsService } from './portal/portal-jobs.service';
 import { AuditLogHandler } from './services/discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './services/discord-commands/handlers/wallet-block.handler';
 import { WalletBlockService } from './services/wallet-block.service';
@@ -7,7 +12,7 @@ import { Erc20OwnershipService } from './services/erc20-ownership.service';
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AppController } from '@/app.controller';
@@ -95,7 +100,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
       limit: CONSTANTS.RATE_LIMIT.LONG.LIMIT,   // 100 requests max
     }]),
   ],
-  controllers: [AppController],
+  controllers: [AppController, PortalController],
   providers: [
     // Supabase client provider with optimized configuration
     {
@@ -125,11 +130,12 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Global security: Rate limiting protection
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: PortalThrottleGuard,
     },
 
     // Core application services
     AppService,
+    PortalAuthService, PortalService, PortalJobsService,
     Erc20OwnershipService,
 
     // Discord integration services

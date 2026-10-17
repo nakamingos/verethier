@@ -46,6 +46,8 @@ export class DiscordService implements OnModuleInit {
 
   /** The Discord.js client instance, null until initialized */
   private client: Client | null = null;
+
+  getBotClient(): Client | null { return this.client?.isReady() ? this.client : null; }
   
   /** REST API instance for Discord API calls */
   private rest = new REST({ version: '10' }).setToken(EnvironmentConfig.DISCORD_BOT_TOKEN!);
@@ -277,7 +279,9 @@ export class DiscordService implements OnModuleInit {
       // Handle slash command interactions (admin functions)
       if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
-        if (commandName === 'setup') {
+        if (commandName === 'help' || commandName === 'join') {
+          await this.handlePortalHelp(interaction, commandName === 'join');
+        } else if (commandName === 'setup') {
           await this.handleSetup(interaction);
         }
       }
@@ -316,6 +320,21 @@ export class DiscordService implements OnModuleInit {
    * 
    * @param interaction - The chat input command interaction from Discord
    */
+  async handlePortalHelp(interaction: ChatInputCommandInteraction, join: boolean): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!interaction.guildId) { await interaction.editReply('Use this command in a server.'); return; }
+    try {
+      const rules = await this.dbSvc.getRoleMappings(interaction.guildId);
+      const channels = [...new Set(rules.map(rule => rule.channel_id))];
+      const links = channels.map(id => `[<#${id}>](https://discord.com/channels/${interaction.guildId}/${id})`).join(' · ');
+      const origin = EnvironmentConfig.BASE_URL.replace(/\/$/, '');
+      await interaction.editReply({ content: join
+        ? channels.length ? `Open a verification channel and click **Request Verification**: ${links}` : 'This server has no verification rules yet. Ask an administrator to set up Bouncer.'
+        : `**Bouncer · Wallet verification**\nConnect your wallet and sign a message to check your collections. Bouncer never needs your seed phrase, private key, a payment, or token approval.\n\n${links || 'An administrator needs to add a verification rule.'}\n\n[Wallet help](${origin}/help) · [Control room / Check setup](${origin}/admin)`,
+        allowedMentions: {parse: []} });
+    } catch { await interaction.editReply('Could not load verification help. Please try again shortly.'); }
+  }
+
   async handleSetup(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
       // 🔒 SECURITY: Check for Administrator permissions
@@ -522,6 +541,8 @@ export class DiscordService implements OnModuleInit {
    */
   async registerSlashCommands(): Promise<void> {
     const commands = [
+      new SlashCommandBuilder().setName('help').setDescription('Bouncer verification help and server control room').setDMPermission(false),
+      new SlashCommandBuilder().setName('join').setDescription('Find this server’s Bouncer verification channels').setDMPermission(false),
       new SlashCommandBuilder()
         .setName('setup')
         .setDescription('Setup the bot for the first time or manage rules')

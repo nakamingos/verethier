@@ -46,6 +46,12 @@ export class DbService {
     return data;
   }
 
+  async getDisabledBackgroundServers(): Promise<Set<string>> {
+    const { data, error } = await this.supabase.from('verifier_server_settings').select('server_id').eq('background_checks_enabled', false);
+    if (error) throw new Error('Could not read background-check settings.');
+    return new Set((data || []).map(row => row.server_id));
+  }
+
   async replaceOrdinalCollection(slug: string, fetchedAt: string, items: OrdinalAttributeRow[]): Promise<boolean> {
     const { data, error } = await this.supabase.rpc('replace_ordinal_collection', {
       p_slug: slug, p_fetched_at: fetchedAt, p_items: items,
