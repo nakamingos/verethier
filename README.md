@@ -67,6 +67,8 @@ The Angular dev server runs on `http://localhost:4200`.
 
 The checked-in dev environment file, [env.dev.ts](frontend/src/env/env.dev.ts), currently points to `http://localhost:3200/api`.
 
+For mobile EVM wallet troubleshooting, open `/wallet-check`, start **Bouncer kit**, then use **Test signature** after connecting. It uses the same signing path as verification with a separate diagnostic message and never calls the verification API or changes Discord roles. **Copy connection details** includes signing stages, WalletConnect request-sent events, relay state, and page visibility, but excludes addresses, signatures, message payloads, pairing links, and session topics. WalletConnect's request-sent event does not confirm that the wallet displayed a prompt. The WalletConnect-only mode remains a connection test.
+
 ### 3. Local Supabase
 
 Migrations live in [backend/supabase/migrations](backend/supabase/migrations).

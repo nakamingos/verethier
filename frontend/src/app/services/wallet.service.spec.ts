@@ -127,10 +127,12 @@ describe('EVM wallet connection', () => {
       throw new Error(`Unexpected RPC method: ${method}`);
     });
     connectedWallet(request);
+    const stages: string[] = [];
     const typedData = { domain: { name: 'Bouncer', version: '1', chainId: 1 },
       types: { Verification: [{ name: 'Nonce', type: 'string' }] },
       primaryType: 'Verification', message: { Nonce: 'test-nonce' } };
-    expect(await service.signTypedMessage(typedData)).toEqual({ address: activeAddress, signature });
+    expect(await service.signTypedMessage(typedData, stage => stages.push(stage))).toEqual({ address: activeAddress, signature });
+    expect(stages).toEqual(['Checking connected account', 'Connected account ready', 'Requesting typed-data signature', 'Signature received']);
     expect(getAccount(config).address).toBe(activeAddress);
     const signingRequest = request.calls.allArgs().map(args => args[0]).find(args => args.method === 'eth_signTypedData_v4');
     expect(signingRequest.params[0]).toBe(activeAddress);

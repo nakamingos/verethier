@@ -209,13 +209,16 @@ export class WalletService implements OnDestroy {
     return activeAddress;
   }
 
-  async signTypedMessage(typedData: any): Promise<{
+  async signTypedMessage(typedData: any, record?: (stage: string) => void): Promise<{
     signature: `0x${string}`;
     address: `0x${string}`;
   }> {
+    record?.('Checking connected account');
     const address = await this.syncConnectedAccount();
-
+    record?.('Connected account ready');
+    record?.('Requesting typed-data signature');
     const signature = await signTypedData(this.config, typedData);
+    record?.('Signature received');
 
     return {
       signature,

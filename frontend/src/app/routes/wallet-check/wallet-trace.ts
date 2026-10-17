@@ -27,12 +27,28 @@ export function traceWalletClient(client: Pick<SignClient, 'core' | 'on' | 'off'
   bindings.forEach(([event, listener]) => relay.on(event, listener));
   const expired = () => record('Wallet proposal expired');
   const connected = () => record('Wallet session established');
+  const sent = ({ request }: { request: { method: string } }) => record(
+    request.method === 'eth_signTypedData_v4'
+      ? 'Typed-data signature request sent to relay'
+      : 'Wallet request sent to relay',
+  );
+  const requestExpired = () => record('Wallet request expired');
+  const deleted = () => record('Wallet session deleted');
+  const sessionExpired = () => record('Wallet session expired');
   client.on('proposal_expire', expired);
   client.on('session_connect', connected);
+  client.on('session_request_sent', sent);
+  client.on('session_request_expire', requestExpired);
+  client.on('session_delete', deleted);
+  client.on('session_expire', sessionExpired);
   record(relay.connected ? 'Relay already connected' : 'Relay not connected yet');
   return () => {
     bindings.forEach(([event, listener]) => relay.off(event, listener));
     client.off('proposal_expire', expired);
     client.off('session_connect', connected);
+    client.off('session_request_sent', sent);
+    client.off('session_request_expire', requestExpired);
+    client.off('session_delete', deleted);
+    client.off('session_expire', sessionExpired);
   };
 }

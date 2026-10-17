@@ -30,7 +30,14 @@ describe('Wallet connection diagnostics', () => {
     const stop = traceWalletClient(client, stage => stages.push(stage));
     listeners.get('relayer_message')!({ topic: 'private-topic', message: 'encrypted-payload' });
     listeners.get('session_connect')!({ session: { topic: 'private-session', accounts: ['private-address'] } });
-    expect(stages).toEqual(['Relay already connected', 'Encrypted relay message received', 'Wallet session established']);
+    listeners.get('session_request_sent')!({ topic: 'private-session', request: { method: 'eth_signTypedData_v4', params: ['private-address', 'private-message'] } });
+    listeners.get('session_request_sent')!({ request: { method: 'private-method', params: ['private-payload'] } });
+    listeners.get('session_request_expire')!({ id: 'private-request' });
+    listeners.get('session_delete')!({ topic: 'private-session' });
+    listeners.get('session_expire')!({ topic: 'private-session' });
+    expect(stages).toEqual(['Relay already connected', 'Encrypted relay message received', 'Wallet session established',
+      'Typed-data signature request sent to relay', 'Wallet request sent to relay', 'Wallet request expired',
+      'Wallet session deleted', 'Wallet session expired']);
     expect(stages.join(' ')).not.toContain('private');
     expect(stages.join(' ')).not.toContain('payload');
     stop();

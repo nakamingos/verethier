@@ -27,7 +27,7 @@ export class WalletCheckComponent implements OnDestroy {
 
   constructor(private route: ActivatedRoute, private injector: Injector, private zone: NgZone) {
     this.direct = route.snapshot.queryParamMap.get('mode') === 'direct';
-    this.record('Connection check v1; AppKit 1.8.24; Wagmi Core 2.22.1; WalletConnect 2.23.7');
+    this.record('Wallet check v2; AppKit 1.8.24; Wagmi Core 2.22.1; WalletConnect 2.23.7');
     this.record(this.direct ? 'Mode: WalletConnect only' : 'Mode: Bouncer AppKit');
     this.record(`Origin: ${window.location.origin}`);
     this.record(`Browser: ${navigator.userAgent}`);
@@ -150,6 +150,36 @@ export class WalletCheckComponent implements OnDestroy {
   }
 
   openRainbow(): void { this.record('Open Rainbow pressed'); }
+
+  async sign(): Promise<void> {
+    if (this.direct || !this.wallet || !this.connected() || this.busy()) return;
+    this.busy.set(true);
+    this.status.set('Waiting for the wallet signature');
+    this.record('Test signature pressed');
+    // This message cannot be submitted to Bouncer's verification API: it has a
+    // different domain/type and contains no Discord identity or verification nonce.
+    const challenge = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+    const typedData = {
+      domain: { name: 'Bouncer Wallet Check', version: '1', chainId: 1 },
+      types: { WalletCheck: [{ name: 'Purpose', type: 'string' }, { name: 'Challenge', type: 'string' }] },
+      primaryType: 'WalletCheck',
+      message: { Purpose: 'Test wallet signing only. This does not verify holdings or change Discord roles.', Challenge: challenge },
+    };
+    this.timer = setTimeout(() => {
+      this.record('45 seconds elapsed without a signature');
+      this.status.set('Still waiting for the signature. Return here and copy the details.');
+    }, 45000);
+    try {
+      await this.wallet.signTypedMessage(typedData, stage => this.record(stage));
+      this.status.set('Signature received successfully');
+    } catch (error) {
+      this.status.set('Signature failed');
+      this.record(`Signature error: ${safeWalletError(error)}`);
+    } finally {
+      clearTimeout(this.timer);
+      if (!this.destroyed) this.busy.set(false);
+    }
+  }
 
   async disconnect(): Promise<void> {
     if (this.busy()) return;
