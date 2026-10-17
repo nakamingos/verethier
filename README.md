@@ -148,6 +148,19 @@ node test/check-ordinals-live.cjs
 
 ## Docs
 
+For a one-time grant-only Ordinals catch-up, build the backend and run
+`yarn ordinals:grant-once --server SERVER_ID` from `backend`. It uses the linked
+Supabase CLI login and the live `DISCORD_BOT_TOKEN` from the environment or the
+gitignored local env files. Add `--data-workdir PATH` pointing to the separately
+linked holdings project to include combined Ethscription/Ordinals minimums.
+The default is a dry run; `--apply` rechecks eligibility and adds missing roles.
+Only saved Bitcoin users who are still server members are checked. Existing
+roles are preserved, new grants are tracked normally, and a private journal is
+written under `backend/temp` (or the path supplied with `--report`). This does
+not enable recurring grants or start another bot/scheduled role monitor.
+Use `--retry-report FILE` to retry only members with failed/unavailable checks
+in an earlier journal, or `--user DISCORD_USER_ID` to check one saved holder.
+
 - [Backend README](backend/README.md)
 - [Frontend README](frontend/README.md)
 

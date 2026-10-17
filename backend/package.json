@@ -18,7 +18,8 @@
     "test:verbose": "jest --verbose",
     "test:debug": "jest --verbose --no-cache",
     "ordnet:wallet": "node scripts/ordnet-wallet.cjs",
-    "ordnet:check": "node scripts/check-ordnet.cjs"
+    "ordnet:check": "node scripts/check-ordnet.cjs",
+    "ordinals:grant-once": "node scripts/grant-ordinal-roles.cjs"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^2.2.2",
