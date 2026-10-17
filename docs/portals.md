@@ -16,6 +16,8 @@ The admin tabs join a shared workspace surface that spans the screen. The server
 
 Tab frames preserve the source sprites' asymmetric right edge and flared active feet. The dark palette uses direct PNG pixel samples: active face `#333333`, active rim `#575757`, inactive face `#202125`, inactive rim `#2f3136`, and black outlines. The original theme definitions provide the strip color `#2c2c30`, active text `#c0c0c0`, and inactive text `#7d7d7d`. These values are explicit, not calculated tints.
 
+The server menu uses the source editor frame: a `#202125` interior, black inner border, `#2b2b2b` upper rim and `#575757` left/lower rim. Server controls use the tool-button frames with `#292b30` faces and `#41444a` bands; the current server has the lighter `#41444a` face and `#202125` lower inset of the selected tool. Selection is also marked with `aria-current`. Light mode uses the same geometry with its light palette.
+
 Border geometry is adapted from the [Aseprite Default Dark theme](https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme/dark) by David Capello, Ilija Melentijevic and Nicolas Desilets, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bouncer reconstructs the frames as SVG grids, recolors them to its themes, and adds card/editor variants; it does not bundle the source sprite sheet or icons.
 
 Member Lookup accepts Discord IDs, usernames and server nicknames without case sensitivity. Suggestions show the username and ID to distinguish shared names. Only an exact, unique name or a selected member resolves; Bouncer confirms current server membership before exposing saved information. Direct ID lookup remains available if Discord member search is unavailable.

@@ -132,6 +132,7 @@
             @if (server.installed) {
               <button
                 [class.selected]="selected === server.id"
+                [attr.aria-current]="selected === server.id ? 'true' : null"
                 (click)="select(server.id)"
                 [disabled]="busy"
               >

@@ -106,6 +106,80 @@ $pixel-tab-current: (
   'HFFFFFFFFFFFFFHH'
 );
 
+// Server menu and tool-button grids preserve the sampled source sprites.
+$pixel-server-panel: (
+  'OOOOOOOOOOOOOOOO',
+  'OOOSSSSSSSSSSOOO',
+  'OOSEEEEEEEEEESOO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHEFFFFFFFFFFEHO',
+  'OHHEEEEEEEEEEHHO',
+  'OOHHHHHHHHHHHHOO',
+  'OOOOOOOOOOOOOOOO'
+);
+$pixel-server-button: (
+  '.EEEEEEEEEEEEEE.',
+  'EFHHHHHHHHHHHHFE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EFHHHHHHHHHHHHFE',
+  'DEEEEEEEEEEEEEED',
+  '.DDDDDDDDDDDDDD.'
+);
+$pixel-server-button-hover: (
+  '.EEEEEEEEEEEEEE.',
+  'EFHHHHHHHHHHHHFE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EFHHHHHHHHHHHHFE',
+  'ESFFFFFFFFFFFFSE',
+  'DEEEEEEEEEEEEEED',
+  '.DDDDDDDDDDDDDD.'
+);
+$pixel-server-button-selected: (
+  '.EEEEEEEEEEEEEE.',
+  'EFHHHHHHHHHHHHFE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EHHHHHHHHHHHHHHE',
+  'EFHHHHHHHHHHHHFE',
+  'ESSSSSSSSSSSSSSE',
+  'DEEEEEEEEEEEEEED',
+  '.DDDDDDDDDDDDDD.'
+);
+
 @function pixel-frame($face, $edge, $highlight, $shade, $kind: 'raised') {
   $rows: $pixel-raised;
   @if $kind == 'inset' {
@@ -251,6 +325,46 @@ $pixel-tab-current: (
   --ase-tab-current-text: #{$current-text};
   --ase-tab-strip: #{$strip};
   --ase-workspace-highlight: #{$current-rim};
+}
+
+@mixin pixel-server-menu(
+  $outside: #333333,
+  $inside: #202125,
+  $rim: #2b2b2b,
+  $highlight: #575757,
+  $button-face: #292b30,
+  $button-band: #41444a,
+  $selected-shade: #202125,
+  $text: #c0c0c0
+) {
+  --pixel-server-panel: #{pixel-grid(
+      $pixel-server-panel,
+      (
+        'O': $outside,
+        'F': $inside,
+        'S': $rim,
+        'H': $highlight,
+        'E': #000,
+      )
+    )};
+  $button-colors: (
+    'E': #000,
+    'F': $button-face,
+    'H': $button-band,
+    'S': $selected-shade,
+    'D': #00000087,
+  );
+  --pixel-server-button: #{pixel-grid($pixel-server-button, $button-colors)};
+  --pixel-server-button-hover: #{pixel-grid(
+      $pixel-server-button-hover,
+      $button-colors
+    )};
+  --pixel-server-button-selected: #{pixel-grid(
+      $pixel-server-button-selected,
+      $button-colors
+    )};
+  --ase-server-text: #{$text};
+  --ase-server-placeholder: #{$button-face};
 }
 
 @mixin pixel-surface($frame) {
