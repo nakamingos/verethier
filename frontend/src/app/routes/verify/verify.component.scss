@@ -76,6 +76,11 @@
   &.bitcoin-wallets { height: 18rem; }
   &.unisat-launch { height: 23rem; }
 
+  @media (max-width: $mobile) {
+    &,
+    &:is(.bitcoin-wallets, .unisat-launch) { height: auto; }
+  }
+
   .bitcoin-wallet-choice {
     display: flex;
     flex-wrap: wrap;
@@ -195,6 +200,10 @@
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0);
+
+      @media (max-width: $mobile) {
+        position: relative;
+      }
     }
 
     &.disabled {
@@ -219,6 +228,6 @@
   font-size: 1.2rem;
 
   @media (max-width: $mobile) {
-    margin: 0;
+    margin: 1rem 0;
   }
 }

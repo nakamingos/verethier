@@ -227,12 +227,12 @@ const base = {
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
       await page
-        .getByRole('combobox', {name: /^Asset type/})
+        .getByRole('combobox', { name: /^Asset type/ })
         .selectOption('ordinal');
       await page.locator('#rule-1 .combined-badge').click();
       assert.equal(await page.locator('.rule-card').count(), 2);
       assert.equal(
-        await page.getByRole('combobox', {name: /^Asset type/}).isDisabled(),
+        await page.getByRole('combobox', { name: /^Asset type/ }).isDisabled(),
         true,
       );
       await page
@@ -242,10 +242,41 @@ const base = {
       await page.waitForFunction(() => document.activeElement?.id === 'rule-2');
       await page.getByRole('button', { name: 'Back to all rules' }).click();
       assert.equal(
-        await page.getByRole('combobox', {name: /^Asset type/}).inputValue(),
+        await page.getByRole('combobox', { name: /^Asset type/ }).inputValue(),
         'ordinal',
       );
-      await page.getByRole('combobox', {name: /^Asset type/}).selectOption('');
+      await page
+        .getByRole('combobox', { name: /^Asset type/ })
+        .selectOption('');
+      const cardHeights = await page
+        .locator('.rule-card')
+        .evaluateAll((cards) =>
+          cards.map((card) => card.getBoundingClientRect().height),
+        );
+      assert.ok(
+        Math.max(...cardHeights) - Math.min(...cardHeights) < 1,
+        'all rule cards should have equal heights',
+      );
+      await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Edit', exact: true })
+        .click();
+      await page
+        .getByRole('region', { name: 'Edit rule 1', exact: true })
+        .waitFor();
+      const mutationsBeforeCollapse = requests.filter(
+        (request) => request.method === 'POST',
+      ).length;
+      await page
+        .locator('#rule-1')
+        .getByRole('button', { name: 'Collapse', exact: true })
+        .click();
+      assert.equal(await page.locator('#edit-rule-1').count(), 0);
+      assert.equal(
+        requests.filter((request) => request.method === 'POST').length,
+        mutationsBeforeCollapse,
+        'collapsing an unchanged editor must not submit',
+      );
       await page
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
@@ -255,17 +286,22 @@ const base = {
         .waitFor();
       assert.equal(await page.locator('#rule-1 #edit-rule-1').count(), 1);
       const editor = await page.locator('#edit-rule-1').boundingBox();
-      const below = await page.locator('#rule-3').boundingBox();
-      if (width > 800)
-        assert.ok(
-          editor.y + editor.height > below.y,
-          'editor should overlap the next row',
+      const below = await page
+        .locator(width > 800 ? '#rule-3' : '#rule-2')
+        .boundingBox();
+      assert.ok(
+        editor.y + editor.height > below.y,
+        'editor should overlap the next row',
+      );
+      const expandedHeights = await page
+        .locator('.rule-card')
+        .evaluateAll((cards) =>
+          cards.map((card) => card.getBoundingClientRect().height),
         );
-      else
-        assert.ok(
-          editor.y + editor.height <= below.y + 1,
-          'mobile editor should expand within its card',
-        );
+      assert.ok(
+        Math.max(...expandedHeights) - Math.min(...expandedHeights) < 1,
+        'opening the editor must keep card heights equal',
+      );
       await page.screenshot({
         path: `${artifacts}/inline-editor-${width}.png`,
         fullPage: true,
@@ -284,7 +320,7 @@ const base = {
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
       await page
-        .getByRole('combobox', {name: /^Discord role/})
+        .getByRole('combobox', { name: /^Discord role/ })
         .selectOption('666666666666666666');
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByText('Comrade → New Comrade', { exact: true }).waitFor();
@@ -304,7 +340,9 @@ const base = {
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
-      await page.getByRole('combobox', {name: /^Discord role/}).selectOption('');
+      await page
+        .getByRole('combobox', { name: /^Discord role/ })
+        .selectOption('');
       await page
         .getByLabel('New role name', { exact: true })
         .fill('Created role');
