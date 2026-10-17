@@ -319,6 +319,12 @@ form > label {
   border-bottom: 1px solid var(--ase-border);
   background: var(--ase-face);
 }
+.brand-header .brand-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  white-space: nowrap;
+}
 .brand-header a.brand {
   font-family: Pizzascript, Blockscript, monospace;
   font-size: 2.8rem;
