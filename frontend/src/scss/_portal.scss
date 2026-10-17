@@ -20,7 +20,7 @@
     #2c2c30,
     #1a1a1d,
     #535557,
-    #0d0d0d,
+    #000,
     #e1b85f,
     #edc86f,
     #ef9ca8,
@@ -176,13 +176,13 @@ button:disabled {
   cursor: wait;
 }
 button[aria-pressed='true']:not(.primary):not(.selected) {
-  border-image-source: var(--pixel-accent);
+  border-image-source: var(--pixel-choice);
 }
 button[aria-pressed='true']:not(.primary):not(.selected):hover {
-  border-image-source: var(--pixel-accent-hover);
+  border-image-source: var(--pixel-choice-hover);
 }
 button[aria-pressed='true']:not(.primary):not(.selected):active {
-  border-image-source: var(--pixel-accent-pressed);
+  border-image-source: var(--pixel-choice-pressed);
 }
 :focus-visible {
   outline: 2px solid var(--ase-selected);
@@ -376,7 +376,7 @@ form > label {
 .panel {
   padding: 2rem;
   border: 1px solid var(--ase-border);
-  @include pixel-surface(var(--pixel-face));
+  @include pixel-surface(var(--pixel-panel));
   margin-bottom: 1.5rem;
 }
 .welcome {
@@ -490,6 +490,24 @@ form > label {
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--ase-border);
+}
+.tabs button {
+  border-image-source: var(--pixel-tab);
+}
+.tabs button:hover {
+  border-image-source: var(--pixel-tab-hover);
+}
+.tabs button:active {
+  border-image-source: var(--pixel-tab-pressed);
+}
+.tabs button.selected {
+  border-image-source: var(--pixel-tab-selected);
+}
+.tabs button.selected:hover {
+  border-image-source: var(--pixel-tab-selected-hover);
+}
+.tabs button.selected:active {
+  border-image-source: var(--pixel-tab-selected-pressed);
 }
 .toolbar {
   display: flex;

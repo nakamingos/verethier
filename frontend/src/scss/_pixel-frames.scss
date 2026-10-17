@@ -1,4 +1,5 @@
 @use 'sass:color';
+@use 'sass:list';
 @use 'sass:string';
 
 @function pixel-replace($text, $search, $replacement) {
@@ -14,23 +15,136 @@
   @return $text;
 }
 
-// A filled nine-slice frame keeps six-pixel corner steps crisp at any size.
-// It paints the background too, leaving the cut corners genuinely transparent.
-// Unlike clipping the element, it preserves focus outlines and overflowing editors.
-@function pixel-frame($face, $edge, $highlight, $shade, $join: null) {
-  $outer: '6,0 18,0 18,2 20,2 20,4 22,4 22,6 24,6 24,18 22,18 22,20 20,20 20,22 18,22 18,24 6,24 6,22 4,22 4,20 2,20 2,18 0,18 0,6 2,6 2,4 4,4 4,2 6,2';
-  $bevel: '7,1 17,1 17,3 19,3 19,5 21,5 21,7 23,7 23,17 21,17 21,19 19,19 19,21 17,21 17,23 7,23 7,21 5,21 5,19 3,19 3,17 1,17 1,7 3,7 3,5 5,5 5,3 7,3';
-  $inner: '8,2 16,2 16,4 18,4 18,6 20,6 20,8 22,8 22,16 20,16 20,18 18,18 18,20 16,20 16,22 8,22 8,20 6,20 6,18 4,18 4,16 2,16 2,8 4,8 4,6 6,6 6,4 8,4';
-  @if $join == 'bottom' {
-    $outer: '6,0 18,0 18,2 20,2 20,4 22,4 22,6 24,6 24,24 0,24 0,6 2,6 2,4 4,4 4,2 6,2';
-    $bevel: '7,1 17,1 17,3 19,3 19,5 21,5 21,7 23,7 23,24 1,24 1,7 3,7 3,5 5,5 5,3 7,3';
-    $inner: '8,2 16,2 16,4 18,4 18,6 20,6 20,8 22,8 22,24 2,24 2,8 4,8 4,6 6,6 6,4 8,4';
-  } @else if $join == 'top' {
-    $outer: '0,0 24,0 24,18 22,18 22,20 20,20 20,22 18,22 18,24 6,24 6,22 4,22 4,20 2,20 2,18 0,18';
-    $bevel: '1,0 23,0 23,17 21,17 21,19 19,19 19,21 17,21 17,23 7,23 7,21 5,21 5,19 3,19 3,17 1,17';
-    $inner: '2,0 22,0 22,16 20,16 20,18 18,18 18,20 16,20 16,22 8,22 8,20 6,20 6,18 4,18 4,16 2,16';
+// Geometric frames adapted from Aseprite's default dark theme (CC BY 4.0).
+// David Capello, Ilija Melentijevic and Nicolas Desilets.
+// https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme/dark
+// Rebuilt as recolorable SVGs; see docs/portals.md for attribution.
+// Each grid cell is two CSS pixels. E = outline, F = face, H/S = hard
+// highlight/shade bands, K = inset corner, D = lower ledge, . = transparent.
+$pixel-raised: (
+  '..EEEEEEEEEE..',
+  '.EFHHHHHHHHFE.',
+  'EFHFFFFFFFFHFE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHHFFFFFFFFHHE',
+  'ESHHHHHHHHHHSE',
+  '.ESSSSSSSSSSE.',
+  '..EEEEEEEEEE..',
+  '..DDDDDDDDDD..'
+);
+$pixel-inset: (
+  '.HHHHHHHHHHHH.',
+  'HSEEEEEEEEEESH',
+  'HEKSSSSSSSSKEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HESFFFFFFFFSEH',
+  'HEFSSSSSSSSFEH',
+  'HSEEEEEEEEEESH',
+  '.HHHHHHHHHHHH.'
+);
+$pixel-panel: (
+  '.EEEEEEEEEEEE.',
+  'EHHHHHHHHHHHHE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'EHFFFFFFFFFFSE',
+  'ESSSSSSSSSSSSE',
+  '.EEEEEEEEEEEE.'
+);
+$pixel-tab: (
+  '..EEEEEEEEEE..',
+  '.EFHHHHHHHHFE.',
+  'EFHFFFFFFFFHFE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'ESSSSSSSSSSSSE',
+  'EEEEEEEEEEEEEE'
+);
+
+@function pixel-frame($face, $edge, $highlight, $shade, $kind: 'raised') {
+  $rows: $pixel-raised;
+  @if $kind == 'inset' {
+    $rows: $pixel-inset;
+  } @else if $kind == 'tab' {
+    $rows: $pixel-tab;
+  } @else if $kind == 'panel' or $kind == 'open' or $kind == 'lower' {
+    $rows: $pixel-panel;
+    @if $kind == 'open' {
+      $rows: list.set-nth($rows, 15, 'EHFFFFFFFFFFSE');
+      $rows: list.set-nth($rows, 16, 'EHFFFFFFFFFFSE');
+    } @else if $kind == 'lower' {
+      $rows: list.set-nth($rows, 1, 'EHFFFFFFFFFFSE');
+      $rows: list.set-nth($rows, 2, 'EHFFFFFFFFFFSE');
+    }
   }
-  $svg: "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='crispEdges'><defs><linearGradient id='b' x2='0' y2='1'><stop stop-color='#{$highlight}'/><stop offset='1' stop-color='#{$shade}'/></linearGradient></defs><polygon fill='#{$edge}' points='#{$outer}'/><polygon fill='url(%23b)' points='#{$bevel}'/><polygon fill='#{$face}' points='#{$inner}'/></svg>";
+  $colors: (
+    'E': $edge,
+    'F': $face,
+    'H': $highlight,
+    'S': $shade,
+    'K': color.mix(black, $face, 55%),
+    'D': #0006,
+  );
+  $svg: "<svg xmlns='http://www.w3.org/2000/svg' width='28' height='32' viewBox='0 0 14 16' shape-rendering='crispEdges'>";
+  @each $symbol, $fill in $colors {
+    $path: '';
+    @for $y from 1 through list.length($rows) {
+      $row: list.nth($rows, $y);
+      @if string.length($row) != 14 {
+        @error 'Pixel frame rows must be 14 cells wide.';
+      }
+      $x: 1;
+      @while $x <= 14 {
+        @if string.slice($row, $x, $x) == $symbol {
+          $start: $x;
+          @while $x <= 14 and string.slice($row, $x, $x) == $symbol {
+            $x: $x + 1;
+          }
+          $run: $x - $start;
+          $path: $path + 'M#{$start - 1} #{$y - 1}h#{$run}v1h-#{$run}z';
+        } @else {
+          $x: $x + 1;
+        }
+      }
+    }
+    @if $path != '' {
+      $svg: $svg + "<path fill='#{$fill}' d='#{$path}'/>";
+    }
+  }
+  $svg: $svg + '</svg>';
   $svg: pixel-replace($svg, '#', '%23');
   $svg: pixel-replace($svg, '<', '%3C');
   $svg: pixel-replace($svg, '>', '%3E');
@@ -47,50 +161,75 @@
   $danger,
   $danger-bg
 ) {
-  $high: color.mix(white, $face, 22%);
-  $low: color.mix(black, $face, 50%);
+  $high: color.mix(white, $face, 11%);
+  $low: color.mix(black, $face, 25%);
+  $hover-high: color.mix(white, $hover, 11%);
+  $hover-low: color.mix(black, $hover, 25%);
+  $gold-high: color.mix(white, $accent, 35%);
+  $gold-low: color.mix(black, $accent, 35%);
+  $gold-hover-high: color.mix(white, $accent-hover, 35%);
+  $gold-hover-low: color.mix(black, $accent-hover, 35%);
   --pixel-face: #{pixel-frame($face, $edge, $high, $low)};
-  --pixel-hover: #{pixel-frame(
-      $hover,
-      $edge,
-      color.mix(white, $hover, 22%),
-      color.mix(black, $hover, 50%)
-    )};
+  --pixel-hover: #{pixel-frame($hover, $edge, $hover-high, $hover-low)};
   --pixel-pressed: #{pixel-frame($face, $edge, $low, $high)};
-  --pixel-primary: #{pixel-frame(
-      $accent,
-      $edge,
-      color.mix(white, $accent, 35%),
-      color.mix(black, $accent, 35%)
-    )};
+  --pixel-primary: #{pixel-frame($accent, $edge, $gold-high, $gold-low)};
   --pixel-primary-hover: #{pixel-frame(
       $accent-hover,
       $edge,
-      color.mix(white, $accent-hover, 35%),
-      color.mix(black, $accent-hover, 35%)
+      $gold-hover-high,
+      $gold-hover-low
     )};
-  --pixel-primary-pressed: #{pixel-frame(
-      $accent,
-      $edge,
-      color.mix(black, $accent, 35%),
-      color.mix(white, $accent, 35%)
-    )};
+  --pixel-primary-pressed: #{pixel-frame($accent, $edge, $gold-low, $gold-high)};
   --pixel-inset: #{pixel-frame(
       $editor,
       $edge,
-      color.mix(black, $editor, 55%),
-      color.mix(white, $editor, 18%)
+      $high,
+      color.mix(black, $editor, 25%),
+      'inset'
     )};
-  --pixel-accent: #{pixel-frame($face, $accent, $high, $low)};
-  --pixel-accent-hover: #{pixel-frame($hover, $accent, $high, $low)};
-  --pixel-accent-pressed: #{pixel-frame($face, $accent, $low, $high)};
-  --pixel-open: #{pixel-frame($face, $accent, $high, $low, 'bottom')};
-  --pixel-lower: #{pixel-frame($face, $accent, $high, $low, 'top')};
+  --pixel-panel: #{pixel-frame($face, $edge, $high, $low, 'panel')};
+  --pixel-accent: #{pixel-frame($face, $accent, $high, $low, 'panel')};
+  --pixel-choice: #{pixel-frame($face, $accent, $high, $low)};
+  --pixel-choice-hover: #{pixel-frame($hover, $accent, $hover-high, $hover-low)};
+  --pixel-choice-pressed: #{pixel-frame($face, $accent, $low, $high)};
+  --pixel-open: #{pixel-frame($face, $accent, $high, $low, 'open')};
+  --pixel-lower: #{pixel-frame($face, $accent, $high, $low, 'lower')};
   --pixel-danger: #{pixel-frame(
       $danger-bg,
       $danger,
-      color.mix(white, $danger-bg, 18%),
-      color.mix(black, $danger-bg, 40%)
+      color.mix(white, $danger-bg, 11%),
+      color.mix(black, $danger-bg, 25%),
+      'panel'
+    )};
+  --pixel-tab: #{pixel-frame($face, $edge, $high, $low, 'tab')};
+  --pixel-tab-hover: #{pixel-frame(
+      $hover,
+      $edge,
+      $hover-high,
+      $hover-low,
+      'tab'
+    )};
+  --pixel-tab-pressed: #{pixel-frame($face, $edge, $low, $high, 'tab')};
+  --pixel-tab-selected: #{pixel-frame(
+      $accent,
+      $edge,
+      $gold-high,
+      $gold-low,
+      'tab'
+    )};
+  --pixel-tab-selected-hover: #{pixel-frame(
+      $accent-hover,
+      $edge,
+      $gold-hover-high,
+      $gold-hover-low,
+      'tab'
+    )};
+  --pixel-tab-selected-pressed: #{pixel-frame(
+      $accent,
+      $edge,
+      $gold-low,
+      $gold-high,
+      'tab'
     )};
 }
 
@@ -100,7 +239,7 @@
   border-radius: 0;
   box-shadow: none;
   border-image-source: $frame;
-  border-image-slice: 8 fill;
-  border-image-width: 8px;
+  border-image-slice: 8 8 12 8 fill;
+  border-image-width: 8px 8px 12px 8px;
   border-image-repeat: stretch;
 }
