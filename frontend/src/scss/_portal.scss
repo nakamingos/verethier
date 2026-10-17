@@ -384,8 +384,9 @@ form > label {
 .rule-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 1.5rem;
-  align-items: start;
+  align-items: stretch;
 }
 .rule-card {
   margin: 0;
@@ -609,16 +610,6 @@ app-verify .user-info-wrapper .user-tag .warn {
   font-size: 1.2rem;
 }
 @media (max-width: 800px) {
-  .inline-rule-editor {
-    position: static;
-    margin: 1.5rem -1.5rem -1.5rem;
-    width: calc(100% + 3rem);
-    border-width: 1px 0 0;
-    box-shadow: none;
-  }
-  .rule-card.editing {
-    border-bottom-color: var(--ase-selected);
-  }
   .brand-header {
     padding: 1rem 1.2rem;
     flex-wrap: wrap;
@@ -678,11 +669,14 @@ app-verify .user-info-wrapper .user-tag .warn {
   app-verify .steps-wrapper .step .content {
     max-width: calc(100% - 4.5rem);
   }
-  app-verify .steps-wrapper {
-    min-height: 32rem;
+  // Let the visible step size the mobile panel so feedback follows its controls.
+  app-verify .steps-wrapper,
+  app-verify .steps-wrapper.bitcoin-wallets,
+  app-verify .steps-wrapper.unisat-launch {
+    min-height: 0;
   }
-  app-verify .steps-wrapper.bitcoin-wallets {
-    min-height: 40rem;
+  app-verify .steps-wrapper .step:not(.active) {
+    visibility: hidden;
   }
   app-verify .steps-wrapper .step .actions button {
     font-size: 1.4rem;

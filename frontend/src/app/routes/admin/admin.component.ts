@@ -272,6 +272,11 @@ export class AdminComponent implements OnInit, OnDestroy {
     };
   }
   edit(rule: any) {
+    if (this.busy) return;
+    if (this.editor?.id === rule.id) {
+      this.closeEditor();
+      return;
+    }
     this.editor = rule;
     this.editRoleId = rule.role_id;
     this.editRoleName = '';

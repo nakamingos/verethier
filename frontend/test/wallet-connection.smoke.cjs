@@ -114,7 +114,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
   });
   await page.goto(origin + entry);
   if (entry.startsWith('/wallet-check')) await page.getByRole('heading', { name: 'Wallet connection check' }).waitFor();
-  else await page.getByText('Connect your wallet', { exact: true }).waitFor();
+  else await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
   return { context, page, errors, consoleErrors, socketMethods, apiRequests, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
 }
 
@@ -139,7 +139,7 @@ async function restorePreviousWalletConnectConnection(page) {
     ] }));
   }, account.address);
   await page.reload();
-  await page.getByText('Connect your wallet', { exact: true }).waitFor();
+  await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
 }
 
 (async () => {
@@ -162,7 +162,7 @@ async function restorePreviousWalletConnectConnection(page) {
       // A second visit reuses the approved wallet but still requires a signature.
       const nextNonce = 'b'.repeat(64);
       await page.goto(origin + '/verify/' + nextNonce);
-      await page.getByText('Connect your wallet', { exact: true }).waitFor();
+      await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
       assert.equal(test.signatures, 1, 'Restoring a session must not sign automatically');
       await page.getByRole('button', { name: 'Sign Message', exact: true }).click();
       await page.locator('.step-3.active').waitFor();
@@ -250,7 +250,7 @@ async function restorePreviousWalletConnectConnection(page) {
       if (previousConnection) await restorePreviousWalletConnectConnection(page);
       else {
         await page.reload();
-        await page.getByText('Connect your wallet', { exact: true }).waitFor();
+        await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
       }
       await page.locator('.step-1 .actions button').click();
       const rainbowRow = page.locator('w3m-list-wallet[name="Rainbow"]');

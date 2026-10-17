@@ -576,7 +576,7 @@
                       [attr.aria-expanded]="editor?.id === rule.id"
                       [attr.aria-controls]="'edit-rule-' + rule.id"
                     >
-                      Edit</button
+                      {{ editor?.id === rule.id ? 'Collapse' : 'Edit' }}</button
                     ><button
                       class="danger-text"
                       (click)="remove(rule)"
