@@ -87,6 +87,19 @@ describe('DataService', () => {
     jest.clearAllMocks();
   });
 
+  it('counts all matching items even when their trait key capitalization differs', async () => {
+    queueQuery({data: [
+      {hashId: '1', attributes_new: {values: {EyeColor: 'Gold Crown'}}},
+      {hashId: '2', attributes_new: {values: {EYECOLOR: 'GOLD CROWN'}}},
+      {hashId: '3', attributes_new: {values: {eyecolor: 'Silver Crown'}}},
+    ], error: null});
+    expect(await service.checkAssetOwnershipWithCriteria('0x123', 'pizza-comrades', 'eyecolor', 'gold crown', 1)).toBe(2);
+  });
+  it('offers values from arbitrary mixed-case keys without changing their spelling', async () => {
+    queueQuery({data: [{values: {EyeColor: 'Gold Crown'}}, {values: {eYeCoLoR: 'Silver Crown'}}], error: null});
+    expect(await service.getAllAttributeValues('eyecolor', 'pizza-comrades')).toEqual(['Gold Crown', 'Silver Crown']);
+  });
+
   it('filters by attribute key when the rule is category-only', async () => {
     const query = queueQuery({
       data: [

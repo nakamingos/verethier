@@ -127,6 +127,7 @@ const mockDataService = {
 };
 
 const mockCacheService = {
+  getAttributeKeys: jest.fn().mockResolvedValue([]),
   getAttributeValues: jest.fn().mockResolvedValue([]),
   getAllAttributeValues: jest.fn().mockResolvedValue([]),
   cacheAllCollectionData: jest.fn().mockResolvedValue(undefined),
@@ -798,6 +799,38 @@ describe('DiscordService - Enhanced Tests', () => {
       const input = interaction();
       await service.handleNftAttributeAutocomplete(input);
       expect(input.respond.mock.calls[0][0]).toHaveLength(25);
+    });
+  });
+
+  describe('collection input normalization in autocomplete', () => {
+    it('finds saved Ordinals collections when the search contains capitals and repeated spaces', async () => {
+      mockDbService.getKnownOrdinalCollectionSlugs.mockResolvedValue(['pizza-comrades', 'yonder']);
+      const interaction = {options: {getFocused: () => ' PIZZA   COMRADES '}, respond: jest.fn()};
+      await service.handleOrdinalSlugAutocomplete(interaction as any);
+      expect(interaction.respond).toHaveBeenCalledWith([{name: 'pizza-comrades', value: 'pizza-comrades'}]);
+    });
+    it('normalizes the Ordinals collection context before requesting trait suggestions', async () => {
+      mockOrdinalsService.suggestions.mockResolvedValue(['Gold Crown']);
+      const values = {slug: ' PIZZA   COMRADES ', attribute_key: 'Category'};
+      const interaction = {options: {getFocused: () => ({name: 'attribute_value', value: 'gold crown'}), getString: key => values[key]}, respond: jest.fn()};
+      await service.handleOrdinalAttributeAutocomplete(interaction as any);
+      expect(mockOrdinalsService.suggestions).toHaveBeenCalledWith('pizza-comrades', 'Category');
+      expect(interaction.respond).toHaveBeenCalledWith([{name: 'Gold Crown', value: 'Gold Crown'}]);
+    });
+    it('normalizes Ethscription searches and resolves the canonical slug for trait suggestions', async () => {
+      (service as any).isInitialized = true;
+      const previous = await mockDataService.getAllSlugs();
+      mockDataService.getAllSlugs.mockResolvedValue(['Pizza-Comrades']);
+      try {
+        const interaction = {options: {getFocused: () => ' PIZZA   COMRADES ', getString: () => ' PIZZA   COMRADES '}, respond: jest.fn()};
+        await service.handleSlugAutocomplete(interaction as any);
+        expect(interaction.respond).toHaveBeenCalledWith([{name: 'Pizza-Comrades', value: 'Pizza-Comrades'}]);
+        mockCacheService.getAttributeKeys.mockResolvedValue(['EyeColor']);
+        interaction.options.getFocused = () => '';
+        await service.handleAttributeKeyAutocomplete(interaction as any);
+        expect(mockCacheService.getAttributeKeys).toHaveBeenCalledWith('Pizza-Comrades', mockDataService);
+        expect(interaction.respond).toHaveBeenLastCalledWith([{name: 'EyeColor', value: 'EyeColor'}]);
+      } finally {mockDataService.getAllSlugs.mockResolvedValue(previous);}
     });
   });
 

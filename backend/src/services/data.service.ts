@@ -308,30 +308,14 @@ export class DataService {
       // Track frequency of each attribute value
       const valueFrequency = new Map<string, number>();
       
-      // Generate possible key variations for case-insensitive matching
-      // Use Set to deduplicate variations (e.g., "Background" might appear twice)
-      const keyVariations = Array.from(new Set([
-        attributeKey,
-        attributeKey.charAt(0).toUpperCase() + attributeKey.slice(1).toLowerCase(),
-        attributeKey.toLowerCase(),
-        attributeKey.toUpperCase()
-      ]));
-
       (data || []).forEach(item => {
-        if (item.values && typeof item.values === 'object') {
-          // Track if we've already counted this item for this attribute to prevent double counting
-          let foundValue = false;
-          
-          keyVariations.forEach(keyVariation => {
-            if (!foundValue && item.values.hasOwnProperty(keyVariation)) {
-              const value = item.values[keyVariation];
-              if (value !== null && value !== undefined) {
-                const valueStr = value.toString();
-                valueFrequency.set(valueStr, (valueFrequency.get(valueStr) || 0) + 1);
-                foundValue = true; // Prevent counting the same item multiple times
-              }
-            }
-          });
+        const attributes = item.values;
+        if (!attributes || typeof attributes !== 'object') return;
+        const key = Object.keys(attributes).find(key => key.toLowerCase() === attributeKey.toLowerCase());
+        const value = key === undefined ? null : attributes[key];
+        if (value !== null && value !== undefined) {
+          const text = value.toString();
+          valueFrequency.set(text, (valueFrequency.get(text) || 0) + 1);
         }
       });
 
@@ -444,30 +428,14 @@ export class DataService {
       // Extract all unique values without frequency counting
       const allUniqueValues = new Set<string>();
       
-      // Generate possible key variations for case-insensitive matching
-      const keyVariations = Array.from(new Set([
-        attributeKey,
-        attributeKey.charAt(0).toUpperCase() + attributeKey.slice(1).toLowerCase(),
-        attributeKey.toLowerCase(),
-        attributeKey.toUpperCase()
-      ]));
-
       allData.forEach(item => {
-        if (item.values && typeof item.values === 'object') {
-          let foundValue = false;
-          
-          keyVariations.forEach(keyVariation => {
-            if (!foundValue && item.values.hasOwnProperty(keyVariation)) {
-              const value = item.values[keyVariation];
-              if (value !== null && value !== undefined) {
-                const valueStr = value.toString().trim();
-                if (valueStr.length > 0) {
-                  allUniqueValues.add(valueStr);
-                  foundValue = true;
-                }
-              }
-            }
-          });
+        const attributes = item.values;
+        if (!attributes || typeof attributes !== 'object') return;
+        const key = Object.keys(attributes).find(key => key.toLowerCase() === attributeKey.toLowerCase());
+        const value = key === undefined ? null : attributes[key];
+        if (value !== null && value !== undefined) {
+          const text = value.toString().trim();
+          if (text) allUniqueValues.add(text);
         }
       });
 
@@ -700,49 +668,14 @@ export class DataService {
    * @private
    */
   private filterByAttributes(ethscriptions: any[], attributeKey: string, attributeValue?: string): any[] {
-    if (attributeKey === 'ALL') {
-      // Search all attribute keys for the specified value
-      return ethscriptions.filter(item => {
-        const attrs = item.attributes_new?.values;
-        if (!attrs) return false;
-        
-        return Object.values(attrs).some(value => 
-          value && value.toString().toLowerCase() === attributeValue?.toLowerCase()
-        );
-      });
-    }
-
-    // Generate possible key variations once
-    const keyVariations = [
-      attributeKey,
-      attributeKey.charAt(0).toUpperCase() + attributeKey.slice(1).toLowerCase(),
-      attributeKey.toLowerCase(),
-      attributeKey.toUpperCase()
-    ];
-
-    // Try each key variation until we find matches
-    for (const keyVariation of keyVariations) {
-      const matches = ethscriptions.filter(item => {
-        const attrs = item.attributes_new?.values;
-        if (!attrs || !attrs.hasOwnProperty(keyVariation)) return false;
-        
-        // If no specific value required, just having the key is enough
-        if (!attributeValue || attributeValue === 'ALL') {
-          return true;
-        }
-        
-        // Check for specific value match (case-insensitive)
-        const value = attrs[keyVariation];
-        return value && value.toString().toLowerCase() === attributeValue.toLowerCase();
-      });
-
-      if (matches.length > 0) {
-        Logger.debug(`Found ${matches.length} matches using key variation: "${keyVariation}"`);
-        return matches;
-      }
-    }
-
-    return [];
+    return ethscriptions.filter(item => {
+      const attributes = item.attributes_new?.values;
+      if (!attributes || typeof attributes !== 'object') return false;
+      return Object.entries(attributes).some(([key, value]) =>
+        (attributeKey === 'ALL' || key.toLowerCase() === attributeKey.toLowerCase())
+        && (!attributeValue || attributeValue === 'ALL'
+          || (value !== null && value !== undefined && String(value).toLowerCase() === attributeValue.toLowerCase())));
+    });
   }
 }
 

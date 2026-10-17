@@ -1,3 +1,4 @@
+import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { 
@@ -130,9 +131,10 @@ export class AddRuleHandler {
   } | null> {
     const channel = interaction.options.getChannel('channel') as TextChannel;
     const roleName = interaction.options.getString('role');
-    let slug = interaction.options.getString('slug') || 'ALL';
-    const attributeKey = interaction.options.getString('attribute_key') || 'ALL';
-    const attributeValue = interaction.options.getString('attribute_value') || 'ALL';
+    let slug = normalizeCollectionSlug(interaction.options.getString('slug')) || 'ALL';
+    if (slug === 'all') slug = 'ALL';
+    let attributeKey = normalizeCriteriaOption(interaction.options.getString('attribute_key'));
+    let attributeValue = normalizeCriteriaOption(interaction.options.getString('attribute_value'));
     const minItems = interaction.options.getInteger('min_items') ?? 1;
 
     if (!channel || !roleName) {
@@ -244,6 +246,7 @@ export class AddRuleHandler {
         });
         return null;
       }
+      if (validationResult.criteria) ({ slug, attributeKey, attributeValue } = validationResult.criteria);
     } catch (error) {
       this.logger.error('Error validating input combinations:', error);
       await interaction.editReply({
@@ -1072,7 +1075,7 @@ export class AddRuleHandler {
     slug: string, 
     attributeKey: string, 
     attributeValue: string
-  ): Promise<{ isValid: boolean; message: string }> {
+  ) {
     return validateEthscriptionCriteria(this.dataSvc, slug, attributeKey, attributeValue);
   }
 }

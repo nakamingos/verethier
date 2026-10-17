@@ -1,3 +1,5 @@
+import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
+import { resolveEthscriptionSlug } from './discord-commands/utils/rule-validation.util';
 import { Inject, Injectable, Logger, forwardRef, OnModuleInit, Optional } from '@nestjs/common';
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, CacheType, ChannelType, ChatInputCommandInteraction, Client, EmbedBuilder, Events, GatewayIntentBits, GuildTextBasedChannel, InteractionResponse, MessageFlags, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, AutocompleteInteraction } from 'discord.js';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -799,7 +801,7 @@ export class DiscordService implements OnModuleInit {
         return;
       }
 
-      const focusedValue = interaction.options.getFocused().toLowerCase();
+      const focusedValue = normalizeCollectionSlug(interaction.options.getFocused());
       
       // Get all available slugs with cache and timeout protection
       const allSlugs = await Promise.race([
@@ -841,7 +843,7 @@ export class DiscordService implements OnModuleInit {
         return;
       }
 
-      const focusedValue = interaction.options.getFocused().toLowerCase();
+      const focusedValue = String(interaction.options.getFocused()).trim().toLowerCase();
       const selectedSlug = interaction.options.getString('slug');
       
       // Only provide autocomplete if a slug has been specifically selected
@@ -857,7 +859,7 @@ export class DiscordService implements OnModuleInit {
       
       // Get all available attribute keys for the selected slug with cache and timeout protection
       const allKeys = await Promise.race([
-        this.cacheSvc.getAttributeKeys(selectedSlug, this.dataSvc),
+        resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAttributeKeys(slug, this.dataSvc) : []),
         this.timeoutPromise(2000, [])
       ]);
       
@@ -912,12 +914,12 @@ export class DiscordService implements OnModuleInit {
       }
     } catch { /* Manual entry is available when metadata suggestions are unavailable. */ }
     const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
-    if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
+    if (typed && typed.length <= 100 && !values.some(value => value.toLowerCase() === typed.toLowerCase())) values.unshift(typed);
     await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));
   }
 
   async handleOrdinalSlugAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
-    const typed = String(interaction.options.getFocused()).trim().toLowerCase();
+    const typed = normalizeCollectionSlug(String(interaction.options.getFocused()));
     let slugs: string[] = [];
     try {
       slugs = await Promise.race([this.dbSvc.getKnownOrdinalCollectionSlugs(), this.timeoutPromise(1500, [])]);
@@ -936,7 +938,7 @@ export class DiscordService implements OnModuleInit {
     const typed = String(input.value).trim();
     let suggestions: string[] = [];
     try {
-      const slug = interaction.options.getString('slug');
+      const slug = normalizeCollectionSlug(interaction.options.getString('slug'));
       const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
       if (this.ordinalsSvc && slug && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
         suggestions = await Promise.race([
@@ -945,7 +947,7 @@ export class DiscordService implements OnModuleInit {
       }
     } catch { /* Typed traits remain available when suggestions time out. */ }
     const values = suggestions.filter(value => !typed || value.toLowerCase().includes(typed.toLowerCase()));
-    if (typed && typed.length <= 100 && !values.includes(typed)) values.unshift(typed);
+    if (typed && typed.length <= 100 && !values.some(value => value.toLowerCase() === typed.toLowerCase())) values.unshift(typed);
     await this.safeRespond(interaction, values.slice(0, 25).map(value => ({ name: value, value })));
   }
 
@@ -964,9 +966,10 @@ export class DiscordService implements OnModuleInit {
         return;
       }
 
-      const focusedValue = interaction.options.getFocused();
+      const focusedValue = String(interaction.options.getFocused()).trim();
       const selectedSlug = interaction.options.getString('slug');
-      const selectedAttributeKey = interaction.options.getString('attribute_key');
+      const rawKey = interaction.options.getString('attribute_key');
+      const selectedAttributeKey = rawKey ? normalizeCriteriaOption(rawKey) : null;
       
       // Only provide autocomplete if both slug and attribute key have been specifically selected
       if (!selectedSlug || !selectedAttributeKey) {
@@ -981,7 +984,7 @@ export class DiscordService implements OnModuleInit {
       // Handle empty or very short input - show rarest 25
       if (!focusedValue || focusedValue.length <= 2) {
         const values = await Promise.race([
-          this.cacheSvc.getAttributeValues(selectedSlug, selectedAttributeKey, this.dataSvc),
+          resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAttributeValues(slug, selectedAttributeKey, this.dataSvc) : []),
           this.timeoutPromise(2000, [])
         ]);
 
@@ -998,7 +1001,7 @@ export class DiscordService implements OnModuleInit {
 
       // For longer input, get ALL values and prioritize user's input
       const allValues = await Promise.race([
-        this.cacheSvc.getAllAttributeValues(selectedSlug, selectedAttributeKey, this.dataSvc),
+        resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAllAttributeValues(slug, selectedAttributeKey, this.dataSvc) : []),
         this.timeoutPromise(2000, [])
       ]);
 
