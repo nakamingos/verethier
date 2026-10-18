@@ -28,7 +28,7 @@ The server menu uses the source editor frame: a `#202125` interior, black inner 
 
 Server buttons and invite links use equal avatar slots and heights, with initials when an icon is missing. Names stay on one line with an ellipsis and a full-name tooltip. Server labels use a slightly larger 17px font.
 
-Servers with Bouncer installed appear first. Both installed and invite groups sort by name without case sensitivity and with numeric ordering (2 before 10). Text fields use the reference's recessed frame and blue focus border with gold text selection; focusing a field keeps its dimensions fixed.
+Servers with Bouncer installed appear first. Both installed and invite groups sort by name without case sensitivity and with numeric ordering (2 before 10). Rule search and member lookup use the supplied `search.png` unchanged at 2× scale inside their fields, with space reserved before the text. Text fields use the reference's recessed frame and blue focus border with gold text selection; focusing a field keeps its dimensions fixed.
 
 Stacked server buttons overlap their bottom outline and shadow with the next top outline, leaving one shared divider. Cards across Rules, Bot Settings, Member Lookup and Audit Log use the reference editor frame with black inner/outer outlines, a `#41444a` rim and a `#202125` interior. Combined-rule and editor highlights retain their accent, with joined open/lower frames keeping inline editors continuous. Light mode retains the same geometry.
 
