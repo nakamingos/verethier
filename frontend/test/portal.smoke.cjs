@@ -127,7 +127,12 @@ const base = {
                     'https://discord.com/oauth2/authorize?guild_id=800000000000000010',
                 },
                 { id: '700000000000000010', name: 'Zeta 10', installed: true },
-                { id: server, name: 'NoMoreLabs', installed: true },
+                {
+                  id: server,
+                  name: 'NoMoreLabs',
+                  installed: true,
+                  icon: '/assets/bouncer.svg',
+                },
                 {
                   id: '800000000000000002',
                   name: 'Alpha 2',
@@ -475,6 +480,41 @@ const base = {
         addRuleBox.height,
         'dropdowns match the default button height',
       );
+      const serverRows = await page
+        .locator('.server-list > :is(button, a.button)')
+        .evaluateAll((rows) =>
+          rows.map((el) => ({
+            height: el.getBoundingClientRect().height,
+            font: getComputedStyle(el).fontSize,
+          })),
+        );
+      for (const row of serverRows) {
+        assert.equal(
+          row.height,
+          addRuleBox.height,
+          'server buttons use default control height',
+        );
+        assert.equal(row.font, '16px');
+      }
+      for (const link of await page.locator('.server-invite').all())
+        assert.equal(
+          await link.evaluate((el) => getComputedStyle(el).color),
+          'rgb(153, 155, 159)',
+        );
+      assert.equal(
+        await page
+          .locator('.server-list img')
+          .first()
+          .evaluate((el) => el.getBoundingClientRect().height),
+        22,
+      );
+      assert.ok(
+        await page
+          .locator('.server-list img')
+          .first()
+          .evaluate((el) => el.complete && el.naturalWidth > 0),
+        'server icon is loaded for the size check',
+      );
       const arrowBox = await assetPicker
         .locator('.pixel-select-arrow')
         .boundingBox();
@@ -522,8 +562,8 @@ const base = {
         'single-line menu options have compact vertical spacing',
       );
       const themeFrame = await page.locator('.theme-toggle').boundingBox();
-      assert.equal(themeFrame.width, 35);
-      assert.equal(themeFrame.height, 35);
+      assert.equal(themeFrame.width, 34);
+      assert.equal(themeFrame.height, 34);
       const fieldLabel = page
         .locator('.portal-content .toolbar > label')
         .filter({ has: assetPicker });
@@ -594,6 +634,17 @@ const base = {
         .getByRole('navigation', { name: 'Server settings' })
         .getByRole('button', { name: 'Bot Settings', exact: true })
         .click();
+      const settingsButtons = page.getByRole('button', {
+        name: /^(Save settings|Update message|Check again)$/,
+      });
+      const settingsWidths = await settingsButtons.evaluateAll((buttons) =>
+        buttons.map((el) => el.getBoundingClientRect().width),
+      );
+      assert.equal(settingsWidths.length, 3);
+      assert.ok(
+        Math.max(...settingsWidths) - Math.min(...settingsWidths) < 1,
+        'settings actions reserve the widest label',
+      );
       for (const form of await page.locator('.settings-actions').all()) {
         const box = await form.boundingBox();
         const button = await form.locator('button[type=submit]').boundingBox();
@@ -1338,6 +1389,45 @@ const base = {
         path: `${artifacts}/audit-${width}.png`,
         fullPage: true,
       });
+      const lastPage = page.getByRole('button', { name: 'Last', exact: true });
+      assert.equal(
+        await lastPage.isDisabled(),
+        true,
+        'Last is disabled on the final page',
+      );
+      const pagingButtons = await page
+        .locator('.pagination-actions button')
+        .evaluateAll((buttons) =>
+          buttons.map((el) => ({
+            x: el.getBoundingClientRect().x,
+            y: el.getBoundingClientRect().y,
+            right: el.getBoundingClientRect().right,
+          })),
+        );
+      assert.equal(pagingButtons.length, 3);
+      assert.ok(
+        pagingButtons.every((button) => button.y === pagingButtons[0].y),
+        'page navigation stays together in one row',
+      );
+      assert.ok(
+        pagingButtons[1].x - pagingButtons[0].right < 7,
+        'Previous sits beside Next',
+      );
+      await page
+        .getByRole('button', { name: '← Previous', exact: true })
+        .click();
+      await page.getByText('2 / 3 · 45 entries').waitFor();
+      await page
+        .getByRole('button', { name: '← Previous', exact: true })
+        .click();
+      await page.getByText('1 / 3 · 45 entries').waitFor();
+      await lastPage.click();
+      await page.getByText('3 / 3 · 45 entries').waitFor();
+      assert.match(
+        requests.filter((request) => request.path.endsWith('/activity')).at(-1)
+          .search,
+        /page=3/,
+      );
       const activitySort = page.getByRole('combobox', {
         name: 'Sort by date',
         exact: true,
