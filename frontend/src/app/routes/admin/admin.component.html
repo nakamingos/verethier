@@ -209,10 +209,15 @@
                       [options]="assetFilterChoices"
                       label="Asset type" /></span></label
                 ><label
-                  >Find a rule:<input
-                    [(ngModel)]="query"
-                    [disabled]="!!activeGroup"
-                    placeholder="Role or collection…" /></label
+                  >Find a rule:<span class="search-field"
+                    ><img
+                      src="/assets/search.png"
+                      width="16"
+                      height="16"
+                      alt="" /><input
+                      [(ngModel)]="query"
+                      [disabled]="!!activeGroup"
+                      placeholder="Role or collection…" /></span></label
                 ><label
                   >Rule group:<span class="select-control"
                     ><app-pixel-select
@@ -802,31 +807,36 @@
                 <form class="toolbar" (ngSubmit)="lookup()">
                   <div class="member-search">
                     <label for="member-lookup">Username or user ID:</label>
-                    <input
-                      id="member-lookup"
-                      name="memberQuery"
-                      [(ngModel)]="memberQuery"
-                      (ngModelChange)="queueMemberSearch()"
-                      (focus)="
-                        memberFocused = true;
-                        memberMatchesOpen = memberMatches.length > 0
-                      "
-                      (blur)="closeMemberMatches()"
-                      (keydown)="memberSearchKey($event)"
-                      required
-                      maxlength="100"
-                      autocomplete="off"
-                      role="combobox"
-                      aria-autocomplete="list"
-                      aria-controls="member-matches"
-                      [attr.aria-expanded]="memberMatchesOpen"
-                      [attr.aria-activedescendant]="
-                        memberMatchIndex >= 0
-                          ? 'member-match-' + memberMatchIndex
-                          : null
-                      "
-                      placeholder="Type a username or paste an ID"
-                    />
+                    <span class="search-field"
+                      ><img
+                        src="/assets/search.png"
+                        width="16"
+                        height="16"
+                        alt="" /><input
+                        id="member-lookup"
+                        name="memberQuery"
+                        [(ngModel)]="memberQuery"
+                        (ngModelChange)="queueMemberSearch()"
+                        (focus)="
+                          memberFocused = true;
+                          memberMatchesOpen = memberMatches.length > 0
+                        "
+                        (blur)="closeMemberMatches()"
+                        (keydown)="memberSearchKey($event)"
+                        required
+                        maxlength="100"
+                        autocomplete="off"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-controls="member-matches"
+                        [attr.aria-expanded]="memberMatchesOpen"
+                        [attr.aria-activedescendant]="
+                          memberMatchIndex >= 0
+                            ? 'member-match-' + memberMatchIndex
+                            : null
+                        "
+                        placeholder="Type a username or paste an ID"
+                    /></span>
                     @if (memberMatchesOpen) {
                       <div
                         id="member-matches"

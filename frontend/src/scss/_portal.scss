@@ -1019,8 +1019,26 @@ app-root:has(app-admin) .app-footer {
   flex: 1;
   min-width: 18rem;
 }
-.member-search > input {
-  margin: 0.2rem 0 0;
+.search-field {
+  position: relative;
+  display: block;
+  margin-top: 0.2rem;
+}
+.search-field > img {
+  position: absolute;
+  top: 50%;
+  left: 1rem;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.search-field > input {
+  padding-left: 3.4rem;
+}
+.portal-content .toolbar .search-field > input {
+  margin: 0;
 }
 .member-matches {
   position: absolute;
