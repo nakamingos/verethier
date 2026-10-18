@@ -51,6 +51,8 @@
   --ase-editor: #1a1a1d;
   --ase-hover: #535557;
   --ase-border: #0d0d0d;
+  --ase-divider: #0d0d0d;
+  --ase-selection-text: #41444a;
   --ase-danger: #ef9ca8;
   --ase-danger-bg: #492d32;
   --ase-disabled-text: #53666b;
@@ -65,53 +67,77 @@
 }
 :root[data-theme='light'] {
   color-scheme: light;
+  // Aseprite Default theme.xml and exact pixels from its sheet.png.
   @include pixel-tokens(
-    #eee,
-    #faf0e6,
-    #c0c0c0,
+    #c6c6c6,
+    #fff,
+    #fff,
     #000,
-    #e1b85f,
-    #edc86f,
+    #ff5555,
+    #ff5555,
     #8e2635,
     #f5d7dd,
-    #e0e0e0
+    #7d929e
   );
+  --pixel-face: #{pixel-frame(#c6c6c6, #000, #fff, #958174)};
+  --pixel-hover: #{pixel-frame(#fff, #000, #c6c6c6, #958174)};
   @include pixel-tabs(
     #c6c6c6,
-    #eee,
-    #636d79,
-    #e0e0e0,
     #fff,
-    #2c2c30,
-    #aaa,
-    #eee
+    #000,
+    #7d929e,
+    #adcade,
+    #fff,
+    #958174,
+    #d3cbbe
   );
   @include pixel-server-menu(
-    #e0e0e0,
-    #eee,
-    #aaa,
+    #7d929e,
+    #c6c6c6,
+    #958174,
     #fff,
     #c6c6c6,
-    #eee,
-    #aaa,
-    #2c2c30
+    #fff,
+    #7c7c7c,
+    #000,
+    #7c919d
   );
-  @include pixel-cards(#eee, #aaa, #e0e0e0);
-  @include pixel-input-controls(#eee, #aaa, #c6c6c6, #eee, #2c2c30, #aaa);
-  --ase-bg: #d9d9d9;
-  --ase-face: #eee;
-  --ase-text: #2c2c30;
-  --ase-dim: #636d79;
-  --ase-link: #4069c2;
-  --ase-editor: #faf0e6;
-  --ase-hover: #c0c0c0;
+  @include pixel-cards(#c6c6c6, #fff, #7d929e, #7d929e);
+  @include pixel-input-controls(
+    #fff,
+    #958174,
+    #c6c6c6,
+    #fff,
+    #000,
+    #7c7c7c,
+    #000,
+    #958174
+  );
+  --ase-bg: #7d929e;
+  --ase-face: #d3cbbe;
+  --ase-text: #000;
+  --ase-dim: #655561;
+  --ase-selected: #ff5555;
+  --ase-selected-hover: #ff5555;
+  --ase-selected-text: #fff;
+  --ase-selection-text: #fff;
+  --ase-link: #2c4c91;
+  --ase-editor: #fff;
+  --ase-hover: #fff;
   --ase-border: #000;
+  --ase-divider: #958174;
   --ase-danger: #8e2635;
   --ase-danger-bg: #f5d7dd;
-  --ase-disabled-text: #8b9294;
-  --base-color: 217, 217, 217;
-  --background: 44, 44, 48;
+  --ase-disabled-text: #968275;
+  --base-color: 125, 146, 158;
+  --background: 0, 0, 0;
+  --black: 0, 0, 0;
+  --pink: 255, 85, 85;
+  --bid-color: 211, 203, 190;
+  --magma: 245, 215, 221;
+  --highlight: 255, 85, 85;
 }
+
 body {
   font-feature-settings:
     'calt' 0,
@@ -247,7 +273,7 @@ textarea {
 input::selection,
 textarea::selection {
   background: var(--ase-selected);
-  color: #41444a;
+  color: var(--ase-selection-text);
 }
 .select-control {
   display: block;
@@ -348,7 +374,7 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 }
 .pixel-select-menu [role='option'].active {
   background: var(--ase-selected);
-  color: #41444a;
+  color: var(--ase-selection-text);
 }
 .pixel-select-menu [aria-disabled='true'] {
   opacity: 0.5;
@@ -390,14 +416,12 @@ input[type='checkbox'] {
   width: 18px;
   height: 18px;
   border: 0;
-  padding: 2px 0 0 2px;
+  padding: 0;
   margin: 0;
   image-rendering: pixelated;
-  background: transparent url('/assets/check_deselect.png') -96px -128px / 608px
-    608px no-repeat;
-  background-origin: content-box;
-  background-clip: content-box;
-  // The supplied unchecked asset is a sprite sheet; use its matching unchecked tile.
+  background: transparent url('/assets/check_deselect.png') 0 0 / 18px 18px
+    no-repeat;
+  filter: invert(1);
   &:checked {
     padding: 0;
     background-origin: border-box;
@@ -411,6 +435,13 @@ input[type='checkbox'] {
     outline-offset: 3px;
   }
 }
+:root[data-theme='light'] input[type='checkbox'] {
+  filter: none;
+}
+:root[data-theme='light'] .search-field > img {
+  filter: invert(1);
+}
+
 form > button {
   margin-top: 1rem;
 }
@@ -1150,13 +1181,24 @@ app-root:has(app-admin) .app-footer {
   border-collapse: collapse;
   margin: 0.6rem 0 1.2rem;
 }
+@mixin pixel-divider {
+  border-bottom: 2px solid transparent;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--ase-divider) 0 4px,
+    transparent 4px 6px
+  );
+  background-size: 100% 2px;
+  background-position: left bottom;
+  background-repeat: no-repeat;
+}
 .history-table th,
 .history-table td {
   padding: 0.8rem 0.6rem;
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--ase-border);
+  @include pixel-divider;
 }
 .history-table th {
   font-weight: 400;
@@ -1165,6 +1207,7 @@ app-root:has(app-admin) .app-footer {
 }
 .history-table tbody tr:last-child > td {
   border-bottom: 0;
+  background-image: none;
   padding-bottom: 0;
 }
 .history-table:last-child {
@@ -1483,10 +1526,11 @@ button:disabled:hover,
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.8rem;
     padding: 1rem 0;
-    border-bottom: 1px solid var(--ase-border);
+    @include pixel-divider;
   }
   .history-table:not(.wallet-table) tbody tr:last-child {
     border-bottom: 0;
+    background-image: none;
     padding-bottom: 0;
   }
   .history-table:not(.wallet-table) td {
@@ -1494,6 +1538,7 @@ button:disabled:hover,
     min-width: 0;
     padding: 0;
     border: 0;
+    background-image: none;
   }
   .history-table:not(.wallet-table) td::before {
     content: attr(data-label);
@@ -1522,10 +1567,7 @@ button:disabled:hover,
     flex-wrap: nowrap;
     gap: 0.4rem;
   }
-  .brand-header nav a.button {
-    padding-left: 0.2rem;
-    padding-right: 0.2rem;
-  }
+
   .brand-header .header-account {
     flex: 0 0 100%;
     justify-content: flex-end;

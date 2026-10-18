@@ -459,7 +459,8 @@ $pixel-select-arrow: (
   $button-face: #292b30,
   $button-band: #41444a,
   $selected-shade: #202125,
-  $text: #c0c0c0
+  $text: #c0c0c0,
+  $selected-face: $button-band
 ) {
   --pixel-server-panel: #{pixel-grid(
       $pixel-server-panel,
@@ -485,7 +486,13 @@ $pixel-select-arrow: (
     )};
   --pixel-server-button-selected: #{pixel-grid(
       $pixel-server-button-selected,
-      $button-colors
+      (
+        'E': #000,
+        'F': $button-face,
+        'H': $selected-face,
+        'S': $selected-shade,
+        'D': #00000087,
+      )
     )};
   --ase-server-text: #{$text};
   --ase-server-placeholder: #{$button-face};
@@ -553,7 +560,9 @@ $pixel-select-arrow: (
   $shade: #202125,
   $menu: #41444a,
   $text: #c0c0c0,
-  $inset: #101114
+  $inset: #101114,
+  $focus: #4069c2,
+  $focus-corner: #2a4185
 ) {
   --pixel-entry: #{pixel-grid(
       $pixel-entry,
@@ -570,10 +579,10 @@ $pixel-select-arrow: (
       (
         'E': #000,
         'F': $face,
-        'H': #4069c2,
+        'H': $focus,
         'S': $shade,
         'I': $inset,
-        'K': #2a4185,
+        'K': $focus-corner,
       )
     )};
   --pixel-select-field: #{pixel-grid(
@@ -591,9 +600,9 @@ $pixel-select-arrow: (
       (
         'E': #000,
         'F': $menu,
-        'H': #4069c2,
+        'H': $focus,
         'S': $shade,
-        'K': #2a4185,
+        'K': $focus-corner,
         'T': #0006,
       )
     )};
