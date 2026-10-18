@@ -35,7 +35,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   tab = 'rules';
   filter = '';
   query = '';
-  ruleSort = 'asc';
+  ruleSort = 'desc';
   editor: any = null;
   inputs: Record<string, string> = {};
   draft: any = {};

@@ -738,8 +738,9 @@ app-root:has(app-admin) .app-footer {
   color: var(--ase-dim);
   font-size: 1.6rem;
   font-weight: 400;
-  line-height: 1.5;
-  margin: 0 0 0.45rem;
+  line-height: 1.25;
+  // The frame begins with a background-colored 2px row; align its visible top edge.
+  margin: 0 0 -2px;
 }
 .server-list {
   min-width: 0;

@@ -503,7 +503,11 @@ const base = {
         name: 'Sort by ID',
         exact: true,
       });
-      await chooseOption(page, ruleSort, 'Descending');
+      assert.equal(
+        (await ruleSort.textContent()).trim(),
+        'Descending',
+        'rules default to descending IDs',
+      );
       assert.deepEqual(
         await page
           .locator('.rule-card')
