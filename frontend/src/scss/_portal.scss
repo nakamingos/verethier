@@ -96,7 +96,7 @@
     #2c2c30
   );
   @include pixel-cards(#eee, #aaa, #e0e0e0);
-  @include pixel-dropdowns(#eee, #aaa, #c6c6c6, #eee, #2c2c30);
+  @include pixel-dropdowns(#eee, #aaa, #c6c6c6, #eee, #2c2c30, #aaa);
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
   --ase-text: #2c2c30;
@@ -275,13 +275,13 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 }
 .pixel-select-value {
   position: absolute;
-  inset: 2px 0;
+  inset: 0;
   display: flex;
   align-items: center;
   min-width: 0;
   padding: 0 4.6rem 0 1rem;
   border: 1px solid transparent;
-  border-image: var(--pixel-select-field) 8 fill / 8px;
+  border-image: var(--pixel-select-field) 10 0 10 10 fill / 10px 0 10px 10px;
 }
 .pixel-select-text {
   min-width: 0;
