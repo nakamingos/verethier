@@ -372,9 +372,19 @@ $pixel-select-arrow: (
 @mixin pixel-scrollbar($thumb) {
   --ase-scrollbar-thumb: #{$thumb};
   --pixel-scrollbar-thumb: #{pixel-grid(
-      ('..FF..', '.FFFF.', 'FFFFFF', 'FFFFFF', '.FFFF.', '..FF..'),
+      (
+        'OOOOOOOO',
+        'O..FF..O',
+        'O.FFFF.O',
+        'OFFFFFFO',
+        'OFFFFFFO',
+        'O.FFFF.O',
+        'O..FF..O',
+        'OOOOOOOO'
+      ),
       (
         'F': $thumb,
+        'O': #000,
       )
     )};
 }

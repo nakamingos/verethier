@@ -759,12 +759,16 @@ app-root:has(app-admin) .app-footer {
 .server-list {
   min-width: 0;
   margin: 0;
-  padding: calc(1rem - 2px) calc(1rem - 1px);
   border-image-source: var(--pixel-server-panel);
   border-image-slice: 6 fill;
   border-image-width: 6px;
   color: var(--ase-server-text);
 }
+.server-list.panel {
+  padding: calc(1rem - 2px) calc(1rem - 1px);
+  padding-top: calc(1rem - 1px);
+}
+
 .server-list button,
 .server-list .button {
   display: flex;
@@ -817,6 +821,7 @@ app-root:has(app-admin) .app-footer {
   border-radius: 0;
 }
 .server-avatar {
+  transform: translateY(-0.5px);
   display: grid;
   place-items: center;
   flex: 0 0 22px;
@@ -1368,11 +1373,21 @@ button:disabled:hover,
 }
 :where(.brand-header, app-admin .portal)
   button:disabled:not(
-    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+    :where(
+      .tabs button,
+      .pixel-select-trigger,
+      .member-matches button,
+      .server-list button.selected
+    )
   ),
 :where(.brand-header, app-admin .portal)
   button:disabled:hover:not(
-    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+    :where(
+      .tabs button,
+      .pixel-select-trigger,
+      .member-matches button,
+      .server-list button.selected
+    )
   ) {
   border-image-source: var(--pixel-server-button);
 }
@@ -1446,6 +1461,20 @@ button:disabled:hover,
     color: Highlight;
   }
 }
+@media (min-width: 801px) {
+  .workspace-surface {
+    padding-top: 1.6rem;
+  }
+  .portal-layout {
+    gap: 1.2rem;
+  }
+  .rule-list {
+    gap: 0.8rem;
+  }
+  .portal-content > .panel {
+    margin-bottom: 0.8rem;
+  }
+}
 @media (max-width: 800px) {
   .brand-header {
     padding: 1rem 1.2rem;
@@ -1487,7 +1516,7 @@ button:disabled:hover,
   }
   .server-list.panel {
     // Account for the shared 2px outline at each column's right edge.
-    padding-right: calc(1.5rem + 2px);
+    padding-right: calc(1rem + 1px);
   }
   .server-list button,
   .server-list .button {
