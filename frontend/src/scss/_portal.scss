@@ -101,7 +101,7 @@
     #fff,
     #7c7c7c,
     #000,
-    #7c919d
+    #fff
   );
   @include pixel-cards(#c6c6c6, #fff, #7d929e, #fff);
   @include pixel-input-controls(
@@ -196,8 +196,10 @@ a {
   color: var(--ase-link);
   text-decoration: none;
 }
-a:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a:hover {
+    text-decoration: underline;
+  }
 }
 button,
 a.button {
@@ -227,10 +229,12 @@ a.button {
 .button-label > [aria-hidden='true'] {
   visibility: hidden;
 }
-button:hover,
-a.button:hover {
-  border-image-source: var(--pixel-hover);
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  button:hover,
+  a.button:hover {
+    border-image-source: var(--pixel-hover);
+    text-decoration: none;
+  }
 }
 button.primary,
 a.button.primary,
@@ -238,10 +242,12 @@ button.selected {
   border-image-source: var(--pixel-primary);
   color: var(--ase-selected-text);
 }
-button.primary:hover,
-a.button.primary:hover,
-button.selected:hover {
-  border-image-source: var(--pixel-primary-hover);
+@media (hover: hover) and (pointer: fine) {
+  button.primary:hover,
+  a.button.primary:hover,
+  button.selected:hover {
+    border-image-source: var(--pixel-primary-hover);
+  }
 }
 button:disabled {
   opacity: 1;
@@ -250,10 +256,12 @@ button:disabled {
 button[aria-pressed='true']:not(.primary):not(.selected):not(.theme-toggle) {
   border-image-source: var(--pixel-choice);
 }
-button[aria-pressed='true']:not(.primary):not(.selected):not(
-    .theme-toggle
-  ):hover {
-  border-image-source: var(--pixel-choice-hover);
+@media (hover: hover) and (pointer: fine) {
+  button[aria-pressed='true']:not(.primary):not(.selected):not(
+      .theme-toggle
+    ):hover {
+    border-image-source: var(--pixel-choice-hover);
+  }
 }
 :focus-visible {
   outline: 2px solid var(--ase-selected);
@@ -369,11 +377,15 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 .pixel-select-trigger:not(:disabled) .pixel-select-arrow {
   cursor: pointer;
 }
-.pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover {
-  border-image-source: var(--pixel-server-button-hover);
+@media (hover: hover) and (pointer: fine) {
+  .pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover {
+    border-image-source: var(--pixel-server-button-hover);
+  }
 }
-.pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover::after {
-  background-image: var(--pixel-select-arrow-hover);
+@media (hover: hover) and (pointer: fine) {
+  .pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover::after {
+    background-image: var(--pixel-select-arrow-hover);
+  }
 }
 
 .pixel-select-menu {
@@ -568,11 +580,13 @@ form > label {
   ) {
   color: var(--ase-server-text);
 }
-:where(.brand-header, app-admin .portal)
-  :is(button, a.button):not(
-    :where(.tabs button, .pixel-select-trigger, .member-matches button)
-  ):is(:hover, :focus-visible) {
-  border-image-source: var(--pixel-server-button-hover);
+@media (hover: hover) and (pointer: fine) {
+  :where(.brand-header, app-admin .portal)
+    :is(button, a.button):not(
+      :where(.tabs button, .pixel-select-trigger, .member-matches button)
+    ):is(:hover, :focus-visible) {
+    border-image-source: var(--pixel-server-button-hover);
+  }
 }
 :where(.brand-header, app-admin .portal)
   button[aria-pressed='true']:not(.primary):not(.selected):not(.theme-toggle),
@@ -771,9 +785,11 @@ app-root:has(app-admin) .app-footer {
 .server-list > :is(button, .button):last-child {
   margin-bottom: 0;
 }
-.server-list button:hover,
-.server-list .button:hover {
-  border-image-source: var(--pixel-server-button-hover);
+@media (hover: hover) and (pointer: fine) {
+  .server-list button:hover,
+  .server-list .button:hover {
+    border-image-source: var(--pixel-server-button-hover);
+  }
 }
 .server-list button.selected,
 .server-list button.selected:hover {
@@ -1135,9 +1151,13 @@ app-root:has(app-admin) .app-footer {
   background: none;
   box-shadow: none;
 }
-.member-matches button:hover,
 .member-matches button[aria-selected='true'] {
   background: var(--ase-hover);
+}
+@media (hover: hover) and (pointer: fine) {
+  .member-matches button:hover {
+    background: var(--ase-hover);
+  }
 }
 .member-matches img {
   width: 3.2rem;

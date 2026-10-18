@@ -98,6 +98,19 @@ const base = {
         hasTouch: width <= 800,
       });
       const page = await context.newPage();
+      if (width <= 800) {
+        const emulation = await context.newCDPSession(page);
+        const screenshot = page.screenshot.bind(page);
+        page.screenshot = async (options) => {
+          const result = await screenshot(options);
+          // Full-page screenshots reset Chromium's touch media queries.
+          await emulation.send('Emulation.setTouchEmulationEnabled', {
+            enabled: true,
+            maxTouchPoints: 1,
+          });
+          return result;
+        };
+      }
       await page.addInitScript((id) => {
         sessionStorage.setItem('bouncer-admin-server', id);
       }, server);
@@ -544,13 +557,16 @@ const base = {
         'hovering the value leaves arrow colors unchanged',
       );
       await arrowControl.hover();
-      assert.notEqual(
+      (width > 800 ? assert.notEqual : assert.equal)(
         await arrowControl.evaluate(
           (el) => getComputedStyle(el).borderImageSource,
         ),
         normalArrowFrame,
-        'hovering the arrow changes its colors',
+        width > 800
+          ? 'mouse hover changes arrow colors'
+          : 'touch devices do not retain hover colors',
       );
+
       const closedPicker = await assetPicker.boundingBox();
       const addRuleBox = await page
         .getByRole('button', { name: '+ Add rule', exact: true })
@@ -772,6 +788,35 @@ const base = {
         'rgba(0, 0, 0, 0)',
         'light header has no visible divider',
       );
+      if (width <= 800) {
+        const arrow = assetPicker.locator('.pixel-select-arrow');
+        const before = await arrow.evaluate(
+          (el) => getComputedStyle(el).borderImageSource,
+        );
+        await arrow.tap();
+        await arrow.tap();
+        assert.equal(await assetPicker.getAttribute('aria-expanded'), 'false');
+        assert.equal(
+          await arrow.evaluate((el) => getComputedStyle(el).borderImageSource),
+          before,
+          'dropdown returns to its normal color after closing by touch',
+        );
+        const add = page.getByRole('button', {
+          name: '+ Add rule',
+          exact: true,
+        });
+        const addFrame = await add.evaluate(
+          (el) => getComputedStyle(el).borderImageSource,
+        );
+        await add.tap();
+        await add.tap();
+        assert.equal(await add.getAttribute('aria-expanded'), 'false');
+        assert.equal(
+          await add.evaluate((el) => getComputedStyle(el).borderImageSource),
+          addFrame,
+          'Add rule returns to normal after closing by touch',
+        );
+      }
       await assetPicker.locator('.pixel-select-arrow').click();
       await page.screenshot({
         path: `${artifacts}/dropdown-light-${width}.png`,
@@ -1803,14 +1848,50 @@ const base = {
         1,
       );
       await page.getByLabel('Username or user ID').fill('555555555555555555');
-      await page.getByRole('button', { name: 'Look up', exact: true }).click();
+      if (width <= 800)
+        await page
+          .getByRole('button', { name: 'Light theme', exact: true })
+          .click();
+      const lookupAction = page.getByRole('button', {
+        name: 'Look up',
+        exact: true,
+      });
+      const lookupFrame = await lookupAction.evaluate(
+        (el) => getComputedStyle(el).borderImageSource,
+      );
+      await (width <= 800 ? lookupAction.tap() : lookupAction.click());
       await page
         .getByRole('heading', { name: 'Collector', exact: true })
         .waitFor();
-      await page
-        .getByRole('button', { name: 'Check roles', exact: true })
-        .click();
+      if (width <= 800)
+        assert.equal(
+          await lookupAction.evaluate(
+            (el) => getComputedStyle(el).borderImageSource,
+          ),
+          lookupFrame,
+          'Lookup does not retain a touch hover color',
+        );
+      const checkAction = page.getByRole('button', {
+        name: 'Check roles',
+        exact: true,
+      });
+      const checkFrame = await checkAction.evaluate(
+        (el) => getComputedStyle(el).borderImageSource,
+      );
+      await (width <= 800 ? checkAction.tap() : checkAction.click());
       await page.getByText('unavailable', { exact: true }).waitFor();
+      if (width <= 800) {
+        assert.equal(
+          await checkAction.evaluate(
+            (el) => getComputedStyle(el).borderImageSource,
+          ),
+          checkFrame,
+          'Check roles does not retain a touch hover color',
+        );
+        await page
+          .getByRole('button', { name: 'Dark theme', exact: true })
+          .click();
+      }
       assert.ok(
         requests
           .filter((r) => r.method === 'POST')
