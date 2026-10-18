@@ -547,6 +547,7 @@ export class PortalService {
     server: string,
     page: number,
     kind: string,
+    sort: 'asc' | 'desc' = 'desc',
   ) {
     await this.access(session, server);
     const table =
@@ -566,9 +567,9 @@ export class PortalService {
       .select(fields, { count: 'exact' })
       .eq('server_id', server)
       .order(kind === 'changes' ? 'created_at' : 'updated_at', {
-        ascending: false,
+        ascending: sort === 'asc',
       })
-      .order('id', { ascending: false })
+      .order('id', { ascending: sort === 'asc' })
       .range((page - 1) * 20, page * 20 - 1);
     this.dbError(error);
     let items: any[] = data || [];

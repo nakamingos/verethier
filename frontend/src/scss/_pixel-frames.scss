@@ -201,8 +201,9 @@ $pixel-server-button-selected: (
 );
 
 $pixel-count: (
-  '.EEEEEEEEEEEEEE.',
-  'EFHHHHHHHHHHHHFE',
+  '..EEEEEEEEEEEE..',
+  '.EKHHHHHHHHHHKE.',
+  'EKHFFFFFFFFFFHKE',
   'EHFFFFFFFFFFFFHE',
   'EHFFFFFFFFFFFFHE',
   'EHFFFFFFFFFFFFHE',
@@ -211,12 +212,11 @@ $pixel-count: (
   'EHFFFFFFFFFFFFHE',
   'EHFFFFFFFFFFFFHE',
   'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EFHHHHHHHHHHHHFE',
-  'ESSSSSSSSSSSSSSE',
-  'DEEEEEEEEEEEEEED',
-  '.DDDDDDDDDDDDDD.'
+  'EKHFFFFFFFFFFHKE',
+  '.EKHHHHHHHHHHKE.',
+  '.ESSSSSSSSSSSSE.',
+  '..EEEEEEEEEEEE..',
+  '..DDDDDDDDDDDD..'
 );
 
 // Text entries preserve the source sunken_normal/sunken_focused frames.
@@ -492,6 +492,7 @@ $pixel-select-arrow: (
       (
         'E': #000,
         'F': #0f1011,
+        'K': #7d7d7d,
         'H': #c0c0c0,
         'S': #7d7d7d,
         'D': #202125,

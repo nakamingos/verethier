@@ -1,6 +1,6 @@
 <header class="brand-header">
   <div class="brand-line">
-    <a class="brand" routerLink="/admin">Bouncer</a>
+    <a class="brand" routerLink="/admin"><u>B</u>ouncer</a>
     <span class="brand-subtitle">Verify your wallet. Get your roles.</span>
   </div>
   <nav aria-label="Main navigation">
@@ -14,7 +14,7 @@
       [attr.aria-label]="light ? 'Dark theme' : 'Light theme'"
       [title]="light ? 'Dark theme' : 'Light theme'"
     >
-      <img src="/assets/theme-switch.svg" width="20" height="20" alt="" />
+      <img src="/assets/theme.png" width="20" height="20" alt="" />
     </button>
     @if (portalAuth?.user; as user) {
       <button

@@ -218,15 +218,16 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     const rect = this.trigger.nativeElement.getBoundingClientRect();
     const menu = this.menu.nativeElement;
     const margin = 8;
+    const gap = 0;
     menu.style.width = `${Math.min(rect.width, innerWidth - margin * 2)}px`;
     menu.style.maxHeight = 'none';
-    const below = innerHeight - rect.bottom - margin - 4;
-    const above = rect.top - margin - 4;
+    const below = innerHeight - rect.bottom - margin - gap;
+    const above = rect.top - margin - gap;
     const height = Math.min(menu.getBoundingClientRect().height, 320);
     const up = below < height && above > below;
     const available = Math.max(0, up ? above : below);
     menu.style.maxHeight = `${Math.min(320, available)}px`;
     menu.style.left = `${Math.max(margin, Math.min(rect.left, innerWidth - rect.width - margin))}px`;
-    menu.style.top = `${up ? rect.top - Math.min(height, available) - 4 : rect.bottom + 4}px`;
+    menu.style.top = `${up ? rect.top - Math.min(height, available) - gap : rect.bottom + gap}px`;
   }
 }
