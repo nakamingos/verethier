@@ -30,6 +30,15 @@ const supabase = createClient(
 export class DataService {
   private readonly logger = new Logger(DataService.name);
 
+  async checkSetupHealth(traits: boolean): Promise<void> {
+    const result = await supabase.from('ethscriptions').select('hashId').limit(1).abortSignal(AbortSignal.timeout(6000));
+    if (result.error) throw new Error('Ethscriptions data unavailable.');
+    if (traits) {
+      const attributes = await supabase.from('attributes_new').select('sha').limit(1).abortSignal(AbortSignal.timeout(6000));
+      if (attributes.error) throw new Error('Ethscriptions traits unavailable.');
+    }
+  }
+
   private hasAttributeCriteria(attributeKey?: string, attributeValue?: string): boolean {
     return (
       (!!attributeKey && attributeKey !== 'ALL') ||

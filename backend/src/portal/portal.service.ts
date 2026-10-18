@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -12,6 +13,7 @@ import { ChannelType, Guild, PermissionFlagsBits } from 'discord.js';
 import { DiscordService } from '@/services/discord.service';
 import { DbService } from '@/services/db.service';
 import { DiscordMessageService } from '@/services/discord-message.service';
+import { ServerSetupService } from '@/services/server-setup.service';
 import { RuleEditService } from '@/services/rule-edit.service';
 import { VerificationEngine } from '@/services/verification-engine.service';
 import { DataService } from '@/services/data.service';
@@ -36,6 +38,8 @@ import {
   PortalWalletBlockDto,
   PortalRoleActionDto,
   PortalWalletAuditDto,
+  PortalSetupChannelsDto,
+  PortalSetupRecoveryDto,
 } from './portal.dto';
 
 const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
@@ -62,6 +66,7 @@ export class PortalService {
     private readonly ethscriptions: EthscriptionsOwnershipService,
     private readonly tokens: Erc20OwnershipService,
     private readonly metadata: NftMetadataService,
+    @Optional() private readonly setup?: ServerSetupService,
   ) {}
 
   client() {
@@ -247,7 +252,7 @@ export class PortalService {
   async settings(server: string) {
     const { data, error } = await this.db
       .from('verifier_server_settings')
-      .select('verification_channel_id,background_checks_enabled')
+      .select('admin_channel_id,verification_channel_id,background_checks_enabled')
       .eq('server_id', server)
       .maybeSingle();
     this.dbError(error);
@@ -275,7 +280,8 @@ export class PortalService {
       await this.channel(guild, input.verification_channel_id);
     const { error } = await this.db.from('verifier_server_settings').upsert({
       server_id: server,
-      ...input,
+      background_checks_enabled: input.background_checks_enabled,
+      verification_channel_id: input.verification_channel_id ?? null,
       updated_by: session.user.id,
       updated_at: new Date().toISOString(),
     });
@@ -309,6 +315,23 @@ export class PortalService {
     return {
       url: `https://discord.com/channels/${server}/${channel.id}/${id}`,
     };
+  }
+  async checkSetup(session: PortalSession, server: string) {
+    const report = await this.setup.check(await this.access(session, server));
+    await this.access(session, server);
+    return report;
+  }
+  async setupChannels(session: PortalSession, server: string, input: PortalSetupChannelsDto) {
+    return this.setup.previewChannels(await this.access(session, server), session.user.id, input);
+  }
+  async setupRecovery(session: PortalSession, server: string, input: PortalSetupRecoveryDto) {
+    return this.setup.previewRecovery(await this.access(session, server), session.user.id, input.channel_id, input.request_id);
+  }
+  async setupRequest(session: PortalSession, server: string, request: string, apply = false) {
+    if (!/^[a-f0-9-]{36}$/i.test(request)) throw new BadRequestException('Invalid setup request.');
+    const guild = await this.access(session, server);
+    return apply ? this.setup.apply(guild, session.user.id, request, () => this.access(session, server))
+      : this.setup.get(server, session.user.id, request);
   }
   async create(session: PortalSession, server: string, input: PortalRuleDto) {
     let guild = await this.access(session, server);
@@ -545,6 +568,9 @@ export class PortalService {
     return this.safeAction(data);
   }
   private safeAction(a: any) {
+    if (['setup_channels', 'setup_recover'].includes(a.kind))
+      return { id: a.id, kind: a.kind, created_at: a.created_at, actor_id: a.actor_id,
+        setup: a.after_rule, before_rule: null, after_rule: null, reverts: null };
     if (['role_action_set', 'role_action_delete'].includes(a.kind))
       return {
         id: a.id,

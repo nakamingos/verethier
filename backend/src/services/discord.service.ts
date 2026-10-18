@@ -16,6 +16,7 @@ import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
 import { NFT_NETWORKS, getNftNetworkId } from '@/utils/nft-network.util';
 import { NftMetadataService } from '@/services/nft-metadata.service';
 import { OrdinalsOwnershipService } from '@/services/ordinals-ownership.service';
+import { ServerSetupService } from '@/services/server-setup.service';
 import { ruleCommandAssetType } from '@/utils/rule-command.util';
 import { normalizeRoleName } from './discord-commands/utils/role-management.util';
 
@@ -84,6 +85,7 @@ export class DiscordService implements OnModuleInit {
     private readonly cacheSvc: CacheService,
     @Optional() private readonly nftMetadataSvc?: NftMetadataService,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    @Optional() private readonly setupSvc?: ServerSetupService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -288,7 +290,9 @@ export class DiscordService implements OnModuleInit {
 
       // Handle button interactions (user verification)
       if (interaction.isButton()) {
-        if (interaction.customId === 'requestVerification') {
+        if (interaction.customId === 'bouncer-check-setup') {
+          await this.handleSetupCheck(interaction);
+        } else if (interaction.customId === 'requestVerification') {
           await this.handleVerificationRequest(interaction);
         } else if (interaction.customId.startsWith('audit-log-')) {
           await this.discordCommandsSvc.handleAuditLogPagination(interaction);
@@ -331,8 +335,30 @@ export class DiscordService implements OnModuleInit {
       await interaction.editReply({ content: join
         ? channels.length ? `Open a verification channel and click **Request Verification**: ${links}` : 'This server has no verification rules yet. Ask an administrator to set up Bouncer.'
         : `**Bouncer · Wallet verification**\nConnect your wallet and sign a message to check your collections. Bouncer never needs your seed phrase, private key, a payment, or token approval.\n\n${links || 'An administrator needs to add a verification rule.'}\n\n[Wallet help](${origin}/help) · [Control room / Check setup](${origin}/admin)`,
-        allowedMentions: {parse: []} });
+        allowedMentions: {parse: []}, components: !join && interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+          ? [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('bouncer-check-setup').setLabel('Check Setup').setStyle(ButtonStyle.Secondary))] : [] });
     } catch { await interaction.editReply('Could not load verification help. Please try again shortly.'); }
+  }
+
+  async handleSetupCheck(interaction: ButtonInteraction): Promise<void> {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const guild = interaction.guild;
+      if (!guild || !this.setupSvc) throw new Error();
+      const authorize = async () => {
+        const member = await guild.members.fetch({ user: interaction.user.id, force: true });
+        if (member.id !== guild.ownerId && !member.permissions.has(PermissionFlagsBits.Administrator)) throw new Error();
+      };
+      await authorize();
+      const report = await this.setupSvc.check(guild);
+      await authorize();
+      const lines = report.issues.map(issue => `${issue.message} ${issue.remedy}`);
+      lines.push(...report.providers.map(provider => `${provider.label}: ${provider.status.replace('_', ' ')}. ${provider.detail}`));
+      const summary = lines.length ? lines.join('\n\n').slice(0, 1650) : 'Configured roles, channels and messages are accessible. No rule providers need checking.';
+      await interaction.editReply({ content: `**Bouncer · Check Setup**\n${summary}\n\nFull report and reviewed repairs: ${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`, allowedMentions: { parse: [] } });
+    } catch {
+      await interaction.editReply('Could not complete Check Setup. Current server owner or Administrator permission is required; Discord may also be temporarily unavailable.');
+    }
   }
 
   async handleSetup(interaction: ChatInputCommandInteraction): Promise<void> {

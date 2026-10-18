@@ -2,6 +2,8 @@ import { PortalThrottleGuard } from './portal/portal-throttle.guard';
 import { PortalController } from './portal/portal.controller';
 import { PortalAuthService } from './portal/portal-auth.service';
 import { PortalService } from './portal/portal.service';
+import { ServerSetupService } from './services/server-setup.service';
+import { SetupHealthService } from './services/setup-health.service';
 import { PortalJobsService } from './portal/portal-jobs.service';
 import { MemberController } from './portal/member.controller';
 import { MemberService } from './portal/member.service';
@@ -138,7 +140,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
 
     // Core application services
     AppService,
-    PortalAuthService, PortalService, PortalJobsService,
+    PortalAuthService, PortalService, PortalJobsService, ServerSetupService, SetupHealthService,
     MemberService,
     Erc20OwnershipService,
 

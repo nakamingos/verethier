@@ -54,6 +54,12 @@ export class NftOwnershipService {
 
   constructor(@Optional() private readonly metadataSvc?: NftMetadataService) {}
 
+  async checkSetupHealth(chainId: number): Promise<void> {
+    const client = this.getClient(chainId);
+    if (await client.getChainId() !== chainId) throw new Error('Wrong RPC network.');
+    await client.getBlockNumber({ cacheTime: 0 });
+  }
+
   private getClient(chainId: number) {
     const network = getNftNetwork(chainId);
     const rpcVariable = chainId === 1 ? 'RPC_URL' : 'ROBINHOOD_RPC_URL';

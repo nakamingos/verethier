@@ -33,6 +33,8 @@ import {
   PortalWalletBlockDto,
   PortalRoleActionDto,
   PortalWalletAuditDto,
+  PortalSetupChannelsDto,
+  PortalSetupRecoveryDto,
 } from './portal.dto';
 
 @Catch()
@@ -212,6 +214,21 @@ export class PortalController {
     @Body() body: PortalMessageDto,
   ) {
     return this.portal.message(await this.mutation(req), server, body);
+  }
+  @Post('servers/:server/setup/check') async checkSetup(@Req() req: Request, @Param('server') server: string) {
+    return this.portal.checkSetup(await this.mutation(req), server);
+  }
+  @Post('servers/:server/setup/channels/preview') async setupChannels(@Req() req: Request, @Param('server') server: string, @Body() body: PortalSetupChannelsDto) {
+    return this.portal.setupChannels(await this.mutation(req), server, body);
+  }
+  @Post('servers/:server/setup/recover/preview') async setupRecovery(@Req() req: Request, @Param('server') server: string, @Body() body: PortalSetupRecoveryDto) {
+    return this.portal.setupRecovery(await this.mutation(req), server, body);
+  }
+  @Get('servers/:server/setup/:request') async setupRequest(@Req() req: Request, @Param('server') server: string, @Param('request') request: string) {
+    return this.portal.setupRequest(await this.auth.session(req), server, request);
+  }
+  @Post('servers/:server/setup/:request/apply') async applySetup(@Req() req: Request, @Param('server') server: string, @Param('request') request: string) {
+    return this.portal.setupRequest(await this.mutation(req), server, request, true);
   }
   @Get('servers/:server/activity') async activity(
     @Req() req: Request,

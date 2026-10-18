@@ -82,6 +82,9 @@ export class PortalWalletAuditDto {
 
 export class PortalSettingsDto {
   @IsBoolean() background_checks_enabled: boolean;
+  // Older clients echo the settings read model. Changes to this field still
+  // require reviewed channel setup, so saveSettings deliberately ignores it.
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) admin_channel_id?: string | null;
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) verification_channel_id?:
     | string
     | null;
@@ -90,4 +93,16 @@ export class PortalSettingsDto {
 export class PortalMessageDto {
   @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
   @IsIn(['refresh', 'new', 'recover']) action: string;
+}
+
+export class PortalSetupChannelsDto {
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) admin_channel_id?: string | null;
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) verification_channel_id?: string | null;
+  @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9_-]{0,99}$/) admin_channel_name?: string;
+  @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9_-]{0,99}$/) verification_channel_name?: string;
+  @IsUUID() request_id: string;
+}
+export class PortalSetupRecoveryDto {
+  @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
+  @IsUUID() request_id: string;
 }

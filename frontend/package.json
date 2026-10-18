@@ -9,6 +9,7 @@
     "test": "ng test",
     "test:wallet-smoke": "node test/wallet-connection.smoke.cjs",
     "test:portal-smoke": "node test/portal.smoke.cjs",
+    "test:setup-smoke": "node test/setup.smoke.cjs",
     "test:member-smoke": "node test/member.smoke.cjs"
   },
   "private": true,

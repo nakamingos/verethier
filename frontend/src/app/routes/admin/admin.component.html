@@ -166,6 +166,7 @@
                 <a
                   class="button server-invite"
                   [href]="server.invite"
+                  (click)="installationPending = true"
                   target="_blank"
                   rel="noopener"
                   ><ng-container
@@ -175,7 +176,12 @@
               }
             }
             @if (invite) {
-              <a class="button" [href]="invite" target="_blank" rel="noopener"
+              <a
+                class="button"
+                [href]="invite"
+                (click)="installationPending = true"
+                target="_blank"
+                rel="noopener"
                 ><span class="server-avatar" aria-hidden="true">+</span
                 ><span class="server-name">Add Bouncer</span></a
               >
@@ -194,6 +200,17 @@
           [attr.inert]="loadingServer && data ? '' : null"
           [class.is-loading]="loadingServer && data"
         >
+          @if (installationPending) {
+            <section class="panel">
+              <p>
+                After installing Bouncer, refresh the server list and select
+                your server to continue setup.
+              </p>
+              <button (click)="refreshServers()" [disabled]="busy">
+                Refresh servers
+              </button>
+            </section>
+          }
           @if (data) {
             @if (data.diagnostics.length) {
               <details class="notice warning">
@@ -882,9 +899,13 @@
                   <span aria-hidden="true">Save settings</span>
                   <span aria-hidden="true">Update message</span>
                   <span aria-hidden="true">Check again</span>
+                  <span aria-hidden="true">Review recovery</span>
                   <span>{{ text }}</span>
                 </span>
               </ng-template>
+              @if (!data.rules.length) {
+                <ng-container [ngTemplateOutlet]="setupPanels" />
+              }
               <section class="panel">
                 <h2>Background role checks</h2>
                 <form (ngSubmit)="settings()">
@@ -965,28 +986,351 @@
               </section>
               <section class="panel">
                 <div class="section-heading">
-                  <h2>Setup check</h2>
-                  <button (click)="select(selected)" [disabled]="busy">
+                  <h2>Check Setup</h2>
+                  <button (click)="checkSetup()" [disabled]="busy">
                     <ng-container
                       [ngTemplateOutlet]="settingsActionLabel"
-                      [ngTemplateOutletContext]="{ $implicit: 'Check again' }"
+                      [ngTemplateOutletContext]="{ $implicit: 'Check setup' }"
                     />
                   </button>
                 </div>
-                @if (!data.diagnostics.length) {
-                  <p>
-                    Roles and channels are accessible. Use Recover missing above
-                    if a verification message was deleted.
+                @if (setupReport; as report) {
+                  <p class="muted">
+                    Checked {{ report.checked_at | date: 'medium' }}. Setup
+                    checks do not scan member wallets or change roles.
                   </p>
-                }
-                @for (issue of data.diagnostics; track issue) {
-                  <p>{{ issue }}</p>
+                  @if (!report.issues.length) {
+                    <p>
+                      Configured Discord roles, channels and verification
+                      messages are accessible.
+                    </p>
+                  }
+                  @for (issue of report.issues; track issue.id) {
+                    <div class="history-row">
+                      <p>
+                        <strong>{{ issue.message }}</strong>
+                        {{
+                          issue.status === 'unavailable'
+                            ? 'Check unavailable.'
+                            : ''
+                        }}
+                      </p>
+                      <p>{{ issue.remedy }}</p>
+                      @if (issue.rule_ids.length) {
+                        <p class="muted">
+                          Affected rules: {{ issue.rule_ids.join(', ') }}
+                        </p>
+                      }
+                      @if (issue.repairable) {
+                        <button
+                          (click)="previewSetupRecovery(issue.channel_id)"
+                          [disabled]="busy || !!setupReview"
+                        >
+                          <ng-container
+                            [ngTemplateOutlet]="settingsActionLabel"
+                            [ngTemplateOutletContext]="{
+                              $implicit: 'Review recovery',
+                            }"
+                          />
+                        </button>
+                      }
+                    </div>
+                  }
+                  @if (report.providers.length) {
+                    <table
+                      class="history-table"
+                      aria-label="Verification provider checks"
+                    >
+                      <thead>
+                        <tr>
+                          <th scope="col">Provider</th>
+                          <th scope="col">Status</th>
+                          <th scope="col">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (provider of report.providers; track provider.id) {
+                          <tr>
+                            <td data-label="Provider">{{ provider.label }}</td>
+                            <td data-label="Status">
+                              <span class="badge">{{
+                                provider.status === 'not_checked'
+                                  ? 'Not checked'
+                                  : provider.status === 'healthy'
+                                    ? 'Reachable'
+                                    : 'Unavailable'
+                              }}</span>
+                            </td>
+                            <td data-label="Details">
+                              {{ provider.detail }}
+                              <p class="muted">
+                                Rules: {{ provider.rule_ids.join(', ') }}
+                              </p>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <p class="muted">
+                      Add rules to check their configured verification
+                      providers.
+                    </p>
+                  }
+                } @else {
+                  <p>
+                    Check current Discord permissions, roles, channels,
+                    verification messages and the providers used by your rules.
+                  </p>
+                  @for (issue of data.diagnostics; track issue) {
+                    <p>{{ issue }}</p>
+                  }
                 }
                 <p class="muted">
                   Rename channels freely. Keep Bouncer above the roles it
                   assigns.
                 </p>
               </section>
+              @if (data.rules.length) {
+                <ng-container [ngTemplateOutlet]="setupPanels" />
+              }
+              <ng-template #setupPanels>
+                <section class="panel">
+                  <div class="section-heading">
+                    <h2>Channel setup</h2>
+                    <button
+                      (click)="setupChannelsOpen = !setupChannelsOpen"
+                      [disabled]="busy"
+                      [attr.aria-expanded]="setupChannelsOpen"
+                    >
+                      <ng-container
+                        [ngTemplateOutlet]="settingsActionLabel"
+                        [ngTemplateOutletContext]="{
+                          $implicit: setupChannelsOpen
+                            ? 'Collapse'
+                            : 'Set up channels',
+                        }"
+                      />
+                    </button>
+                  </div>
+                  <p>
+                    Select existing channels or create a private admin channel
+                    and a member verification channel. Review permissions before
+                    saving.
+                  </p>
+                  @if (pendingSetup && !setupReview) {
+                    <button (click)="resumeSetup()" [disabled]="busy">
+                      <ng-container
+                        [ngTemplateOutlet]="settingsActionLabel"
+                        [ngTemplateOutletContext]="{
+                          $implicit: 'Continue setup',
+                        }"
+                      />
+                    </button>
+                  }
+                  @if (setupChannelsOpen && !setupReview) {
+                    <form (ngSubmit)="previewSetupChannels()">
+                      <div class="form-grid">
+                        <label
+                          >Admin channel:<span class="select-control"
+                            ><app-pixel-select
+                              name="setupAdmin"
+                              [(ngModel)]="setupDraft.admin_channel_id"
+                              (ngModelChange)="setupDraftChanged()"
+                              [options]="setupChannelChoices"
+                              [disabled]="busy"
+                              label="Admin channel" /></span
+                        ></label>
+                        @if (!setupDraft.admin_channel_id) {
+                          <label
+                            >New admin channel name:<input
+                              name="setupAdminName"
+                              [(ngModel)]="setupDraft.admin_channel_name"
+                              (ngModelChange)="setupDraftChanged()"
+                              [disabled]="busy"
+                              required
+                              maxlength="100"
+                              pattern="[a-z0-9][a-z0-9_-]{0,99}"
+                          /></label>
+                        }
+                        <label
+                          >Verification channel:<span class="select-control"
+                            ><app-pixel-select
+                              name="setupVerification"
+                              [(ngModel)]="setupDraft.verification_channel_id"
+                              (ngModelChange)="setupDraftChanged()"
+                              [options]="setupChannelChoices"
+                              [disabled]="busy"
+                              label="Verification channel" /></span
+                        ></label>
+                        @if (!setupDraft.verification_channel_id) {
+                          <label
+                            >New verification channel name:<input
+                              name="setupVerificationName"
+                              [(ngModel)]="setupDraft.verification_channel_name"
+                              (ngModelChange)="setupDraftChanged()"
+                              [disabled]="busy"
+                              required
+                              maxlength="100"
+                              pattern="[a-z0-9][a-z0-9_-]{0,99}"
+                          /></label>
+                        }
+                      </div>
+                      <div class="actions">
+                        <button
+                          type="submit"
+                          [disabled]="busy || !!pendingSetup"
+                        >
+                          <ng-container
+                            [ngTemplateOutlet]="settingsActionLabel"
+                            [ngTemplateOutletContext]="{
+                              $implicit: 'Review setup',
+                            }"
+                          />
+                        </button>
+                      </div>
+                    </form>
+                  }
+                  @if (setupResult; as result) {
+                    <p>Saved setup:</p>
+                    <div class="actions">
+                      @if (result.admin_channel_id) {
+                        <a
+                          [href]="
+                            'https://discord.com/channels/' +
+                            selected +
+                            '/' +
+                            result.admin_channel_id
+                          "
+                          target="_blank"
+                          rel="noopener"
+                          >Open admin channel ↗</a
+                        >
+                      }
+                      @if (result.verification_channel_id) {
+                        <a
+                          [href]="
+                            'https://discord.com/channels/' +
+                            selected +
+                            '/' +
+                            result.verification_channel_id +
+                            (result.verification_message_id
+                              ? '/' + result.verification_message_id
+                              : '')
+                          "
+                          target="_blank"
+                          rel="noopener"
+                          >Open verification channel ↗</a
+                        >
+                      }
+                    </div>
+                  }
+                </section>
+                @if (setupReview; as review) {
+                  <section
+                    class="panel rule-editor setup-review"
+                    aria-label="Review setup"
+                    role="region"
+                    tabindex="-1"
+                  >
+                    <h2>
+                      {{
+                        review.plan.kind === 'channels'
+                          ? 'Review channel setup'
+                          : 'Review message recovery'
+                      }}
+                    </h2>
+                    @if (review.plan.kind === 'channels') {
+                      <p>
+                        <strong>Admin: #{{ review.plan.admin.name }}</strong> —
+                        {{
+                          review.plan.admin.create
+                            ? 'Create a private channel, visible to server administrators and Bouncer.'
+                            : 'Use this existing channel with its current permissions.'
+                        }}
+                        Post or reuse a Control Room link; opening it still
+                        requires owner or Administrator permission.
+                      </p>
+                      <p>
+                        <strong
+                          >Verification: #{{
+                            review.plan.verification.name
+                          }}</strong
+                        >
+                        —
+                        {{
+                          review.plan.verification.create
+                            ? 'Create a channel members can view and read, with ordinary member message posting disabled. Bouncer can post.'
+                            : 'Use this existing channel with its current permissions.'
+                        }}
+                      </p>
+                      <p>
+                        Save these channel IDs and make #{{
+                          review.plan.verification.name
+                        }}
+                        the default verification channel. Existing rules keep
+                        their channels.
+                      </p>
+                      <p>
+                        {{
+                          review.plan.recover_verification
+                            ? 'Reuse or recover the verification message using this channel’s current rules.'
+                            : 'Add a rule for this channel, then recover its verification message.'
+                        }}
+                      </p>
+                    } @else {
+                      <p>
+                        Reuse the verification message in
+                        <strong>#{{ review.plan.channel.name }}</strong> if
+                        present, or post one using that channel’s current rules.
+                      </p>
+                    }
+                    @if (review.started_at) {
+                      <p class="muted">
+                        This setup has started. Retry continues saved progress.
+                        Closing the review keeps it available; channels already
+                        created remain.
+                      </p>
+                    }
+                    <div class="actions">
+                      <button (click)="closeSetupReview()" [disabled]="busy">
+                        <ng-container
+                          [ngTemplateOutlet]="settingsActionLabel"
+                          [ngTemplateOutletContext]="{
+                            $implicit: review.started_at
+                              ? 'Close review'
+                              : 'Cancel',
+                          }"
+                        />
+                      </button>
+                      @if (review.started_at) {
+                        <button (click)="newSetupReview()" [disabled]="busy">
+                          <ng-container
+                            [ngTemplateOutlet]="settingsActionLabel"
+                            [ngTemplateOutletContext]="{
+                              $implicit: 'New review',
+                            }"
+                          />
+                        </button>
+                      }
+                      <button
+                        class="primary"
+                        (click)="applySetup()"
+                        [disabled]="busy"
+                      >
+                        <ng-container
+                          [ngTemplateOutlet]="settingsActionLabel"
+                          [ngTemplateOutletContext]="{
+                            $implicit: review.started_at
+                              ? 'Retry setup'
+                              : 'Confirm setup',
+                          }"
+                        />
+                      </button>
+                    </div>
+                  </section>
+                }
+              </ng-template>
             }
             @if (tab === 'members') {
               <section class="panel">
@@ -1580,6 +1924,12 @@
                                       roleName(item.role_action.trigger_role_id)
                                     }}
                                   </p>
+                                } @else if (item.setup) {
+                                  <strong>{{
+                                    item.kind === 'setup_channels'
+                                      ? 'Saved channel setup'
+                                      : 'Recovered verification message'
+                                  }}</strong>
                                 } @else if (item.wallet) {
                                   <strong>{{
                                     item.kind === 'wallet_block'
@@ -1609,6 +1959,18 @@
                                   ) {
                                     {{ roleName(id) }}{{ last ? '' : ', ' }}
                                   }
+                                } @else if (item.setup) {
+                                  <a
+                                    [href]="
+                                      'https://discord.com/channels/' +
+                                      selected +
+                                      '/' +
+                                      item.setup.verification_channel_id
+                                    "
+                                    target="_blank"
+                                    rel="noopener"
+                                    >Verification channel ↗</a
+                                  >
                                 } @else if (item.wallet) {
                                   {{
                                     item.wallet.reason || 'No reason provided'

@@ -1020,7 +1020,7 @@ const base = {
         .getByRole('button', { name: 'Dark theme', exact: true })
         .click();
       const settingsButtons = page.getByRole('button', {
-        name: /^(Save settings|Update message|Check again)$/,
+        name: /^(Save settings|Update message|Check setup)$/,
       });
       const settingsWidths = await settingsButtons.evaluateAll((buttons) =>
         buttons.map((el) => el.getBoundingClientRect().width),

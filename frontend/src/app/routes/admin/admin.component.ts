@@ -102,6 +102,12 @@ export class AdminComponent implements OnInit, OnDestroy {
   } | null = null;
   messageChannel = '';
   messageAction = 'refresh';
+  setupReport: any = null;
+  setupReview: any = null;
+  setupResult: any = null;
+  setupChannelsOpen = false;
+  installationPending = false;
+  setupDraft: any = {};
   undo: any = null;
   undoLabel = 'Undo';
   readonly assetFilterChoices: SelectChoice[] = [
@@ -153,6 +159,179 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   get defaultChannelChoices(): SelectChoice[] {
     return [{ value: null, label: 'No default' }, ...this.channelChoices];
+  }
+  get setupChannelChoices(): SelectChoice[] {
+    return [
+      { value: '', label: 'Create a new channel' },
+      ...this.channelChoices,
+    ];
+  }
+  private get setupStorageKey() {
+    return `bouncer-setup:${this.user?.id}:${this.selected}`;
+  }
+  async checkSetup() {
+    await this.run(async () => {
+      this.setupReport = await this.api(
+        `/servers/${this.selected}/setup/check`,
+        {},
+      );
+      this.data.diagnostics = [
+        ...this.setupReport.issues.map(
+          (issue: any) => `${issue.message} ${issue.remedy}`,
+        ),
+        ...this.setupReport.providers
+          .filter((provider: any) => provider.status === 'unavailable')
+          .map((provider: any) => `${provider.label}: ${provider.detail}`),
+      ];
+    });
+  }
+  setupDraftChanged() {
+    delete this.setupDraft.request_id;
+  }
+  private rememberSetup(review: any) {
+    this.setupReview = review;
+    sessionStorage.setItem(this.setupStorageKey, review.request_id);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>('.setup-review')?.focus(),
+    );
+  }
+  async previewSetupChannels() {
+    await this.run(async () => {
+      this.setupDraft.request_id ||= crypto.randomUUID();
+      const review = await this.api(
+        `/servers/${this.selected}/setup/channels/preview`,
+        this.setupDraft,
+      );
+      this.rememberSetup(review);
+    });
+  }
+  async previewSetupRecovery(channel: string) {
+    if (this.pendingSetup || this.setupReview) {
+      this.error =
+        'Continue the existing setup review, or cancel it before reviewing another repair.';
+      return;
+    }
+    await this.run(async () => {
+      const review = await this.api(
+        `/servers/${this.selected}/setup/recover/preview`,
+        { channel_id: channel, request_id: crypto.randomUUID() },
+      );
+      this.rememberSetup(review);
+    });
+  }
+  closeSetupReview() {
+    if (!this.setupReview?.started_at)
+      sessionStorage.removeItem(this.setupStorageKey);
+    this.setupReview = null;
+    this.setupDraftChanged();
+  }
+  async newSetupReview() {
+    if (
+      !confirm(
+        'Start a new setup review? Channels already created remain available to select; they will not be deleted.',
+      )
+    )
+      return;
+    await this.run(async () => {
+      const progress = this.setupReview?.progress || {};
+      await this.reload();
+      sessionStorage.removeItem(this.setupStorageKey);
+      this.setupReview = null;
+      this.setupDraft = {
+        admin_channel_id:
+          progress.admin_channel_id ||
+          this.data.settings.admin_channel_id ||
+          '',
+        verification_channel_id:
+          progress.verification_channel_id ||
+          this.data.settings.verification_channel_id ||
+          '',
+        admin_channel_name: 'bouncer-admin',
+        verification_channel_name: 'verify',
+      };
+      this.setupChannelsOpen = true;
+    });
+  }
+  get pendingSetup() {
+    return (
+      this.user && this.selected && sessionStorage.getItem(this.setupStorageKey)
+    );
+  }
+  async resumeSetup() {
+    await this.run(() => this.restoreSetup());
+  }
+  private async restoreSetup() {
+    const request = sessionStorage.getItem(this.setupStorageKey);
+    if (!request) return;
+    try {
+      const review = await this.api(
+        `/servers/${this.selected}/setup/${request}`,
+      );
+      if (review.status === 'completed') {
+        this.setupResult = review.progress;
+        sessionStorage.removeItem(this.setupStorageKey);
+      } else {
+        this.setupReview = review;
+        this.setupChannelsOpen = review.plan.kind === 'channels';
+        this.tab = 'settings';
+      }
+    } catch (error: any) {
+      if (error.status === 404) sessionStorage.removeItem(this.setupStorageKey);
+      else throw error;
+    }
+  }
+  async applySetup() {
+    await this.run(async () => {
+      const request = this.setupReview.request_id;
+      let result: any;
+      try {
+        result = await this.api(
+          `/servers/${this.selected}/setup/${request}/apply`,
+          {},
+        );
+      } catch (error) {
+        const saved = await this.api(
+          `/servers/${this.selected}/setup/${request}`,
+        ).catch(() => null);
+        if (saved) this.setupReview = saved;
+        if (saved?.status !== 'completed') throw error;
+        result = saved;
+      }
+      this.setupResult = result.progress;
+      this.setupReview = null;
+      this.setupReport = null;
+      await this.reload();
+      this.setupDraft.admin_channel_id =
+        this.data.settings.admin_channel_id || '';
+      this.setupDraft.verification_channel_id =
+        this.data.settings.verification_channel_id || '';
+      this.messageChannel =
+        this.data.settings.verification_channel_id || this.messageChannel;
+      sessionStorage.removeItem(this.setupStorageKey);
+      this.setupChannelsOpen = false;
+      this.setupDraftChanged();
+      this.notice =
+        result.plan.kind === 'channels'
+          ? 'Channels ready. Add rules in the verification channel, then use Check Setup to confirm its message.'
+          : 'Verification message recovered.';
+    });
+  }
+  private async loadServers() {
+    const result = await this.api('/servers');
+    const names = new Intl.Collator(undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    this.servers = [...result.servers].sort(
+      (a, b) =>
+        Number(b.installed) - Number(a.installed) ||
+        names.compare(a.name, b.name),
+    );
+    this.invite = result.invite;
+  }
+  async refreshServers() {
+    await this.run(() => this.loadServers());
+    this.installationPending = false;
   }
   get roleChoices(): SelectChoice[] {
     return [
@@ -299,17 +478,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.error =
           'Discord sign-in could not be completed. Please try again.';
       if (this.user) {
-        const result = await this.api('/servers');
-        const names = new Intl.Collator(undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        });
-        this.servers = [...result.servers].sort(
-          (a, b) =>
-            Number(b.installed) - Number(a.installed) ||
-            names.compare(a.name, b.name),
-        );
-        this.invite = result.invite;
+        await this.loadServers();
         const remembered = sessionStorage.getItem('bouncer-admin-server');
         const first =
           this.servers.find((s) => s.id === remembered && s.installed) ||
@@ -345,10 +514,13 @@ export class AdminComponent implements OnInit, OnDestroy {
       if (result.status === 401) {
         this.session.clear();
       }
-      throw new Error(
-        Array.isArray(data.message)
-          ? data.message.join(' ')
-          : data.message || 'Could not complete this request.',
+      throw Object.assign(
+        new Error(
+          Array.isArray(data.message)
+            ? data.message.join(' ')
+            : data.message || 'Could not complete this request.',
+        ),
+        { status: result.status },
       );
     }
     return data;
@@ -400,6 +572,16 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.roleActionsOpen = false;
         this.roleActionEditor = null;
         this.walletRestriction = null;
+        this.setupReport = null;
+        this.setupReview = null;
+        this.setupResult = null;
+        this.setupChannelsOpen = false;
+        this.setupDraft = {
+          admin_channel_id: data.settings.admin_channel_id || '',
+          verification_channel_id: data.settings.verification_channel_id || '',
+          admin_channel_name: 'bouncer-admin',
+          verification_channel_name: 'verify',
+        };
         this.activity = {
           items: [],
           page: 1,
@@ -414,7 +596,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.activitySize = '20';
         this.activityReady = false;
         this.undo = null;
-        this.tab = 'rules';
+        this.tab = data.rules.length ? 'rules' : 'settings';
         requestAnimationFrame(() => {
           document
             .querySelector<HTMLElement>('.workspace-tabs')
@@ -425,6 +607,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.messageChannel =
           data.settings.verification_channel_id || data.channels[0]?.id || '';
         sessionStorage.setItem('bouncer-admin-server', id);
+        await this.restoreSetup();
       } finally {
         this.loadingServer = '';
       }
@@ -757,11 +940,18 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async settings() {
     await this.run(async () => {
-      await this.api(`/servers/${this.selected}/settings`, this.data.settings);
+      await this.api(`/servers/${this.selected}/settings`, {
+        background_checks_enabled: this.data.settings.background_checks_enabled,
+        verification_channel_id: this.data.settings.verification_channel_id,
+      });
       this.notice = 'Settings saved.';
     });
   }
   async message() {
+    if (this.messageAction === 'recover') {
+      await this.previewSetupRecovery(this.messageChannel);
+      return;
+    }
     await this.run(async () => {
       const result = await this.api(`/servers/${this.selected}/message`, {
         channel_id: this.messageChannel,
