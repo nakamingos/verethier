@@ -12,7 +12,7 @@
   "
   [attr.aria-required]="required || null"
   [disabled]="disabled"
-  (click)="toggle()"
+  (click)="toggle($event)"
   (keydown)="keydown($event)"
   (blur)="touched()"
 >

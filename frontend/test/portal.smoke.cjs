@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 async function chooseOption(page, control, name) {
-  await control.click();
+  await control.locator('.pixel-select-arrow').click();
   await page
     .getByRole('listbox')
     .getByRole('option', { name, exact: true })
@@ -521,7 +521,32 @@ const base = {
         name: 'Asset type',
         exact: true,
       });
-      await assetPicker.hover();
+      await assetPicker.locator('.pixel-select-value').click();
+      assert.equal(
+        await assetPicker.getAttribute('aria-expanded'),
+        'false',
+        'clicking the value area does not open the menu',
+      );
+      const arrowControl = assetPicker.locator('.pixel-select-arrow');
+      const normalArrowFrame = await arrowControl.evaluate(
+        (el) => getComputedStyle(el).borderImageSource,
+      );
+      await assetPicker.locator('.pixel-select-value').hover();
+      assert.equal(
+        await arrowControl.evaluate(
+          (el) => getComputedStyle(el).borderImageSource,
+        ),
+        normalArrowFrame,
+        'hovering the value leaves arrow colors unchanged',
+      );
+      await arrowControl.hover();
+      assert.notEqual(
+        await arrowControl.evaluate(
+          (el) => getComputedStyle(el).borderImageSource,
+        ),
+        normalArrowFrame,
+        'hovering the arrow changes its colors',
+      );
       const closedPicker = await assetPicker.boundingBox();
       const addRuleBox = await page
         .getByRole('button', { name: '+ Add rule', exact: true })
@@ -659,7 +684,7 @@ const base = {
         'Tab commits keyboard selection',
       );
       await chooseOption(page, assetPicker, 'All assets');
-      await assetPicker.click();
+      await assetPicker.locator('.pixel-select-arrow').click();
       await page
         .getByRole('heading', { name: 'NoMoreLabs Control Room', exact: true })
         .click();
@@ -707,7 +732,14 @@ const base = {
           .evaluate((el) => getComputedStyle(el).borderImageSource),
         'theme toggle keeps the ordinary button border in light mode',
       );
-      await assetPicker.click();
+      assert.equal(
+        await page
+          .locator('.brand-header')
+          .evaluate((el) => getComputedStyle(el).borderBottomColor),
+        'rgba(0, 0, 0, 0)',
+        'light header has no visible divider',
+      );
+      await assetPicker.locator('.pixel-select-arrow').click();
       await page.screenshot({
         path: `${artifacts}/dropdown-light-${width}.png`,
       });
@@ -799,7 +831,13 @@ const base = {
         .click();
 
       if (width <= 800) {
-        await assetPicker.tap();
+        await assetPicker.locator('.pixel-select-value').tap();
+        assert.equal(
+          await assetPicker.getAttribute('aria-expanded'),
+          'false',
+          'touching the value does not open the dropdown',
+        );
+        await assetPicker.locator('.pixel-select-arrow').tap();
         await page
           .getByRole('option', { name: 'Ethscriptions', exact: true })
           .tap();
@@ -808,7 +846,7 @@ const base = {
           'Ethscriptions',
           'touch selects an option',
         );
-        await assetPicker.tap();
+        await assetPicker.locator('.pixel-select-arrow').tap();
         await page
           .getByRole('option', { name: 'All assets', exact: true })
           .tap();
@@ -1135,6 +1173,16 @@ const base = {
         path: `${artifacts}/inline-editor-${width}.png`,
         fullPage: true,
       });
+      await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .click();
+      await page.screenshot({
+        path: `${artifacts}/inline-editor-light-${width}.png`,
+        fullPage: true,
+      });
+      await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
+        .click();
       await page.getByLabel('Minimum items:', { exact: true }).fill('12');
       await page.getByRole('button', { name: 'Review changes' }).click();
       const saveSize = await page
@@ -1198,7 +1246,7 @@ const base = {
         name: 'Discord role',
         exact: true,
       });
-      await rolePicker.click();
+      await rolePicker.locator('.pixel-select-arrow').click();
       assert.equal(
         await page
           .getByRole('option', { name: 'Cannot assign', exact: true })
@@ -1294,7 +1342,7 @@ const base = {
         'Ethscriptions',
         'new rules default to Ethscriptions',
       );
-      await newAsset.click();
+      await newAsset.locator('.pixel-select-arrow').click();
       assert.deepEqual(
         (
           await page.getByRole('listbox').getByRole('option').allTextContents()

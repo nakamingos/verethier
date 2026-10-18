@@ -72,7 +72,18 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     if (!this.options[this.active] || this.options[this.active]?.disabled)
       this.active = this.options.findIndex((option) => !option.disabled);
   }
-  toggle() {
+  toggle(event: MouseEvent) {
+    // Keep keyboard/assistive activation; pointer clicks open only on the arrow.
+    if (
+      event.detail > 0 &&
+      !(
+        event.target instanceof Element &&
+        event.target.closest('.pixel-select-arrow')
+      )
+    ) {
+      event.preventDefault();
+      return;
+    }
     if (this.isOpen) this.close();
     else this.open();
   }
