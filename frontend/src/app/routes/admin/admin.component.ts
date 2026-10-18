@@ -636,7 +636,20 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async pageActivity(direction: number) {
     if (this.activityLoading || !this.activityReady) return;
-    await this.readActivity(this.activity.page + direction);
+    const page = Math.max(
+      1,
+      Math.min(this.activity.pages, this.activity.page + direction),
+    );
+    if (page !== this.activity.page) await this.readActivity(page);
+  }
+  async lastActivity() {
+    if (
+      this.activityLoading ||
+      !this.activityReady ||
+      this.activity.page >= this.activity.pages
+    )
+      return;
+    await this.readActivity(this.activity.pages);
   }
   private async readActivity(page: number) {
     if (this.busy || !this.selected) return;

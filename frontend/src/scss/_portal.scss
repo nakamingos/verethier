@@ -163,8 +163,8 @@ a.button {
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  min-height: 3.5rem;
-  padding: 0.55rem 1.2rem 0.45rem;
+  min-height: 3.4rem;
+  padding: 0.55rem 1.2rem 0.35rem;
   border: 1px solid var(--ase-border);
   @include pixel-surface(var(--pixel-face));
   color: var(--ase-text);
@@ -230,12 +230,12 @@ textarea {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 3.5rem;
+  min-height: 3.4rem;
   color: var(--ase-text);
   font: inherit;
   line-height: 1.4;
   border: 1px solid var(--ase-border);
-  padding: 0.45rem 0.8rem 0.35rem;
+  padding: 0.55rem 0.8rem 0.15rem;
   @include pixel-surface(var(--pixel-entry));
   border-image-slice: 8 fill;
   border-image-width: 8px;
@@ -266,8 +266,8 @@ button.pixel-select-trigger:hover {
   gap: 0;
   justify-content: stretch;
   width: 100%;
-  height: 3.5rem;
-  min-height: 3.5rem;
+  height: 3.4rem;
+  min-height: 3.4rem;
   padding: 0;
   border: 0;
   border-image: none;
@@ -292,7 +292,7 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 1px 4.1rem 0 0.8rem;
+  padding: 4px 4rem 0 0.8rem;
   border: 1px solid transparent;
   border-image: var(--pixel-select-field) 10 0 10 10 fill / 10px 0 10px 10px;
 }
@@ -307,9 +307,9 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   inset: 0 0 0 auto;
   display: grid;
   place-items: center;
-  width: 3.5rem;
+  width: 3.4rem;
   height: 100%;
-  padding-top: 1px;
+  padding-top: 0;
   border: 1px solid transparent;
   border-image: var(--pixel-select-button) 6 6 8 6 fill / 6px 6px 8px 6px;
 }
@@ -452,7 +452,7 @@ form > label {
 }
 .brand-header .button {
   font-size: 1.6rem;
-  min-height: 3.5rem;
+  min-height: 3.4rem;
 }
 .brand-header .header-auth {
   min-width: 0;
@@ -460,10 +460,10 @@ form > label {
 }
 .brand-header .theme-toggle {
   position: relative;
-  width: 35px;
-  min-width: 35px;
-  height: 35px;
-  min-height: 35px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
 }
 .theme-toggle img {
@@ -686,12 +686,11 @@ app-root:has(app-admin) .app-footer {
   display: flex;
   justify-content: flex-start;
   width: 100%;
-  min-height: 4.7rem;
-  font-size: 1.7rem;
+  min-height: 3.4rem;
+  font-size: 1.6rem;
   // Share the bottom outline/shadow with the next button's top outline.
   margin-bottom: -4px;
-  padding-top: 0.65rem;
-  padding-bottom: 0.85rem;
+  padding: 0.55rem 1.2rem 0.35rem;
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
   border-image-width: 6px 6px 8px 6px;
@@ -721,16 +720,22 @@ app-root:has(app-admin) .app-footer {
   object-fit: cover;
   border-radius: 3px;
 }
+.server-list a.server-invite,
+.server-list a.server-invite:hover {
+  color: #999b9f;
+}
 .server-list img {
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   border-radius: 0;
 }
 .server-avatar {
   display: grid;
   place-items: center;
-  flex: 0 0 3rem;
-  width: 3rem;
-  height: 3rem;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   background: transparent;
 }
 .server-name {
@@ -815,8 +820,8 @@ app-root:has(app-admin) .app-footer {
   border-image-source: var(--pixel-count);
   border-image-slice: 8 8 12 8 fill;
   border-image-width: 8px 8px 12px 8px;
-  min-height: 3.1rem;
-  padding: 0.35rem 1rem 0.35rem;
+  min-height: 3rem;
+  padding: 0.35rem 1rem 0.25rem;
   font-size: 1.8rem;
   line-height: 1.1;
   color: #fff;
@@ -1158,9 +1163,14 @@ app-root:has(app-admin) .app-footer {
   margin-top: 2rem;
   font-size: 1.6rem;
 }
-.pagination span {
+.pagination > span {
   min-width: min(19ch, 100%);
-  text-align: center;
+}
+.pagination-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 app-verify {
   max-width: 76rem;

@@ -160,7 +160,7 @@
                 </button>
               } @else {
                 <a
-                  class="button"
+                  class="button server-invite"
                   [href]="server.invite"
                   target="_blank"
                   rel="noopener"
@@ -706,6 +706,14 @@
               </div>
             }
             @if (tab === 'settings') {
+              <ng-template #settingsActionLabel let-text>
+                <span class="button-label">
+                  <span aria-hidden="true">Save settings</span>
+                  <span aria-hidden="true">Update message</span>
+                  <span aria-hidden="true">Check again</span>
+                  <span>{{ text }}</span>
+                </span>
+              </ng-template>
               <section class="panel">
                 <h2>Background role checks</h2>
                 <form (ngSubmit)="settings()">
@@ -735,7 +743,12 @@
                           [options]="defaultChannelChoices"
                           label="Default verification channel" /></span></label
                     ><button class="primary" type="submit" [disabled]="busy">
-                      Save settings
+                      <ng-container
+                        [ngTemplateOutlet]="settingsActionLabel"
+                        [ngTemplateOutletContext]="{
+                          $implicit: 'Save settings',
+                        }"
+                      />
                     </button>
                   </div>
                 </form>
@@ -764,7 +777,12 @@
                           label="Action" /></span
                     ></label>
                     <button type="submit" [disabled]="busy">
-                      Update message
+                      <ng-container
+                        [ngTemplateOutlet]="settingsActionLabel"
+                        [ngTemplateOutletContext]="{
+                          $implicit: 'Update message',
+                        }"
+                      />
                     </button>
                   </div>
                   @if (messageUrl) {
@@ -778,7 +796,10 @@
                 <div class="section-heading">
                   <h2>Setup check</h2>
                   <button (click)="select(selected)" [disabled]="busy">
-                    Check again
+                    <ng-container
+                      [ngTemplateOutlet]="settingsActionLabel"
+                      [ngTemplateOutletContext]="{ $implicit: 'Check again' }"
+                    />
                   </button>
                 </div>
                 @if (!data.diagnostics.length) {
@@ -1017,17 +1038,7 @@
                   }
                 </div>
                 <div class="pagination">
-                  <button
-                    (click)="pageActivity(-1)"
-                    [disabled]="
-                      busy ||
-                      activityLoading ||
-                      !activityReady ||
-                      activity.page <= 1
-                    "
-                  >
-                    ← Previous</button
-                  ><span
+                  <span
                     [style.visibility]="
                       activityReady && activity.kind === activityKind
                         ? null
@@ -1038,17 +1049,46 @@
                     "
                     >{{ activity.page }} / {{ activity.pages }} ·
                     {{ activity.total }} entries</span
-                  ><button
-                    (click)="pageActivity(1)"
-                    [disabled]="
-                      busy ||
-                      activityLoading ||
-                      !activityReady ||
-                      activity.page >= activity.pages
-                    "
                   >
-                    Next →
-                  </button>
+                  <div
+                    class="pagination-actions"
+                    role="group"
+                    aria-label="Activity pages"
+                  >
+                    <button
+                      (click)="pageActivity(-1)"
+                      [disabled]="
+                        busy ||
+                        activityLoading ||
+                        !activityReady ||
+                        activity.page <= 1
+                      "
+                    >
+                      ← Previous
+                    </button>
+                    <button
+                      (click)="pageActivity(1)"
+                      [disabled]="
+                        busy ||
+                        activityLoading ||
+                        !activityReady ||
+                        activity.page >= activity.pages
+                      "
+                    >
+                      Next →
+                    </button>
+                    <button
+                      (click)="lastActivity()"
+                      [disabled]="
+                        busy ||
+                        activityLoading ||
+                        !activityReady ||
+                        activity.page >= activity.pages
+                      "
+                    >
+                      Last
+                    </button>
+                  </div>
                 </div>
               </section>
             }
