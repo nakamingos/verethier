@@ -415,7 +415,11 @@ const base = {
         ],
         'installed servers sort first; each group uses case-insensitive numeric ordering',
       );
-      assert.equal(await page.locator('.brand u').textContent(), 'B');
+      assert.equal(await page.locator('.brand u').count(), 0);
+      assert.equal(
+        (await page.locator('.brand').textContent()).trim(),
+        'Bouncer',
+      );
       assert.equal(
         await page.locator('.theme-toggle img').getAttribute('src'),
         '/assets/theme.png',
@@ -511,6 +515,24 @@ const base = {
           closedPicker.y + closedPicker.height,
           'menu sits directly beneath the arrow',
         );
+      const optionBox = await page.getByRole('option').first().boundingBox();
+      assert.equal(
+        optionBox.height,
+        24,
+        'single-line menu options have compact vertical spacing',
+      );
+      const themeFrame = await page.locator('.theme-toggle').boundingBox();
+      assert.equal(themeFrame.width, 28);
+      assert.equal(themeFrame.height, 32);
+      const fieldLabel = page
+        .locator('.portal-content .toolbar > label')
+        .filter({ has: assetPicker });
+      const labelGap = await fieldLabel.evaluate((el) =>
+        parseFloat(
+          getComputedStyle(el.querySelector('.select-control')).marginTop,
+        ),
+      );
+      assert.equal(labelGap, 2, 'labels sit close to their fields');
       assert.ok(
         popupBox.x >= 0 && popupBox.x + popupBox.width <= width,
         'popup fits viewport',
@@ -750,6 +772,12 @@ const base = {
       await page
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
+      const iconSize = await page.locator('.theme-toggle img').boundingBox();
+      assert.equal(
+        iconSize.width,
+        20,
+        'theme icon keeps its native integer scale',
+      );
       const themeSize = await page
         .getByRole('button', { name: 'Light theme', exact: true })
         .boundingBox();

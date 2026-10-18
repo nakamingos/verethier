@@ -252,7 +252,7 @@ textarea::selection {
 .select-control {
   display: block;
   position: relative;
-  margin: 0.45rem 0 1rem;
+  margin: 0.2rem 0 1rem;
 }
 app-pixel-select {
   display: block;
@@ -340,8 +340,8 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 .pixel-select-menu [role='option'] {
   display: flex;
   align-items: center;
-  padding: 0.3rem 0.8rem;
-  min-height: 3rem;
+  padding: 0 0.8rem;
+  min-height: 2.4rem;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
@@ -364,7 +364,7 @@ label {
 label input,
 label select,
 label textarea {
-  margin: 0.45rem 0 1rem;
+  margin: 0.2rem 0 1rem;
   color: var(--ase-text);
 }
 label .select-control select {
@@ -458,12 +458,17 @@ form > label {
   max-width: min(28rem, 100%);
 }
 .brand-header .theme-toggle {
-  width: 3.8rem;
-  min-width: 3.8rem;
-  height: 3.8rem;
+  position: relative;
+  width: 28px;
+  min-width: 28px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
 }
 .theme-toggle img {
+  position: absolute;
+  top: 4px;
+  left: 4px;
   display: block;
   width: 20px;
   height: 20px;
@@ -752,7 +757,7 @@ app-root:has(app-admin) .app-footer {
 .portal-content .form-grid label input,
 .portal-content .form-grid label textarea,
 .portal-content .select-control {
-  margin-top: 0.45rem;
+  margin-top: 0.2rem;
   margin-bottom: 0.8rem;
 }
 .portal-content .toolbar label input,
@@ -806,8 +811,8 @@ app-root:has(app-admin) .app-footer {
   @include pixel-surface(var(--pixel-count));
   white-space: nowrap;
   border-image-source: var(--pixel-count);
-  border-image-slice: 8 8 10 8 fill;
-  border-image-width: 8px 8px 10px 8px;
+  border-image-slice: 8 8 12 8 fill;
+  border-image-width: 8px 8px 12px 8px;
   min-height: 3.4rem;
   padding: 0.35rem 1rem 0.65rem;
   font-size: 1.8rem;
@@ -1015,7 +1020,7 @@ app-root:has(app-admin) .app-footer {
   min-width: 18rem;
 }
 .member-search > input {
-  margin: 0.45rem 0 0;
+  margin: 0.2rem 0 0;
 }
 .member-matches {
   position: absolute;
