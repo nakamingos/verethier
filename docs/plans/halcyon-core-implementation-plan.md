@@ -16,6 +16,24 @@ Accepted scope: ship the admin dashboard first, followed by the member portal. C
 
 Track optional ideas separately in the [optional feature backlog](optional-features.md).
 
+## Current implementation status
+
+Checkpoint: October 18, 2026, through member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
+
+| Phase | Delivered | Remaining |
+| --- | --- | --- |
+| 1. Shared backend and authentication | Authenticated portal APIs, live server authorization, shared rule operations and durable reconciliation. | Maintain these guarantees as features are added. |
+| 2. Admin dashboard and setup | All four admin tabs, bot invite links, existing-channel selection, verification-message controls, basic permission/role/channel diagnostics, `/help` and `/join`. | New-install channel creation and fuller **Check Setup** coverage, including message availability, provider health and explicitly previewed repairs. |
+| 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo and reconciliation for rule changes and signed verification. | Multi-trait AND/OR conditions and ERC-721 ID lists/ranges with quantity thresholds, including storage migration, evaluator and interface updates. |
+| 4. Settings and member troubleshooting | Background-check toggle, member lookup, fresh Check Roles and earned-role repairs. | No separate unfinished milestone identified. |
+| 5. Member portal | Wallet management, fresh proofs/transfers, removal reconciliation, joined-community verification and resumable flows. | Public discovery and signature-free rechecks remain optional. |
+| 6–7. Additional integrations | Existing supported assets and wallet formats remain available. | Deferred until the user chooses integrations. |
+| 8. Documentation and release | Documentation, migration rehearsals and regression checks accompany delivered milestones. | Continue with each remaining milestone. |
+
+Portal follow-ups have also shipped: unified wallet activity, Earned/Available community role views, removed-wallet history with last-proof dates and explorer links, server wallet blocks, role-removal actions, shared-wallet-history audits and wallet-address lookup. See [portal behavior and operational notes](../portals.md).
+
+Next recommended milestone: finish the setup assistance and diagnostics in phase 2, then the rule-engine extensions in phase 3. Privacy/sharing/export ideas and wallet-first/X accounts are recorded in the [optional backlog](optional-features.md#privacy-sharing-and-registration); saving them does not start implementation.
+
 ## Conflicts and recommended decisions
 
 These recommendations deliberately preserve established Bouncer behavior where the guide proposes a different policy. They need to be settled before implementing the affected phase; adding a portal must not silently change them.
@@ -144,7 +162,7 @@ This phase is part of the complete non-optional guide coverage, but it should sh
 - Publish Bouncer's actual application ID, invite, official verification domain and support links. Explain message signing, read-only member-wallet access, role timing, supported wallets, pending requests, expired/superseded links and provider outages. Use real tested wallet instructions rather than fictional compatibility claims.
 - Document wallet transfer/removal, channel recovery, role hierarchy, background-check behavior, multiple wallets and combined minima. Document that support never needs a member's seed phrase/private key or token approvals.
 - Verify the remote database backup and rehearse each migration on a restore before production. Preserve existing rules, wallet links, blocks, assignments, audit history, Ordinals catalogs and evaluation results.
-- Ship additive schema and backend operations before their UI; backfill and verify existing data before removing superseded columns. Release each phase through a reviewable branch/PR and verify the exact Railway deployment. Refresh Discord commands where changed.
+- Ship additive schema and backend operations before their UI; backfill and verify existing data before removing superseded columns. Release each phase through a reviewable branch/PR. Refresh Discord commands where changed.
 - Test existing signed verification, combined counts and wallet transfers alongside new portal authorization, deletion/unlink alternatives, Undo/Redo, disabled background checks, unavailable providers and mobile repeat verification.
 
 ## Database additions by stage
@@ -168,4 +186,4 @@ Keep protected reads/writes behind authenticated backend endpoints with server/m
 2. Whether to change previously-earned-role restoration or wallet-transfer policy; this plan preserves both existing behaviors.
 3. The actual new EVM networks, marketplace resolver, non-EVM providers and tested wallet apps, including their production access/costs.
 
-The recommended first release is phases 1–4: shared authenticated operations, the admin dashboard, setup diagnostics, rule management and member troubleshooting on today's supported assets. The member portal and additional network integrations follow independently.
+The admin and member portals have shipped. Use the [current implementation status](#current-implementation-status) to track remaining core work separately from optional features and deferred integrations.
