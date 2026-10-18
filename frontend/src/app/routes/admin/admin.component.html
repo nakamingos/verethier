@@ -658,11 +658,7 @@
                               editor?.id === rule.id ? 'Cancel' : 'Edit'
                             }}</span></span
                           ></button
-                        ><button
-                          class="danger-text"
-                          (click)="remove(rule)"
-                          [disabled]="busy"
-                        >
+                        ><button (click)="remove(rule)" [disabled]="busy">
                           Delete
                         </button>
                       </div>
@@ -906,8 +902,8 @@
                 </p>
               </section>
               @if (member) {
-                <section class="panel">
-                  <div class="section-heading">
+                <section class="panel member-details">
+                  <div class="section-heading member-heading">
                     <h2>{{ member.name }}</h2>
                     <div class="actions">
                       <button (click)="lookup(true)" [disabled]="busy">
@@ -927,30 +923,70 @@
                     a provider is unavailable.
                   </p>
                   <h3>Saved wallets</h3>
-                  @for (wallet of member.wallets; track wallet.address) {
-                    <p class="address">
-                      {{ wallet.wallet_type }} · {{ wallet.address }}
-                    </p>
-                  } @empty {
-                    <p>No wallets saved.</p>
-                  }
-                  <h3>Previously earned roles</h3>
-                  @for (role of member.roles; track role.id) {
-                    <div class="history-row earned-role">
-                      <strong>{{ role.name }}</strong
-                      ><span>{{
-                        role.held ? 'In Discord' : 'Missing in Discord'
-                      }}</span
-                      ><span class="badge">{{
-                        role.status.replace('_', ' ')
-                      }}</span>
-                      @if (role.reason) {
-                        <p>{{ role.reason }}</p>
+                  <table
+                    class="history-table wallet-table"
+                    aria-label="Saved wallets"
+                  >
+                    <thead>
+                      <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col">Address</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (wallet of member.wallets; track wallet.address) {
+                        <tr>
+                          <td>{{ wallet.wallet_type }}</td>
+                          <td class="address">{{ wallet.address }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="2">No wallets saved.</td>
+                        </tr>
                       }
-                    </div>
-                  } @empty {
-                    <p>No earned roles on file. Ask this member to verify.</p>
-                  }
+                    </tbody>
+                  </table>
+                  <h3>Previously earned roles</h3>
+                  <table
+                    class="history-table"
+                    aria-label="Previously earned roles"
+                  >
+                    <thead>
+                      <tr>
+                        <th scope="col">Role</th>
+                        <th scope="col">Discord</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (role of member.roles; track role.id) {
+                        <tr class="earned-role">
+                          <td data-label="Role">
+                            <strong>{{ role.name }}</strong>
+                            @if (role.reason) {
+                              <p class="history-note">{{ role.reason }}</p>
+                            }
+                          </td>
+                          <td data-label="Discord">
+                            {{
+                              role.held ? 'In Discord' : 'Missing in Discord'
+                            }}
+                          </td>
+                          <td data-label="Status">
+                            <span class="badge">{{
+                              role.status.replace('_', ' ')
+                            }}</span>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="3">
+                            No earned roles on file. Ask this member to verify.
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
                 </section>
               }
             }
@@ -973,6 +1009,13 @@
                         (ngModelChange)="switchTab('audit')"
                         [options]="activitySortChoices"
                         label="Sort by date" /></span></label
+                  ><label
+                    >Entries per page:<span class="select-control"
+                      ><app-pixel-select
+                        [(ngModel)]="activitySize"
+                        (ngModelChange)="switchTab('audit')"
+                        [options]="activitySizeChoices"
+                        label="Entries per page" /></span></label
                   ><button
                     (click)="switchTab('audit')"
                     [disabled]="busy || activityLoading"
@@ -984,61 +1027,145 @@
                   class="activity-results"
                   role="region"
                   aria-label="Activity entries"
-                  tabindex="0"
                   [attr.aria-busy]="activityLoading"
                 >
                   @if (activityReady && activity.kind === activityKind) {
-                    @for (item of activity.items; track item.id) {
-                      <div class="history-row">
-                        @if (activity.kind === 'roles') {
-                          <strong>{{ item.user_name || item.user_id }}</strong
-                          ><span>{{ item.role_name || item.role_id }}</span
-                          ><span class="badge">{{ item.status }}</span>
-                        } @else if (activity.kind === 'changes') {
-                          <strong
-                            >{{ item.kind }} · Rule
-                            {{
-                              item.after_rule?.id || item.before_rule?.id
-                            }}</strong
-                          ><span>{{
-                            item.after_rule?.role_name ||
-                              item.before_rule?.role_name
-                          }}</span>
-                          @if (item.reversible) {
-                            <button (click)="reverse(item)" [disabled]="busy">
-                              Reverse
-                            </button>
+                    <table class="history-table" aria-label="Activity log">
+                      <thead>
+                        <tr>
+                          @if (activity.kind === 'roles') {
+                            <th scope="col">Member</th>
+                            <th scope="col">Role</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Updated</th>
+                          } @else if (activity.kind === 'changes') {
+                            <th scope="col">Change</th>
+                            <th scope="col">Role</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Action</th>
+                          } @else {
+                            <th scope="col">Subject</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Result</th>
+                            <th scope="col">Updated</th>
+                            <th scope="col">Action</th>
                           }
-                        } @else {
-                          <strong>{{
-                            item.user_id
-                              ? 'Member ' + item.user_id
-                              : 'Role ' + item.role_id
-                          }}</strong
-                          ><span class="badge">{{ item.status }}</span>
-                          @if (item.status === 'failed') {
-                            <button (click)="retry(item)" [disabled]="busy">
-                              Retry check
-                            </button>
-                          }
-                          @if (item.result) {
-                            <span
-                              >{{ item.result.verified || 0 }} eligible ·
-                              {{ item.result.revoked || 0 }} ineligible ·
-                              {{ item.result.errors || 0 }} unavailable</span
-                            >
-                            @if (item.result.error) {
-                              <p>{{ item.result.error }}</p>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (item of activity.items; track item.id) {
+                          <tr class="history-row">
+                            @if (activity.kind === 'roles') {
+                              <td data-label="Member">
+                                <strong>{{
+                                  item.user_name || item.user_id
+                                }}</strong>
+                              </td>
+                              <td data-label="Role">
+                                {{ item.role_name || item.role_id }}
+                              </td>
+                              <td data-label="Status">
+                                <span class="badge">{{ item.status }}</span>
+                              </td>
+                              <td data-label="Updated">
+                                <time>{{
+                                  item.updated_at || item.created_at
+                                    | date: 'medium'
+                                }}</time>
+                              </td>
+                            } @else if (activity.kind === 'changes') {
+                              <td data-label="Change">
+                                <strong
+                                  >{{ item.kind }} · Rule
+                                  {{
+                                    item.after_rule?.id || item.before_rule?.id
+                                  }}</strong
+                                >
+                              </td>
+                              <td data-label="Role">
+                                {{
+                                  item.after_rule?.role_name ||
+                                    item.before_rule?.role_name
+                                }}
+                              </td>
+                              <td data-label="Date">
+                                <time>{{
+                                  item.created_at | date: 'medium'
+                                }}</time>
+                              </td>
+                              <td data-label="Action" class="table-actions">
+                                @if (item.reversible) {
+                                  <button
+                                    (click)="reverse(item)"
+                                    [disabled]="busy"
+                                  >
+                                    Reverse
+                                  </button>
+                                } @else {
+                                  <span class="muted">—</span>
+                                }
+                              </td>
+                            } @else {
+                              <td data-label="Subject">
+                                <strong>{{
+                                  item.user_id
+                                    ? 'Member ' + item.user_id
+                                    : 'Role ' + item.role_id
+                                }}</strong>
+                              </td>
+                              <td data-label="Status">
+                                <span class="badge">{{ item.status }}</span>
+                              </td>
+                              <td data-label="Result">
+                                @if (item.result) {
+                                  <span
+                                    >{{ item.result.verified || 0 }} eligible ·
+                                    {{ item.result.revoked || 0 }} ineligible ·
+                                    {{
+                                      item.result.errors || 0
+                                    }}
+                                    unavailable</span
+                                  >
+                                  @if (item.result.error) {
+                                    <p class="history-note">
+                                      {{ item.result.error }}
+                                    </p>
+                                  }
+                                } @else {
+                                  <span class="muted">—</span>
+                                }
+                              </td>
+                              <td data-label="Updated">
+                                <time>{{
+                                  item.updated_at || item.created_at
+                                    | date: 'medium'
+                                }}</time>
+                              </td>
+                              <td data-label="Action" class="table-actions">
+                                @if (item.status === 'failed') {
+                                  <button
+                                    (click)="retry(item)"
+                                    [disabled]="busy"
+                                  >
+                                    Retry check
+                                  </button>
+                                } @else {
+                                  <span class="muted">—</span>
+                                }
+                              </td>
                             }
-                          }
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td
+                              [attr.colspan]="activity.kind === 'jobs' ? 5 : 4"
+                            >
+                              No activity yet.
+                            </td>
+                          </tr>
                         }
-                        <time>{{
-                          item.updated_at || item.created_at | date: 'medium'
-                        }}</time>
-                      </div>
-                    } @empty {
-                      <p>No activity yet.</p>
-                    }
+                      </tbody>
+                    </table>
                   }
                 </div>
                 <div class="pagination">

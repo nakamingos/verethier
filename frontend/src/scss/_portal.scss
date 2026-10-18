@@ -1131,32 +1131,67 @@ app-root:has(app-admin) .app-footer {
 .notice button {
   margin-left: 1rem;
 }
-.history-row {
-  display: flex;
+.member-heading {
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 1.2rem 0;
-  border-bottom: 1px solid var(--ase-border);
+}
+.member-heading h2 {
+  margin: 0;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
-.earned-role:last-child {
-  border-bottom: 0;
+.member-heading .actions {
+  margin: 0 0 0 auto;
+  flex-wrap: nowrap;
 }
-.history-row time {
+.history-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: 0.6rem 0 1.2rem;
+}
+.history-table th,
+.history-table td {
+  padding: 0.8rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--ase-border);
+}
+.history-table th {
+  font-weight: 400;
   font-size: 1.6rem;
   color: var(--ase-dim);
-  margin-left: auto;
 }
-.history-row p {
-  width: 100%;
-  margin: 0;
+.history-table tbody tr:last-child > td {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.history-table:last-child {
+  margin-bottom: 0;
+}
+.wallet-table th:first-child {
+  width: 8rem;
+}
+.history-table .table-actions {
+  text-align: right;
+}
+.history-table time {
+  display: block;
+  font-size: 1.6rem;
+  color: var(--ase-dim);
+}
+.portal-content .history-table .history-note {
+  margin: 0.4rem 0 0;
+  color: var(--ase-dim);
+  font-size: 1.6rem;
 }
 .activity-results {
-  height: clamp(32rem, 60svh, 64rem);
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  padding-right: 0.8rem;
+  height: auto;
+  overflow: visible;
+}
+.activity-panel {
+  scroll-margin-top: 1rem;
 }
 .pagination {
   display: flex;
@@ -1397,5 +1432,102 @@ button:disabled:hover,
   }
   app-verify .steps-wrapper .step .actions button {
     font-size: 1.6rem;
+  }
+}
+
+@media (max-width: 800px) {
+  .rule-card > .section-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    row-gap: 0.4rem;
+  }
+  .rule-card > .section-heading > div {
+    display: contents;
+  }
+  .rule-card > .section-heading .eyebrow {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .rule-card > .section-heading h3 {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .rule-card > .section-heading .item-count {
+    max-width: 12rem;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 600px) {
+  .member-heading .actions {
+    flex-direction: column;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+  .history-table:not(.wallet-table),
+  .history-table:not(.wallet-table) tbody {
+    display: block;
+  }
+  .history-table:not(.wallet-table) thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .history-table:not(.wallet-table) tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--ase-border);
+  }
+  .history-table:not(.wallet-table) tbody tr:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .history-table:not(.wallet-table) td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .history-table:not(.wallet-table) td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 1.6rem;
+    color: var(--ase-dim);
+  }
+  .history-table:not(.wallet-table) td[colspan] {
+    grid-column: 1 / -1;
+  }
+}
+
+.brand-header .header-account {
+  display: flex;
+  align-items: center;
+}
+.brand-header nav {
+  margin-left: auto;
+}
+@media (max-width: 800px) {
+  .brand-header {
+    gap: 0.4rem;
+  }
+  .brand-header nav {
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+  }
+  .brand-header nav a.button {
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+  .brand-header .header-account {
+    flex: 0 0 100%;
+    justify-content: flex-end;
   }
 }

@@ -244,9 +244,15 @@ const base = {
               });
             }
             const number = Number(url.searchParams.get('page') || 1);
+            const limit = Number(url.searchParams.get('limit') || 20);
             data = {
               items: Array.from(
-                { length: number === 3 ? 5 : 20 },
+                {
+                  length: Math.max(
+                    0,
+                    Math.min(limit, 45 - (number - 1) * limit),
+                  ),
+                },
                 (_, index) => ({
                   id: 'a' + index,
                   user_name:
@@ -254,7 +260,12 @@ const base = {
                       ? 'A collector with a long display name ' + index
                       : 'Collector ' + index,
                   role_name: 'Comrade',
-                  status: 'active',
+                  status:
+                    url.searchParams.get('kind') === 'jobs'
+                      ? 'failed'
+                      : 'active',
+                  role_id: role,
+                  result: { verified: 2, revoked: 1, errors: 1 },
                   kind: 'edit',
                   after_rule: base,
                   reversible: true,
@@ -262,7 +273,7 @@ const base = {
                 }),
               ),
               page: Number(url.searchParams.get('page') || 1),
-              pages: 3,
+              pages: Math.ceil(45 / limit),
               total: 45,
             };
             if (failActivity) {
@@ -1349,6 +1360,39 @@ const base = {
         false,
         'horizontal overflow',
       );
+      if (width < 800) {
+        const header = await page.locator('.brand-header').evaluate((el) => {
+          const brand = el.querySelector('.brand').getBoundingClientRect();
+          const nav = el.querySelector('nav').getBoundingClientRect();
+          const auth = el
+            .querySelector('.header-account')
+            .getBoundingClientRect();
+          return {
+            brandY: brand.y + brand.height / 2,
+            navY: nav.y + nav.height / 2,
+            navRight: nav.right,
+            authRight: auth.right,
+            authTop: auth.top,
+            navBottom: nav.bottom,
+          };
+        });
+        assert.ok(
+          Math.abs(header.brandY - header.navY) < 2,
+          'mobile title and navigation share a row',
+        );
+        assert.ok(header.authTop >= header.navBottom, 'auth uses its own row');
+        assert.ok(
+          Math.abs(header.navRight - header.authRight) < 2,
+          'header actions align right',
+        );
+        const card = page.locator('.rule-card').first();
+        const title = await card.locator('h3').first().boundingBox();
+        const count = await card.locator('.item-count').first().boundingBox();
+        assert.ok(
+          Math.abs(title.y + title.height / 2 - count.y - count.height / 2) < 2,
+          'mobile role and count share a row',
+        );
+      }
       holdActivity = true;
       const activityStarted = new Promise((resolve) => {
         activityEntered = resolve;
@@ -1389,48 +1433,24 @@ const base = {
         await page.locator('.activity-results .history-row').count(),
         0,
       );
-      const pendingPager = await page.locator('.pagination').boundingBox();
+
       await page.screenshot({
         path: `${artifacts}/audit-pending-${width}.png`,
         fullPage: true,
       });
       releaseActivity();
       await page.getByText('1 / 3 · 45 entries').waitFor();
-      assert.deepEqual(
-        await page.locator('.pagination').boundingBox(),
-        pendingPager,
-        'loading data does not move pagination',
+      assert.equal(
+        await page
+          .locator('.activity-results')
+          .evaluate((el) => getComputedStyle(el).overflowY),
+        'visible',
       );
-      const pager = await page.locator('.pagination').evaluate((el) => ({
-        top: el.getBoundingClientRect().top + scrollY,
-        height: el.getBoundingClientRect().height,
-      }));
-      await page
-        .locator('.activity-results')
-        .evaluate((el) => (el.scrollTop = 200));
+      assert.equal(await page.locator('.history-row').count(), 20);
       await page.getByRole('button', { name: 'Next →', exact: true }).click();
       await page.getByText('2 / 3 · 45 entries').waitFor();
-      assert.deepEqual(
-        await page.locator('.pagination').evaluate((el) => ({
-          top: el.getBoundingClientRect().top + scrollY,
-          height: el.getBoundingClientRect().height,
-        })),
-        pager,
-        'long rows should not move pagination',
-      );
-      await page.waitForFunction(
-        () => document.querySelector('.activity-results').scrollTop === 0,
-      );
       await page.getByRole('button', { name: 'Next →', exact: true }).click();
       await page.getByText('3 / 3 · 45 entries').waitFor();
-      assert.deepEqual(
-        await page.locator('.pagination').evaluate((el) => ({
-          top: el.getBoundingClientRect().top + scrollY,
-          height: el.getBoundingClientRect().height,
-        })),
-        pager,
-        'short pages should not move pagination',
-      );
       await page.screenshot({
         path: `${artifacts}/audit-${width}.png`,
         fullPage: true,
@@ -1474,6 +1494,54 @@ const base = {
           .search,
         /page=3/,
       );
+      const pageSize = page.getByRole('combobox', {
+        name: 'Entries per page',
+        exact: true,
+      });
+      await chooseOption(page, pageSize, '10');
+      await page.getByText('1 / 5 · 45 entries').waitFor();
+      assert.equal(await page.locator('.history-row').count(), 10);
+      await chooseOption(page, pageSize, '50');
+      await page.getByText('1 / 1 · 45 entries').waitFor();
+      assert.equal(await page.locator('.history-row').count(), 45);
+      await chooseOption(page, pageSize, '100');
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('.activity-results')
+            .getAttribute('aria-busy') === 'false',
+      );
+      assert.equal(await page.locator('.history-row').count(), 45);
+      await chooseOption(page, pageSize, '20');
+      await page.getByText('1 / 3 · 45 entries').waitFor();
+      const showActivity = page.getByRole('combobox', {
+        name: 'Show',
+        exact: true,
+      });
+      await chooseOption(page, showActivity, 'Rule changes');
+      await page
+        .getByRole('columnheader', { name: 'Change', exact: true })
+        .waitFor({ state: 'attached' });
+      assert.equal(
+        await page
+          .getByRole('button', { name: 'Reverse', exact: true })
+          .count(),
+        20,
+      );
+      await chooseOption(page, showActivity, 'Role checks');
+      await page
+        .getByRole('columnheader', { name: 'Result', exact: true })
+        .waitFor({ state: 'attached' });
+      assert.equal(
+        await page
+          .getByRole('button', { name: 'Retry check', exact: true })
+          .count(),
+        20,
+      );
+      await chooseOption(page, showActivity, 'Role assignments');
+      await page
+        .getByRole('columnheader', { name: 'Member', exact: true })
+        .waitFor({ state: 'attached' });
       const activitySort = page.getByRole('combobox', {
         name: 'Sort by date',
         exact: true,
@@ -1573,7 +1641,7 @@ const base = {
       );
       assert.equal(
         await page
-          .locator('.earned-role')
+          .locator('.earned-role:last-child td')
           .last()
           .evaluate((el) => getComputedStyle(el).borderBottomWidth),
         '0px',

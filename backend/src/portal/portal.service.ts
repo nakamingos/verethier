@@ -548,6 +548,7 @@ export class PortalService {
     page: number,
     kind: string,
     sort: 'asc' | 'desc' = 'desc',
+    limit = 20,
   ) {
     await this.access(session, server);
     const table =
@@ -570,7 +571,7 @@ export class PortalService {
         ascending: sort === 'asc',
       })
       .order('id', { ascending: sort === 'asc' })
-      .range((page - 1) * 20, page * 20 - 1);
+      .range((page - 1) * limit, page * limit - 1);
     this.dbError(error);
     let items: any[] = data || [];
     if (kind === 'changes') {
@@ -592,7 +593,8 @@ export class PortalService {
       items,
       total: count || 0,
       page,
-      pages: Math.max(1, Math.ceil((count || 0) / 20)),
+      pages: Math.max(1, Math.ceil((count || 0) / limit)),
+      page_size: limit,
     };
   }
   private memberQuery(input: string): string {
