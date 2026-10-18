@@ -213,10 +213,11 @@ button[aria-pressed='true']:not(.primary):not(.selected):hover {
   outline: 2px solid var(--ase-selected);
   outline-offset: 3px;
 }
-button:focus-visible,
+button:focus-visible:not(:where(.pixel-select-trigger)),
 a.button:focus-visible {
   outline: none;
-  border-image-source: var(--pixel-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 button.danger-text {
   color: var(--ase-danger);
@@ -418,14 +419,38 @@ form > label {
   font-size: 1.6rem;
   min-height: 3.2rem;
 }
-.brand-header :is(button, a.button) {
+:where(.brand-header, app-admin .portal)
+  :is(button, a.button):not(
+    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+  ) {
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
   border-image-width: 6px 6px 8px 6px;
+}
+:where(.brand-header, app-admin .portal)
+  :is(button, a.button):not(
+    :where(
+      .tabs button,
+      .pixel-select-trigger,
+      .member-matches button,
+      .danger-text,
+      .combined-badge
+    )
+  ) {
   color: var(--ase-server-text);
 }
-.brand-header :is(button, a.button):hover {
+:where(.brand-header, app-admin .portal)
+  :is(button, a.button):not(
+    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+  ):is(:hover, :focus-visible) {
   border-image-source: var(--pixel-server-button-hover);
+}
+:where(.brand-header, app-admin .portal)
+  button[aria-pressed='true']:not(.primary):not(.selected),
+:where(.brand-header, app-admin .portal)
+  button[aria-pressed='true']:not(.primary):not(.selected):hover {
+  border-image-source: var(--pixel-server-button-selected);
+  color: var(--ase-server-text);
 }
 .route-content {
   max-width: 132rem;
@@ -511,6 +536,9 @@ app-root:has(app-admin) .app-footer {
   align-items: center;
   gap: 2rem;
   flex-wrap: wrap;
+}
+.portal-title h1 {
+  margin: 0;
 }
 .portal-feedback {
   position: fixed;
@@ -621,28 +649,6 @@ app-root:has(app-admin) .app-footer {
 .server-list img {
   flex-shrink: 0;
   border-radius: 0;
-}
-app-admin .portal :is(button, a.button) {
-  border-image-source: var(--pixel-server-button);
-  border-image-slice: 6 6 8 6 fill;
-  border-image-width: 6px 6px 8px 6px;
-  color: var(--ase-server-text);
-}
-app-admin .portal :is(button, a.button):hover,
-app-admin .portal :is(button, a.button):focus-visible {
-  border-image-source: var(--pixel-server-button-hover);
-}
-app-admin .portal :is(button.selected, a.button.selected),
-app-admin .portal button[aria-current='page'] {
-  border-image-source: var(--pixel-server-button-selected);
-  color: var(--ase-server-text);
-}
-app-admin .portal :is(button.selected, a.button.selected):hover,
-app-admin .portal button[aria-current='page']:hover {
-  border-image-source: var(--pixel-server-button-selected);
-}
-app-admin .portal :is(button, a.button):focus-visible {
-  outline: none;
 }
 .portal-content {
   min-width: 0;
@@ -1048,14 +1054,11 @@ app-verify .user-info-wrapper .user-tag .warn {
   button[aria-pressed='true'] {
     border-color: Highlight;
   }
-  :focus-visible {
+  :focus-visible,
+  button:focus-visible,
+  a.button:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: 2px;
-  }
-  app-admin .portal :is(button, a.button):focus-visible {
-    outline: 2px solid Highlight;
-    outline-offset: 2px;
-    filter: none;
   }
   .pixel-select-value,
   .pixel-select-arrow,

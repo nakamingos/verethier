@@ -2,7 +2,7 @@
   <div class="portal-heading">
     <div class="portal-title">
       <h1>Control room</h1>
-      @if (data) {
+      @if (user && data) {
         <div class="community-title">
           @if (data.server.icon) {
             <img [src]="data.server.icon" alt="" />

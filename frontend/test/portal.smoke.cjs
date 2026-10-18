@@ -50,6 +50,8 @@ const base = {
         releaseServer,
         serverEntered;
       let denyOtherServer = true;
+      let sessionExpired = false;
+      let oauthConfigured = true;
       const initialServerStarted = new Promise((resolve) => {
         serverEntered = resolve;
       });
@@ -98,11 +100,15 @@ const base = {
           });
           if (p === '/session')
             data = {
-              user: { id: '444444444444444444', name: 'Snepsid' },
+              user: sessionExpired
+                ? null
+                : { id: '444444444444444444', name: 'Snepsid' },
               csrf: 'csrf-test',
-              configured: true,
+              configured: oauthConfigured,
             };
-          else if (p === '/servers')
+          else if (p === '/auth/logout') {
+            sessionExpired = true;
+          } else if (p === '/servers')
             data = {
               servers: [
                 { id: server, name: 'NoMoreLabs', installed: true },
@@ -179,6 +185,10 @@ const base = {
                   ],
                 };
               }
+            }
+            if (sessionExpired) {
+              status = 401;
+              data = { message: 'Please sign in again.' };
             }
           } else if (p.endsWith('/suggestions'))
             data = { values: ['pizza-comrades', 'yonder'] };
@@ -950,6 +960,78 @@ const base = {
           .filter((r) => r.method === 'POST')
           .every((r) => r.csrf === 'csrf-test'),
         'CSRF header missing',
+      );
+      if (width === 1280) {
+        await page
+          .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+          .click();
+      } else {
+        sessionExpired = true;
+        await page.locator('.server-list button.selected').click();
+      }
+      const signIn = page.getByRole('link', {
+        name: 'Sign in with Discord',
+        exact: true,
+      });
+      await signIn.waitFor();
+      assert.equal(
+        await page
+          .locator('.brand-header')
+          .getByRole('link', { name: 'Sign in with Discord', exact: true })
+          .count(),
+        1,
+        'sign-in lives in the header',
+      );
+      assert.equal(
+        await page.locator('.portal-heading .community-title').count(),
+        0,
+        'signed-out and expired sessions hide the server summary',
+      );
+      assert.equal(
+        await signIn.getAttribute('href'),
+        '/api/portal/auth/login?return_to=/admin',
+      );
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+        'signed-out header fits viewport',
+      );
+      const dismiss = page.getByRole('button', {
+        name: 'Dismiss',
+        exact: true,
+      });
+      if (await dismiss.count()) await dismiss.click();
+      await page.screenshot({
+        path: `${artifacts}/signed-out-header-${width}.png`,
+        fullPage: true,
+      });
+      await page.getByRole('link', { name: 'Help', exact: true }).click();
+      await page
+        .getByRole('heading', {
+          name: 'Verify your wallet. Get your roles.',
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await signIn.count(),
+        0,
+        'route changes clear the prior admin sign-in state',
+      );
+      await page
+        .getByRole('link', { name: 'Control room', exact: true })
+        .click();
+      await signIn.waitFor();
+      oauthConfigured = false;
+      await page.reload();
+      await page
+        .getByText('Discord sign-in is being configured.', { exact: false })
+        .waitFor();
+      assert.equal(
+        await signIn.count(),
+        0,
+        'unconfigured OAuth does not show a sign-in action',
       );
       assert.deepEqual(errors, []);
       console.log(
