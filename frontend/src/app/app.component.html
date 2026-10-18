@@ -16,25 +16,38 @@
     >
       <img src="/assets/theme.png" width="20" height="20" alt="" />
     </button>
-    @if (portalAuth?.user; as user) {
+    @if (showPortalAuth && session.user; as user) {
       <button
         class="header-auth"
         type="button"
-        (click)="portalAuth?.logout()"
-        [disabled]="portalAuth?.busy"
+        (click)="logout()"
+        [disabled]="session.busy || activeAdmin?.busy"
         [title]="'Sign out · ' + user.name"
       >
         <span>Sign out · {{ user.name }}</span>
       </button>
-    } @else if (showSignIn) {
+    } @else if (showPortalAuth && session.ready && session.configured) {
       <a class="button" href="/api/portal/auth/login?return_to=/admin">
         Sign in with Discord
       </a>
     }
   </nav>
 </header>
+@if (showPortalAuth && !activeAdmin && session.error) {
+  <aside class="portal-feedback" aria-label="Notifications">
+    <div class="notice danger" role="alert">
+      <p>{{ session.error }}</p>
+      <button (click)="session.error = ''">Dismiss</button>
+    </div>
+  </aside>
+}
 <main class="route-content">
-  <router-outlet (activate)="onRouteActivate($event)" />
+  <router-outlet
+    #outlet="outlet"
+    (activate)="
+      onRouteActivate($event, outlet.activatedRoute.snapshot.routeConfig?.path)
+    "
+  />
 </main>
 <footer class="app-footer">
   <span>Bouncer · Wallet verification</span

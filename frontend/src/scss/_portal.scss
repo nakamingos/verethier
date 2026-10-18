@@ -164,7 +164,7 @@ a.button {
   justify-content: center;
   gap: 0.6rem;
   min-height: 3.4rem;
-  padding: 0.55rem 1.2rem 0.35rem;
+  padding: 0.45rem 1.2rem 0.45rem;
   border: 1px solid var(--ase-border);
   @include pixel-surface(var(--pixel-face));
   color: var(--ase-text);
@@ -571,7 +571,6 @@ app-admin .welcome {
   max-width: 132rem;
   margin: 2rem auto;
   padding: 1rem 2rem;
-  border-top: 1px solid var(--ase-border);
   display: flex;
   gap: 2rem;
   flex-wrap: wrap;
@@ -667,6 +666,7 @@ app-root:has(app-admin) .app-footer {
   top: 1.5rem;
 }
 .server-menu > h2 {
+  color: var(--ase-dim);
   font-size: 1.6rem;
   font-weight: 400;
   line-height: 1.5;
@@ -690,7 +690,7 @@ app-root:has(app-admin) .app-footer {
   font-size: 1.6rem;
   // Share the bottom outline/shadow with the next button's top outline.
   margin-bottom: -4px;
-  padding: 0.55rem 1.2rem 0.35rem;
+  padding: 0.45rem 1.2rem 0.45rem;
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
   border-image-width: 6px 6px 8px 6px;
@@ -866,7 +866,7 @@ app-root:has(app-admin) .app-footer {
 .workspace-tabs button {
   flex-shrink: 0;
   min-height: 2.6rem;
-  padding-block: 0.2rem;
+  padding-block: 0.3rem 0.1rem;
   font-size: 2rem;
   line-height: 1;
 }
@@ -1139,6 +1139,9 @@ app-root:has(app-admin) .app-footer {
   padding: 1.2rem 0;
   border-bottom: 1px solid var(--ase-border);
   overflow-wrap: anywhere;
+}
+.earned-role:last-child {
+  border-bottom: 0;
 }
 .history-row time {
   font-size: 1.6rem;

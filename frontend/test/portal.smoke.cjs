@@ -9,6 +9,15 @@ async function chooseOption(page, control, name) {
     .getByRole('option', { name, exact: true })
     .click();
 }
+async function openHelp(page) {
+  await page.getByRole('link', { name: 'Help', exact: true }).click();
+  await page
+    .getByRole('heading', {
+      name: 'Verify your wallet. Get your roles.',
+      exact: true,
+    })
+    .waitFor();
+}
 const root = path.resolve(__dirname, '../dist/frontend/browser');
 const artifacts = fs.mkdtempSync('/tmp/bouncer-portal-smoke-');
 const server = '111111111111111111',
@@ -52,6 +61,7 @@ const base = {
       let denyOtherServer = true;
       let sessionExpired = false;
       let oauthConfigured = true;
+      let failLogout = false;
       let holdActivity = false,
         releaseActivity,
         activityEntered;
@@ -115,7 +125,11 @@ const base = {
               configured: oauthConfigured,
             };
           else if (p === '/auth/logout') {
-            sessionExpired = true;
+            if (failLogout) {
+              failLogout = false;
+              status = 503;
+              data = { message: 'Logout unavailable' };
+            } else sessionExpired = true;
           } else if (p === '/servers')
             data = {
               servers: [
@@ -376,15 +390,14 @@ const base = {
       });
       releaseServer();
       await page
-        .getByRole('heading', { name: 'NoMoreLabs', exact: true })
-        .waitFor();
-      await page
-        .getByRole('heading', { name: 'Control room', exact: true })
+        .getByRole('heading', { name: 'NoMoreLabs Control Room', exact: true })
         .waitFor();
       assert.equal(
-        await page.locator('.portal-heading .community-title h2').textContent(),
+        await page
+          .locator('.portal-heading .community-title .server-title')
+          .textContent(),
         'NoMoreLabs',
-        'active server summary sits beside the control room title',
+        'server name precedes Control Room in one heading',
       );
       assert.equal(
         await page.getByRole('link', { name: 'Sign in with Discord' }).count(),
@@ -400,6 +413,33 @@ const base = {
         'signed-in account action lives in the header',
       );
       assert.equal(await page.locator('.portal-heading button').count(), 0);
+      assert.equal(
+        await page
+          .locator('.app-footer')
+          .evaluate((el) => getComputedStyle(el).borderTopWidth),
+        '0px',
+        'footer has no separator line',
+      );
+      const headingParts = await page
+        .locator('.portal-title h1')
+        .evaluate((el) => ({
+          text: el.textContent.replace(/\s+/g, ' ').trim(),
+          size: getComputedStyle(el).fontSize,
+          serverSize: getComputedStyle(el.querySelector('.server-title'))
+            .fontSize,
+        }));
+      assert.equal(headingParts.text, 'NoMoreLabs Control Room');
+      assert.equal(headingParts.size, headingParts.serverSize);
+      assert.equal(
+        await page
+          .locator('.server-menu > h2')
+          .evaluate((el) => getComputedStyle(el).color),
+        await page
+          .locator('.portal-content .toolbar > label')
+          .first()
+          .evaluate((el) => getComputedStyle(el).color),
+      );
+
       await page.evaluate(() => document.fonts.ready);
       assert.deepEqual(
         await page
@@ -606,7 +646,7 @@ const base = {
       await chooseOption(page, assetPicker, 'All assets');
       await assetPicker.click();
       await page
-        .getByRole('heading', { name: 'Control room', exact: true })
+        .getByRole('heading', { name: 'NoMoreLabs Control Room', exact: true })
         .click();
       await page.waitForFunction(
         () =>
@@ -747,7 +787,7 @@ const base = {
         .click();
       await failedServerStarted;
       assert.equal(
-        await page.locator('.community-title h2').textContent(),
+        await page.locator('.community-title .server-title').textContent(),
         'NoMoreLabs',
       );
       assert.equal(
@@ -790,7 +830,7 @@ const base = {
         .click();
       await switchStarted;
       assert.equal(
-        await page.locator('.community-title h2').textContent(),
+        await page.locator('.community-title .server-title').textContent(),
         'NoMoreLabs',
       );
       assert.equal(
@@ -803,7 +843,10 @@ const base = {
       );
       releaseServer();
       await page
-        .getByRole('heading', { name: 'Another community', exact: true })
+        .getByRole('heading', {
+          name: 'Another community Control Room',
+          exact: true,
+        })
         .waitFor();
       assert.equal(
         (
@@ -821,7 +864,7 @@ const base = {
         .getByRole('button', { name: 'NoMoreLabs', exact: true })
         .click();
       await page
-        .getByRole('heading', { name: 'NoMoreLabs', exact: true })
+        .getByRole('heading', { name: 'NoMoreLabs Control Room', exact: true })
         .waitFor();
       const iconSize = await page.locator('.theme-toggle img').boundingBox();
       assert.equal(
@@ -1229,7 +1272,10 @@ const base = {
         .getByRole('button', { name: 'Another community', exact: true })
         .click();
       await page
-        .getByRole('heading', { name: 'Another community', exact: true })
+        .getByRole('heading', {
+          name: 'Another community Control Room',
+          exact: true,
+        })
         .waitFor();
       await addRule.click();
       assert.equal(
@@ -1243,7 +1289,7 @@ const base = {
         .getByRole('button', { name: 'NoMoreLabs', exact: true })
         .click();
       await page
-        .getByRole('heading', { name: 'NoMoreLabs', exact: true })
+        .getByRole('heading', { name: 'NoMoreLabs Control Room', exact: true })
         .waitFor();
       await addRule.click();
       assert.equal(
@@ -1525,13 +1571,77 @@ const base = {
           .every((r) => r.csrf === 'csrf-test'),
         'CSRF header missing',
       );
+      assert.equal(
+        await page
+          .locator('.earned-role')
+          .last()
+          .evaluate((el) => getComputedStyle(el).borderBottomWidth),
+        '0px',
+        'last earned role has no trailing separator',
+      );
+      await openHelp(page);
+      await page
+        .getByRole('heading', {
+          name: 'Verify your wallet. Get your roles.',
+          exact: true,
+        })
+        .waitFor();
+      await page
+        .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+        .waitFor();
+      await page.reload();
+      await page
+        .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+        .waitFor();
+      assert.equal(
+        await page.locator('app-admin').count(),
+        0,
+        'direct Help loads the session independently of Control Room',
+      );
+      await page.screenshot({
+        path: `${artifacts}/help-signed-in-${width}.png`,
+        fullPage: true,
+      });
       if (width === 1280) {
+        failLogout = true;
+        await page
+          .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+          .click();
+        await page
+          .getByRole('alert')
+          .filter({ hasText: 'Could not sign out' })
+          .waitFor();
+        assert.equal(
+          await page
+            .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+            .isVisible(),
+          true,
+          'failed Help sign-out retains the account',
+        );
+        await page
+          .getByRole('button', { name: 'Dismiss', exact: true })
+          .click();
         await page
           .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
           .click();
       } else {
-        sessionExpired = true;
-        await page.locator('.server-list button.selected').click();
+        await page
+          .getByRole('link', { name: 'Control room', exact: true })
+          .click();
+        await page
+          .getByRole('heading', {
+            name: 'NoMoreLabs Control Room',
+            exact: true,
+          })
+          .waitFor();
+        if (width === 393) {
+          await page
+            .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+            .click();
+        } else {
+          sessionExpired = true;
+          await page.locator('.server-list button.selected').click();
+        }
       }
       const signIn = page.getByRole('link', {
         name: 'Sign in with Discord',
@@ -1571,7 +1681,7 @@ const base = {
         path: `${artifacts}/signed-out-header-${width}.png`,
         fullPage: true,
       });
-      await page.getByRole('link', { name: 'Help', exact: true }).click();
+      await openHelp(page);
       await page
         .getByRole('heading', {
           name: 'Verify your wallet. Get your roles.',
@@ -1580,13 +1690,23 @@ const base = {
         .waitFor();
       assert.equal(
         await signIn.count(),
-        0,
-        'route changes clear the prior admin sign-in state',
+        1,
+        'Help retains the signed-out sign-in action',
       );
+      await page.reload();
+      await signIn.waitFor();
       await page
         .getByRole('link', { name: 'Control room', exact: true })
         .click();
+      await page
+        .getByRole('heading', { name: 'Control Room', exact: true })
+        .waitFor();
       await signIn.waitFor();
+      assert.equal(
+        await page.locator('.portal-heading .community-title').count(),
+        0,
+        'Help sign-out also clears Control Room identity',
+      );
       oauthConfigured = false;
       await page.reload();
       await page
@@ -1596,6 +1716,25 @@ const base = {
         await signIn.count(),
         0,
         'unconfigured OAuth does not show a sign-in action',
+      );
+      await openHelp(page);
+      await page.reload();
+      await page
+        .getByRole('heading', {
+          name: 'Verify your wallet. Get your roles.',
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await signIn.count(),
+        0,
+        'direct Help respects unavailable OAuth configuration',
+      );
+      assert.ok(
+        requests
+          .filter((r) => r.path === '/auth/logout')
+          .every((r) => r.csrf === 'csrf-test'),
+        'Help logout retains CSRF protection',
       );
       assert.deepEqual(errors, []);
       console.log(
