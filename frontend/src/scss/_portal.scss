@@ -39,7 +39,7 @@
   );
   @include pixel-server-menu();
   @include pixel-cards();
-  @include pixel-dropdowns();
+  @include pixel-input-controls();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   --ase-face: #2c2c30;
@@ -96,7 +96,7 @@
     #2c2c30
   );
   @include pixel-cards(#eee, #aaa, #e0e0e0);
-  @include pixel-dropdowns(#eee, #aaa, #c6c6c6, #eee, #2c2c30, #aaa);
+  @include pixel-input-controls(#eee, #aaa, #c6c6c6, #eee, #2c2c30, #aaa);
   --ase-bg: #d9d9d9;
   --ase-face: #eee;
   --ase-text: #2c2c30;
@@ -234,7 +234,18 @@ textarea {
   line-height: 1.4;
   border: 1px solid var(--ase-border);
   padding: 0.8rem 1rem;
-  @include pixel-surface(var(--pixel-inset));
+  @include pixel-surface(var(--pixel-entry));
+  border-image-slice: 8 fill;
+  border-image-width: 8px;
+}
+:where(input:not([type='checkbox']):not([type='radio']), textarea):focus {
+  border-image-source: var(--pixel-entry-focused);
+  outline: none;
+}
+input::selection,
+textarea::selection {
+  background: var(--ase-selected);
+  color: #41444a;
 }
 .select-control {
   display: block;
@@ -1097,6 +1108,11 @@ app-verify .user-info-wrapper .user-tag .warn {
     background: Highlight;
     color: HighlightText;
     forced-color-adjust: none;
+  }
+  input::selection,
+  textarea::selection {
+    background: Highlight;
+    color: HighlightText;
   }
   .pixel-select-arrow::after {
     background: CanvasText;
