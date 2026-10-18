@@ -430,7 +430,24 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         path: path.join(artifacts, width + '-communities.png'),
         fullPage: true,
       });
-      await page.getByRole('searchbox').fill('absent');
+      const communitySearch = page.getByRole('searchbox');
+      const searchIcon = page.locator('.search-field > img');
+      assert.equal(await searchIcon.getAttribute('src'), '/assets/search.png');
+      assert.equal(
+        await searchIcon.evaluate(
+          (icon) => getComputedStyle(icon).imageRendering,
+        ),
+        'pixelated',
+      );
+      const fieldBox = await communitySearch.boundingBox(),
+        iconBox = await searchIcon.boundingBox();
+      assert(
+        Math.abs(
+          iconBox.y + iconBox.height / 2 - fieldBox.y - fieldBox.height / 2,
+        ) < 1,
+        'Search icon centered in field',
+      );
+      await communitySearch.fill('absent');
       await page.getByText('No communities match your search.').waitFor();
       await page.getByRole('searchbox').fill('');
       await page.getByRole('button', { name: 'Wallets', exact: true }).click();

@@ -244,7 +244,178 @@
                 >
                   + Add rule
                 </button>
+                <button
+                  [disabled]="busy"
+                  (click)="roleActionsOpen = !roleActionsOpen"
+                  [attr.aria-expanded]="roleActionsOpen"
+                  aria-controls="role-actions"
+                >
+                  Role actions
+                </button>
               </div>
+              @if (roleActionsOpen) {
+                <section
+                  class="panel"
+                  id="role-actions"
+                  aria-label="Role actions"
+                >
+                  <div class="section-heading">
+                    <h2>Role actions</h2>
+                    <button [disabled]="busy" (click)="editRoleAction()">
+                      Add role action
+                    </button>
+                  </div>
+                  <p>
+                    When Bouncer grants or restores the trigger role, remove the
+                    selected roles. Bouncer keeps those roles excluded while the
+                    trigger role is held.
+                  </p>
+                  @for (
+                    action of data.role_actions || [];
+                    track action.trigger_role_id
+                  ) {
+                    <div class="role-action-row">
+                      <p>
+                        <strong>{{ roleName(action.trigger_role_id) }}</strong>
+                        removes
+                        @for (
+                          id of action.remove_role_ids;
+                          track id;
+                          let last = $last
+                        ) {
+                          {{ roleName(id) }}{{ last ? '' : ', ' }}
+                        }
+                      </p>
+                      <div class="actions">
+                        <button
+                          [disabled]="busy"
+                          (click)="editRoleAction(action)"
+                        >
+                          Edit role action</button
+                        ><button
+                          [disabled]="busy"
+                          (click)="deleteRoleAction(action)"
+                        >
+                          Delete role action
+                        </button>
+                      </div>
+                    </div>
+                  }
+                  @if (!data.role_actions?.length && !roleActionEditor) {
+                    <p>No role actions configured.</p>
+                  }
+                  @if (roleActionEditor; as action) {
+                    <section
+                      class="panel role-action-editor"
+                      aria-label="Role action editor"
+                    >
+                      @if (!roleActionReview) {
+                        <h3>
+                          {{
+                            action.existing
+                              ? 'Edit role action'
+                              : 'Add role action'
+                          }}
+                        </h3>
+                        <div class="toolbar">
+                          <label
+                            >Trigger role:<app-pixel-select
+                              [(ngModel)]="action.trigger_role_id"
+                              [disabled]="busy || action.existing"
+                              [options]="roleActionChoices"
+                              label="Trigger role"
+                          /></label>
+                          <label
+                            >Remove role:<app-pixel-select
+                              [(ngModel)]="roleActionTarget"
+                              [disabled]="busy || !action.trigger_role_id"
+                              [options]="roleActionTargetChoices"
+                              label="Remove role" /></label
+                          ><button
+                            [disabled]="
+                              busy ||
+                              !roleActionTarget ||
+                              action.remove_role_ids.length >= 20
+                            "
+                            (click)="addRoleActionTarget()"
+                          >
+                            Add role to remove
+                          </button>
+                        </div>
+                        @for (
+                          id of action.remove_role_ids;
+                          track id;
+                          let index = $index
+                        ) {
+                          <div class="actions">
+                            <span>{{ roleName(id) }}</span
+                            ><button
+                              [disabled]="busy"
+                              (click)="action.remove_role_ids.splice(index, 1)"
+                            >
+                              Remove selection
+                            </button>
+                          </div>
+                        }
+                        <div class="actions">
+                          <button
+                            [disabled]="
+                              busy ||
+                              !action.trigger_role_id ||
+                              !action.remove_role_ids.length ||
+                              action.remove_role_ids.includes(
+                                action.trigger_role_id
+                              )
+                            "
+                            (click)="reviewRoleAction()"
+                          >
+                            Review role action</button
+                          ><button
+                            [disabled]="busy"
+                            (click)="roleActionEditor = null"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      } @else {
+                        <h3>Review role action</h3>
+                        <p>
+                          When Bouncer grants or restores
+                          <strong>{{
+                            roleName(action.trigger_role_id)
+                          }}</strong>
+                          in {{ data.server.name }}, remove:
+                        </p>
+                        <ul>
+                          @for (id of action.remove_role_ids; track id) {
+                            <li>{{ roleName(id) }}</li>
+                          }
+                        </ul>
+                        <p>
+                          Apply this action to previously tracked holders too.
+                          Role changes are queued, audited and retried if
+                          needed.
+                        </p>
+                        <div class="actions">
+                          <button [disabled]="busy" (click)="saveRoleAction()">
+                            Confirm role action</button
+                          ><button
+                            [disabled]="busy"
+                            (click)="roleActionReview = false"
+                          >
+                            Back</button
+                          ><button
+                            [disabled]="busy"
+                            (click)="roleActionEditor = null"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      }
+                    </section>
+                  }
+                </section>
+              }
               <ng-template #ruleEditor>
                 <section
                   class="panel rule-editor"
@@ -819,7 +990,12 @@
             }
             @if (tab === 'members') {
               <section class="panel">
-                <h2>Member Lookup</h2>
+                <div class="section-heading">
+                  <h2>Member Lookup</h2>
+                  <button [disabled]="busy" (click)="auditWalletHistory()">
+                    Audit all members
+                  </button>
+                </div>
                 <p>
                   Look up a server member’s saved wallets and previously earned
                   roles.
@@ -901,6 +1077,130 @@
                   }}
                 </p>
               </section>
+              @if (walletAuditResult; as audit) {
+                <section class="panel" aria-label="Wallet history audit">
+                  <div class="section-heading">
+                    <h2>
+                      Wallet history audit ·
+                      {{
+                        audit.member_id
+                          ? audit.member_name || audit.member_id
+                          : 'All members'
+                      }}
+                    </h2>
+                    <span class="badge"
+                      >{{ audit.total }} shared
+                      {{ audit.total === 1 ? 'wallet' : 'wallets' }}</span
+                    >
+                  </div>
+                  <p>
+                    Includes current members and former members with saved
+                    records in this server. A shared address records an
+                    association; it does not establish abuse.
+                  </p>
+                  <p class="muted">
+                    Wallet activity history
+                    {{
+                      audit.history_since
+                        ? 'begins ' + (audit.history_since | date: 'short')
+                        : 'has no retained events'
+                    }}. Earlier associations may be missing. Checked
+                    {{ audit.checked_at | date: 'short' }}.
+                  </p>
+                  @if (!audit.total) {
+                    <p>
+                      No shared wallet addresses found in the retained records.
+                    </p>
+                  }
+                  @for (item of audit.items; track item.address) {
+                    <h3>
+                      <a
+                        [href]="walletExplorer(item.address)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [title]="item.address"
+                        >{{ walletAddress(item.address) }}</a
+                      >
+                      · {{ item.account_count }} accounts
+                    </h3>
+                    <table
+                      class="history-table"
+                      aria-label="Accounts associated with wallet"
+                    >
+                      <thead>
+                        <tr>
+                          <th scope="col">Member</th>
+                          <th scope="col">Wallet link</th>
+                          <th scope="col">First recorded</th>
+                          <th scope="col">Last proven</th>
+                          <th scope="col">Last recorded</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (account of item.accounts; track account.user_id) {
+                          <tr>
+                            <td data-label="Member">
+                              <strong>{{ account.name }}</strong>
+                              <p class="history-note">{{ account.user_id }}</p>
+                              <p class="history-note">
+                                {{
+                                  account.in_server
+                                    ? 'Current member'
+                                    : 'Past server record'
+                                }}
+                              </p>
+                              @if (account.in_server) {
+                                <button
+                                  [disabled]="busy"
+                                  (click)="lookupAuditMember(account.user_id)"
+                                >
+                                  Look up member
+                                </button>
+                              }
+                            </td>
+                            <td data-label="Wallet link">
+                              {{
+                                account.current
+                                  ? 'Currently linked'
+                                  : 'History only'
+                              }}
+                            </td>
+                            <td data-label="First recorded">
+                              {{ account.first_seen | date: 'short' }}
+                            </td>
+                            <td data-label="Last proven">
+                              {{
+                                account.last_proven
+                                  ? (account.last_proven | date: 'short')
+                                  : 'Unknown'
+                              }}
+                            </td>
+                            <td data-label="Last recorded">
+                              {{ account.last_seen | date: 'short' }}
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                    @if (item.account_next) {
+                      <button
+                        [disabled]="busy"
+                        (click)="moreWalletAccounts(item)"
+                      >
+                        More accounts for this wallet
+                      </button>
+                    }
+                  }
+                  @if (audit.next) {
+                    <button
+                      [disabled]="busy"
+                      (click)="auditWalletHistory(audit.member_id, audit.next)"
+                    >
+                      More shared wallets
+                    </button>
+                  }
+                </section>
+              }
               @if (member) {
                 <section class="panel member-details">
                   <div class="section-heading member-heading">
@@ -908,6 +1208,11 @@
                     <div class="actions">
                       <button (click)="lookup(true)" [disabled]="busy">
                         Check roles</button
+                      ><button
+                        (click)="auditWalletHistory(member.id)"
+                        [disabled]="busy"
+                      >
+                        Audit member</button
                       ><button
                         class="primary"
                         (click)="fix()"
@@ -1257,7 +1562,18 @@
                               </td>
                             } @else if (activity.kind === 'changes') {
                               <td data-label="Change">
-                                @if (item.wallet) {
+                                @if (item.role_action) {
+                                  <strong>{{
+                                    item.kind === 'role_action_delete'
+                                      ? 'Deleted role action'
+                                      : 'Saved role action'
+                                  }}</strong>
+                                  <p class="history-note">
+                                    {{
+                                      roleName(item.role_action.trigger_role_id)
+                                    }}
+                                  </p>
+                                } @else if (item.wallet) {
                                   <strong>{{
                                     item.kind === 'wallet_block'
                                       ? 'Blocked wallet'
@@ -1277,7 +1593,16 @@
                                 }
                               </td>
                               <td data-label="Details">
-                                @if (item.wallet) {
+                                @if (item.role_action) {
+                                  Removes
+                                  @for (
+                                    id of item.role_action.remove_role_ids;
+                                    track id;
+                                    let last = $last
+                                  ) {
+                                    {{ roleName(id) }}{{ last ? '' : ', ' }}
+                                  }
+                                } @else if (item.wallet) {
                                   {{
                                     item.wallet.reason || 'No reason provided'
                                   }}
@@ -1312,18 +1637,34 @@
                                     ? 'Member ' + item.user_id
                                     : 'Role ' + item.role_id
                                 }}</strong>
+                                @if (item.role_action_role_id) {
+                                  <p class="history-note">
+                                    Role action ·
+                                    {{ roleName(item.role_action_role_id) }}
+                                  </p>
+                                }
                               </td>
                               <td data-label="Status">
                                 <span class="badge">{{ item.status }}</span>
                               </td>
                               <td data-label="Result">
                                 @if (item.result) {
-                                  <span
-                                    >{{ item.result.verified || 0 }} eligible ·
-                                    {{ item.result.revoked || 0 }} ineligible ·
-                                    {{ item.result.errors || 0 }}
-                                    unavailable</span
-                                  >
+                                  @if (item.role_action_role_id) {
+                                    <span
+                                      >{{ item.result.checked || 0 }} checked ·
+                                      {{ item.result.removed || 0 }} removed ·
+                                      {{ item.result.errors || 0 }} errors</span
+                                    >
+                                  } @else {
+                                    <span
+                                      >{{ item.result.verified || 0 }} eligible
+                                      ·
+                                      {{ item.result.revoked || 0 }} ineligible
+                                      ·
+                                      {{ item.result.errors || 0 }}
+                                      unavailable</span
+                                    >
+                                  }
                                   @if (item.result.error) {
                                     <p class="history-note">
                                       {{ item.result.error }}

@@ -71,6 +71,30 @@ describe('Durable portal reconciliation worker', () => {
     );
     expect(roles.reverifyRoleInServer).not.toHaveBeenCalled();
   });
+  it('dispatches role-action jobs separately from ownership reconciliation', async () => {
+    const { service, roles, writes } = setup(
+      {
+        id: 'job',
+        server_id: 'server',
+        user_id: 'user',
+        role_action_role_id: 'trigger',
+        attempts: 1,
+      },
+      null,
+    );
+    const guild = { id: 'server' };
+    (service as any).discord = {
+      getBotClient: () => ({ guilds: { fetch: async () => guild } }),
+    };
+    const enforce = jest
+      .fn()
+      .mockResolvedValue({ checked: 1, removed: 1, errors: 0 });
+    (service as any).roleActions = { enforce };
+    await service.run();
+    expect(enforce).toHaveBeenCalledWith(guild, 'user', 'trigger');
+    expect(roles.reverifyUserInServer).not.toHaveBeenCalled();
+    expect(writes[0].status).toBe('completed');
+  });
   it('queues a retry for uncertain checks and leaves removals to the existing safe engine', async () => {
     const { service, roles, writes } = setup(
       { id: 'job', server_id: 'server', user_id: 'member', attempts: 1 },

@@ -31,6 +31,8 @@ import {
   PortalRuleDto,
   PortalSettingsDto,
   PortalWalletBlockDto,
+  PortalRoleActionDto,
+  PortalWalletAuditDto,
 } from './portal.dto';
 
 @Catch()
@@ -145,6 +147,20 @@ export class PortalController {
     @Body() body: PortalRuleDto,
   ) {
     return this.portal.create(await this.mutation(req), server, body);
+  }
+  @Post('servers/:server/role-actions') async roleAction(
+    @Req() req: Request,
+    @Param('server') server: string,
+    @Body() body: PortalRoleActionDto,
+  ) {
+    return this.portal.roleAction(await this.mutation(req), server, body);
+  }
+  @Post('servers/:server/wallet-audit') async walletAudit(
+    @Req() req: Request,
+    @Param('server') server: string,
+    @Body() body: PortalWalletAuditDto,
+  ) {
+    return this.portal.walletAudit(await this.mutation(req), server, body);
   }
   @Post('servers/:server/rules/:id/edit') async edit(
     @Req() req: Request,

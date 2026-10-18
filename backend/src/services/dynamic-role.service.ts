@@ -155,6 +155,11 @@ export class DynamicRoleService {
             matching_asset_count: matched?.matchingAssetCount } });
         const granted = await this.discordVerificationSvc.addUserRoleDynamic(userId, serverId, roleId, discordContext);
         if (!granted) throw new Error('Role move pending Discord retry.');
+        if (granted === 'suppressed') {
+          const saved = await this.dbSvc.getEarnedRoleAssignments({ serverId, userId, roleId });
+          for (const assignment of saved) await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'revoked');
+          continue;
+        }
         result.verified++;
       } catch { result.errors++; Logger.warn(`Role move for rule ${ruleId} is pending retry.`); }
     }
@@ -255,6 +260,11 @@ export class DynamicRoleService {
       assignment.user_id, assignment.server_id, assignment.role_id, context
     );
     if (!restored) throw new Error('Discord role restoration failed; assignment retained for retry.');
+    if (restored === 'suppressed') {
+      if (assignment.status !== 'revoked') await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'revoked');
+      await this.updateLastVerified(assignment.id);
+      return;
+    }
     if (assignment.status !== 'active') {
       await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'active');
     }

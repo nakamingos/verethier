@@ -10,6 +10,10 @@ import {
   Max,
   MaxLength,
   Min,
+  IsArray,
+  ArrayNotEmpty,
+  ArrayMaxSize,
+  IsISO8601,
 } from 'class-validator';
 
 export class PortalRuleDto {
@@ -57,6 +61,23 @@ export class PortalWalletBlockDto {
   @IsBoolean() blocked: boolean;
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
   @IsUUID() request_id: string;
+}
+export class PortalRoleActionDto {
+  @IsString() @Matches(/^\d{17,22}$/) trigger_role_id: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(20)
+  @Matches(/^\d{17,22}$/, { each: true })
+  remove_role_ids?: string[] | null;
+  @IsOptional() @IsISO8601() version?: string | null;
+  @IsUUID() request_id: string;
+}
+export class PortalWalletAuditDto {
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) member_id?: string;
+  @IsOptional() @IsString() @MaxLength(100) after?: string;
+  @IsOptional() @IsString() @MaxLength(100) address?: string;
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) account_after?: string;
 }
 
 export class PortalSettingsDto {
