@@ -52,6 +52,10 @@ const base = {
       let denyOtherServer = true;
       let sessionExpired = false;
       let oauthConfigured = true;
+      let holdActivity = false,
+        releaseActivity,
+        activityEntered;
+      let failActivity = false;
       const initialServerStarted = new Promise((resolve) => {
         serverEntered = resolve;
       });
@@ -193,6 +197,13 @@ const base = {
           } else if (p.endsWith('/suggestions'))
             data = { values: ['pizza-comrades', 'yonder'] };
           else if (p.endsWith('/activity')) {
+            if (holdActivity) {
+              holdActivity = false;
+              activityEntered();
+              await new Promise((resolve) => {
+                releaseActivity = resolve;
+              });
+            }
             const number = Number(url.searchParams.get('page') || 1);
             data = {
               items: Array.from(
@@ -215,6 +226,11 @@ const base = {
               pages: 3,
               total: 45,
             };
+            if (failActivity) {
+              failActivity = false;
+              status = 503;
+              data = { message: 'Activity is unavailable. Try again.' };
+            }
           } else if (p.endsWith('/edit')) {
             if (holdEdit) {
               holdEdit = false;
@@ -889,10 +905,58 @@ const base = {
         false,
         'horizontal overflow',
       );
-      await page
-        .getByRole('button', { name: 'Audit Log', exact: true })
-        .click();
+      holdActivity = true;
+      const activityStarted = new Promise((resolve) => {
+        activityEntered = resolve;
+      });
+      const auditTab = page.getByRole('button', {
+        name: 'Audit Log',
+        exact: true,
+      });
+      await auditTab.click();
+      await activityStarted;
+      assert.equal(await auditTab.getAttribute('aria-current'), 'page');
+      assert.equal(
+        await auditTab.isEnabled(),
+        true,
+        'tab is active while data loads',
+      );
+      assert.equal(
+        await auditTab.evaluate((el) => getComputedStyle(el).opacity),
+        '1',
+      );
+      assert.equal(await page.locator('.activity-panel').isVisible(), true);
+      assert.equal(
+        await page.locator('.activity-results').getAttribute('aria-busy'),
+        'true',
+      );
+      assert.equal(
+        await page
+          .locator('.activity-results')
+          .evaluate((el) => getComputedStyle(el).opacity),
+        '1',
+      );
+      assert.equal(
+        await page.getByText('No activity yet.', { exact: true }).count(),
+        0,
+        'no false empty state before data arrives',
+      );
+      assert.equal(
+        await page.locator('.activity-results .history-row').count(),
+        0,
+      );
+      const pendingPager = await page.locator('.pagination').boundingBox();
+      await page.screenshot({
+        path: `${artifacts}/audit-pending-${width}.png`,
+        fullPage: true,
+      });
+      releaseActivity();
       await page.getByText('1 / 3 · 45 entries').waitFor();
+      assert.deepEqual(
+        await page.locator('.pagination').boundingBox(),
+        pendingPager,
+        'loading data does not move pagination',
+      );
       const pager = await page.locator('.pagination').evaluate((el) => ({
         top: el.getBoundingClientRect().top + scrollY,
         height: el.getBoundingClientRect().height,
@@ -927,9 +991,45 @@ const base = {
         path: `${artifacts}/audit-${width}.png`,
         fullPage: true,
       });
+      failActivity = true;
+      await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+      await page
+        .getByRole('alert')
+        .filter({ hasText: 'Activity is unavailable' })
+        .waitFor();
+      assert.equal(await auditTab.isEnabled(), true);
+      assert.equal(
+        await page.getByText('3 / 3 · 45 entries').isVisible(),
+        true,
+        'failed refresh keeps previous results',
+      );
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      holdActivity = true;
+      const refreshStartedActivity = new Promise((resolve) => {
+        activityEntered = resolve;
+      });
+      await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+      await refreshStartedActivity;
+      assert.equal(
+        await page.getByText('3 / 3 · 45 entries').isVisible(),
+        true,
+        'refresh preserves current page until replacement arrives',
+      );
+      const canceledActivity = page.waitForEvent('requestfailed', {
+        predicate: (request) =>
+          new URL(request.url()).pathname.endsWith('/activity'),
+        timeout: 10000,
+      });
       await page
         .getByRole('button', { name: 'Member Lookup', exact: true })
         .click();
+      await canceledActivity;
+      releaseActivity();
+      assert.equal(
+        await page.locator('.activity-panel').count(),
+        0,
+        'navigation does not wait for the old tab request',
+      );
       await page.getByLabel('Username or user ID').fill('COLLECTOR');
       await page.getByRole('listbox', { name: 'Server members' }).waitFor();
       assert.equal(await page.getByRole('option').count(), 2);

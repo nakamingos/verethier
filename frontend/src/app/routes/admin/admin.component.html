@@ -875,7 +875,10 @@
                         [disabled]="busy"
                         [options]="activityChoices"
                         label="Show" /></span></label
-                  ><button (click)="switchTab('audit')" [disabled]="busy">
+                  ><button
+                    (click)="switchTab('audit')"
+                    [disabled]="busy || activityLoading"
+                  >
                     Refresh
                   </button>
                 </div>
@@ -884,72 +887,92 @@
                   role="region"
                   aria-label="Activity entries"
                   tabindex="0"
-                  [attr.aria-busy]="busy"
+                  [attr.aria-busy]="activityLoading"
                 >
-                  @for (item of activity.items; track item.id) {
-                    <div class="history-row">
-                      @if (activity.kind === 'roles') {
-                        <strong>{{ item.user_name || item.user_id }}</strong
-                        ><span>{{ item.role_name || item.role_id }}</span
-                        ><span class="badge">{{ item.status }}</span>
-                      } @else if (activity.kind === 'changes') {
-                        <strong
-                          >{{ item.kind }} · Rule
-                          {{
-                            item.after_rule?.id || item.before_rule?.id
+                  @if (activityReady && activity.kind === activityKind) {
+                    @for (item of activity.items; track item.id) {
+                      <div class="history-row">
+                        @if (activity.kind === 'roles') {
+                          <strong>{{ item.user_name || item.user_id }}</strong
+                          ><span>{{ item.role_name || item.role_id }}</span
+                          ><span class="badge">{{ item.status }}</span>
+                        } @else if (activity.kind === 'changes') {
+                          <strong
+                            >{{ item.kind }} · Rule
+                            {{
+                              item.after_rule?.id || item.before_rule?.id
+                            }}</strong
+                          ><span>{{
+                            item.after_rule?.role_name ||
+                              item.before_rule?.role_name
+                          }}</span>
+                          @if (item.reversible) {
+                            <button (click)="reverse(item)" [disabled]="busy">
+                              Reverse
+                            </button>
+                          }
+                        } @else {
+                          <strong>{{
+                            item.user_id
+                              ? 'Member ' + item.user_id
+                              : 'Role ' + item.role_id
                           }}</strong
-                        ><span>{{
-                          item.after_rule?.role_name ||
-                            item.before_rule?.role_name
-                        }}</span>
-                        @if (item.reversible) {
-                          <button (click)="reverse(item)" [disabled]="busy">
-                            Reverse
-                          </button>
-                        }
-                      } @else {
-                        <strong>{{
-                          item.user_id
-                            ? 'Member ' + item.user_id
-                            : 'Role ' + item.role_id
-                        }}</strong
-                        ><span class="badge">{{ item.status }}</span>
-                        @if (item.status === 'failed') {
-                          <button (click)="retry(item)" [disabled]="busy">
-                            Retry check
-                          </button>
-                        }
-                        @if (item.result) {
-                          <span
-                            >{{ item.result.verified || 0 }} eligible ·
-                            {{ item.result.revoked || 0 }} ineligible ·
-                            {{ item.result.errors || 0 }} unavailable</span
-                          >
-                          @if (item.result.error) {
-                            <p>{{ item.result.error }}</p>
+                          ><span class="badge">{{ item.status }}</span>
+                          @if (item.status === 'failed') {
+                            <button (click)="retry(item)" [disabled]="busy">
+                              Retry check
+                            </button>
+                          }
+                          @if (item.result) {
+                            <span
+                              >{{ item.result.verified || 0 }} eligible ·
+                              {{ item.result.revoked || 0 }} ineligible ·
+                              {{ item.result.errors || 0 }} unavailable</span
+                            >
+                            @if (item.result.error) {
+                              <p>{{ item.result.error }}</p>
+                            }
                           }
                         }
-                      }
-                      <time>{{
-                        item.updated_at || item.created_at | date: 'medium'
-                      }}</time>
-                    </div>
-                  } @empty {
-                    <p>No activity yet.</p>
+                        <time>{{
+                          item.updated_at || item.created_at | date: 'medium'
+                        }}</time>
+                      </div>
+                    } @empty {
+                      <p>No activity yet.</p>
+                    }
                   }
                 </div>
                 <div class="pagination">
                   <button
                     (click)="pageActivity(-1)"
-                    [disabled]="busy || activity.page <= 1"
+                    [disabled]="
+                      busy ||
+                      activityLoading ||
+                      !activityReady ||
+                      activity.page <= 1
+                    "
                   >
                     ← Previous</button
                   ><span
+                    [style.visibility]="
+                      activityReady && activity.kind === activityKind
+                        ? null
+                        : 'hidden'
+                    "
+                    [attr.aria-hidden]="
+                      !activityReady || activity.kind !== activityKind
+                    "
                     >{{ activity.page }} / {{ activity.pages }} ·
                     {{ activity.total }} entries</span
                   ><button
                     (click)="pageActivity(1)"
-                    [disabled]="busy || activity.page >= activity.pages"
+                    [disabled]="
+                      busy ||
+                      activityLoading ||
+                      !activityReady ||
+                      activity.page >= activity.pages
+                    "
                   >
                     Next →
                   </button>

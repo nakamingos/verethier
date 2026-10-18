@@ -966,9 +966,6 @@ app-root:has(app-admin) .app-footer {
   scrollbar-gutter: stable;
   padding-right: 0.8rem;
 }
-.activity-results[aria-busy='true'] {
-  opacity: 0.5;
-}
 .pagination {
   display: flex;
   align-items: center;
@@ -978,6 +975,7 @@ app-root:has(app-admin) .app-footer {
   font-size: 1.6rem;
 }
 .pagination span {
+  min-width: min(19ch, 100%);
   text-align: center;
 }
 app-verify {
