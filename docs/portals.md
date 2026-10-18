@@ -95,6 +95,8 @@ The member migration adds only flow/action bookkeeping and links to the existing
 
 ## Following releases
 
+Optional ideas are tracked in the [optional feature backlog](plans/optional-features.md).
+
 Public discovery, optional add-ons, additional networks and broader wallet/address support remain deferred.
 
 The guide's multi-trait AND/OR editor and expanded ERC-721 ID selections are separate rule-engine work. This admin milestone uses the existing, tested single-trait criteria and token-ID limits rather than advertising unsupported combinations.
