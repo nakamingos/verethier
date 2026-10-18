@@ -200,6 +200,25 @@ $pixel-server-button-selected: (
   '.DDDDDDDDDDDDDD.'
 );
 
+$pixel-count: (
+  '.EEEEEEEEEEEEEE.',
+  'EFHHHHHHHHHHHHFE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EFHHHHHHHHHHHHFE',
+  'ESSSSSSSSSSSSSSE',
+  'DEEEEEEEEEEEEEED',
+  '.DDDDDDDDDDDDDD.'
+);
+
 // Text entries preserve the source sunken_normal/sunken_focused frames.
 $pixel-entry: (
   '............',
@@ -468,6 +487,16 @@ $pixel-select-arrow: (
     )};
   --ase-server-text: #{$text};
   --ase-server-placeholder: #{$button-face};
+  --pixel-count: #{pixel-grid(
+      $pixel-count,
+      (
+        'E': #000,
+        'F': #0f1011,
+        'H': #c0c0c0,
+        'S': #7d7d7d,
+        'D': #202125,
+      )
+    )};
 }
 
 @function pixel-card-frame($inside, $band, $outside, $kind: 'closed') {
@@ -496,12 +525,24 @@ $pixel-select-arrow: (
   $inside: #202125,
   $band: #41444a,
   $outside: #333333,
-  $accent: #e1b85f
+  $accent: #4069c2
 ) {
   --pixel-card: #{pixel-card-frame($inside, $band, $outside)};
   --pixel-card-highlight: #{pixel-card-frame($inside, $accent, $outside)};
-  --pixel-card-open: #{pixel-card-frame($inside, $accent, $outside, 'open')};
-  --pixel-card-lower: #{pixel-card-frame($inside, $accent, $outside, 'lower')};
+  --pixel-card-open: #{pixel-card-frame($inside, $band, $outside, 'open')};
+  --pixel-card-lower: #{pixel-card-frame($inside, $band, $outside, 'lower')};
+  --pixel-card-open-highlight: #{pixel-card-frame(
+      $inside,
+      $accent,
+      $outside,
+      'open'
+    )};
+  --pixel-card-lower-highlight: #{pixel-card-frame(
+      $inside,
+      $accent,
+      $outside,
+      'lower'
+    )};
 }
 
 @mixin pixel-input-controls(

@@ -463,7 +463,7 @@ const base = {
       await assetPicker.press('Tab');
       assert.equal(
         (await assetPicker.textContent()).trim(),
-        'Ordinals',
+        'Ethscriptions',
         'Tab commits keyboard selection',
       );
       await chooseOption(page, assetPicker, 'All assets');
@@ -756,23 +756,32 @@ const base = {
       const mutationsBeforeCollapse = requests.filter(
         (request) => request.method === 'POST',
       ).length;
+      assert.equal(
+        await page
+          .locator('#edit-rule-1')
+          .getByRole('button', { name: 'Cancel', exact: true })
+          .count(),
+        0,
+        'existing editor uses only its card Cancel action',
+      );
+      await page.getByLabel('Minimum items:', { exact: true }).fill('99');
       const collapseSize = await page
         .locator('#rule-1')
-        .getByRole('button', { name: 'Collapse', exact: true })
+        .getByRole('button', { name: 'Cancel', exact: true })
         .boundingBox();
       assert.equal(
         editSize.width,
         collapseSize.width,
-        'Edit/Collapse width must stay stable',
+        'Edit/Cancel width must stay stable',
       );
       assert.equal(
         editSize.height,
         collapseSize.height,
-        'Edit/Collapse height must stay stable',
+        'Edit/Cancel height must stay stable',
       );
       await page
         .locator('#rule-1')
-        .getByRole('button', { name: 'Collapse', exact: true })
+        .getByRole('button', { name: 'Cancel', exact: true })
         .click();
       assert.equal(await page.locator('#edit-rule-1').count(), 0);
       assert.equal(
@@ -787,6 +796,11 @@ const base = {
       await page
         .getByRole('region', { name: 'Edit rule 1', exact: true })
         .waitFor();
+      assert.equal(
+        await page.getByLabel('Minimum items:', { exact: true }).inputValue(),
+        '10',
+        'Cancel discards unsaved rule edits',
+      );
       assert.equal(await page.locator('#rule-1 #edit-rule-1').count(), 1);
       const editor = await page.locator('#edit-rule-1').boundingBox();
       const below = await page
@@ -809,7 +823,7 @@ const base = {
         path: `${artifacts}/inline-editor-${width}.png`,
         fullPage: true,
       });
-      await page.getByLabel('Minimum items', { exact: true }).fill('12');
+      await page.getByLabel('Minimum items:', { exact: true }).fill('12');
       await page.getByRole('button', { name: 'Review changes' }).click();
       const saveSize = await page
         .getByRole('button', { name: 'Save rule', exact: true })
@@ -930,7 +944,7 @@ const base = {
         'Create a new role',
       );
       await page
-        .getByLabel('New role name', { exact: true })
+        .getByLabel('New role name:', { exact: true })
         .fill('Created role');
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByText('Comrade → Created role', { exact: true }).waitFor();
@@ -946,12 +960,125 @@ const base = {
       );
       await page.getByRole('button', { name: 'Undo', exact: true }).click();
       await page.getByRole('button', { name: 'Redo', exact: true }).waitFor();
+      const addRule = page.getByRole('button', {
+        name: '+ Add rule',
+        exact: true,
+      });
+      await addRule.click();
+      const newRule = page.locator('#new-rule-editor');
+      const newAsset = newRule.getByRole('combobox', {
+        name: 'Asset type',
+        exact: true,
+      });
+      assert.equal(
+        (await newAsset.textContent()).trim(),
+        'Ethscriptions',
+        'new rules default to Ethscriptions',
+      );
+      await newAsset.click();
+      assert.deepEqual(
+        (
+          await page.getByRole('listbox').getByRole('option').allTextContents()
+        ).map((label) => label.trim()),
+        ['Ethscriptions', 'Ordinals', 'NFTs', 'Tokens (ERC-20)'],
+      );
+      await newAsset.press('Escape');
       await page
-        .getByRole('button', { name: '+ Add rule', exact: true })
+        .getByLabel('New role name:', { exact: true })
+        .fill('Saved draft');
+      await chooseOption(page, newAsset, 'Ordinals');
+      await page
+        .getByLabel('Collection slug:', { exact: true })
+        .fill('pizza-comrades');
+      await chooseOption(
+        page,
+        newRule.getByRole('combobox', { name: 'Match by', exact: true }),
+        'Global inscription numbers',
+      );
+      await page
+        .getByLabel('Inscription numbers and ranges:', { exact: true })
+        .fill('1,2,10-20');
+      await page.getByLabel('Minimum items:', { exact: true }).fill('7');
+      await page
+        .getByRole('button', { name: 'Review changes', exact: true })
         .click();
+      const draftPosts = requests.filter(
+        (request) => request.method === 'POST',
+      ).length;
+      await addRule.click();
+      assert.equal(
+        await newRule.count(),
+        0,
+        'Add rule toggles the form closed',
+      );
+      assert.equal(await addRule.getAttribute('aria-expanded'), 'false');
+      await page
+        .getByRole('button', { name: 'Bot Settings', exact: true })
+        .click();
+      await page.getByRole('button', { name: 'Rules', exact: true }).click();
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'Another community', exact: true })
+        .click();
+      await page
+        .getByRole('heading', { name: 'Another community', exact: true })
+        .waitFor();
+      await addRule.click();
+      assert.equal(
+        await page.getByLabel('New role name:', { exact: true }).inputValue(),
+        '',
+        'drafts are scoped to their server',
+      );
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page
+        .locator('.server-list')
+        .getByRole('button', { name: 'NoMoreLabs', exact: true })
+        .click();
+      await page
+        .getByRole('heading', { name: 'NoMoreLabs', exact: true })
+        .waitFor();
+      await addRule.click();
+      assert.equal(
+        await page.getByLabel('New role name:', { exact: true }).inputValue(),
+        'Saved draft',
+      );
+      assert.equal((await newAsset.textContent()).trim(), 'Ordinals');
+      assert.equal(
+        await page
+          .getByLabel('Inscription numbers and ranges:', { exact: true })
+          .inputValue(),
+        '1,2,10-20',
+      );
+      assert.equal(
+        await page.getByLabel('Minimum items:', { exact: true }).inputValue(),
+        '7',
+      );
+      assert.equal(
+        await page.getByText('Ready to save?', { exact: true }).isVisible(),
+        true,
+        'reopening preserves review state',
+      );
+      assert.equal(
+        requests.filter((request) => request.method === 'POST').length,
+        draftPosts,
+        'collapsing and resuming never creates a rule',
+      );
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await addRule.click();
+      assert.equal((await newAsset.textContent()).trim(), 'Ethscriptions');
+      assert.equal(
+        await page.getByLabel('New role name:', { exact: true }).inputValue(),
+        '',
+        'Cancel clears the new-rule draft',
+      );
+      assert.equal(
+        await page.getByText('Ready to save?', { exact: true }).count(),
+        0,
+      );
+      await chooseOption(page, newAsset, 'Ordinals');
       await page.getByLabel('New role name').fill('Yonderling');
-      await page.getByLabel('Collection slug', { exact: true }).fill('yonder');
-      await page.getByLabel('Minimum items', { exact: true }).fill('1');
+      await page.getByLabel('Collection slug:', { exact: true }).fill('yonder');
+      await page.getByLabel('Minimum items:', { exact: true }).fill('1');
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByRole('button', { name: 'Save rule' }).click();
       await page

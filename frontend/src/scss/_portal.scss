@@ -53,6 +53,7 @@
   --ase-border: #0d0d0d;
   --ase-danger: #ef9ca8;
   --ase-danger-bg: #492d32;
+  --ase-disabled-text: #53666b;
   --ase-selected-text: #26282c;
   --base-color: 65, 68, 74;
   --background: 192, 192, 192;
@@ -107,6 +108,7 @@
   --ase-border: #000;
   --ase-danger: #8e2635;
   --ase-danger-bg: #f5d7dd;
+  --ase-disabled-text: #8b9294;
   --base-color: 217, 217, 217;
   --background: 44, 44, 48;
 }
@@ -200,8 +202,8 @@ button.selected:hover {
   border-image-source: var(--pixel-primary-hover);
 }
 button:disabled {
-  opacity: 0.5;
-  cursor: wait;
+  opacity: 1;
+  cursor: not-allowed;
 }
 button[aria-pressed='true']:not(.primary):not(.selected) {
   border-image-source: var(--pixel-choice);
@@ -433,6 +435,21 @@ form > label {
 .brand-header .header-auth {
   min-width: 0;
   max-width: min(28rem, 100%);
+}
+.brand-header .theme-toggle {
+  width: 3.8rem;
+  min-width: 3.8rem;
+  height: 3.8rem;
+  padding: 0;
+}
+.theme-toggle img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
+}
+:root[data-theme='light'] .theme-toggle img {
+  filter: invert(1);
 }
 .header-auth span {
   min-width: 0;
@@ -741,6 +758,16 @@ app-root:has(app-admin) .app-footer {
   padding: 0.25rem 0.7rem;
   white-space: normal;
 }
+.badge.item-count {
+  border-image-source: var(--pixel-count);
+  border-image-slice: 6 6 10 6 fill;
+  border-image-width: 6px 6px 10px 6px;
+  min-height: 3.4rem;
+  padding: 0.35rem 1rem 0.65rem;
+  font-size: 1.8rem;
+  line-height: 1.1;
+  color: #fff;
+}
 .tabs {
   display: flex;
   gap: 0.5rem;
@@ -825,6 +852,7 @@ app-root:has(app-admin) .app-footer {
   align-items: stretch;
 }
 .rule-card {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -833,12 +861,21 @@ app-root:has(app-admin) .app-footer {
   scroll-margin-top: 2rem;
 }
 .rule-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
   margin-top: auto;
+  padding-top: 1.2rem;
+}
+.rule-card-footer .actions {
+  flex-wrap: nowrap;
+  margin: 0;
 }
 .rule-card-group {
   display: flex;
   align-items: flex-end;
-  min-height: 3.8rem;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .rule-card-group .combined-badge {
   max-width: 100%;
@@ -857,7 +894,6 @@ app-root:has(app-admin) .app-footer {
   @include pixel-surface(var(--pixel-card-lower));
   border-image-slice: 6 fill;
   border-image-width: 6px;
-  filter: drop-shadow(0 3px 0 #0006);
 }
 .inline-rule-editor .rule-editor {
   margin: 0;
@@ -866,10 +902,30 @@ app-root:has(app-admin) .app-footer {
   background: none;
   box-shadow: none;
 }
+.rule-editor .notice {
+  border-image-source: var(--pixel-card-highlight);
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
+}
 .combined-badge {
   font-size: 1.6rem;
   min-height: 3rem;
   color: var(--ase-selected);
+}
+.combined-short {
+  display: none;
+}
+@container (max-width: 38rem) {
+  .combined-label {
+    display: none;
+  }
+  .combined-short {
+    display: inline;
+  }
+}
+.editor-heading .actions {
+  margin: 0;
+  margin-left: auto;
 }
 .combined-navigation nav {
   display: flex;
@@ -885,7 +941,10 @@ app-root:has(app-admin) .app-footer {
   border-image-source: var(--pixel-card-highlight);
 }
 .rule-card.group-highlight.editing {
-  border-image-source: var(--pixel-card-open);
+  border-image-source: var(--pixel-card-open-highlight);
+}
+.rule-card.group-highlight .inline-rule-editor {
+  border-image-source: var(--pixel-card-lower-highlight);
 }
 .member-search {
   position: relative;
@@ -1061,6 +1120,24 @@ app-verify .user-info-wrapper .user-tag {
 }
 app-verify .user-info-wrapper .user-tag .warn {
   font-size: 1.6rem;
+}
+button:disabled,
+button:disabled:hover,
+.tabs button:disabled,
+.server-list button:disabled,
+.server-list button:disabled:hover {
+  color: var(--ase-disabled-text);
+  text-shadow: none;
+}
+:where(.brand-header, app-admin .portal)
+  button:disabled:not(
+    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+  ),
+:where(.brand-header, app-admin .portal)
+  button:disabled:hover:not(
+    :where(.tabs button, .pixel-select-trigger, .member-matches button)
+  ) {
+  border-image-source: var(--pixel-server-button);
 }
 @media (forced-colors: active) {
   .server-list,
