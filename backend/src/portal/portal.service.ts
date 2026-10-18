@@ -636,7 +636,9 @@ export class PortalService {
   }
   private memberQuery(input: string): string {
     if (typeof input !== 'string' || input.trim().length > 100)
-      throw new BadRequestException('Enter a username or Discord user ID.');
+      throw new BadRequestException(
+        'Enter a username, Discord user ID or full wallet address.',
+      );
     return input
       .trim()
       .replace(/^<@!?(\d{17,22})>$/, '$1')
@@ -651,6 +653,66 @@ export class PortalService {
       .map((name) => name.normalize('NFC').toLowerCase());
   }
 
+  private walletMemberQuery(input: string): boolean {
+    // Full addresses are longer than Discord usernames/nicknames. Preserve
+    // ordinary name lookup for members such as "0xcollector".
+    const value = input.trim();
+    return value.length >= 42 && /^(0x|bc1)/i.test(value);
+  }
+
+  private async walletMembers(guild: Guild, input: string) {
+    let address: string;
+    try {
+      address = normalizeBlockedWallet(input);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+    const current = await this.db
+      .from('user_wallets')
+      .select('user_id')
+      .eq('address', address);
+    this.dbError(current.error || (!Array.isArray(current.data) ? {} : null));
+    const ids = new Map<string, 'current' | 'history'>(
+      current.data.map((row) => [row.user_id, 'current']),
+    );
+    for (let offset = 0; ; offset += 1000) {
+      const history = await this.db
+        .from('verifier_member_actions')
+        .select('id,user_id')
+        .eq('address', address)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + 999);
+      this.dbError(history.error || (!Array.isArray(history.data) ? {} : null));
+      for (const row of history.data)
+        if (!ids.has(row.user_id)) ids.set(row.user_id, 'history');
+      if (history.data.length < 1000) break;
+    }
+    const matches: { member: any; wallet_match: 'current' | 'history' }[] = [];
+    for (const [id, wallet_match] of ids) {
+      try {
+        const member = await guild.members.fetch({ user: id, force: true });
+        matches.push({ member, wallet_match });
+      } catch (error) {
+        if (error?.code === 10007) continue;
+        throw new ServiceUnavailableException(
+          'Could not confirm wallet matches in this server. Please try again.',
+        );
+      }
+    }
+    return matches;
+  }
+
+  private memberSuggestion(member: any, wallet_match?: 'current' | 'history') {
+    return {
+      id: member.id,
+      name: member.displayName,
+      username: member.user.username,
+      avatar: member.displayAvatarURL({ size: 64 }),
+      ...(wallet_match ? { wallet_match } : {}),
+    };
+  }
+
   async memberSuggestions(
     session: PortalSession,
     server: string,
@@ -659,6 +721,21 @@ export class PortalService {
     const guild = await this.access(session, server);
     const text = this.memberQuery(query);
     if (text.length < 2) return { members: [] };
+    if (this.walletMemberQuery(query)) {
+      // Validate the original casing: lowercasing first would incorrectly
+      // accept mixed-case Bitcoin encodings. Incomplete typing has no matches.
+      try {
+        normalizeBlockedWallet(query);
+      } catch {
+        return { members: [] };
+      }
+      const matches = await this.walletMembers(guild, query);
+      return {
+        members: matches.map(({ member, wallet_match }) =>
+          this.memberSuggestion(member, wallet_match),
+        ),
+      };
+    }
     let members;
     try {
       if (snowflake(text))
@@ -676,17 +753,24 @@ export class PortalService {
       );
     }
     return {
-      members: members.map((member) => ({
-        id: member.id,
-        name: member.displayName,
-        username: member.user.username,
-        avatar: member.displayAvatarURL({ size: 64 }),
-      })),
+      members: members.map((member) => this.memberSuggestion(member)),
     };
   }
 
   private async resolveMember(guild: Guild, input: string) {
     const text = this.memberQuery(input);
+    if (this.walletMemberQuery(input)) {
+      const matches = await this.walletMembers(guild, input);
+      if (!matches.length)
+        throw new NotFoundException(
+          'No current server member has this wallet in their saved history.',
+        );
+      if (matches.length > 1)
+        throw new BadRequestException(
+          'This wallet matches several server members. Choose a member from the suggestions.',
+        );
+      return matches[0].member;
+    }
     let id = text;
     if (!snowflake(id)) {
       if (text.length < 2)

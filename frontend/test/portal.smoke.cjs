@@ -23,6 +23,8 @@ const artifacts = fs.mkdtempSync('/tmp/bouncer-portal-smoke-');
 const server = '111111111111111111',
   channel = '222222222222222222',
   role = '333333333333333333';
+const lookupBitcoin =
+  'bc1pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsyjer9e';
 const base = {
   id: 1,
   server_id: server,
@@ -410,7 +412,7 @@ const base = {
               slug: body.slug,
               min_items: body.min_items,
             });
-          } else if (p.endsWith('/members'))
+          } else if (p.endsWith('/members')) {
             data = {
               members: [
                 {
@@ -427,7 +429,18 @@ const base = {
                 },
               ],
             };
-          else if (p.endsWith('/wallet-block')) {
+            const query = url.searchParams.get('query') || '';
+            if (/^(0x|bc1)/i.test(query)) {
+              data.members[0].wallet_match = 'current';
+              data.members[1].wallet_match = 'history';
+              if (query === '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+                data.members = data.members.slice(1);
+              else if (query === lookupBitcoin)
+                data.members = data.members.slice(0, 1);
+              else if (query !== '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+                data.members = [];
+            }
+          } else if (p.endsWith('/wallet-block')) {
             const body = request.postDataJSON();
             assert.equal(request.headers()['x-csrf-token'], 'csrf-test');
             if (failWalletBlock) {
@@ -481,6 +494,16 @@ const base = {
             for (const wallet of [...data.wallets, ...data.removed_wallets]) {
               wallet.blocked = walletBlocks.has(wallet.address);
               wallet.block = walletBlocks.get(wallet.address) || null;
+            }
+            if (p.endsWith('/888888888888888888')) {
+              data.id = '888888888888888888';
+              data.name = 'Historical collector';
+            } else if (p.includes('/members/0x')) {
+              status = 404;
+              data = {
+                message:
+                  'No current server member has this wallet in their saved history.',
+              };
             }
           } else if (p.endsWith('/settings')) data = request.postDataJSON();
           else if (p.endsWith('/message'))
@@ -1976,12 +1999,12 @@ const base = {
         0,
         'navigation does not wait for the old tab request',
       );
-      await page.getByLabel('Username or user ID').fill('COLLECTOR');
+      await page.getByLabel('Member or wallet').fill('COLLECTOR');
       await page.getByRole('listbox', { name: 'Server members' }).waitFor();
       assert.equal(await page.getByRole('option').count(), 2);
       assert.ok(requests.some((r) => r.path.endsWith('/members')));
-      await page.getByLabel('Username or user ID').press('ArrowDown');
-      await page.getByLabel('Username or user ID').press('Enter');
+      await page.getByLabel('Member or wallet').press('ArrowDown');
+      await page.getByLabel('Member or wallet').press('Enter');
       await page
         .getByRole('heading', { name: 'Collector', exact: true })
         .waitFor();
@@ -2143,7 +2166,7 @@ const base = {
         path: `${artifacts}/wallet-blocks-${width}.png`,
         fullPage: true,
       });
-      await page.getByLabel('Username or user ID').fill('555555555555555555');
+      await page.getByLabel('Member or wallet').fill('555555555555555555');
       if (width <= 800)
         await page
           .getByRole('button', { name: 'Light theme', exact: true })
@@ -2202,10 +2225,60 @@ const base = {
         '0px',
         'last earned role has no trailing separator',
       );
-      await page.getByLabel('Username or user ID').fill('COLLECTOR');
+      const lookupField = page.getByLabel('Member or wallet');
+      const memberReadsBeforeWallet = requests.filter((r) =>
+        /\/members\/\d/.test(r.path),
+      ).length;
+      await lookupField.fill('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      await lookupField.press('Enter');
       await page.getByRole('listbox', { name: 'Server members' }).waitFor();
-      await page.getByLabel('Username or user ID').press('ArrowDown');
-      await page.getByLabel('Username or user ID').press('Enter');
+      await page
+        .getByRole('option')
+        .getByText('Current wallet link', { exact: true })
+        .waitFor();
+      await page
+        .getByRole('option')
+        .getByText('Wallet history', { exact: true })
+        .waitFor();
+      assert.equal(
+        requests.filter((r) => /\/members\/\d/.test(r.path)).length,
+        memberReadsBeforeWallet,
+        'Submitting an ambiguous wallet never guesses a member',
+      );
+      await page.screenshot({
+        path: `${artifacts}/wallet-member-search-${width}.png`,
+        fullPage: true,
+      });
+      await page
+        .getByRole('option')
+        .filter({ hasText: '888888888888888888' })
+        .click();
+      await page
+        .getByRole('heading', { name: 'Historical collector', exact: true })
+        .waitFor();
+      await lookupField.fill(lookupBitcoin);
+      await lookupField.press('Enter');
+      await page
+        .getByRole('heading', { name: 'Collector', exact: true })
+        .waitFor();
+      await lookupField.fill('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      await lookupField.press('Enter');
+      await page
+        .getByRole('heading', { name: 'Historical collector', exact: true })
+        .waitFor();
+      await lookupField.fill('0xcccccccccccccccccccccccccccccccccccccccc');
+      await lookupField.press('Enter');
+      await page
+        .getByText(
+          'No current server member has this wallet in their saved history.',
+          { exact: true },
+        )
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await page.getByLabel('Member or wallet').fill('COLLECTOR');
+      await page.getByRole('listbox', { name: 'Server members' }).waitFor();
+      await page.getByLabel('Member or wallet').press('ArrowDown');
+      await page.getByLabel('Member or wallet').press('Enter');
       await page
         .getByRole('heading', { name: 'Collector', exact: true })
         .waitFor();
