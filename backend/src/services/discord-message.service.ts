@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GuildTextBasedChannel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, Message } from 'discord.js';
+import { EnvironmentConfig } from '@/config/environment.config';
 
 /**
  * DiscordMessageService
@@ -49,8 +50,8 @@ export class DiscordMessageService {
    * @param channel - The Discord channel to send the message to
    * @returns The message ID of the created verification message
    */
-  async createVerificationMessage(channel: GuildTextBasedChannel): Promise<string> {
-    const sentMessage = await channel.send(this.buildVerificationMessage());
+  async createVerificationMessage(channel: GuildTextBasedChannel, nonce?: string): Promise<string> {
+    const sentMessage = await channel.send({ ...this.buildVerificationMessage(), ...(nonce ? { nonce, enforceNonce: true } : {}) });
     return sentMessage.id;
   }
 
@@ -64,21 +65,43 @@ export class DiscordMessageService {
     return message.id;
   }
 
-  async getExistingVerificationMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
+  async getExistingVerificationMessage(channel: GuildTextBasedChannel, exhaustive = false): Promise<Message | null> {
+    return this.findMessage(channel, message => this.isVerificationMessage(message, this.client.user.id), exhaustive);
+  }
+
+  async controlRoomMessage(channel: GuildTextBasedChannel, nonce: string): Promise<string> {
+    const url = `${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`;
+    const existing = await this.getExistingControlRoomMessage(channel);
+    if (existing) return existing.id;
+    const message = await channel.send({ content: `**Bouncer Control Room**\nManage verification rules and check setup: ${url}\nSign in with Discord. Server owner or Administrator permission is required.`, allowedMentions: { parse: [] }, nonce, enforceNonce: true });
+    return message.id;
+  }
+
+  async getExistingControlRoomMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
+    const url = `${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`;
+    return this.findMessage(channel, message => message.author.id === this.client.user.id && message.content.includes(url), true);
+  }
+
+  private async findMessage(channel: GuildTextBasedChannel, matches: (message: Message) => boolean, exhaustive: boolean): Promise<Message | null> {
     const botUserId = this.client?.user?.id;
     if (!botUserId) throw new Error('Discord client not properly initialized or bot user ID not available');
 
-    const messages = await channel.messages.fetch({ limit: 100 });
-    for (const message of messages.values()) {
-      if (this.isVerificationMessage(message, botUserId)) return message;
+    let before: string | undefined;
+    for (let page = 0; page < (exhaustive ? 10 : 1); page++) {
+      const messages = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+      for (const message of messages.values()) if (matches(message)) return message;
+      if (page === 0) {
+        // A pinned verification message may be older than recent history.
+        const pinnedMessages = await channel.messages.fetchPinned();
+        for (const message of pinnedMessages.values()) if (matches(message)) return message;
+      }
+      if (!exhaustive || messages.size < 100) return null;
+      const cursor = messages.last()?.id;
+      if (!cursor || cursor === before) throw new Error('Message search could not finish.');
+      before = cursor;
     }
-
-    // A pinned verification message may be older than the last 100 messages.
-    const pinnedMessages = await channel.messages.fetchPinned();
-    for (const message of pinnedMessages.values()) {
-      if (this.isVerificationMessage(message, botUserId)) return message;
-    }
-    return null;
+    // A bounded/incomplete read cannot prove a message is missing.
+    throw new Error('Message search limit reached. Pin an existing verification message and check again.');
   }
 
   private isVerificationMessage(message: Message, botUserId: string): boolean {

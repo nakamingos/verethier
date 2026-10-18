@@ -17,6 +17,10 @@ const UNAVAILABLE = 'Ethscriptions verification is temporarily unavailable. Plea
 export class EthscriptionsOwnershipService {
   private requestTail: Promise<unknown> = Promise.resolve();
 
+  async checkSetupHealth(): Promise<void> {
+    this.validatePage(await this.request('/ethscriptions?max_results=1'));
+  }
+
   async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number): Promise<NftRuleFields & { slug: null }> {
     const criteria = parseInscriptionCriteria(ids, numbers, 'ethscription');
     if (!criteria) throw new Error('Enter inscription_ids or inscription_numbers.');

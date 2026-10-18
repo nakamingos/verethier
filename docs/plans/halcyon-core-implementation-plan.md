@@ -18,12 +18,12 @@ Track optional ideas separately in the [optional feature backlog](optional-featu
 
 ## Current implementation status
 
-Checkpoint: October 18, 2026, through member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
+Checkpoint: October 18, 2026, through setup assistance and Check Setup. Earlier portal follow-ups include member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
 
 | Phase | Delivered | Remaining |
 | --- | --- | --- |
 | 1. Shared backend and authentication | Authenticated portal APIs, live server authorization, shared rule operations and durable reconciliation. | Maintain these guarantees as features are added. |
-| 2. Admin dashboard and setup | All four admin tabs, bot invite links, existing-channel selection, verification-message controls, basic permission/role/channel diagnostics, `/help` and `/join`. | New-install channel creation and fuller **Check Setup** coverage, including message availability, provider health and explicitly previewed repairs. |
+| 2. Admin dashboard and setup | All four admin tabs, invite/return flow, reviewed channel selection/creation, resumable setup, verification-message controls, live **Check Setup** with provider probes and reviewed message recovery, `/help` and `/join`. | Maintain diagnostics as supported operations/providers expand. Bounded setup probes and unchecked wallet inventories are labeled explicitly; see the [setup notes](../portals.md#installation-and-check-setup). |
 | 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo and reconciliation for rule changes and signed verification. | Multi-trait AND/OR conditions and ERC-721 ID lists/ranges with quantity thresholds, including storage migration, evaluator and interface updates. |
 | 4. Settings and member troubleshooting | Background-check toggle, member lookup, fresh Check Roles and earned-role repairs. | No separate unfinished milestone identified. |
 | 5. Member portal | Wallet management, fresh proofs/transfers, removal reconciliation, joined-community verification and resumable flows. | Public discovery and signature-free rechecks remain optional. |
@@ -32,7 +32,7 @@ Checkpoint: October 18, 2026, through member lookup by wallet address ([PR #100]
 
 Portal follow-ups have also shipped: unified wallet activity, Earned/Available community role views, removed-wallet history with last-proof dates and explorer links, server wallet blocks, role-removal actions, shared-wallet-history audits and wallet-address lookup. See [portal behavior and operational notes](../portals.md).
 
-Next recommended milestone: finish the setup assistance and diagnostics in phase 2, then the rule-engine extensions in phase 3. Privacy/sharing/export ideas and wallet-first/X accounts are recorded in the [optional backlog](optional-features.md#privacy-sharing-and-registration); saving them does not start implementation.
+Next recommended milestone: multi-trait AND/OR conditions in phase 3, followed by ERC-721 ID lists/ranges and quantity thresholds. Privacy/sharing/export ideas and wallet-first/X accounts remain in the [optional backlog](optional-features.md#privacy-sharing-and-registration).
 
 ## Conflicts and recommended decisions
 

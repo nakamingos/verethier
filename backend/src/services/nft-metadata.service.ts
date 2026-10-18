@@ -16,6 +16,12 @@ export class NftMetadataService {
 
   constructor(private readonly dbSvc: DbService) {}
 
+  async checkSetupHealth(rule: NftRuleFields): Promise<void> {
+    const query = new URLSearchParams({ contractAddress: rule.contract_address, withMetadata: 'false', limit: '1' });
+    const data = await this.request(rule.chain_id, `getNFTsForContract?${query}`);
+    if (!Array.isArray(data?.nfts)) throw new Error(UNAVAILABLE);
+  }
+
   private baseUrl(chainId: number): string {
     const network = getNftNetwork(chainId);
     const host = chainId === 1 ? 'eth-mainnet.g.alchemy.com' : 'robinhood-mainnet.g.alchemy.com';

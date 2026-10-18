@@ -35,6 +35,19 @@ export class OrdinalsOwnershipService {
     if (this.catalog && this.provider() === 'ordnet') await this.catalog.refreshScheduled(context);
   }
 
+  async checkSetupHealth(rule: VerifierRole): Promise<void> {
+    if (!inscriptionCriteria(rule) && this.provider(rule) === 'ordnet') {
+      await this.ordnet.prepareRule(rule.slug);
+    } else if (rule.slug) {
+      await this.loadCollection(ordinalCollectionId(rule.slug), { priority: 'interactive' });
+    } else {
+      const criteria = inscriptionCriteria(rule);
+      if (criteria?.kind !== 'ids') throw new Error('A wallet check is needed for number inventories.');
+      await this.readOwners([criteria.ids[0]], { priority: 'interactive' });
+    }
+    if (ordinalTrait(rule).enabled && this.provider(rule) !== 'ordnet') await this.ordnet.prepareRule(rule.slug);
+  }
+
   async refreshCollection(slug: string): Promise<{ slug: string; count: number; fetched_at: string }> {
     if (!this.catalog || this.provider() !== 'ordnet') throw new Error('Collection metadata refresh requires ORDINALS_PROVIDER=ordnet.');
     const catalog = await this.catalog.refresh(slug, { priority: 'background' });
