@@ -124,7 +124,7 @@
   @include pixel-scrollbar(#7c919d);
   --ase-face: #d3cbbe;
   --ase-text: #000;
-  --ase-dim: #655561;
+  --ase-dim: #000;
   --ase-selected: #ff5555;
   --ase-selected-hover: #ff5555;
   --ase-selected-text: #fff;
@@ -144,6 +144,11 @@
   --bid-color: 211, 203, 190;
   --magma: 245, 215, 221;
   --highlight: 255, 85, 85;
+}
+
+:root[data-theme='light']
+  :is(.brand-header, .panel, .notice, .inline-rule-editor) {
+  --ase-dim: #655561;
 }
 
 :root[data-theme='light'] .brand-header {
@@ -598,6 +603,8 @@ form > label {
   color: var(--ase-server-text);
 }
 .route-content {
+  flex: 1;
+  width: 100%;
   max-width: 132rem;
   margin: auto;
   padding: 3rem 2rem;
@@ -614,7 +621,7 @@ body:has(app-admin) {
   flex-direction: column;
   width: 100%;
   max-width: none;
-  padding: 3rem 0 0;
+  padding: 0.8rem 0 0;
   background: var(--ase-tab-strip);
   flex: 1;
 }
@@ -652,8 +659,9 @@ app-admin .welcome {
   align-items: center;
   text-align: center;
   max-width: 132rem;
-  margin: 2rem auto;
-  padding: 1rem 2rem;
+  margin: 0 auto;
+  padding: 2rem;
+  flex-shrink: 0;
   display: flex;
   gap: 2rem;
   flex-wrap: wrap;
@@ -676,7 +684,7 @@ app-root:has(app-admin) .app-footer {
   flex-wrap: wrap;
 }
 .portal-heading {
-  margin-bottom: 2.5rem;
+  margin-bottom: 0.6rem;
 }
 .portal-title {
   display: flex;
@@ -695,10 +703,6 @@ app-root:has(app-admin) .app-footer {
   max-height: min(40svh, 32rem);
   overflow: auto;
   z-index: 30;
-  filter: drop-shadow(0 3px 0 #0006);
-}
-.portal-feedback .notice {
-  margin: 0;
 }
 .portal-feedback p {
   margin: 0;
@@ -898,6 +902,7 @@ app-root:has(app-admin) .app-footer {
   width: 65%;
 }
 .community-title {
+  row-gap: 0.4rem;
   justify-content: flex-start;
   margin: 0;
 }
@@ -1219,6 +1224,13 @@ app-root:has(app-admin) .app-footer {
 .notice.warning {
   border-image-source: var(--pixel-accent);
 }
+.portal-feedback .notice {
+  @include pixel-surface(var(--pixel-card-highlight));
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
+  margin: 0;
+}
+
 .notice summary {
   cursor: pointer;
   color: var(--ase-selected);
@@ -1407,6 +1419,7 @@ button:disabled:hover,
   .member-matches,
   .combined-navigation nav a,
   .notice,
+  .portal-feedback .notice,
   app-verify .steps-wrapper .step .label,
   app-verify .error-message {
     border-image: none !important;
@@ -1487,7 +1500,7 @@ button:disabled:hover,
     padding: 2rem 1.2rem;
   }
   .route-content:has(app-admin) {
-    padding: 2rem 0 0;
+    padding: 0.8rem 0 0;
   }
   app-admin {
     --workspace-gutter: 1.2rem;
@@ -1511,12 +1524,14 @@ button:disabled:hover,
   }
   .server-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--server-columns, 2), minmax(0, 1fr));
     gap: 0;
   }
   .server-list.panel {
     // Account for the shared 2px outline at each column's right edge.
     padding-right: calc(1rem + 1px);
+    // The final row overlaps 4px into this padding, just like earlier rows.
+    padding-bottom: calc(1rem + 2px);
   }
   .server-list button,
   .server-list .button {
@@ -1526,9 +1541,8 @@ button:disabled:hover,
     // Share outlines horizontally and outline/shadow vertically.
     margin: 0 -2px -4px 0;
   }
-  .server-list > :is(button, .button):last-child,
-  .server-list > :is(button, .button):nth-last-child(2):nth-child(odd) {
-    margin-bottom: 0;
+  .server-list > :is(button, .button):last-child {
+    margin-bottom: -4px;
   }
   .server-list > p {
     grid-column: 1 / -1;
@@ -1579,6 +1593,16 @@ button:disabled:hover,
   }
 }
 
+@media (min-width: 520px) and (max-width: 800px) {
+  .server-list {
+    --server-columns: 3;
+  }
+}
+@media (min-width: 680px) and (max-width: 800px) {
+  .server-list {
+    --server-columns: 4;
+  }
+}
 @media (max-width: 800px) {
   .rule-card > .section-heading {
     display: grid;
