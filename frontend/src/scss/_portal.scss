@@ -419,6 +419,16 @@ form > label {
   font-size: 1.6rem;
   min-height: 3.2rem;
 }
+.brand-header .header-auth {
+  min-width: 0;
+  max-width: min(28rem, 100%);
+}
+.header-auth span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 :where(.brand-header, app-admin .portal)
   :is(button, a.button):not(
     :where(.tabs button, .pixel-select-trigger, .member-matches button)
@@ -596,6 +606,7 @@ app-root:has(app-admin) .app-footer {
   gap: 2rem;
 }
 .server-list {
+  min-width: 0;
   align-self: start;
   position: sticky;
   top: 1.5rem;
@@ -614,6 +625,8 @@ app-root:has(app-admin) .app-footer {
   display: flex;
   justify-content: flex-start;
   width: 100%;
+  min-height: 4.7rem;
+  font-size: 1.7rem;
   // Share the bottom outline/shadow with the next button's top outline.
   margin-bottom: -4px;
   padding-bottom: 0.85rem;
@@ -649,6 +662,20 @@ app-root:has(app-admin) .app-footer {
 .server-list img {
   flex-shrink: 0;
   border-radius: 0;
+}
+.server-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 3rem;
+  width: 3rem;
+  height: 3rem;
+  background: var(--ase-server-placeholder);
+}
+.server-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .portal-content {
   min-width: 0;

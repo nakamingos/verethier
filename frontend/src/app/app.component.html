@@ -13,7 +13,17 @@
         <span>{{ light ? 'Dark' : 'Light' }} theme</span>
       </span>
     </button>
-    @if (showSignIn) {
+    @if (portalAuth?.user; as user) {
+      <button
+        class="header-auth"
+        type="button"
+        (click)="portalAuth?.logout()"
+        [disabled]="portalAuth?.busy"
+        [title]="'Sign out · ' + user.name"
+      >
+        <span>Sign out · {{ user.name }}</span>
+      </button>
+    } @else if (showSignIn) {
       <a class="button" href="/api/portal/auth/login?return_to=/admin">
         Sign in with Discord
       </a>
