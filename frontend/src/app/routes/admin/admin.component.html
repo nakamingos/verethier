@@ -216,22 +216,21 @@
                       (ngModelChange)="showGroup($event)"
                       [options]="groupChoices"
                       label="Rule group" /></span></label
-                ><button class="primary" (click)="create()" [disabled]="busy">
+                ><button
+                  class="primary"
+                  (click)="create()"
+                  [disabled]="busy"
+                  [attr.aria-expanded]="!!editor?.new"
+                  aria-controls="new-rule-editor"
+                >
                   + Add rule
                 </button>
               </div>
               <ng-template #ruleEditor>
-                <section class="panel rule-editor">
-                  <div class="section-heading">
-                    <h2>
-                      {{
-                        editor.new ? 'Create a rule' : 'Edit rule ' + editor.id
-                      }}
-                    </h2>
-                    <button (click)="closeEditor()" [disabled]="busy">
-                      Cancel
-                    </button>
-                  </div>
+                <section
+                  class="panel rule-editor"
+                  [id]="editor.new ? 'new-rule-editor' : null"
+                >
                   <datalist id="slug-suggestions">
                     @for (value of suggestions['slug'] || []; track value) {
                       <option [value]="value"></option>
@@ -257,6 +256,35 @@
                     #ruleForm="ngForm"
                     (ngSubmit)="ruleForm.valid && (review = true)"
                   >
+                    <div class="section-heading editor-heading">
+                      <h2>
+                        {{
+                          editor.new
+                            ? 'Create a rule'
+                            : 'Edit rule ' + editor.id
+                        }}
+                      </h2>
+                      <div class="actions">
+                        @if (editor.new) {
+                          <button
+                            type="button"
+                            (click)="closeEditor()"
+                            [disabled]="busy"
+                          >
+                            Cancel
+                          </button>
+                        }
+                        @if (!review) {
+                          <button
+                            class="primary"
+                            type="submit"
+                            [disabled]="busy || !ruleForm.valid"
+                          >
+                            Review changes
+                          </button>
+                        }
+                      </div>
+                    </div>
                     @if (editor.new) {
                       <div class="form-grid">
                         <label
@@ -269,7 +297,7 @@
                               label="Asset type" /></span
                         ></label>
                         <label
-                          >Verification channel<span class="select-control"
+                          >Verification channel:<span class="select-control"
                             ><app-pixel-select
                               name="channel"
                               [(ngModel)]="draft.channel_id"
@@ -278,7 +306,7 @@
                               label="Verification channel" /></span
                         ></label>
                         <label
-                          >Discord role<span class="select-control"
+                          >Discord role:<span class="select-control"
                             ><app-pixel-select
                               name="role"
                               [(ngModel)]="draft.role_id"
@@ -287,7 +315,7 @@
                         ></label>
                         @if (!draft.role_id) {
                           <label
-                            >New role name<input
+                            >New role name:<input
                               name="roleName"
                               [(ngModel)]="draft.role_name"
                               required
@@ -300,7 +328,7 @@
                           draft.asset_type === 'ethscription'
                         ) {
                           <label
-                            >Match by<span class="select-control"
+                            >Match by:<span class="select-control"
                               ><app-pixel-select
                                 name="mode"
                                 [(ngModel)]="mode"
@@ -309,7 +337,7 @@
                           ></label>
                           @if (mode === 'collection') {
                             <label
-                              >Collection slug<input
+                              >Collection slug:<input
                                 name="slug"
                                 [(ngModel)]="draft.slug"
                                 list="slug-suggestions"
@@ -323,7 +351,7 @@
                                 mode === 'ids'
                                   ? 'Inscription IDs / hashes'
                                   : 'Inscription numbers and ranges'
-                              }}<textarea
+                              }}:<textarea
                                 [name]="mode"
                                 [(ngModel)]="
                                   draft[
@@ -342,7 +370,7 @@
                                 "
                               ></textarea></label
                             ><label
-                              >Label (optional)<input
+                              >Label (optional):<input
                                 name="label"
                                 [(ngModel)]="draft.label"
                                 maxlength="100"
@@ -355,7 +383,7 @@
                           draft.asset_type === 'erc20'
                         ) {
                           <label
-                            >Network<span class="select-control"
+                            >Network:<span class="select-control"
                               ><app-pixel-select
                                 name="network"
                                 [(ngModel)]="draft.network"
@@ -363,7 +391,7 @@
                                 label="Network" /></span
                           ></label>
                           <label
-                            >Contract address<input
+                            >Contract address:<input
                               name="contract"
                               [(ngModel)]="draft.contract_address"
                               required
@@ -372,12 +400,12 @@
                           /></label>
                           @if (draft.asset_type === 'nft') {
                             <label
-                              >Token IDs (optional)<input
+                              >Token IDs (optional):<input
                                 name="tokenIds"
                                 [(ngModel)]="draft.token_ids"
                                 placeholder="1,2,10-20" /></label
                             ><label
-                              >Collection name (optional)<input
+                              >Collection name (optional):<input
                                 name="collectionName"
                                 [(ngModel)]="draft.collection_name"
                                 maxlength="100"
@@ -389,14 +417,14 @@
                           (draft.asset_type === 'nft' || mode === 'collection')
                         ) {
                           <label
-                            >Attribute key (optional)<input
+                            >Attribute key (optional):<input
                               name="key"
                               [(ngModel)]="draft.attribute_key"
                               list="key-suggestions"
                               (focus)="suggest('attribute_key')"
                               placeholder="ALL" /></label
                           ><label
-                            >Attribute value (optional)<input
+                            >Attribute value (optional):<input
                               name="value"
                               [(ngModel)]="draft.attribute_value"
                               list="value-suggestions"
@@ -406,7 +434,7 @@
                         }
                         @if (draft.asset_type === 'erc20') {
                           <label
-                            >Minimum token balance<input
+                            >Minimum token balance:<input
                               name="balance"
                               [(ngModel)]="draft.min_balance"
                               required
@@ -415,7 +443,7 @@
                           /></label>
                         } @else {
                           <label
-                            >Minimum items<input
+                            >Minimum items:<input
                               name="minimum"
                               type="number"
                               [(ngModel)]="draft.min_items"
@@ -440,7 +468,7 @@
                     } @else {
                       <div class="form-grid">
                         <label
-                          >Discord role<span class="select-control"
+                          >Discord role:<span class="select-control"
                             ><app-pixel-select
                               name="editRole"
                               [(ngModel)]="editRoleId"
@@ -449,7 +477,7 @@
                         ></label>
                         @if (!editRoleId) {
                           <label
-                            >New role name<input
+                            >New role name:<input
                               name="editRoleName"
                               [(ngModel)]="editRoleName"
                               required
@@ -459,7 +487,8 @@
                         }
                         @for (field of editor.fields; track field.key) {
                           <label [class.wide]="field.list"
-                            >{{ field.label }}
+                            >{{ field.label
+                            }}{{ field.label.endsWith(':') ? '' : ':' }}
                             @if (field.list) {
                               <textarea
                                 [name]="field.key"
@@ -478,15 +507,6 @@
                           </label>
                         }
                       </div>
-                    }
-                    @if (!review) {
-                      <button
-                        class="primary"
-                        type="submit"
-                        [disabled]="busy || !ruleForm.valid"
-                      >
-                        Review changes
-                      </button>
                     }
                   </form>
                   @if (review) {
@@ -601,22 +621,10 @@
                         </p>
                         <h3>{{ rule.role_name || rule.role_id }}</h3>
                       </div>
-                      <span class="badge">{{ minimum(rule) }}</span>
+                      <span class="badge item-count">{{ minimum(rule) }}</span>
                     </div>
                     <p class="selection-text">{{ describe(rule) }}</p>
                     <div class="rule-card-footer">
-                      <div class="rule-card-group">
-                        @if (groupFor(rule); as group) {
-                          <button
-                            class="combined-badge"
-                            (click)="showGroup(group.key)"
-                            [disabled]="busy"
-                            [attr.aria-pressed]="activeGroup?.key === group.key"
-                          >
-                            Combined · {{ group.rules.length }} rules ↗
-                          </button>
-                        }
-                      </div>
                       <div class="actions">
                         <button
                           (click)="edit(rule)"
@@ -625,10 +633,10 @@
                           [attr.aria-controls]="'edit-rule-' + rule.id"
                         >
                           <span class="button-label"
-                            ><span aria-hidden="true">Collapse</span
+                            ><span aria-hidden="true">Cancel</span
                             ><span aria-hidden="true">Edit</span
                             ><span>{{
-                              editor?.id === rule.id ? 'Collapse' : 'Edit'
+                              editor?.id === rule.id ? 'Cancel' : 'Edit'
                             }}</span></span
                           ></button
                         ><button
@@ -638,6 +646,30 @@
                         >
                           Delete
                         </button>
+                      </div>
+                      <div class="rule-card-group">
+                        @if (groupFor(rule); as group) {
+                          <button
+                            class="combined-badge"
+                            (click)="showGroup(group.key)"
+                            [disabled]="busy"
+                            [attr.aria-pressed]="activeGroup?.key === group.key"
+                            [attr.aria-label]="
+                              'Combined · ' + group.rules.length + ' rules'
+                            "
+                            [title]="
+                              'Combined · ' + group.rules.length + ' rules'
+                            "
+                          >
+                            <span class="combined-label" aria-hidden="true"
+                              >Combined · {{ group.rules.length }} rules
+                              ↗</span
+                            >
+                            <span class="combined-short" aria-hidden="true"
+                              >{{ group.rules.length }} rules ↗</span
+                            >
+                          </button>
+                        }
                       </div>
                     </div>
                     @if (editor?.id === rule.id) {
@@ -681,7 +713,7 @@
                     member repairs can still update roles.
                   </p>
                   <label
-                    >Default verification channel<span class="select-control"
+                    >Default verification channel:<span class="select-control"
                       ><app-pixel-select
                         name="defaultChannel"
                         [(ngModel)]="data.settings.verification_channel_id"
@@ -701,14 +733,14 @@
                 <form (ngSubmit)="message()">
                   <div class="form-grid">
                     <label
-                      >Channel<span class="select-control"
+                      >Channel:<span class="select-control"
                         ><app-pixel-select
                           name="messageChannel"
                           [(ngModel)]="messageChannel"
                           [options]="channelChoices"
                           label="Channel" /></span></label
                     ><label
-                      >Action<span class="select-control"
+                      >Action:<span class="select-control"
                         ><app-pixel-select
                           name="messageAction"
                           [(ngModel)]="messageAction"
@@ -757,7 +789,7 @@
                 </p>
                 <form class="toolbar" (ngSubmit)="lookup()">
                   <div class="member-search">
-                    <label for="member-lookup">Username or user ID</label>
+                    <label for="member-lookup">Username or user ID:</label>
                     <input
                       id="member-lookup"
                       name="memberQuery"
@@ -881,7 +913,7 @@
                 <div class="toolbar">
                   <h2>Activity</h2>
                   <label
-                    >Show<span class="select-control"
+                    >Show:<span class="select-control"
                       ><app-pixel-select
                         [(ngModel)]="activityKind"
                         (ngModelChange)="switchTab('audit')"

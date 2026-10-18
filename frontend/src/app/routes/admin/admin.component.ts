@@ -39,6 +39,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   draft: any = {};
   mode = 'collection';
   review = false;
+  private newRuleDrafts = new Map<
+    string,
+    { draft: any; mode: string; review: boolean }
+  >();
   activity: any = { items: [], page: 1, pages: 1, total: 0, kind: 'roles' };
   activityKind = 'roles';
   activityLoading = false;
@@ -69,15 +73,12 @@ export class AdminComponent implements OnInit, OnDestroy {
   undoLabel = 'Undo';
   readonly assetFilterChoices: SelectChoice[] = [
     { value: '', label: 'All assets' },
-    { value: 'ordinal', label: 'Ordinals' },
     { value: 'ethscription', label: 'Ethscriptions' },
+    { value: 'ordinal', label: 'Ordinals' },
     { value: 'nft', label: 'NFTs' },
-    { value: 'erc20', label: 'Tokens' },
-  ];
-  readonly assetChoices: SelectChoice[] = [
-    ...this.assetFilterChoices.slice(1, 4),
     { value: 'erc20', label: 'Tokens (ERC-20)' },
   ];
+  readonly assetChoices: SelectChoice[] = this.assetFilterChoices.slice(1);
   readonly matchChoices: SelectChoice[] = [
     { value: 'collection', label: 'Collection' },
     { value: 'ids', label: 'Inscription IDs / hashes' },
@@ -220,6 +221,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async select(id: string) {
     await this.run(async () => {
+      this.rememberNewRule();
       this.cancelActivity();
       this.resetMemberSearch();
       this.suggestionEpoch++;
@@ -271,6 +273,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.user = null;
       this.data = null;
       this.servers = [];
+      this.newRuleDrafts.clear();
       this.csrf = '';
       this.signInVisibility.emit(this.configured);
     });
@@ -352,12 +355,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     return this.combinedIndex.get(this.groupFilter);
   }
   showGroup(key: string) {
-    this.closeEditor();
+    this.hideEditor();
     this.groupFilter = key;
   }
   jumpToRule(event: Event, id: number) {
     event.preventDefault();
-    this.closeEditor();
+    this.hideEditor();
     requestAnimationFrame(() => {
       const card = document.getElementById('rule-' + id);
       card?.scrollIntoView({
@@ -371,27 +374,54 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   closeEditor() {
     if (!this.busy) {
+      if (this.editor?.new) {
+        this.newRuleDrafts.delete(this.selected);
+        this.draft = {};
+        this.mode = 'collection';
+      }
       this.editor = null;
       this.review = false;
     }
   }
+  private rememberNewRule() {
+    if (this.editor?.new)
+      this.newRuleDrafts.set(this.selected, {
+        draft: { ...this.draft },
+        mode: this.mode,
+        review: this.review,
+      });
+  }
+  private hideEditor() {
+    if (this.busy) return;
+    this.rememberNewRule();
+    this.editor = null;
+    this.review = false;
+  }
   create() {
+    if (this.busy) return;
+    if (this.editor?.new) {
+      this.hideEditor();
+      return;
+    }
     this.suggestions = {};
     this.editor = { new: true };
-    this.review = false;
-    this.mode = 'collection';
-    this.draft = {
-      asset_type: 'ordinal',
-      channel_id:
-        this.activeGroup?.channelId ||
-        this.messageChannel ||
-        this.data.channels[0]?.id ||
-        '',
-      role_id: this.activeGroup?.roleId || '',
-      role_name: '',
-      min_items: this.activeGroup?.minimum || 1,
-      network: 'ethereum',
-    };
+    const saved = this.newRuleDrafts.get(this.selected);
+    this.review = saved?.review || false;
+    this.mode = saved?.mode || 'collection';
+    this.draft = saved
+      ? { ...saved.draft }
+      : {
+          asset_type: 'ethscription',
+          channel_id:
+            this.activeGroup?.channelId ||
+            this.messageChannel ||
+            this.data.channels[0]?.id ||
+            '',
+          role_id: this.activeGroup?.roleId || '',
+          role_name: '',
+          min_items: this.activeGroup?.minimum || 1,
+          network: 'ethereum',
+        };
   }
   edit(rule: any) {
     if (this.busy) return;
@@ -399,6 +429,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.closeEditor();
       return;
     }
+    this.rememberNewRule();
     this.editor = rule;
     this.editRoleId = rule.role_id;
     this.editRoleName = '';
@@ -498,6 +529,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async save() {
     await this.run(async () => {
+      const creating = this.editor.new;
       const action = this.editor.new
         ? await this.api(`/servers/${this.selected}/rules`, this.payload())
         : await this.api(
@@ -512,6 +544,7 @@ export class AdminComponent implements OnInit, OnDestroy {
             },
           );
       this.undo = action;
+      if (creating) this.newRuleDrafts.delete(this.selected);
       this.undoLabel = 'Undo';
       this.editor = null;
       await this.reload();
@@ -568,6 +601,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   messageUrl = '';
   async switchTab(tab: string) {
     if (this.busy) return;
+    if (tab !== 'rules' && this.editor?.new) this.hideEditor();
     this.tab = tab;
     this.error = '';
     this.notice = '';

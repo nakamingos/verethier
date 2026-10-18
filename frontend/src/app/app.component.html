@@ -1,17 +1,20 @@
 <header class="brand-header">
   <div class="brand-line">
     <a class="brand" routerLink="/admin">Bouncer</a>
-    <span class="brand-subtitle">- Verify your wallet. Get your roles.</span>
+    <span class="brand-subtitle">Verify your wallet. Get your roles.</span>
   </div>
   <nav aria-label="Main navigation">
     <a class="button" routerLink="/admin">Control room</a
     ><a class="button" routerLink="/help">Help</a
-    ><button type="button" (click)="toggleTheme()" [attr.aria-pressed]="light">
-      <span class="button-label">
-        <span aria-hidden="true">Light theme</span>
-        <span aria-hidden="true">Dark theme</span>
-        <span>{{ light ? 'Dark' : 'Light' }} theme</span>
-      </span>
+    ><button
+      class="theme-toggle"
+      type="button"
+      (click)="toggleTheme()"
+      [attr.aria-pressed]="light"
+      [attr.aria-label]="light ? 'Dark theme' : 'Light theme'"
+      [title]="light ? 'Dark theme' : 'Light theme'"
+    >
+      <img src="/assets/theme-switch.svg" width="20" height="20" alt="" />
     </button>
     @if (portalAuth?.user; as user) {
       <button
