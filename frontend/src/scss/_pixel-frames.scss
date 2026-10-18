@@ -200,23 +200,25 @@ $pixel-server-button-selected: (
   '.DDDDDDDDDDDDDD.'
 );
 
+// Same 14×16 source geometry as button_normal, with a dark display face.
+// Its six-row lower slice includes the white inner rim, bevel, outline and ledge.
 $pixel-count: (
-  '..EEEEEEEEEEEE..',
-  '.EKHHHHHHHHHHKE.',
-  'EKHFFFFFFFFFFHKE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EHFFFFFFFFFFFFHE',
-  'EKHFFFFFFFFFFHKE',
-  'EKHHHHHHHHHHHHKE',
-  'ESSSSSSSSSSSSSSE',
-  'DEEEEEEEEEEEEEED',
-  '.DDDDDDDDDDDDDDD'
+  '..EEEEEEEEEE..',
+  '.EFHHHHHHHHFE.',
+  'EFHFFFFFFFFHFE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHHFFFFFFFFHHE',
+  'ESHHHHHHHHHHSE',
+  'DESSSSSSSSSSED',
+  '.DEEEEEEEEEED.',
+  '..DDDDDDDDDD..'
 );
 
 // Text entries preserve the source sunken_normal/sunken_focused frames.
@@ -492,7 +494,6 @@ $pixel-select-arrow: (
       (
         'E': #000,
         'F': #0f1011,
-        'K': #7d7d7d,
         'H': #c0c0c0,
         'S': #7d7d7d,
         'D': #202125,
