@@ -102,6 +102,7 @@ const base = {
           requests.push({
             path: p,
             method: request.method(),
+            search: url.search,
             body: request.postDataJSON(),
             csrf: request.headers()['x-csrf-token'],
           });
@@ -344,6 +345,7 @@ const base = {
             '.css': 'text/css',
             '.woff2': 'font/woff2',
             '.svg': 'image/svg+xml',
+            '.png': 'image/png',
             '.html': 'text/html',
           };
           return route.fulfill({
@@ -413,6 +415,48 @@ const base = {
         ],
         'installed servers sort first; each group uses case-insensitive numeric ordering',
       );
+      assert.equal(await page.locator('.brand u').textContent(), 'B');
+      assert.equal(
+        await page.locator('.theme-toggle img').getAttribute('src'),
+        '/assets/theme.png',
+      );
+      assert.equal(await page.locator('.server-list h2').count(), 0);
+      const serversTitle = await page
+        .locator('.server-menu > h2')
+        .boundingBox();
+      const assetTitle = await page
+        .locator('.portal-content .toolbar > label')
+        .first()
+        .boundingBox();
+      if (width > 800)
+        assert.ok(
+          Math.abs(serversTitle.y - assetTitle.y) < 1,
+          'menu titles align',
+        );
+      for (const avatar of await page.locator('.server-avatar').all()) {
+        assert.equal(
+          await avatar.evaluate((el) => getComputedStyle(el).backgroundColor),
+          'rgba(0, 0, 0, 0)',
+        );
+      }
+      const ruleSort = page.getByRole('combobox', {
+        name: 'Sort by ID',
+        exact: true,
+      });
+      await chooseOption(page, ruleSort, 'Descending');
+      assert.deepEqual(
+        await page
+          .locator('.rule-card')
+          .evaluateAll((cards) => cards.map((card) => card.id)),
+        ['rule-4', 'rule-3', 'rule-2', 'rule-1'],
+      );
+      await chooseOption(page, ruleSort, 'Ascending');
+      assert.deepEqual(
+        await page
+          .locator('.rule-card')
+          .evaluateAll((cards) => cards.map((card) => card.id)),
+        ['rule-1', 'rule-2', 'rule-3', 'rule-4'],
+      );
       const assetPicker = page.getByRole('combobox', {
         name: 'Asset type',
         exact: true,
@@ -436,6 +480,12 @@ const base = {
       );
       assert.equal(await assetPicker.getAttribute('aria-expanded'), 'true');
       const popupBox = await page.getByRole('listbox').boundingBox();
+      if (popupBox.y >= closedPicker.y)
+        assert.equal(
+          popupBox.y,
+          closedPicker.y + closedPicker.height,
+          'menu sits directly beneath the arrow',
+        );
       assert.ok(
         popupBox.x >= 0 && popupBox.x + popupBox.width <= width,
         'popup fits viewport',
@@ -497,6 +547,28 @@ const base = {
         .getByRole('navigation', { name: 'Server settings' })
         .getByRole('button', { name: 'Bot Settings', exact: true })
         .click();
+      for (const form of await page.locator('.settings-actions').all()) {
+        const box = await form.boundingBox();
+        const button = await form.locator('button[type=submit]').boundingBox();
+        assert.ok(
+          Math.abs(box.x + box.width - button.x - button.width) < 1,
+          'settings actions stay right aligned',
+        );
+        if (width > 800) {
+          const control = await form
+            .getByRole('combobox')
+            .first()
+            .boundingBox();
+          assert.ok(
+            Math.abs(control.y + control.height - button.y - button.height) < 1,
+            'settings actions share dropdown row',
+          );
+        }
+      }
+      await page.screenshot({
+        path: `${artifacts}/settings-${width}.png`,
+        fullPage: true,
+      });
       const defaultChannel = page.getByRole('combobox', {
         name: 'Default verification channel',
         exact: true,
@@ -1181,6 +1253,33 @@ const base = {
         path: `${artifacts}/audit-${width}.png`,
         fullPage: true,
       });
+      const activitySort = page.getByRole('combobox', {
+        name: 'Sort by date',
+        exact: true,
+      });
+      await chooseOption(page, activitySort, 'Oldest first');
+      await page.getByText('1 / 3 · 45 entries').waitFor();
+      assert.match(
+        requests.filter((request) => request.path.endsWith('/activity')).at(-1)
+          .search,
+        /sort=asc/,
+      );
+      await chooseOption(page, activitySort, 'Newest first');
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('.activity-results')
+            .getAttribute('aria-busy') === 'false',
+      );
+      assert.match(
+        requests.filter((request) => request.path.endsWith('/activity')).at(-1)
+          .search,
+        /sort=desc/,
+      );
+      await page.getByRole('button', { name: 'Next →', exact: true }).click();
+      await page.getByText('2 / 3 · 45 entries').waitFor();
+      await page.getByRole('button', { name: 'Next →', exact: true }).click();
+      await page.getByText('3 / 3 · 45 entries').waitFor();
       failActivity = true;
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await page

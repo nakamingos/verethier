@@ -34,6 +34,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   tab = 'rules';
   filter = '';
   query = '';
+  ruleSort = 'asc';
   editor: any = null;
   inputs: Record<string, string> = {};
   draft: any = {};
@@ -43,8 +44,16 @@ export class AdminComponent implements OnInit, OnDestroy {
     string,
     { draft: any; mode: string; review: boolean }
   >();
-  activity: any = { items: [], page: 1, pages: 1, total: 0, kind: 'roles' };
+  activity: any = {
+    items: [],
+    page: 1,
+    pages: 1,
+    total: 0,
+    kind: 'roles',
+    sort: 'desc',
+  };
   activityKind = 'roles';
+  activitySort = 'desc';
   activityLoading = false;
   activityReady = false;
   private activityRequest?: AbortController;
@@ -92,6 +101,14 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'refresh', label: 'Refresh existing' },
     { value: 'new', label: 'Create another message' },
     { value: 'recover', label: 'Recover missing' },
+  ];
+  readonly ruleSortChoices: SelectChoice[] = [
+    { value: 'asc', label: 'Ascending' },
+    { value: 'desc', label: 'Descending' },
+  ];
+  readonly activitySortChoices: SelectChoice[] = [
+    { value: 'desc', label: 'Newest first' },
+    { value: 'asc', label: 'Oldest first' },
   ];
   readonly activityChoices: SelectChoice[] = [
     { value: 'roles', label: 'Role assignments' },
@@ -242,8 +259,10 @@ export class AdminComponent implements OnInit, OnDestroy {
           pages: 1,
           total: 0,
           kind: 'roles',
+          sort: 'desc',
         };
         this.activityKind = 'roles';
+        this.activitySort = 'desc';
         this.activityReady = false;
         this.undo = null;
         this.tab = 'rules';
@@ -279,14 +298,21 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
   get rules() {
-    if (this.activeGroup) return this.activeGroup.rules;
-    return (this.data?.rules || []).filter(
-      (r: any) =>
-        (this.groupFilter !== 'combined' || !!this.groupFor(r)) &&
-        (!this.filter || r.asset_type === this.filter) &&
-        (!this.query ||
-          this.describe(r).toLowerCase().includes(this.query.toLowerCase()) ||
-          r.role_name?.toLowerCase().includes(this.query.toLowerCase())),
+    const rules = this.activeGroup
+      ? [...this.activeGroup.rules]
+      : (this.data?.rules || []).filter(
+          (r: any) =>
+            (this.groupFilter !== 'combined' || !!this.groupFor(r)) &&
+            (!this.filter || r.asset_type === this.filter) &&
+            (!this.query ||
+              this.describe(r)
+                .toLowerCase()
+                .includes(this.query.toLowerCase()) ||
+              r.role_name?.toLowerCase().includes(this.query.toLowerCase())),
+        );
+    return rules.sort(
+      (a: any, b: any) =>
+        (Number(a.id) - Number(b.id)) * (this.ruleSort === 'asc' ? 1 : -1),
     );
   }
   describe(r: any) {
@@ -634,15 +660,16 @@ export class AdminComponent implements OnInit, OnDestroy {
     const request = (this.activityRequest = new AbortController());
     const server = this.selected;
     const kind = this.activityKind;
+    const sort = this.activitySort;
     this.activityLoading = true;
     try {
       const data = await this.api(
-        `/servers/${server}/activity?kind=${kind}&page=${page}`,
+        `/servers/${server}/activity?kind=${kind}&page=${page}&sort=${sort}`,
         undefined,
         request.signal,
       );
       if (epoch !== this.activityEpoch || server !== this.selected) return;
-      this.activity = { ...data, kind };
+      this.activity = { ...data, kind, sort };
       this.activityReady = true;
       requestAnimationFrame(() => {
         if (epoch !== this.activityEpoch || this.tab !== 'audit') return;
@@ -653,6 +680,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     } catch (error: any) {
       if (epoch !== this.activityEpoch || error?.name === 'AbortError') return;
       this.activityKind = this.activity.kind;
+      this.activitySort = this.activity.sort;
       throw error;
     } finally {
       if (epoch === this.activityEpoch) {

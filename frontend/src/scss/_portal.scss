@@ -314,8 +314,8 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 }
 .pixel-select-arrow::after {
   content: '';
-  width: 18px;
-  height: 16px;
+  width: 27px;
+  height: 24px;
   background: var(--pixel-select-arrow) center / contain no-repeat;
 }
 .pixel-select-menu {
@@ -382,12 +382,33 @@ input[type='radio'] {
   border-image: none;
 }
 input[type='checkbox'] {
+  appearance: none;
   display: inline-block;
+  flex: 0 0 18px;
   min-height: 0;
-  width: 1.8rem;
-  height: 1.8rem;
-  accent-color: var(--ase-selected);
+  width: 18px;
+  height: 18px;
+  border: 0;
+  padding: 2px 0 0 2px;
   margin: 0;
+  image-rendering: pixelated;
+  background: transparent url('/assets/check_deselect.png') -96px -128px / 608px
+    608px no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
+  // The supplied unchecked asset is a sprite sheet; use its matching unchecked tile.
+  &:checked {
+    padding: 0;
+    background-origin: border-box;
+    background-clip: border-box;
+    background-image: url('/assets/check_select.png');
+    background-position: 0 0;
+    background-size: 18px 18px;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ase-selected);
+    outline-offset: 3px;
+  }
 }
 form > button {
   margin-top: 1rem;
@@ -633,20 +654,26 @@ app-root:has(app-admin) .app-footer {
   grid-template-columns: 22rem minmax(0, 1fr);
   gap: 2rem;
 }
-.server-list {
+.server-menu {
   min-width: 0;
   align-self: start;
   position: sticky;
   top: 1.5rem;
+}
+.server-menu > h2 {
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1.5;
+  margin: 0 0 0.45rem;
+}
+.server-list {
+  min-width: 0;
+  margin: 0;
   padding: calc(1rem - 2px) calc(1rem - 1px);
   border-image-source: var(--pixel-server-panel);
   border-image-slice: 6 fill;
   border-image-width: 6px;
   color: var(--ase-server-text);
-}
-.server-list h2 {
-  padding: 0.5rem 1rem;
-  font-size: 1.6rem;
 }
 .server-list button,
 .server-list .button {
@@ -697,7 +724,7 @@ app-root:has(app-admin) .app-footer {
   flex: 0 0 3rem;
   width: 3rem;
   height: 3rem;
-  background: var(--ase-server-placeholder);
+  background: transparent;
 }
 .server-name {
   min-width: 0;
@@ -752,16 +779,11 @@ app-root:has(app-admin) .app-footer {
 }
 .badge {
   display: inline-block;
-  border: 1px solid var(--ase-border);
-  @include pixel-surface(var(--pixel-inset));
-  font-size: 1.6rem;
-  padding: 0.25rem 0.7rem;
-  white-space: normal;
-}
-.badge.item-count {
+  @include pixel-surface(var(--pixel-count));
+  white-space: nowrap;
   border-image-source: var(--pixel-count);
-  border-image-slice: 6 6 10 6 fill;
-  border-image-width: 6px 6px 10px 6px;
+  border-image-slice: 8 8 10 8 fill;
+  border-image-width: 8px 8px 10px 8px;
   min-height: 3.4rem;
   padding: 0.35rem 1rem 0.65rem;
   font-size: 1.8rem;
@@ -837,6 +859,16 @@ app-root:has(app-admin) .app-footer {
 }
 .toolbar > button {
   margin: 0;
+}
+.settings-actions {
+  margin-bottom: 0;
+}
+.settings-actions label {
+  flex: 0 1 28rem;
+  min-width: min(100%, 15rem);
+}
+.settings-actions > button {
+  margin-left: auto;
 }
 .rule-card .section-heading {
   align-items: start;
@@ -1240,15 +1272,13 @@ button:disabled:hover,
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  .server-list {
+  .server-menu {
     position: static;
+  }
+  .server-list {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-  }
-  .server-list h2 {
-    width: 100%;
-    margin: 0;
   }
   .server-list button,
   .server-list .button {

@@ -93,10 +93,12 @@
     <ng-container [ngTemplateOutlet]="workspaceTabs" />
     <div class="workspace-surface">
       <div class="portal-layout" aria-busy="true">
-        <aside class="panel server-list" aria-hidden="true">
+        <aside class="server-menu" aria-hidden="true">
           <h2>Servers:</h2>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
+          <div class="panel server-list">
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+          </div>
         </aside>
         <div class="portal-content">
           <ng-container [ngTemplateOutlet]="serverPlaceholder" />
@@ -125,60 +127,62 @@
     <ng-container [ngTemplateOutlet]="workspaceTabs" />
     <div class="workspace-surface">
       <div class="portal-layout">
-        <aside class="panel server-list">
+        <aside class="server-menu">
           <h2>Servers:</h2>
-          <ng-template #serverLabel let-server>
-            <span class="server-avatar" aria-hidden="true">
-              @if (server.icon) {
-                <img [src]="server.icon" alt="" />
+          <div class="panel server-list">
+            <ng-template #serverLabel let-server>
+              <span class="server-avatar" aria-hidden="true">
+                @if (server.icon) {
+                  <img [src]="server.icon" alt="" />
+                } @else {
+                  {{ server.name.slice(0, 1).toUpperCase() }}
+                }
+              </span>
+              <span class="server-name" [title]="server.name">
+                @if (!server.installed) {
+                  +
+                }
+                {{ server.name }}
+              </span>
+            </ng-template>
+            @for (server of servers; track server.id) {
+              @if (server.installed) {
+                <button
+                  [class.selected]="selected === server.id"
+                  [attr.aria-current]="selected === server.id ? 'true' : null"
+                  (click)="select(server.id)"
+                  [disabled]="busy"
+                >
+                  <ng-container
+                    [ngTemplateOutlet]="serverLabel"
+                    [ngTemplateOutletContext]="{ $implicit: server }"
+                  />
+                </button>
               } @else {
-                {{ server.name.slice(0, 1).toUpperCase() }}
+                <a
+                  class="button"
+                  [href]="server.invite"
+                  target="_blank"
+                  rel="noopener"
+                  ><ng-container
+                    [ngTemplateOutlet]="serverLabel"
+                    [ngTemplateOutletContext]="{ $implicit: server }"
+                /></a>
               }
-            </span>
-            <span class="server-name" [title]="server.name">
-              @if (!server.installed) {
-                +
-              }
-              {{ server.name }}
-            </span>
-          </ng-template>
-          @for (server of servers; track server.id) {
-            @if (server.installed) {
-              <button
-                [class.selected]="selected === server.id"
-                [attr.aria-current]="selected === server.id ? 'true' : null"
-                (click)="select(server.id)"
-                [disabled]="busy"
-              >
-                <ng-container
-                  [ngTemplateOutlet]="serverLabel"
-                  [ngTemplateOutletContext]="{ $implicit: server }"
-                />
-              </button>
-            } @else {
-              <a
-                class="button"
-                [href]="server.invite"
-                target="_blank"
-                rel="noopener"
-                ><ng-container
-                  [ngTemplateOutlet]="serverLabel"
-                  [ngTemplateOutletContext]="{ $implicit: server }"
-              /></a>
             }
-          }
-          @if (invite) {
-            <a class="button" [href]="invite" target="_blank" rel="noopener"
-              ><span class="server-avatar" aria-hidden="true">+</span
-              ><span class="server-name">Add Bouncer</span></a
-            >
-          }
-          @if (!servers.length) {
-            <p>
-              No administrator servers found. Sign in again after your
-              permissions change.
-            </p>
-          }
+            @if (invite) {
+              <a class="button" [href]="invite" target="_blank" rel="noopener"
+                ><span class="server-avatar" aria-hidden="true">+</span
+                ><span class="server-name">Add Bouncer</span></a
+              >
+            }
+            @if (!servers.length) {
+              <p>
+                No administrator servers found. Sign in again after your
+                permissions change.
+              </p>
+            }
+          </div>
         </aside>
         <div
           class="portal-content"
@@ -216,6 +220,12 @@
                       (ngModelChange)="showGroup($event)"
                       [options]="groupChoices"
                       label="Rule group" /></span></label
+                ><label
+                  >Sort by ID:<span class="select-control"
+                    ><app-pixel-select
+                      [(ngModel)]="ruleSort"
+                      [options]="ruleSortChoices"
+                      label="Sort by ID" /></span></label
                 ><button
                   class="primary"
                   (click)="create()"
@@ -342,7 +352,7 @@
                                 [(ngModel)]="draft.slug"
                                 list="slug-suggestions"
                                 (focus)="suggest('slug')"
-                                placeholder="pizza-comrades"
+                                placeholder="nakamingos"
                                 [required]="draft.asset_type === 'ordinal'"
                             /></label>
                           } @else {
@@ -712,16 +722,18 @@
                     When disabled, explicit verification, rule changes and
                     member repairs can still update roles.
                   </p>
-                  <label
-                    >Default verification channel:<span class="select-control"
-                      ><app-pixel-select
-                        name="defaultChannel"
-                        [(ngModel)]="data.settings.verification_channel_id"
-                        [options]="defaultChannelChoices"
-                        label="Default verification channel" /></span></label
-                  ><button class="primary" type="submit" [disabled]="busy">
-                    Save settings
-                  </button>
+                  <div class="toolbar settings-actions">
+                    <label
+                      >Default verification channel:<span class="select-control"
+                        ><app-pixel-select
+                          name="defaultChannel"
+                          [(ngModel)]="data.settings.verification_channel_id"
+                          [options]="defaultChannelChoices"
+                          label="Default verification channel" /></span></label
+                    ><button class="primary" type="submit" [disabled]="busy">
+                      Save settings
+                    </button>
+                  </div>
                 </form>
               </section>
               <section class="panel">
@@ -731,7 +743,7 @@
                   current rules.
                 </p>
                 <form (ngSubmit)="message()">
-                  <div class="form-grid">
+                  <div class="toolbar settings-actions">
                     <label
                       >Channel:<span class="select-control"
                         ><app-pixel-select
@@ -747,10 +759,10 @@
                           [options]="messageActionChoices"
                           label="Action" /></span
                     ></label>
+                    <button type="submit" [disabled]="busy">
+                      Update message
+                    </button>
                   </div>
-                  <button type="submit" [disabled]="busy">
-                    Update message
-                  </button>
                   @if (messageUrl) {
                     <a [href]="messageUrl" target="_blank" rel="noopener"
                       >Open in Discord ↗</a
@@ -920,6 +932,13 @@
                         [disabled]="busy"
                         [options]="activityChoices"
                         label="Show" /></span></label
+                  ><label
+                    >Sort by date:<span class="select-control"
+                      ><app-pixel-select
+                        [(ngModel)]="activitySort"
+                        (ngModelChange)="switchTab('audit')"
+                        [options]="activitySortChoices"
+                        label="Sort by date" /></span></label
                   ><button
                     (click)="switchTab('audit')"
                     [disabled]="busy || activityLoading"

@@ -1,5 +1,6 @@
 import { PortalService, portalRule } from '../src/portal/portal.service';
 import { PermissionFlagsBits } from 'discord.js';
+import { PortalController } from '../src/portal/portal.controller';
 
 describe('Portal server boundaries', () => {
   const server = '111111111111111111',
@@ -64,6 +65,40 @@ describe('Portal server boundaries', () => {
       'not installed',
     );
   });
+  it.each(['roles', 'changes', 'jobs'])(
+    'sorts %s activity by date and ID before pagination',
+    async (kind) => {
+      guild.members.fetch.mockResolvedValue({
+        id: user,
+        permissions: { has: () => true },
+      });
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        range: jest
+          .fn()
+          .mockResolvedValue({ data: [], error: null, count: 45 }),
+      };
+      db.from.mockReturnValue(query);
+      for (const sort of ['asc', 'desc'] as const) {
+        query.order.mockClear();
+        const result = await service.activity(session, server, 2, kind, sort);
+        expect(query.order.mock.calls).toEqual([
+          [
+            kind === 'changes' ? 'created_at' : 'updated_at',
+            { ascending: sort === 'asc' },
+          ],
+          ['id', { ascending: sort === 'asc' }],
+        ]);
+        expect(query.range).toHaveBeenLastCalledWith(20, 39);
+        expect(query.order.mock.invocationCallOrder[1]).toBeLessThan(
+          query.range.mock.invocationCallOrder.at(-1),
+        );
+        expect(result).toEqual({ items: [], total: 45, page: 2, pages: 3 });
+      }
+    },
+  );
   it('does not reveal wallet information for nonmembers', async () => {
     guild.members.fetch
       .mockResolvedValueOnce({ id: user, permissions: { has: () => true } })
@@ -204,5 +239,40 @@ describe('Portal server boundaries', () => {
         expect.objectContaining({ key: 'attribute_value', value: 'Gold' }),
       ]),
     );
+  });
+});
+
+describe('Portal activity sort parameters', () => {
+  const session = { user: { id: 'admin' } };
+  const auth = { session: jest.fn().mockResolvedValue(session) };
+  const portal = { activity: jest.fn().mockResolvedValue({ items: [] }) };
+  const controller = new PortalController(auth as any, portal as any);
+  beforeEach(() => jest.clearAllMocks());
+  it('preserves newest-first ordering when sort is omitted', async () => {
+    await controller.activity({} as any, 'server');
+    expect(portal.activity).toHaveBeenCalledWith(
+      session,
+      'server',
+      1,
+      'roles',
+      'desc',
+    );
+  });
+  it('forwards the chosen sort and page', async () => {
+    await controller.activity({} as any, 'server', '3', 'jobs', 'asc');
+    expect(portal.activity).toHaveBeenCalledWith(
+      session,
+      'server',
+      3,
+      'jobs',
+      'asc',
+    );
+  });
+  it('rejects an unsupported sort before reading activity', async () => {
+    await expect(
+      controller.activity({} as any, 'server', '1', 'roles', 'invalid'),
+    ).rejects.toThrow();
+    expect(auth.session).not.toHaveBeenCalled();
+    expect(portal.activity).not.toHaveBeenCalled();
   });
 });
