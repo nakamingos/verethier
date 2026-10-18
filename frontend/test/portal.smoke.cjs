@@ -51,7 +51,7 @@ const base = {
     args: ['--no-sandbox'],
   });
   try {
-    for (const width of [1280, 768, 393, 320]) {
+    for (const width of [1280, 768, 600, 393, 320]) {
       let holdEdit = false,
         releaseEdit,
         editEntered;
@@ -603,13 +603,17 @@ const base = {
           boxes.every((box) => Math.abs(box.width - boxes[0].width) < 1),
           'mobile server buttons have equal widths',
         );
-        assert.equal(boxes[0].y, boxes[1].y, 'mobile servers use two columns');
+        const columns = width >= 680 ? 4 : width >= 520 ? 3 : 2;
+        assert.ok(
+          boxes.slice(0, columns).every((box) => box.y === boxes[0].y),
+          'server columns match available width',
+        );
         assert.ok(
           Math.abs(boxes[0].right - boxes[1].x - 2) < 1,
           'mobile columns share one outline',
         );
         assert.ok(
-          Math.abs(boxes[0].bottom - boxes[2].y - 4) < 1,
+          Math.abs(boxes[0].bottom - boxes[columns].y - 4) < 1,
           'mobile rows share their outline and shadow',
         );
       }
@@ -817,6 +821,26 @@ const base = {
           'Add rule returns to normal after closing by touch',
         );
       }
+      assert.equal(
+        await page
+          .locator('.server-menu > h2')
+          .evaluate((el) => getComputedStyle(el).color),
+        'rgb(0, 0, 0)',
+      );
+      assert.equal(
+        await page
+          .locator('.portal-content .toolbar > label')
+          .first()
+          .evaluate((el) => getComputedStyle(el).color),
+        'rgb(0, 0, 0)',
+      );
+      assert.equal(
+        await page
+          .locator('.rule-card .eyebrow')
+          .first()
+          .evaluate((el) => getComputedStyle(el).color),
+        'rgb(101, 85, 97)',
+      );
       await assetPicker.locator('.pixel-select-arrow').click();
       await page.screenshot({
         path: `${artifacts}/dropdown-light-${width}.png`,
@@ -2024,6 +2048,33 @@ const base = {
         exact: true,
       });
       if (await dismiss.count()) await dismiss.click();
+      if (width === 1280) {
+        await page
+          .getByRole('link', { name: 'Control room', exact: true })
+          .click();
+        await page
+          .getByRole('heading', {
+            name: 'Your rules. Your community.',
+            exact: true,
+          })
+          .waitFor();
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollHeight),
+          900,
+          'signed-out control room is a short page',
+        );
+      }
+      const footer = await page.locator('.app-footer').evaluate((el) => ({
+        bottom: el.getBoundingClientRect().bottom + scrollY,
+        pageHeight: Math.max(
+          innerHeight,
+          document.documentElement.scrollHeight,
+        ),
+      }));
+      assert.ok(
+        Math.abs(footer.bottom - footer.pageHeight) <= 1,
+        'footer reaches the bottom of the page',
+      );
       await page.screenshot({
         path: `${artifacts}/signed-out-header-${width}.png`,
         fullPage: true,
