@@ -137,7 +137,15 @@ export class AdminComponent implements OnInit, OnDestroy {
           'Discord sign-in could not be completed. Please try again.';
       if (this.user) {
         const result = await this.api('/servers');
-        this.servers = result.servers;
+        const names = new Intl.Collator(undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        });
+        this.servers = [...result.servers].sort(
+          (a, b) =>
+            Number(b.installed) - Number(a.installed) ||
+            names.compare(a.name, b.name),
+        );
         this.invite = result.invite;
         const remembered = sessionStorage.getItem('bouncer-admin-server');
         const first =

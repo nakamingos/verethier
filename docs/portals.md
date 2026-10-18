@@ -26,6 +26,8 @@ The server menu uses the source editor frame: a `#202125` interior, black inner 
 
 Server buttons and invite links use equal avatar slots and heights, with initials when an icon is missing. Names stay on one line with an ellipsis and a full-name tooltip. Server labels use a slightly larger 17px font.
 
+Servers with Bouncer installed appear first. Both installed and invite groups sort by name without case sensitivity and with numeric ordering (2 before 10). Text fields use the reference's recessed frame and blue focus border with gold text selection; focusing a field keeps its dimensions fixed.
+
 Stacked server buttons overlap their bottom outline and shadow with the next top outline, leaving one shared divider. Cards across Rules, Bot Settings, Member Lookup and Audit Log use the reference editor frame with black inner/outer outlines, a `#41444a` rim and a `#202125` interior. Combined-rule and editor highlights retain their accent, with joined open/lower frames keeping inline editors continuous. Light mode retains the same geometry.
 
 Border geometry is adapted from the [Aseprite Default Dark theme](https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme/dark) by David Capello, Ilija Melentijevic and Nicolas Desilets, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bouncer reconstructs the frames as SVG grids, recolors them to its themes, and adds card/editor variants; it does not bundle the source sprite sheet or icons.

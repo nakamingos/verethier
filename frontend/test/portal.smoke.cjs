@@ -88,6 +88,9 @@ const base = {
         hasTouch: width <= 800,
       });
       const page = await context.newPage();
+      await page.addInitScript((id) => {
+        sessionStorage.setItem('bouncer-admin-server', id);
+      }, server);
       page.on('pageerror', (e) => errors.push(e.message));
       await page.route('**/*', async (route) => {
         const url = new URL(route.request().url());
@@ -115,7 +118,23 @@ const base = {
           } else if (p === '/servers')
             data = {
               servers: [
+                {
+                  id: '800000000000000010',
+                  name: 'alpha 10',
+                  installed: false,
+                  invite:
+                    'https://discord.com/oauth2/authorize?guild_id=800000000000000010',
+                },
+                { id: '700000000000000010', name: 'Zeta 10', installed: true },
                 { id: server, name: 'NoMoreLabs', installed: true },
+                {
+                  id: '800000000000000002',
+                  name: 'Alpha 2',
+                  installed: false,
+                  invite:
+                    'https://discord.com/oauth2/authorize?guild_id=800000000000000002',
+                },
+                { id: '700000000000000002', name: 'zeta 2', installed: true },
                 {
                   id: '999999999999999999',
                   name: 'Another community',
@@ -375,6 +394,25 @@ const base = {
       );
       assert.equal(await page.locator('.portal-heading button').count(), 0);
       await page.evaluate(() => document.fonts.ready);
+      assert.deepEqual(
+        await page
+          .locator('.server-list > :is(button, a.button) .server-name')
+          .evaluateAll((labels) =>
+            labels.map((label) =>
+              label.textContent.replace(/\s+/g, ' ').trim(),
+            ),
+          ),
+        [
+          'Another community',
+          'NoMoreLabs',
+          'zeta 2',
+          'Zeta 10',
+          '+ Alpha 2',
+          '+ alpha 10',
+          'Add Bouncer',
+        ],
+        'installed servers sort first; each group uses case-insensitive numeric ordering',
+      );
       const assetPicker = page.getByRole('combobox', {
         name: 'Asset type',
         exact: true,

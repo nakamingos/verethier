@@ -94,7 +94,7 @@
     <div class="workspace-surface">
       <div class="portal-layout" aria-busy="true">
         <aside class="panel server-list" aria-hidden="true">
-          <h2>Servers</h2>
+          <h2>Servers:</h2>
           <div class="placeholder-line"></div>
           <div class="placeholder-line"></div>
         </aside>
@@ -126,7 +126,7 @@
     <div class="workspace-surface">
       <div class="portal-layout">
         <aside class="panel server-list">
-          <h2>Servers</h2>
+          <h2>Servers:</h2>
           <ng-template #serverLabel let-server>
             <span class="server-avatar" aria-hidden="true">
               @if (server.icon) {
@@ -198,19 +198,19 @@
             @if (tab === 'rules') {
               <div class="toolbar">
                 <label
-                  >Asset type<span class="select-control"
+                  >Asset type:<span class="select-control"
                     ><app-pixel-select
                       [(ngModel)]="filter"
                       [disabled]="!!activeGroup"
                       [options]="assetFilterChoices"
                       label="Asset type" /></span></label
                 ><label
-                  >Find a rule<input
+                  >Find a rule:<input
                     [(ngModel)]="query"
                     [disabled]="!!activeGroup"
                     placeholder="Role or collection…" /></label
                 ><label
-                  >Rule group<span class="select-control"
+                  >Rule group:<span class="select-control"
                     ><app-pixel-select
                       [ngModel]="groupFilter"
                       (ngModelChange)="showGroup($event)"
@@ -260,7 +260,7 @@
                     @if (editor.new) {
                       <div class="form-grid">
                         <label
-                          >Asset type<span class="select-control"
+                          >Asset type:<span class="select-control"
                             ><app-pixel-select
                               name="asset"
                               [(ngModel)]="draft.asset_type"

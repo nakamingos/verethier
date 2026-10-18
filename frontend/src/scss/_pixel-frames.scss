@@ -200,6 +200,36 @@ $pixel-server-button-selected: (
   '.DDDDDDDDDDDDDD.'
 );
 
+// Text entries preserve the source sunken_normal/sunken_focused frames.
+$pixel-entry: (
+  '............',
+  '..HHHHHHHH..',
+  '.HSEEEEEESH.',
+  '.HEISSSSIEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HEFFFFFFEH.',
+  '.HESFFFFSEH.',
+  '.HSEEEEEESH.',
+  '..HHHHHHHH..',
+  '............'
+);
+$pixel-entry-focused: (
+  '.SEEEEEEEES.',
+  'SEHHHHHHHHES',
+  'EHKEEEEEEKHE',
+  'EHEISSSSIEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHESFFFFSEHE',
+  'EHKEEEEEEKHE',
+  'SEHHHHHHHHES',
+  '.SEEEEEEEES.'
+);
+
 // The dropdown uses sunken2_normal: an inset top band and an open right edge
 // covered by the arrow button, rather than the symmetric sunken_normal frame.
 $pixel-select-field: (
@@ -474,7 +504,7 @@ $pixel-select-arrow: (
   --pixel-card-lower: #{pixel-card-frame($inside, $accent, $outside, 'lower')};
 }
 
-@mixin pixel-dropdowns(
+@mixin pixel-input-controls(
   $face: #292b30,
   $band: #41444a,
   $shade: #202125,
@@ -482,6 +512,27 @@ $pixel-select-arrow: (
   $text: #c0c0c0,
   $inset: #101114
 ) {
+  --pixel-entry: #{pixel-grid(
+      $pixel-entry,
+      (
+        'E': #000,
+        'F': $face,
+        'H': $band,
+        'S': $shade,
+        'I': $inset,
+      )
+    )};
+  --pixel-entry-focused: #{pixel-grid(
+      $pixel-entry-focused,
+      (
+        'E': #000,
+        'F': $face,
+        'H': #4069c2,
+        'S': $shade,
+        'I': $inset,
+        'K': #2a4185,
+      )
+    )};
   --pixel-select-field: #{pixel-grid(
       $pixel-select-field,
       (
