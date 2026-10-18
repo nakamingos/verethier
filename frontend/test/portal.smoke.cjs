@@ -326,6 +326,19 @@ const base = {
       await page
         .getByRole('heading', { name: 'NoMoreLabs', exact: true })
         .waitFor();
+      await page
+        .getByRole('heading', { name: 'Control room', exact: true })
+        .waitFor();
+      assert.equal(
+        await page.locator('.portal-heading .community-title h2').textContent(),
+        'NoMoreLabs',
+        'active server summary sits beside the control room title',
+      );
+      assert.equal(
+        await page.getByRole('link', { name: 'Sign in with Discord' }).count(),
+        0,
+        'signed-in users do not see the sign-in link',
+      );
       await page.evaluate(() => document.fonts.ready);
       const assetPicker = page.getByRole('combobox', {
         name: 'Asset type',
@@ -383,7 +396,7 @@ const base = {
       await chooseOption(page, assetPicker, 'All assets');
       await assetPicker.click();
       await page
-        .getByRole('heading', { name: 'Community settings', exact: true })
+        .getByRole('heading', { name: 'Control room', exact: true })
         .click();
       await page.waitForFunction(
         () =>

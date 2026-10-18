@@ -213,6 +213,11 @@ button[aria-pressed='true']:not(.primary):not(.selected):hover {
   outline: 2px solid var(--ase-selected);
   outline-offset: 3px;
 }
+button:focus-visible,
+a.button:focus-visible {
+  outline: none;
+  border-image-source: var(--pixel-hover);
+}
 button.danger-text {
   color: var(--ase-danger);
 }
@@ -413,6 +418,15 @@ form > label {
   font-size: 1.6rem;
   min-height: 3.2rem;
 }
+.brand-header :is(button, a.button) {
+  border-image-source: var(--pixel-server-button);
+  border-image-slice: 6 6 8 6 fill;
+  border-image-width: 6px 6px 8px 6px;
+  color: var(--ase-server-text);
+}
+.brand-header :is(button, a.button):hover {
+  border-image-source: var(--pixel-server-button-hover);
+}
 .route-content {
   max-width: 132rem;
   margin: auto;
@@ -492,6 +506,12 @@ app-root:has(app-admin) .app-footer {
 .portal-heading {
   margin-bottom: 2.5rem;
 }
+.portal-title {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
 .portal-feedback {
   position: fixed;
   top: max(1.2rem, env(safe-area-inset-top));
@@ -551,7 +571,7 @@ app-root:has(app-admin) .app-footer {
   align-self: start;
   position: sticky;
   top: 1.5rem;
-  padding: 1rem;
+  padding: calc(1rem - 2px) calc(1rem - 1px);
   border-image-source: var(--pixel-server-panel);
   border-image-slice: 6 fill;
   border-image-width: 6px;
@@ -579,9 +599,6 @@ app-root:has(app-admin) .app-footer {
 .server-list > :is(button, .button):last-child {
   margin-bottom: 0;
 }
-.server-list :is(button, .button):focus-visible {
-  outline-offset: -6px;
-}
 .server-list button:hover,
 .server-list .button:hover {
   border-image-source: var(--pixel-server-button-hover);
@@ -604,6 +621,28 @@ app-root:has(app-admin) .app-footer {
 .server-list img {
   flex-shrink: 0;
   border-radius: 0;
+}
+app-admin .portal :is(button, a.button) {
+  border-image-source: var(--pixel-server-button);
+  border-image-slice: 6 6 8 6 fill;
+  border-image-width: 6px 6px 8px 6px;
+  color: var(--ase-server-text);
+}
+app-admin .portal :is(button, a.button):hover,
+app-admin .portal :is(button, a.button):focus-visible {
+  border-image-source: var(--pixel-server-button-hover);
+}
+app-admin .portal :is(button.selected, a.button.selected),
+app-admin .portal button[aria-current='page'] {
+  border-image-source: var(--pixel-server-button-selected);
+  color: var(--ase-server-text);
+}
+app-admin .portal :is(button.selected, a.button.selected):hover,
+app-admin .portal button[aria-current='page']:hover {
+  border-image-source: var(--pixel-server-button-selected);
+}
+app-admin .portal :is(button, a.button):focus-visible {
+  outline: none;
 }
 .portal-content {
   min-width: 0;
@@ -645,7 +684,7 @@ app-root:has(app-admin) .app-footer {
 }
 .community-title {
   justify-content: flex-start;
-  margin: 0 0 1.5rem;
+  margin: 0;
 }
 .community-title h2 {
   margin: 0;
@@ -706,9 +745,6 @@ app-root:has(app-admin) .app-footer {
   // The final two sprite rows form the flared feet across the workspace rim.
   border-image-outset: 0 0 4px;
   color: var(--ase-tab-current-text);
-}
-.workspace-tabs button.selected:focus-visible {
-  outline-offset: -6px;
 }
 .toolbar {
   display: flex;
@@ -1013,7 +1049,13 @@ app-verify .user-info-wrapper .user-tag .warn {
     border-color: Highlight;
   }
   :focus-visible {
-    outline-color: Highlight;
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  app-admin .portal :is(button, a.button):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    filter: none;
   }
   .pixel-select-value,
   .pixel-select-arrow,
