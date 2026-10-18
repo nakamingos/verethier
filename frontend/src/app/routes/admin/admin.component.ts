@@ -1,4 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  OnDestroy,
+  OnInit,
+  Output,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -12,6 +18,7 @@ import {
   templateUrl: './admin.component.html',
 })
 export class AdminComponent implements OnInit, OnDestroy {
+  @Output() signInVisibility = new EventEmitter<boolean>();
   user: any = null;
   csrf = '';
   configured = true;
@@ -139,6 +146,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.failure(e);
     } finally {
       this.ready = true;
+      this.signInVisibility.emit(!this.user && this.configured);
     }
   }
   async api(path: string, body?: any, signal?: AbortSignal) {
@@ -160,7 +168,10 @@ export class AdminComponent implements OnInit, OnDestroy {
       throw new Error('Could not reach Bouncer. Please try again.');
     }
     if (!result.ok) {
-      if (result.status === 401) this.user = null;
+      if (result.status === 401) {
+        this.user = null;
+        this.signInVisibility.emit(this.configured);
+      }
       throw new Error(
         Array.isArray(data.message)
           ? data.message.join(' ')
@@ -238,6 +249,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.data = null;
       this.servers = [];
       this.csrf = '';
+      this.signInVisibility.emit(this.configured);
     });
   }
   get rules() {

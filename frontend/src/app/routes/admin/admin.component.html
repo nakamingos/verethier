@@ -1,8 +1,16 @@
 <section class="portal">
   <div class="portal-heading">
-    <div>
-      <p class="eyebrow">Control room</p>
-      <h1>Community settings</h1>
+    <div class="portal-title">
+      <h1>Control room</h1>
+      @if (data) {
+        <div class="community-title">
+          @if (data.server.icon) {
+            <img [src]="data.server.icon" alt="" />
+          }
+          <h2>{{ data.server.name }}</h2>
+          <span class="badge">{{ data.rules.length }} rules</span>
+        </div>
+      }
     </div>
     @if (user) {
       <button (click)="logout()" [disabled]="busy">
@@ -108,11 +116,7 @@
         Set collection requirements, manage verification, and help members with
         their roles.
       </p>
-      @if (configured) {
-        <a class="button primary" href="/api/portal/auth/login?return_to=/admin"
-          >Sign in with Discord</a
-        >
-      } @else {
+      @if (!configured) {
         <p>
           Discord sign-in is being configured. Your existing verification links
           still work.
@@ -170,14 +174,6 @@
           [class.is-loading]="loadingServer && data"
         >
           @if (data) {
-            <div class="community-title">
-              @if (data.server.icon) {
-                <img [src]="data.server.icon" alt="" />
-              }
-              <h2>{{ data.server.name }}</h2>
-              <span class="badge">{{ data.rules.length }} rules</span>
-            </div>
-
             @if (data.diagnostics.length) {
               <details class="notice warning">
                 <summary>{{ data.diagnostics.length }} setup issue(s)</summary>

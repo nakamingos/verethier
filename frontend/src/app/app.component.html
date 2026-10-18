@@ -13,9 +13,16 @@
         <span>{{ light ? 'Dark' : 'Light' }} theme</span>
       </span>
     </button>
+    @if (showSignIn) {
+      <a class="button" href="/api/portal/auth/login?return_to=/admin">
+        Sign in with Discord
+      </a>
+    }
   </nav>
 </header>
-<main class="route-content"><router-outlet /></main>
+<main class="route-content">
+  <router-outlet (activate)="onRouteActivate($event)" />
+</main>
 <footer class="app-footer">
   <span>Bouncer · Wallet verification</span
   ><a routerLink="/help">Wallets &amp; verification help</a
