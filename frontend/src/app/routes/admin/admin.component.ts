@@ -87,6 +87,11 @@ export class AdminComponent implements OnInit, OnDestroy {
   editRoleId = '';
   editRoleName = '';
   member: any = null;
+  roleActionsOpen = false;
+  roleActionEditor: any = null;
+  roleActionTarget = '';
+  roleActionReview = false;
+  walletAuditResult: any = null;
   walletRestriction: {
     address: string;
     blocked: boolean;
@@ -158,6 +163,124 @@ export class AdminComponent implements OnInit, OnDestroy {
         disabled: !role.manageable,
       })),
     ];
+  }
+  get roleActionChoices(): SelectChoice[] {
+    return [
+      { value: '', label: 'Select a role' },
+      ...this.roleChoices.filter((role) => !!role.value),
+    ];
+  }
+  get roleActionTargetChoices(): SelectChoice[] {
+    return this.roleActionChoices.filter(
+      (role) =>
+        !role.value ||
+        (role.value !== this.roleActionEditor?.trigger_role_id &&
+          !this.roleActionEditor?.remove_role_ids.includes(role.value)),
+    );
+  }
+  roleName(id: string) {
+    return this.data?.roles.find((role: any) => role.id === id)?.name || id;
+  }
+  editRoleAction(action?: any) {
+    this.roleActionEditor = action
+      ? {
+          ...action,
+          remove_role_ids: [...action.remove_role_ids],
+          version: action.updated_at,
+        }
+      : { trigger_role_id: '', remove_role_ids: [], version: null };
+    this.roleActionEditor.existing = !!action;
+    this.roleActionReview = false;
+    this.roleActionTarget = '';
+  }
+  addRoleActionTarget() {
+    if (
+      this.roleActionTarget &&
+      this.roleActionEditor.remove_role_ids.length < 20
+    ) {
+      this.roleActionEditor.remove_role_ids.push(this.roleActionTarget);
+      this.roleActionTarget = '';
+    }
+  }
+  reviewRoleAction() {
+    this.roleActionEditor.request_id = crypto.randomUUID();
+    this.roleActionReview = true;
+  }
+  async saveRoleAction() {
+    const draft = this.roleActionEditor;
+    await this.run(async () => {
+      await this.api(`/servers/${this.selected}/role-actions`, {
+        trigger_role_id: draft.trigger_role_id,
+        remove_role_ids: draft.remove_role_ids,
+        version: draft.version,
+        request_id: draft.request_id,
+      });
+      this.data = await this.api('/servers/' + this.selected);
+      this.roleActionEditor = null;
+      this.notice =
+        'Role action saved. Checks for previously tracked holders are queued.';
+    });
+  }
+  async deleteRoleAction(action: any) {
+    if (
+      !confirm(
+        `Delete the role action for ${this.roleName(action.trigger_role_id)}? Previously earned roles will be rechecked.`,
+      )
+    )
+      return;
+    await this.run(async () => {
+      await this.api(`/servers/${this.selected}/role-actions`, {
+        trigger_role_id: action.trigger_role_id,
+        remove_role_ids: null,
+        version: action.updated_at,
+        request_id: (action.deleteRequestId ||= crypto.randomUUID()),
+      });
+      this.data = await this.api('/servers/' + this.selected);
+      this.roleActionEditor = null;
+      this.notice = 'Role action deleted. Earned-role checks queued.';
+    });
+  }
+  async auditWalletHistory(memberId?: string, after?: string) {
+    await this.run(async () => {
+      const result = await this.api(`/servers/${this.selected}/wallet-audit`, {
+        ...(memberId ? { member_id: memberId } : {}),
+        ...(after ? { after } : {}),
+      });
+      this.walletAuditResult = {
+        ...result,
+        items: after
+          ? [...this.walletAuditResult.items, ...result.items]
+          : result.items,
+      };
+    });
+  }
+  async lookupAuditMember(id: string) {
+    this.memberSelection = null;
+    this.memberQuery = id;
+    await this.lookup();
+  }
+  async moreWalletAccounts(item: any) {
+    await this.run(async () => {
+      const result = await this.api(`/servers/${this.selected}/wallet-audit`, {
+        member_id: this.walletAuditResult.member_id || undefined,
+        address: item.address,
+        account_after: item.account_next,
+      });
+      const next = result.items[0];
+      if (!next)
+        throw new Error(
+          'This wallet’s associations changed. Run the audit again.',
+        );
+      const accounts = new Map(
+        item.accounts.map((account: any) => [account.user_id, account]),
+      );
+      for (const account of next.accounts)
+        accounts.set(account.user_id, account);
+      item.accounts = [...accounts.values()];
+      item.account_next = next.account_next;
+      item.account_count = next.account_count;
+      this.walletAuditResult.checked_at = result.checked_at;
+    });
   }
   get groupChoices(): SelectChoice[] {
     return [
@@ -273,6 +396,9 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.groupFilter = '';
         this.editor = null;
         this.member = null;
+        this.walletAuditResult = null;
+        this.roleActionsOpen = false;
+        this.roleActionEditor = null;
         this.walletRestriction = null;
         this.activity = {
           items: [],
@@ -833,6 +959,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         check ? { request_id: crypto.randomUUID() } : undefined,
       );
       this.memberId = this.member.id;
+      this.walletAuditResult = null;
       this.walletRestriction = null;
     });
   }

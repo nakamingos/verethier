@@ -8,6 +8,7 @@ import { MemberService } from './portal/member.service';
 import { AuditLogHandler } from './services/discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './services/discord-commands/handlers/wallet-block.handler';
 import { WalletBlockService } from './services/wallet-block.service';
+import { RoleActionService } from './services/role-action.service';
 import { EditRuleHandler } from './services/discord-commands/handlers/edit-rule.handler';
 import { RuleEditService } from './services/rule-edit.service';
 import { Erc20OwnershipService } from './services/erc20-ownership.service';
@@ -152,6 +153,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     AuditLogHandler,             // Paginated assignment activity
     WalletBlockHandler,
     WalletBlockService,
+    RoleActionService,
     EditRuleHandler,
     RuleEditService,
     VerificationMessageHandler, // Refresh, create, or recover verification messages

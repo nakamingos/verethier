@@ -95,6 +95,8 @@ const base = {
         errors = [];
       const walletBlocks = new Map();
       let failWalletBlock = true;
+      let roleActions = [],
+        failRoleAction = true;
       const context = await browser.newContext({
         viewport: { width, height: 900 },
         hasTouch: width <= 800,
@@ -192,6 +194,7 @@ const base = {
             data = {
               server: { id: server, name: 'NoMoreLabs' },
               rules,
+              role_actions: roleActions,
               settings: {
                 verification_channel_id: channel,
                 background_checks_enabled: true,
@@ -296,6 +299,80 @@ const base = {
               status = 503;
               data = { message: 'Activity is unavailable. Try again.' };
             }
+          } else if (p.endsWith('/role-actions')) {
+            const body = request.postDataJSON();
+            assert.equal(request.headers()['x-csrf-token'], 'csrf-test');
+            if (failRoleAction) {
+              failRoleAction = false;
+              status = 503;
+              data = { message: 'Role actions temporarily unavailable.' };
+            } else {
+              roleActions =
+                body.remove_role_ids == null
+                  ? []
+                  : [{ ...body, updated_at: new Date().toISOString() }];
+              data = { id: 'role-action', jobs: 1 };
+            }
+          } else if (p.endsWith('/wallet-audit')) {
+            const body = request.postDataJSON();
+            assert.equal(request.headers()['x-csrf-token'], 'csrf-test');
+            const accounts = [
+              {
+                user_id: '555555555555555555',
+                name: 'Collector',
+                in_server: true,
+                current: true,
+                first_seen: '2026-10-17T10:00:00Z',
+                last_seen: '2026-10-18T10:00:00Z',
+                last_proven: '2026-10-18T10:00:00Z',
+              },
+              {
+                user_id: '888888888888888888',
+                name: 'Former collector',
+                in_server: false,
+                current: false,
+                first_seen: '2026-10-16T10:00:00Z',
+                last_seen: '2026-10-17T10:00:00Z',
+                last_proven: null,
+              },
+              {
+                user_id: '999999999999999999',
+                name: 'Earlier collector',
+                in_server: true,
+                current: false,
+                first_seen: '2026-10-15T10:00:00Z',
+                last_seen: '2026-10-16T10:00:00Z',
+                last_proven: null,
+              },
+            ];
+            const address =
+              body.after ||
+              body.address ||
+              '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+            data = {
+              total: body.member_id ? 1 : 2,
+              member_id: body.member_id || null,
+              checked_at: '2026-10-18T12:00:00Z',
+              history_since: '2026-10-18T00:00:00Z',
+              next:
+                !body.member_id && !body.after && !body.address
+                  ? address
+                  : null,
+              items: [
+                {
+                  address: body.after
+                    ? '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+                    : address,
+                  account_count: 3,
+                  accounts: body.account_after
+                    ? accounts.slice(2)
+                    : accounts.slice(0, 2),
+                  account_next: body.account_after
+                    ? null
+                    : '888888888888888888',
+                },
+              ],
+            };
           } else if (p.endsWith('/edit')) {
             if (holdEdit) {
               holdEdit = false;
@@ -2125,6 +2202,213 @@ const base = {
         '0px',
         'last earned role has no trailing separator',
       );
+      await page.getByLabel('Username or user ID').fill('COLLECTOR');
+      await page.getByRole('listbox', { name: 'Server members' }).waitFor();
+      await page.getByLabel('Username or user ID').press('ArrowDown');
+      await page.getByLabel('Username or user ID').press('Enter');
+      await page
+        .getByRole('heading', { name: 'Collector', exact: true })
+        .waitFor();
+      const ownershipReads = requests.filter((r) =>
+        r.path.endsWith('/check'),
+      ).length;
+      await page
+        .getByRole('button', { name: 'Audit member', exact: true })
+        .click();
+      const audit = page.getByRole('region', {
+        name: 'Wallet history audit',
+        exact: true,
+      });
+      await audit.getByText('1 shared wallet', { exact: true }).waitFor();
+      await audit.getByText('History only', { exact: true }).waitFor();
+      assert.equal(
+        requests.filter((r) => r.path.endsWith('/wallet-audit')).at(-1).body
+          .member_id,
+        '555555555555555555',
+      );
+      await audit
+        .getByRole('button', {
+          name: 'More accounts for this wallet',
+          exact: true,
+        })
+        .click();
+      await audit.getByText('Earlier collector', { exact: true }).waitFor();
+      await page
+        .getByRole('button', { name: 'Audit all members', exact: true })
+        .click();
+      await audit.getByText('2 shared wallets', { exact: true }).waitFor();
+      assert.equal(
+        requests.filter((r) => r.path.endsWith('/wallet-audit')).at(-1).body
+          .member_id,
+        undefined,
+      );
+      await audit
+        .getByRole('button', { name: 'More shared wallets', exact: true })
+        .click();
+      await audit
+        .getByRole('table', { name: 'Accounts associated with wallet' })
+        .nth(1)
+        .waitFor();
+      assert.equal(
+        await audit
+          .getByRole('table', { name: 'Accounts associated with wallet' })
+          .count(),
+        2,
+      );
+      assert.equal(
+        requests.filter((r) => r.path.endsWith('/check')).length,
+        ownershipReads,
+        'Wallet audits never start ownership scans',
+      );
+      await page.screenshot({
+        path: `${artifacts}/wallet-audit-${width}.png`,
+        fullPage: true,
+      });
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+        'Wallet audit fits viewport',
+      );
+      await audit
+        .getByRole('button', {
+          name: 'More accounts for this wallet',
+          exact: true,
+        })
+        .first()
+        .click();
+      await audit
+        .getByRole('row')
+        .filter({ hasText: 'Earlier collector' })
+        .getByRole('button', { name: 'Look up member', exact: true })
+        .click();
+      assert.ok(
+        requests.some((r) => r.path.endsWith('/members/999999999999999999')),
+        'Audit links look up the clicked account rather than the prior suggestion',
+      );
+      await page.getByRole('button', { name: 'Rules', exact: true }).click();
+      await page
+        .getByRole('button', { name: 'Role actions', exact: true })
+        .click();
+      const policies = page.getByRole('region', {
+        name: 'Role actions',
+        exact: true,
+      });
+      await policies
+        .getByRole('button', { name: 'Add role action', exact: true })
+        .click();
+      const policyEditor = page.getByRole('region', {
+        name: 'Role action editor',
+        exact: true,
+      });
+      await policyEditor
+        .getByRole('button', { name: 'Cancel', exact: true })
+        .click();
+      assert.equal(
+        requests.filter((r) => r.path.endsWith('/role-actions')).length,
+        0,
+        'Cancel has no side effects',
+      );
+      await policies
+        .getByRole('button', { name: 'Add role action', exact: true })
+        .click();
+      await chooseOption(
+        page,
+        policyEditor.getByRole('combobox', {
+          name: 'Trigger role',
+          exact: true,
+        }),
+        'Comrade',
+      );
+      await chooseOption(
+        page,
+        policyEditor.getByRole('combobox', {
+          name: 'Remove role',
+          exact: true,
+        }),
+        'New Comrade',
+      );
+      await policyEditor
+        .getByRole('button', { name: 'Add role to remove', exact: true })
+        .click();
+      await policyEditor
+        .getByRole('button', { name: 'Review role action', exact: true })
+        .click();
+      await policyEditor
+        .getByRole('button', { name: 'Confirm role action', exact: true })
+        .click();
+      await page
+        .getByText('Role actions temporarily unavailable.', { exact: true })
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await policyEditor
+        .getByRole('button', { name: 'Confirm role action', exact: true })
+        .click();
+      await policies
+        .getByRole('button', { name: 'Edit role action', exact: true })
+        .waitFor();
+      const policyRequests = requests.filter((r) =>
+        r.path.endsWith('/role-actions'),
+      );
+      assert.equal(
+        policyRequests[0].body.request_id,
+        policyRequests[1].body.request_id,
+        'Role action retries reuse the receipt',
+      );
+      assert.deepEqual(policyRequests[1].body.remove_role_ids, [
+        '666666666666666666',
+      ]);
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await policies
+        .getByRole('button', { name: 'Edit role action', exact: true })
+        .click();
+      await policyEditor
+        .getByRole('button', { name: 'Remove selection', exact: true })
+        .click();
+      await chooseOption(
+        page,
+        policyEditor.getByRole('combobox', {
+          name: 'Remove role',
+          exact: true,
+        }),
+        'Additional community role 1 with a longer name',
+      );
+      await policyEditor
+        .getByRole('button', { name: 'Add role to remove', exact: true })
+        .click();
+      await policyEditor
+        .getByRole('button', { name: 'Review role action', exact: true })
+        .click();
+      await page.screenshot({
+        path: `${artifacts}/role-action-review-${width}.png`,
+        fullPage: true,
+      });
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+        'Role action editor fits viewport',
+      );
+      await policyEditor
+        .getByRole('button', { name: 'Confirm role action', exact: true })
+        .click();
+      await page
+        .getByText(
+          'Role action saved. Checks for previously tracked holders are queued.',
+          { exact: true },
+        )
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      page.once('dialog', (dialog) => dialog.accept());
+      await policies
+        .getByRole('button', { name: 'Delete role action', exact: true })
+        .click();
+      await policies
+        .getByText('No role actions configured.', { exact: true })
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
       await openHelp(page);
       await page
         .getByRole('heading', {

@@ -355,12 +355,17 @@
           }
           @if (tab === 'communities') {
             <div class="toolbar">
-              <label class="search-field"
-                >Find a community:<input
-                  type="search"
-                  [(ngModel)]="search"
-                  placeholder="Community name"
-              /></label>
+              <label
+                >Find a community:<span class="search-field"
+                  ><img
+                    src="/assets/search.png"
+                    width="16"
+                    height="16"
+                    alt="" /><input
+                    type="search"
+                    [(ngModel)]="search"
+                    placeholder="Community name" /></span
+              ></label>
             </div>
             @if (!account.communities.length) {
               <section class="panel">

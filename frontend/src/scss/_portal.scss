@@ -1679,6 +1679,9 @@ button:disabled:hover,
   }
 }
 
+.role-action-editor { border-image-source: var(--pixel-card-highlight); }
+.role-action-row { padding-block: 0.6rem; }
+
 .brand-header .header-account {
   display: flex;
   align-items: center;

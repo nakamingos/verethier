@@ -300,6 +300,87 @@ describe('Portal server boundaries', () => {
       }),
     );
   });
+  it('audits with a complete live member list and preserves the requested member scope', async () => {
+    jest.spyOn(service, 'access').mockResolvedValue(guild);
+    jest.spyOn(service as any, 'resolveMember').mockResolvedValue({ id: user });
+    guild.members.list = jest
+      .fn()
+      .mockResolvedValue(new Map([[user, { displayName: 'Current member' }]]));
+    db.rpc = jest.fn().mockResolvedValue({
+      data: {
+        total: 1,
+        items: [{ address: '0xabc', accounts: [{ user_id: user }] }],
+      },
+      error: null,
+    });
+    const result = await service.walletAudit(session, server, {
+      member_id: user,
+    });
+    expect(db.rpc).toHaveBeenCalledWith('verifier_portal_wallet_audit', {
+      p_server: server,
+      p_users: [user],
+      p_member: user,
+      p_after: null,
+      p_limit: 20,
+      p_address: null,
+      p_account_after: null,
+    });
+    expect(result.items[0].accounts[0]).toEqual({
+      user_id: user,
+      name: 'Current member',
+      in_server: true,
+    });
+  });
+  it('does not report a partial audit if Discord member enumeration fails', async () => {
+    jest.spyOn(service, 'access').mockResolvedValue(guild);
+    guild.members.list = jest.fn().mockRejectedValue(new Error('Forbidden'));
+    db.rpc = jest.fn();
+    await expect(service.walletAudit(session, server, {})).rejects.toThrow(
+      'No partial audit',
+    );
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it('checks admin access before reading wallet-audit identities or changing role actions', async () => {
+    jest.spyOn(service, 'access').mockRejectedValue(new Error('Not admin'));
+    guild.members.list = jest.fn();
+    db.rpc = jest.fn();
+    await expect(service.walletAudit(session, server, {})).rejects.toThrow(
+      'Not admin',
+    );
+    await expect(
+      service.roleAction(session, server, {
+        trigger_role_id: user,
+        request_id: 'id',
+      }),
+    ).rejects.toThrow('Not admin');
+    expect(guild.members.list).not.toHaveBeenCalled();
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it('rejects unmanageable, cross-server and self-removing role actions', async () => {
+    jest.spyOn(service, 'access').mockResolvedValue(guild);
+    guild.members.me = { permissions: { has: () => true } };
+    guild.roles = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue(new Map([[user, { id: user, editable: true }]])),
+    };
+    db.rpc = jest.fn();
+    await expect(
+      service.roleAction(session, server, {
+        trigger_role_id: user,
+        remove_role_ids: [user],
+        request_id: 'id',
+      }),
+    ).rejects.toThrow('itself');
+    await expect(
+      service.roleAction(session, server, {
+        trigger_role_id: user,
+        remove_role_ids: ['missing'],
+        request_id: 'id',
+      }),
+    ).rejects.toThrow('existing roles');
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
   it('rejects channels from another guild', async () => {
     guild.members.fetch.mockResolvedValue({
       id: user,
@@ -479,6 +560,23 @@ describe('Portal activity sort parameters', () => {
 });
 
 describe('Portal wallet block mutations', () => {
+  it.each(['roleAction', 'walletAudit'])(
+    'requires CSRF for %s before dispatch',
+    async (method) => {
+      const auth = {
+        session: jest.fn().mockResolvedValue({ user: { id: 'admin' } }),
+        assertMutation: jest.fn(() => {
+          throw new Error('Unconfirmed request');
+        }),
+      };
+      const portal = { [method]: jest.fn() };
+      const controller = new PortalController(auth as any, portal as any);
+      await expect(
+        controller[method]({} as any, 'server', {} as any),
+      ).rejects.toThrow('Unconfirmed');
+      expect(portal[method]).not.toHaveBeenCalled();
+    },
+  );
   it('requires CSRF before dispatching an authenticated block request', async () => {
     const session = { user: { id: 'admin' } };
     const auth = {

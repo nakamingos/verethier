@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { RoleActionService } from '@/services/role-action.service';
 import { Interval } from '@nestjs/schedule';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
@@ -14,6 +15,7 @@ export class PortalJobsService {
     @Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
     private readonly roles: DynamicRoleService,
     private readonly discord: DiscordService,
+    @Optional() private readonly roleActions?: RoleActionService,
   ) {}
   @Interval(10000)
   async run() {
@@ -46,8 +48,13 @@ export class PortalJobsService {
             if (result.error) Logger.warn('Portal job lease renewal failed.');
           });
       }, 30000);
-      const result =
-        job.rule_id && Array.isArray(job.member_ids)
+      const result = job.role_action_role_id
+        ? await this.roleActions.enforce(
+            await this.discord.getBotClient().guilds.fetch(job.server_id),
+            job.user_id,
+            job.role_action_role_id,
+          )
+        : job.rule_id && Array.isArray(job.member_ids)
           ? await this.roles.reverifyRoleChangeInServer(
               job.server_id,
               job.role_id,

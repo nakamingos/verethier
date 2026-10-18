@@ -7,7 +7,8 @@ import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { boundedEmbedDescription } from '@/utils/discord-embed.util';
 import { EnvironmentConfig } from '@/config/environment.config';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { RoleActionService } from './role-action.service';
 import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags, Guild, GuildMember } from 'discord.js';
 import dotenv from 'dotenv';
 import { DbService } from './db.service';
@@ -112,7 +113,8 @@ export class DiscordVerificationService {
     private readonly dataSvc: DataService,
     private readonly userAddressService: UserAddressService,
     private readonly ownershipSvc: AssetOwnershipService,
-    private readonly walletBlocks: WalletBlockService
+    private readonly walletBlocks: WalletBlockService,
+    @Optional() private readonly roleActions?: RoleActionService,
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {
@@ -533,6 +535,9 @@ export class DiscordVerificationService {
 
     const role = guild.roles.cache.get(roleId);
     if (!role) throw new Error('Role not found');
+
+    if (await this.roleActions?.blockedBy(member, roleId))
+      throw new Error('This role is excluded by another role you hold in this server.');
       
     const storedInteraction = this.tempMessages[nonce];
     // For reverification or other background processes, nonce might not have a stored interaction
@@ -777,7 +782,7 @@ export class DiscordVerificationService {
    * Add a Discord role to a user (dynamic version)
    * Used for dynamic role assignment - different signature from the verification flow method
    */
-  async addUserRoleDynamic(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean> {
+  async addUserRoleDynamic(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean | 'suppressed'> {
     if (!this.client) {
       Logger.error('Discord client not initialized');
       return false;
@@ -800,6 +805,14 @@ export class DiscordVerificationService {
       if (!role) {
         Logger.error(`Role ${roleId} not found in guild ${serverId}`);
         return false;
+      }
+
+      if (await this.roleActions?.blockedBy(member, roleId)) {
+        if (member.roles.cache.has(roleId)) {
+          const updated = await member.roles.remove(role, 'Bouncer role action: excluded by another role');
+          context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
+        }
+        return 'suppressed';
       }
 
       // Check if user already has the role

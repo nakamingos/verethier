@@ -34,6 +34,8 @@ import {
   PortalSettingsDto,
   PortalMessageDto,
   PortalWalletBlockDto,
+  PortalRoleActionDto,
+  PortalWalletAuditDto,
 } from './portal.dto';
 
 const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
@@ -133,16 +135,23 @@ export class PortalService {
   }
   async overview(session: PortalSession, server: string) {
     const guild = await this.access(session, server);
-    const [channels, roles, rules, settings] = await Promise.all([
+    const [channels, roles, rules, settings, actions] = await Promise.all([
       guild.channels.fetch(),
       guild.roles.fetch(),
       this.rules.getRoleMappings(server),
       this.settings(server),
+      this.db
+        .from('verifier_role_actions')
+        .select('*')
+        .eq('server_id', server)
+        .order('trigger_role_id'),
     ]);
+    this.dbError(actions.error);
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
       rules: rules.map(portalRule),
       settings,
+      role_actions: actions.data || [],
       channels: [...channels.values()]
         .filter((c) => c?.type === ChannelType.GuildText)
         .map((c) => ({ id: c.id, name: c.name })),
@@ -536,6 +545,17 @@ export class PortalService {
     return this.safeAction(data);
   }
   private safeAction(a: any) {
+    if (['role_action_set', 'role_action_delete'].includes(a.kind))
+      return {
+        id: a.id,
+        kind: a.kind,
+        created_at: a.created_at,
+        actor_id: a.actor_id,
+        role_action: a.after_rule || a.before_rule,
+        before_rule: null,
+        after_rule: null,
+        reverts: null,
+      };
     if (['wallet_block', 'wallet_unblock'].includes(a.kind))
       return {
         id: a.id,
@@ -576,7 +596,7 @@ export class PortalService {
       kind === 'changes'
         ? '*'
         : kind === 'jobs'
-          ? 'id,server_id,role_id,user_id,status,attempts,result,created_at,updated_at'
+          ? 'id,server_id,role_id,user_id,role_action_role_id,status,attempts,result,created_at,updated_at'
           : 'id,user_id,user_name,role_id,role_name,status,verified_at,last_checked,updated_at';
     const { data, error, count } = await this.db
       .from(table)
@@ -824,6 +844,124 @@ export class PortalService {
       );
     return data;
   }
+  async roleAction(
+    session: PortalSession,
+    server: string,
+    dto: PortalRoleActionDto,
+  ) {
+    const guild = await this.access(session, server);
+    const roles = await guild.roles.fetch();
+    if (
+      dto.remove_role_ids != null &&
+      !guild.members.me?.permissions.has(PermissionFlagsBits.ManageRoles)
+    )
+      throw new BadRequestException(
+        'Bouncer needs Manage Roles to configure role actions.',
+      );
+    for (const id of dto.remove_role_ids == null
+      ? []
+      : [dto.trigger_role_id, ...dto.remove_role_ids]) {
+      const role = roles.get(id);
+      if (!role || role.id === server || role.managed || !role.editable)
+        throw new BadRequestException(
+          'Choose existing roles below Bouncer in this server.',
+        );
+    }
+    if (dto.remove_role_ids?.includes(dto.trigger_role_id))
+      throw new BadRequestException('A role cannot remove itself.');
+    const { data, error } = await this.db.rpc('verifier_portal_role_action', {
+      p_server: server,
+      p_actor: session.user.id,
+      p_trigger: dto.trigger_role_id,
+      p_remove: dto.remove_role_ids ?? null,
+      p_expected: dto.version || null,
+      p_request: dto.request_id,
+    });
+    if (error?.message?.includes('cycle'))
+      throw new BadRequestException('Role actions cannot form a cycle.');
+    if (error)
+      throw new ConflictException(
+        'Could not save this role action. Refresh the server and try again.',
+      );
+    return data;
+  }
+  async walletAudit(
+    session: PortalSession,
+    server: string,
+    dto: PortalWalletAuditDto,
+  ) {
+    const guild = await this.access(session, server);
+    const target = dto.member_id
+      ? await this.resolveMember(guild, dto.member_id)
+      : null;
+    if (dto.after) {
+      try {
+        normalizeBlockedWallet(dto.after);
+      } catch {
+        throw new BadRequestException('Invalid audit cursor.');
+      }
+    }
+    if (dto.address) {
+      try {
+        normalizeBlockedWallet(dto.address);
+      } catch {
+        throw new BadRequestException('Invalid wallet address.');
+      }
+    }
+    if (dto.account_after && !dto.address)
+      throw new BadRequestException(
+        'Choose a wallet before paging its accounts.',
+      );
+    const members = new Map<string, any>();
+    let after: string | undefined;
+    // REST pagination works without enabling a new gateway subscription. If
+    // Discord denies the member list, fail rather than report a partial audit.
+    try {
+      for (let page = 0; ; page++) {
+        if (page >= 100) throw new Error('Member list limit');
+        const batch = await guild.members.list({
+          limit: 1000,
+          ...(after ? { after } : {}),
+        });
+        const ids = [...batch.keys()];
+        if (ids.some((id) => members.has(id)))
+          throw new Error('Repeated member page');
+        for (const [id, member] of batch) members.set(id, member);
+        if (batch.size < 1000) break;
+        const next = ids
+          .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1))
+          .at(-1);
+        if (next === after) throw new Error('Member page did not advance');
+        after = next;
+      }
+    } catch {
+      throw new ServiceUnavailableException(
+        'Could not read the complete server member list. Check Bouncer’s Server Members access in Discord and try again. No partial audit was returned.',
+      );
+    }
+    const { data, error } = await this.db.rpc('verifier_portal_wallet_audit', {
+      p_server: server,
+      p_users: [...members.keys()],
+      p_member: dto.member_id || null,
+      p_after: dto.after || null,
+      p_limit: 20,
+      p_address: dto.address || null,
+      p_account_after: dto.account_after || null,
+    });
+    this.dbError(error);
+    for (const item of data.items)
+      for (const account of item.accounts) {
+        const live = members.get(account.user_id);
+        account.name = live?.displayName || account.name || account.user_id;
+        account.in_server = !!live;
+      }
+    return {
+      ...data,
+      member_id: dto.member_id || null,
+      member_name: target?.displayName || null,
+      checked_at: new Date().toISOString(),
+    };
+  }
   private async removedWallets(userId: string, current: Set<string>) {
     const removed = new Map<string, any>();
     for (let offset = 0; ; offset += 1000) {
@@ -887,7 +1025,7 @@ export class PortalService {
     await this.access(session, server);
     const prior = await this.db
       .from('verifier_reconciliation_jobs')
-      .select('role_id,user_id,status,rule_id,member_ids')
+      .select('role_id,user_id,status,rule_id,member_ids,role_action_role_id')
       .eq('server_id', server)
       .eq('id', id)
       .maybeSingle();
@@ -903,6 +1041,7 @@ export class PortalService {
         user_id: prior.data.user_id,
         rule_id: prior.data.rule_id,
         member_ids: prior.data.member_ids,
+        role_action_role_id: prior.data.role_action_role_id,
       })
       .select('id,status')
       .single();
