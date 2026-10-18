@@ -200,13 +200,15 @@ export class PortalController {
     @Query('page') page = '1',
     @Query('kind') kind = 'roles',
     @Query('sort') sort = 'desc',
+    @Query('limit') limit = '20',
   ) {
     if (
       !/^\d+$/.test(page) ||
       Number(page) < 1 ||
       Number(page) > 10000 ||
       !['roles', 'changes', 'jobs'].includes(kind) ||
-      !['asc', 'desc'].includes(sort)
+      !['asc', 'desc'].includes(sort) ||
+      !['10', '20', '50', '100'].includes(limit)
     )
       throw new BadRequestException('Invalid page.');
     return this.portal.activity(
@@ -215,6 +217,7 @@ export class PortalController {
       Number(page),
       kind,
       sort as 'asc' | 'desc',
+      Number(limit),
     );
   }
   @Get('servers/:server/members') async members(

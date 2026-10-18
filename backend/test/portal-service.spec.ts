@@ -81,21 +81,36 @@ describe('Portal server boundaries', () => {
           .mockResolvedValue({ data: [], error: null, count: 45 }),
       };
       db.from.mockReturnValue(query);
-      for (const sort of ['asc', 'desc'] as const) {
-        query.order.mockClear();
-        const result = await service.activity(session, server, 2, kind, sort);
-        expect(query.order.mock.calls).toEqual([
-          [
-            kind === 'changes' ? 'created_at' : 'updated_at',
-            { ascending: sort === 'asc' },
-          ],
-          ['id', { ascending: sort === 'asc' }],
-        ]);
-        expect(query.range).toHaveBeenLastCalledWith(20, 39);
-        expect(query.order.mock.invocationCallOrder[1]).toBeLessThan(
-          query.range.mock.invocationCallOrder.at(-1),
-        );
-        expect(result).toEqual({ items: [], total: 45, page: 2, pages: 3 });
+      for (const limit of [10, 20, 50, 100]) {
+        for (const sort of ['asc', 'desc'] as const) {
+          query.order.mockClear();
+          const result = await service.activity(
+            session,
+            server,
+            2,
+            kind,
+            sort,
+            limit,
+          );
+          expect(query.order.mock.calls).toEqual([
+            [
+              kind === 'changes' ? 'created_at' : 'updated_at',
+              { ascending: sort === 'asc' },
+            ],
+            ['id', { ascending: sort === 'asc' }],
+          ]);
+          expect(query.range).toHaveBeenLastCalledWith(limit, limit * 2 - 1);
+          expect(query.order.mock.invocationCallOrder[1]).toBeLessThan(
+            query.range.mock.invocationCallOrder.at(-1),
+          );
+          expect(result).toEqual({
+            items: [],
+            total: 45,
+            page: 2,
+            pages: Math.ceil(45 / limit),
+            page_size: limit,
+          });
+        }
       }
     },
   );
@@ -256,18 +271,30 @@ describe('Portal activity sort parameters', () => {
       1,
       'roles',
       'desc',
+      20,
     );
   });
   it('forwards the chosen sort and page', async () => {
-    await controller.activity({} as any, 'server', '3', 'jobs', 'asc');
+    await controller.activity({} as any, 'server', '3', 'jobs', 'asc', '50');
     expect(portal.activity).toHaveBeenCalledWith(
       session,
       'server',
       3,
       'jobs',
       'asc',
+      50,
     );
   });
+
+  it.each(['0', '21', '1000', 'NaN'])(
+    'rejects unsupported page size %s',
+    async (limit) => {
+      await expect(
+        controller.activity({} as any, 'server', '1', 'roles', 'desc', limit),
+      ).rejects.toThrow();
+      expect(portal.activity).not.toHaveBeenCalled();
+    },
+  );
   it('rejects an unsupported sort before reading activity', async () => {
     await expect(
       controller.activity({} as any, 'server', '1', 'roles', 'invalid'),

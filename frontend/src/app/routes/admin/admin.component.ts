@@ -52,9 +52,11 @@ export class AdminComponent implements OnInit, OnDestroy {
     total: 0,
     kind: 'roles',
     sort: 'desc',
+    size: '20',
   };
   activityKind = 'roles';
   activitySort = 'desc';
+  activitySize = '20';
   activityLoading = false;
   activityReady = false;
   private activityRequest?: AbortController;
@@ -110,6 +112,12 @@ export class AdminComponent implements OnInit, OnDestroy {
   readonly activitySortChoices: SelectChoice[] = [
     { value: 'desc', label: 'Newest first' },
     { value: 'asc', label: 'Oldest first' },
+  ];
+  readonly activitySizeChoices: SelectChoice[] = [
+    { value: '10', label: '10' },
+    { value: '20', label: '20' },
+    { value: '50', label: '50' },
+    { value: '100', label: '100' },
   ];
   readonly activityChoices: SelectChoice[] = [
     { value: 'roles', label: 'Role assignments' },
@@ -256,9 +264,11 @@ export class AdminComponent implements OnInit, OnDestroy {
           total: 0,
           kind: 'roles',
           sort: 'desc',
+          size: '20',
         };
         this.activityKind = 'roles';
         this.activitySort = 'desc';
+        this.activitySize = '20';
         this.activityReady = false;
         this.undo = null;
         this.tab = 'rules';
@@ -668,26 +678,32 @@ export class AdminComponent implements OnInit, OnDestroy {
     const server = this.selected;
     const kind = this.activityKind;
     const sort = this.activitySort;
+    const size = this.activitySize;
+    const moveToStart =
+      this.activityReady &&
+      (page !== this.activity.page || size !== this.activity.size);
     this.activityLoading = true;
     try {
       const data = await this.api(
-        `/servers/${server}/activity?kind=${kind}&page=${page}&sort=${sort}`,
+        `/servers/${server}/activity?kind=${kind}&page=${page}&sort=${sort}&limit=${size}`,
         undefined,
         request.signal,
       );
       if (epoch !== this.activityEpoch || server !== this.selected) return;
-      this.activity = { ...data, kind, sort };
+      this.activity = { ...data, kind, sort, size };
       this.activityReady = true;
       requestAnimationFrame(() => {
         if (epoch !== this.activityEpoch || this.tab !== 'audit') return;
-        const entries =
-          document.querySelector<HTMLElement>('.activity-results');
-        if (entries) entries.scrollTop = 0;
+        if (moveToStart)
+          document
+            .querySelector<HTMLElement>('.activity-panel')
+            ?.scrollIntoView({ block: 'start' });
       });
     } catch (error: any) {
       if (epoch !== this.activityEpoch || error?.name === 'AbortError') return;
       this.activityKind = this.activity.kind;
       this.activitySort = this.activity.sort;
+      this.activitySize = this.activity.size;
       throw error;
     } finally {
       if (epoch === this.activityEpoch) {
