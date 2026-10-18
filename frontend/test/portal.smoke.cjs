@@ -673,6 +673,25 @@ const base = {
       await page
         .getByRole('button', { name: 'Light theme', exact: true })
         .click();
+      assert.equal(
+        await page
+          .locator('.search-field > img')
+          .first()
+          .evaluate((el) => getComputedStyle(el).filter),
+        'invert(1)',
+      );
+      assert.equal(
+        await page
+          .locator('.brand-header')
+          .evaluate((el) => getComputedStyle(el).backgroundColor),
+        'rgb(211, 203, 190)',
+      );
+      assert.equal(
+        await page
+          .locator('.workspace-surface')
+          .evaluate((el) => getComputedStyle(el).backgroundColor),
+        'rgb(125, 146, 158)',
+      );
       await assetPicker.click();
       await page.screenshot({
         path: `${artifacts}/dropdown-light-${width}.png`,
@@ -684,6 +703,29 @@ const base = {
       await page
         .getByRole('navigation', { name: 'Server settings' })
         .getByRole('button', { name: 'Bot Settings', exact: true })
+        .click();
+      const checkIcon = page.getByRole('checkbox');
+      assert.equal(
+        await checkIcon.evaluate((el) => getComputedStyle(el).filter),
+        'invert(1)',
+      );
+      assert.equal(
+        await checkIcon.evaluate((el) => getComputedStyle(el).backgroundSize),
+        '18px 18px',
+      );
+      await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .click();
+      assert.equal(
+        await checkIcon.evaluate((el) => getComputedStyle(el).filter),
+        'none',
+      );
+      await page.screenshot({
+        path: `${artifacts}/settings-light-${width}.png`,
+        fullPage: true,
+      });
+      await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
         .click();
       const settingsButtons = page.getByRole('button', {
         name: /^(Save settings|Update message|Check again)$/,
@@ -1376,9 +1418,18 @@ const base = {
             navBottom: nav.bottom,
           };
         });
-        assert.ok(
-          Math.abs(header.brandY - header.navY) < 2,
-          'mobile title and navigation share a row',
+        if (width >= 360)
+          assert.ok(
+            Math.abs(header.brandY - header.navY) < 2,
+            'mobile title and navigation share a row when full-width controls fit',
+          );
+        assert.equal(
+          await page
+            .locator('.brand-header nav a.button')
+            .first()
+            .evaluate((el) => getComputedStyle(el).paddingLeft),
+          '12px',
+          'mobile header links retain normal button padding',
         );
         assert.ok(header.authTop >= header.navBottom, 'auth uses its own row');
         assert.ok(
@@ -1445,6 +1496,18 @@ const base = {
           .locator('.activity-results')
           .evaluate((el) => getComputedStyle(el).overflowY),
         'visible',
+      );
+      const divider =
+        width > 600
+          ? page.locator('.history-table tbody tr:first-child td').first()
+          : page.locator('.history-table tbody tr').first();
+      assert.match(
+        await divider.evaluate((el) => getComputedStyle(el).backgroundImage),
+        /repeating-linear-gradient/,
+      );
+      assert.equal(
+        await divider.evaluate((el) => getComputedStyle(el).backgroundSize),
+        '100% 2px',
       );
       assert.equal(await page.locator('.history-row').count(), 20);
       await page.getByRole('button', { name: 'Next →', exact: true }).click();

@@ -34,7 +34,7 @@ Servers with Bouncer installed appear first. Both installed and invite groups so
 
 Stacked server buttons overlap their bottom outline and shadow with the next top outline, leaving one shared divider. Cards across Rules, Bot Settings, Member Lookup and Audit Log use the reference editor frame with black inner/outer outlines, a `#41444a` rim and a `#202125` interior. Combined-rule and editor highlights retain their accent, with joined open/lower frames keeping inline editors continuous. Light mode retains the same geometry.
 
-Border geometry is adapted from the [Aseprite Default Dark theme](https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme/dark) by David Capello, Ilija Melentijevic and Nicolas Desilets, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bouncer reconstructs the frames as SVG grids, recolors them to its themes, and adds card/editor variants; the theme toggle and checkbox use the supplied PNG assets (including the unchecked checkbox tile from the supplied sprite sheet).
+Border geometry and reference palettes are adapted from the [Aseprite Default themes](https://github.com/aseprite/aseprite/tree/main/data/extensions/aseprite-theme) by David Capello, Ilija Melentijevic and Nicolas Desilets, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bouncer reconstructs the frames as SVG grids, recolors them to its themes, and adds card/editor variants; the theme toggle and checkbox use the supplied PNG assets (both supplied 9×9 checkbox icons).
 
 Member Lookup accepts Discord IDs, usernames and server nicknames without case sensitivity. Suggestions show the username and ID to distinguish shared names. Only an exact, unique name or a selected member resolves; Bouncer confirms current server membership before exposing saved information. Direct ID lookup remains available if Discord member search is unavailable.
 
@@ -72,3 +72,9 @@ Before the schema upgrade, create private roles/schema/data dumps and test resto
 The member portal follows the admin live review. It will list joined communities only, manage saved wallets with fresh ownership proofs, and reconcile earned roles after wallet removal. Public discovery, optional add-ons, additional networks and broader wallet/address support are deferred.
 
 The guide's multi-trait AND/OR editor and expanded ERC-721 ID selections are separate rule-engine work. This admin milestone uses the existing, tested single-trait criteria and token-ID limits rather than advertising unsupported combinations.
+
+## Theme reference colors
+
+Light mode uses the Aseprite Default light theme's XML colors and sampled sheet pixels: header `#d3cbbe`, workspace/active tab `#7d929e`, tab rim `#adcade`, button/card face `#c6c6c6`, selected toolbar shade `#7c919d`, white fields and highlights, black text/outlines, inset rim/separators `#958174`, inset shade `#7c7c7c`, and menu selection `#ff5555` with white text. Frame geometry stays shared between themes. Search icons invert in light mode; the supplied 9×9 check icons render at 2× and invert in dark mode. Table dividers use a 2px-high repeating 4px dash / 2px gap, with no trailing divider after the final entry.
+
+Mobile header links retain the same side padding as default buttons. Navigation aligns beside the title where it fits and wraps intact on very narrow screens; authentication remains right-aligned below.
