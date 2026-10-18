@@ -93,16 +93,16 @@
   );
   @include pixel-server-menu(
     #7d929e,
-    #c6c6c6,
-    #958174,
-    #fff,
+    #655561,
+    #645460,
+    #adcade,
     #c6c6c6,
     #fff,
     #7c7c7c,
     #000,
     #7c919d
   );
-  @include pixel-cards(#c6c6c6, #fff, #7d929e, #7d929e);
+  @include pixel-cards(#c6c6c6, #fff, #7d929e, #fff);
   @include pixel-input-controls(
     $face: #fff,
     $band: #fff,
@@ -116,7 +116,8 @@
     $button-band: #fff,
     $button-shade: #7c7c7c,
     $menu-corner: #958174,
-    $menu-shade: #c6c6c6
+    $menu-shade: #c6c6c6,
+    $inner-shade: #c6c6c6
   );
   --ase-bg: #7d929e;
   --ase-face: #d3cbbe;
@@ -141,6 +142,10 @@
   --bid-color: 211, 203, 190;
   --magma: 245, 215, 221;
   --highlight: 255, 85, 85;
+}
+
+:root[data-theme='light'] .brand-header {
+  border-bottom-color: transparent;
 }
 
 body {
@@ -352,6 +357,19 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   height: 20px;
   background: var(--pixel-select-arrow) center / contain no-repeat;
 }
+.pixel-select-trigger {
+  cursor: default;
+}
+.pixel-select-trigger:not(:disabled) .pixel-select-arrow {
+  cursor: pointer;
+}
+.pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover {
+  border-image-source: var(--pixel-server-button-hover);
+}
+.pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover::after {
+  background-image: var(--pixel-select-arrow-hover);
+}
+
 .pixel-select-menu {
   position: fixed;
   inset: auto;
@@ -610,6 +628,9 @@ app-admin .welcome {
   width: calc(100% - 4rem);
 }
 .app-footer {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
   max-width: 132rem;
   margin: 2rem auto;
   padding: 1rem 2rem;
@@ -760,7 +781,7 @@ app-root:has(app-admin) .app-footer {
   width: 3rem;
   height: 3rem;
   object-fit: cover;
-  border-radius: 3px;
+  border-radius: 0;
 }
 .server-list a.server-invite,
 .server-list a.server-invite:hover {

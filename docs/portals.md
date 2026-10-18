@@ -82,3 +82,9 @@ Mobile header links retain the same side padding as default buttons. Navigation 
 Light dropdowns have white outer/focus rims, white field/menu faces, coral selection with white text, black text/arrows, gray (`#c6c6c6`) arrow buttons, white button highlights and `#7c7c7c` button shading. Brown (`#958174`) inset/corner pixels remain distinct from the white rims. The theme toggle keeps ordinary button chrome in both themes; its `aria-pressed` state does not apply selected-server colors.
 
 Field titles use a compact 20px line height and no extra top margin before their dropdowns or text inputs; control heights and font sizes remain unchanged.
+
+Light mode has no visible header divider. Expanded rules and the Add rule form use white frame highlights. The server menu matches the light editor frame: `#655561` interior, `#645460` upper rim, `#adcade` side/bottom highlights, black outline, and workspace-colored outer corners.
+
+Dropdown pointer activation and hover feedback are restricted to the arrow. The value area keeps its appearance and does not open the popup on a pointer click. Keyboard and assistive activation retain the existing selection, type-ahead, Escape and Tab behavior.
+
+The strip immediately inside the top black outline uses `#c6c6c6` in light mode, independently of the darker outer inset rim. Text entries and dropdown fields share this lighter inner shadow.

@@ -226,12 +226,12 @@ $pixel-entry: (
   '............',
   '..HHHHHHHH..',
   '.HSEEEEEESH.',
-  '.HEISSSSIEH.',
+  '.HEIJJJJIEH.',
   '.HEFFFFFFEH.',
   '.HEFFFFFFEH.',
   '.HEFFFFFFEH.',
   '.HEFFFFFFEH.',
-  '.HESFFFFSEH.',
+  '.HEJFFFFJEH.',
   '.HSEEEEEESH.',
   '..HHHHHHHH..',
   '............'
@@ -240,12 +240,12 @@ $pixel-entry-focused: (
   '.SEEEEEEEES.',
   'SEHHHHHHHHES',
   'EHKEEEEEEKHE',
-  'EHEISSSSIEHE',
+  'EHEIJJJJIEHE',
   'EHEFFFFFFEHE',
   'EHEFFFFFFEHE',
   'EHEFFFFFFEHE',
   'EHEFFFFFFEHE',
-  'EHESFFFFSEHE',
+  'EHEJFFFFJEHE',
   'EHKEEEEEEKHE',
   'SEHHHHHHHHES',
   '.SEEEEEEEES.'
@@ -258,7 +258,7 @@ $pixel-select-field: (
   '..HHHHHHHHHHHHHH',
   '.HFSSSSSSSSSSSSS',
   '.HSEEEEEEEEEEEEE',
-  '.HEISSSSSSSSSSSS',
+  '.HEIJJJJJJJJJJJJ',
   '.HEFFFFFFFFFFFFF',
   '.HEFFFFFFFFFFFFF',
   '.HEFFFFFFFFFFFFF',
@@ -266,7 +266,7 @@ $pixel-select-field: (
   '.HEFFFFFFFFFFFFF',
   '.HEFFFFFFFFFFFFF',
   '.HEFFFFFFFFFFFFF',
-  '.HESFFFFFFFFFFFF',
+  '.HEJFFFFFFFFFFFF',
   '.HSEEEEEEEEEEEEE',
   '..HHHHHHHHHHHHHH',
   '................'
@@ -567,7 +567,8 @@ $pixel-select-arrow: (
   $button-band: $band,
   $button-shade: $shade,
   $menu-corner: #0006,
-  $menu-shade: $shade
+  $menu-shade: $shade,
+  $inner-shade: $shade
 ) {
   --pixel-entry: #{pixel-grid(
       $pixel-entry,
@@ -577,6 +578,7 @@ $pixel-select-arrow: (
         'H': $band,
         'S': $shade,
         'I': $inset,
+        'J': $inner-shade,
       )
     )};
   --pixel-entry-focused: #{pixel-grid(
@@ -587,6 +589,7 @@ $pixel-select-arrow: (
         'H': $focus,
         'S': $shade,
         'I': $inset,
+        'J': $inner-shade,
         'K': $focus-corner,
       )
     )};
@@ -598,6 +601,7 @@ $pixel-select-arrow: (
         'H': $band,
         'S': $shade,
         'I': $inset,
+        'J': $inner-shade,
       )
     )};
   --pixel-select-picker: #{pixel-grid(
@@ -625,6 +629,13 @@ $pixel-select-arrow: (
       (
         'H': $text,
         'S': $button-face,
+      )
+    )};
+  --pixel-select-arrow-hover: #{pixel-grid(
+      $pixel-select-arrow,
+      (
+        'H': $text,
+        'S': $button-band,
       )
     )};
   --ase-select-text: #{$text};
