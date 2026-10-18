@@ -943,7 +943,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async lookup(check = false) {
     if (this.busy) return;
-    const identifier = check
+    let identifier = check
       ? this.member?.id
       : this.memberSelection?.id || this.memberQuery.trim();
     if (!identifier) return;
@@ -953,6 +953,28 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.memberSearchEpoch++;
     this.memberSearching = false;
     await this.run(async () => {
+      if (
+        !check &&
+        !this.memberSelection &&
+        identifier.length >= 42 &&
+        /^(0x|bc1)/i.test(identifier)
+      ) {
+        const result = await this.api(
+          `/servers/${this.selected}/members?query=${encodeURIComponent(identifier)}`,
+        );
+        if (result.members.length > 1) {
+          this.memberMatches = result.members;
+          this.memberMatchIndex = -1;
+          this.memberMatchesOpen = true;
+          this.memberSearchError =
+            'This wallet matches several members. Choose the account to look up.';
+          requestAnimationFrame(() =>
+            document.getElementById('member-lookup')?.focus(),
+          );
+          return;
+        }
+        if (result.members.length === 1) identifier = result.members[0].id;
+      }
       const path = `/servers/${this.selected}/members/${encodeURIComponent(identifier)}`;
       this.member = await this.api(
         check ? path + '/check' : path,
