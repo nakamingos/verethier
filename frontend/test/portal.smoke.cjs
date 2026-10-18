@@ -788,8 +788,8 @@ const base = {
       assert.equal(
         await page
           .locator('.brand-header')
-          .evaluate((el) => getComputedStyle(el).borderBottomColor),
-        'rgba(0, 0, 0, 0)',
+          .evaluate((el) => getComputedStyle(el).borderBottomWidth),
+        '0px',
         'light header has no visible divider',
       );
       if (width <= 800) {
