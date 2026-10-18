@@ -32,7 +32,10 @@
           <span>Sign out · {{ user.name }}</span>
         </button>
       } @else if (showPortalAuth && session.ready && session.configured) {
-        <a class="button" href="/api/portal/auth/login?return_to=/admin">
+        <a
+          class="button"
+          [href]="'/api/portal/auth/login?return_to=' + signInDestination"
+        >
           Sign in with Discord
         </a>
       }
@@ -57,6 +60,7 @@
 </main>
 <footer class="app-footer">
   <span>Bouncer · Wallet verification</span
+  ><a routerLink="/member">Member portal</a
   ><a routerLink="/help">Wallets &amp; verification help</a
   ><span>Support never needs your seed phrase or private key.</span>
 </footer>

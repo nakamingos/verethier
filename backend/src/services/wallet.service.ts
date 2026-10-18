@@ -134,6 +134,9 @@ export class WalletService {
     // Check before saving or transferring the wallet link. Keep this outside
     // the optional address-storage catch so a blocked wallet cannot proceed.
     await this.walletBlocks.assertAllowed(data.discordId, address);
+    // Reserve the fresh proof before any link/transfer or ownership work, just
+    // as the Bitcoin path does. Concurrent tabs cannot submit the same proof.
+    const context = await this.nonceSvc.consumeNonce(data.userId, data.discordId, data.nonce);
     
     let walletOwnershipTransferred = false;
 
@@ -176,6 +179,9 @@ export class WalletService {
     return {
       address,
       walletOwnershipTransferred,
+      ...(context.channelId || context.messageId ? {
+        nonceContext: { channelId: context.channelId, messageId: context.messageId },
+      } : {}),
     };
   }
 

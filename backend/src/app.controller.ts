@@ -8,6 +8,7 @@ import { DecodedData } from './models/app.interface';
 import { SecurityUtil } from './utils/security.util';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { BitcoinChallengeDto, VerificationContextDto } from './dtos/wallet-context.dto';
+import { MemberService } from './portal/member.service';
 
 /**
  * AppController
@@ -23,7 +24,8 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly verifySvc: VerifyService,
-    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService
+    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
+    @Optional() private readonly memberSvc?: MemberService
   ) {}
 
   /**
@@ -88,6 +90,7 @@ export class AppController {
       };
 
       // Delegate to VerifyService for the complete verification and role assignment flow
+      await this.memberSvc?.assertPortalVerification(decodedData.userId, decodedData.discordId, decodedData.nonce);
       const result = await this.verifySvc.verifySignatureFlow(
         decodedData,
         body.signature
@@ -148,6 +151,11 @@ export class AppController {
         'Verification failed. Please try again.',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    } finally {
+      if (this.memberSvc) {
+        try { await this.memberSvc.finishVerification(body.data.userId, body.data.discordId, body.data.nonce); }
+        catch { Logger.warn('Member verification progress could not be saved.'); }
+      }
     }
   }
 

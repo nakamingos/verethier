@@ -1,0 +1,436 @@
+<section class="portal member-portal">
+  <div class="portal-heading"><h1>Member Portal</h1></div>
+  @if (error || notice) {
+    <aside class="portal-feedback" aria-label="Notifications">
+      <div
+        class="notice"
+        [class.danger]="!!error"
+        [attr.role]="error ? 'alert' : 'status'"
+      >
+        <p>{{ error || notice }}</p>
+        <div class="actions">
+          <button (click)="error = ''; notice = ''">Dismiss</button>
+        </div>
+      </div>
+    </aside>
+  }
+  @if (!user) {
+    <section class="panel welcome">
+      <h2>Your wallets. Your communities.</h2>
+      <p>
+        Sign in with Discord to manage saved wallets and verify roles in
+        communities you’ve joined.
+      </p>
+      @if (loading) {
+        <p role="status">Checking sign-in…</p>
+      } @else if (session.configured) {
+        <a class="button" href="/api/portal/auth/login?return_to=/member"
+          >Sign in with Discord</a
+        >
+      } @else {
+        <p>
+          Discord sign-in is not configured yet. Existing verification links
+          still work.
+        </p>
+      }
+    </section>
+  } @else {
+    <nav class="tabs workspace-tabs" aria-label="Member portal">
+      @for (
+        item of [
+          ['overview', 'Overview'],
+          ['wallets', 'Wallets'],
+          ['communities', 'Communities'],
+        ];
+        track item[0]
+      ) {
+        <button
+          [class.selected]="tab === item[0]"
+          [attr.aria-current]="tab === item[0] ? 'page' : null"
+          (click)="tab = item[0]"
+        >
+          {{ item[1] }}
+        </button>
+      }
+    </nav>
+    <div class="workspace-surface">
+      <div class="member-content portal-content">
+        @if (loading && !data) {
+          <p role="status">Loading your account…</p>
+        } @else if (!data) {
+          <button (click)="init()" [disabled]="busy">Try again</button>
+        }
+        @if (data; as account) {
+          @if (account.communitiesUnavailable) {
+            <section class="panel">
+              <p>
+                Some communities could not be loaded from Discord. Your saved
+                wallets are still available.
+              </p>
+              <button (click)="refreshAccount()" [disabled]="busy">
+                Try again
+              </button>
+            </section>
+          }
+          @if (account.pending && hiddenPending !== account.pending.id) {
+            <section class="panel pending-flow">
+              <h2>Continue where you left off</h2>
+              <p>
+                {{
+                  account.pending.purpose === 'wallet_link'
+                    ? 'Finish linking your wallet.'
+                    : 'Continue your community verification.'
+                }}
+              </p>
+              <div class="actions">
+                <button (click)="resume()" [disabled]="busy || connecting">
+                  Continue</button
+                ><button
+                  (click)="hiddenPending = account.pending.id"
+                  [disabled]="busy"
+                >
+                  Not now
+                </button>
+              </div>
+            </section>
+          }
+          @if (tab === 'overview') {
+            <section class="panel">
+              <h2>Welcome, {{ user.name }}</h2>
+              <div class="member-counts">
+                <span class="badge">{{ account.counts.wallets }} wallets</span
+                ><span class="badge"
+                  >{{ account.counts.communities }} communities</span
+                ><span class="badge"
+                  >{{ account.counts.roles }} earned roles</span
+                >
+              </div>
+              <p>
+                Manage saved wallets, then choose a community to verify. Each
+                verification needs a fresh signature.
+              </p>
+              <div class="actions">
+                <button (click)="tab = 'wallets'">Manage wallets</button
+                ><button (click)="tab = 'communities'">View communities</button>
+              </div>
+            </section>
+            <section class="panel">
+              <h2>Previously earned roles:</h2>
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Community</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (community of account.communities; track community.id) {
+                    @for (role of community.roles; track role.id) {
+                      <tr>
+                        <td>{{ community.name }}</td>
+                        <td>{{ role.name }}</td>
+                        <td>
+                          <span class="badge">{{ role.status }}</span>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+              @if (!account.communities.length || !hasRoles()) {
+                <p class="muted">
+                  No previously earned roles in your joined communities yet.
+                </p>
+              }
+            </section>
+          }
+          @if (tab === 'wallets') {
+            <div class="section-heading">
+              <h2>Saved wallets:</h2>
+              <button
+                (click)="addWallet()"
+                [disabled]="busy || connecting"
+                [attr.aria-expanded]="addOpen"
+              >
+                Add wallet
+              </button>
+            </div>
+            @if (addOpen) {
+              <section class="panel wallet-editor">
+                <h2>Add wallet</h2>
+                <label class="wallet-choice"
+                  >Wallet type:<app-pixel-select
+                    label="Wallet type"
+                    [options]="walletOptions"
+                    [(ngModel)]="walletKind"
+                    (ngModelChange)="changeWallet()"
+                    [disabled]="busy || connecting"
+                /></label>
+                @if (linkFlow) {
+                  <p>
+                    Linking {{ short(linkFlow.address) }}. Connect that wallet
+                    to continue.
+                  </p>
+                }
+                @if (address) {
+                  <p>
+                    Connected:
+                    <span [title]="address">{{ short(address) }}</span>
+                  </p>
+                }
+                <p class="muted">
+                  Connecting a wallet app doesn’t save a wallet or grant roles.
+                  Sign to link it to your Discord account. Community wallet
+                  blocks still apply.
+                </p>
+                @if (transferPending) {
+                  <div class="notice">
+                    <p>
+                      This wallet is linked to another Discord account. Move it
+                      to this account? Previously earned roles on the previous
+                      account will be checked using its remaining wallets.
+                    </p>
+                    <div class="actions">
+                      <button (click)="transfer()" [disabled]="busy">
+                        Confirm transfer</button
+                      ><button (click)="cancelTransfer()" [disabled]="busy">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="actions">
+                    <button (click)="connect()" [disabled]="busy || connecting">
+                      {{
+                        connecting
+                          ? 'Connecting…'
+                          : address
+                            ? 'Change wallet'
+                            : 'Connect wallet'
+                      }}
+                    </button>
+                    @if (
+                      walletKind === 'unisat' && !bitcoin.isUniSatAvailable()
+                    ) {
+                      <button
+                        (click)="openUniSat()"
+                        [disabled]="busy || connecting"
+                      >
+                        Open UniSat
+                      </button>
+                    }
+                    <button
+                      (click)="link()"
+                      [disabled]="!address || busy || connecting"
+                    >
+                      {{ busy ? 'Linking…' : 'Sign & link wallet' }}
+                    </button>
+                  </div>
+                }
+              </section>
+            }
+            @if (!account.wallets.length) {
+              <section class="panel">
+                <p>
+                  No saved wallets yet. Add a wallet or verify in a community to
+                  get started.
+                </p>
+              </section>
+            }
+            @for (wallet of account.wallets; track wallet.address) {
+              <section class="panel saved-wallet">
+                <div class="section-heading">
+                  <h2 [title]="wallet.address">{{ short(wallet.address) }}</h2>
+                  <span class="badge">{{
+                    wallet.wallet_type === 'bitcoin'
+                      ? 'Bitcoin · Ordinals'
+                      : 'EVM'
+                  }}</span>
+                </div>
+                <p class="muted">
+                  Last proven: {{ wallet.last_verified_at | date: 'medium' }}
+                </p>
+                <div class="actions">
+                  <button (click)="copy(wallet.address)" [disabled]="busy">
+                    Copy address</button
+                  ><a
+                    class="button"
+                    [href]="explorer(wallet.address)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >View wallet</a
+                  ><button
+                    (click)="previewRemoval(wallet.address)"
+                    [disabled]="busy"
+                  >
+                    Remove wallet from Bouncer
+                  </button>
+                </div>
+                @if (removal?.address === wallet.address) {
+                  <div class="removal-preview">
+                    <h3>Remove {{ short(wallet.address) }}?</h3>
+                    <p>
+                      This removes the saved link from your account. It does not
+                      disconnect your wallet app.
+                    </p>
+                    <p>
+                      Previously earned roles will be checked using your
+                      remaining wallets. Other qualifying rules and wallets keep
+                      their roles; unavailable checks retain roles for retry.
+                    </p>
+                    @if (removal!.communities.length) {
+                      <p>Communities to check:</p>
+                      <ul>
+                        @for (c of removal!.communities; track c.id) {
+                          <li>{{ c.name }}</li>
+                        }
+                      </ul>
+                    } @else {
+                      <p>No previously earned roles need checking.</p>
+                    }
+                    <div class="actions">
+                      <button (click)="remove()" [disabled]="busy">
+                        Confirm removal</button
+                      ><button (click)="removal = null" [disabled]="busy">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                }
+              </section>
+            }
+            @if (account.actions.length) {
+              <section class="panel">
+                <div class="section-heading">
+                  <h2>Wallet activity</h2>
+                  <button (click)="refreshAccount()" [disabled]="busy">
+                    Refresh
+                  </button>
+                </div>
+                @for (action of account.actions; track action.id) {
+                  <div class="wallet-activity">
+                    <p>
+                      {{
+                        action.kind === 'wallet_remove' ? 'Removed' : 'Linked'
+                      }}
+                      {{ short(action.address) }}
+                      <time>{{ action.created_at | date: 'short' }}</time>
+                    </p>
+                    @for (job of action.jobs; track job.id) {
+                      <p class="muted">
+                        {{ job.community }}: {{ job.status }}
+                        @if (job.result && job.result.verified !== undefined) {
+                          · Verified: {{ job.result.verified }} · Revoked:
+                          {{ job.result.revoked }}
+                          @if (job.result.errors) {
+                            · Unavailable: {{ job.result.errors }}
+                          }
+                        }
+                        @if (job.status === 'failed') {
+                          <button (click)="retry(job.id)" [disabled]="busy">
+                            Retry check
+                          </button>
+                        }
+                      </p>
+                    }
+                    @if (!action.jobs.length) {
+                      <p class="muted">No role checks required.</p>
+                    }
+                  </div>
+                }
+              </section>
+            }
+          }
+          @if (tab === 'communities') {
+            <div class="toolbar">
+              <label class="search-field"
+                >Find a community:<input
+                  type="search"
+                  [(ngModel)]="search"
+                  placeholder="Community name"
+              /></label>
+            </div>
+            @if (!account.communities.length) {
+              <section class="panel">
+                <p>
+                  No joined communities with Bouncer were found. If you just
+                  joined one, sign out and sign in again to refresh your Discord
+                  server list.
+                </p>
+              </section>
+            } @else if (!communities.length) {
+              <p>No communities match your search.</p>
+            }
+            @for (community of communities; track community.id) {
+              <section class="panel community-card">
+                <div class="community-title">
+                  @if (community.icon) {
+                    <img [src]="community.icon" alt="" />
+                  }
+                  <h2>{{ community.name }}</h2>
+                </div>
+                @if (community.channels.length) {
+                  <div class="community-controls">
+                    <label
+                      >Verification channel:<app-pixel-select
+                        label="Verification channel"
+                        [options]="channelOptions(community)"
+                        [(ngModel)]="channels[community.id]"
+                        [disabled]="busy" /></label
+                    ><button
+                      (click)="verify(community)"
+                      [disabled]="busy || !channels[community.id]"
+                    >
+                      Verify
+                    </button>
+                  </div>
+                  <p class="muted">
+                    Verify checks the selected channel. Collectible rules
+                    sharing a role and minimum can combine holdings across
+                    wallets and collections. Tokens are checked separately.
+                  </p>
+                  <ul class="requirements">
+                    @for (rule of requirements(community); track rule.id) {
+                      <li>
+                        <strong>{{ rule.role }}</strong> ·
+                        {{ rule.collection }} · {{ rule.minimum }}
+                        {{ assetLabel(rule.asset) }}
+                        @if (rule.tokenSymbol) {
+                          · {{ rule.tokenSymbol }}
+                        }
+                        @if (network(rule)) {
+                          · {{ network(rule) }}
+                        }
+                        @if (selection(rule)) {
+                          · {{ selection(rule) }}
+                        }
+                        @if (
+                          rule.tokenStandard === 'erc1155' &&
+                          !rule.tokenIds?.length
+                        ) {
+                          · IDs 0–99
+                        }
+                        @if (rule.trait) {
+                          · {{ rule.trait }}
+                        }
+                        @if (rule.tokenIds?.length) {
+                          · IDs: {{ rule.tokenIds!.join(', ') }}
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p>
+                    No verification channels are available to you. Ask a
+                    community administrator for help.
+                  </p>
+                }
+              </section>
+            }
+          }
+        }
+      </div>
+    </div>
+  }
+</section>

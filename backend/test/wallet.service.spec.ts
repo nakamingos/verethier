@@ -19,6 +19,7 @@ const mockRecoverTypedDataAddress = recoverTypedDataAddress as jest.MockedFuncti
 
 const mockNonceService = {
   validateNonce: jest.fn(),
+  consumeNonce: jest.fn(),
   isNonceUsed: jest.fn(),
   markNonceAsUsed: jest.fn(),
 };
@@ -64,12 +65,24 @@ describe('WalletService', () => {
 
     service = module.get<WalletService>(WalletService);
     jest.clearAllMocks();
+    mockNonceService.consumeNonce.mockResolvedValue({});
     mockUserAddressService.addUserAddress.mockResolvedValue({ success: true, isNewAddress: true });
     mockDiscordService.getUser.mockResolvedValue({ username: 'test-user', globalName: null });
     mockDynamicRoleService.reverifyUser.mockResolvedValue({ verified: 0, revoked: 0 });
   });
 
   describe('verifySignature', () => {
+    it('consumes the EVM proof before linking and preserves its channel context', async () => {
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
+      mockNonceService.consumeNonce.mockResolvedValueOnce({ channelId: 'chosen-channel' });
+      expect(await service.verifySignature(baseData, 'sig')).toEqual({address:'0xabc',walletOwnershipTransferred:false,nonceContext:{channelId:'chosen-channel',messageId:undefined}});
+      expect(mockNonceService.consumeNonce).toHaveBeenCalledWith('u','d','n');
+      expect(mockNonceService.consumeNonce.mock.invocationCallOrder[0]).toBeLessThan(mockUserAddressService.addUserAddress.mock.invocationCallOrder[0]);
+      mockNonceService.consumeNonce.mockRejectedValueOnce(new Error('Invalid or expired nonce.'));
+      await expect(service.verifySignature(baseData,'sig')).rejects.toThrow('Invalid or expired nonce');
+      expect(mockUserAddressService.addUserAddress).toHaveBeenCalledTimes(1);
+    });
     it('rejects a blocked EVM wallet before saving or transferring its link', async () => {
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
