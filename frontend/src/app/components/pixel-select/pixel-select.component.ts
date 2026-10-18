@@ -222,7 +222,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     menu.style.maxHeight = 'none';
     const below = innerHeight - rect.bottom - margin - 4;
     const above = rect.top - margin - 4;
-    const height = Math.min(menu.scrollHeight + 2, 320);
+    const height = Math.min(menu.getBoundingClientRect().height, 320);
     const up = below < height && above > below;
     const available = Math.max(0, up ? above : below);
     menu.style.maxHeight = `${Math.min(320, available)}px`;

@@ -205,7 +205,7 @@ $pixel-select-field: (
   '............',
   '..HHHHHHHH..',
   '.HSEEEEEESH.',
-  '.HEKSSSSKEH.',
+  '.HESFFFFSEH.',
   '.HEFFFFFFEH.',
   '.HEFFFFFFEH.',
   '.HEFFFFFFEH.',
@@ -216,40 +216,36 @@ $pixel-select-field: (
   '............'
 );
 $pixel-select-picker: (
-  '..EEEEEEEEEEEE..',
-  '.EHHHHHHHHHHHHE.',
-  'EHKEEEEEEEEEEKHE',
-  'EHEDSSSSSSSSSEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHEFFFFFFFFFFEHE',
-  'EHKEEEEEEEEEEKHE',
-  '.EHHHHHHHHHHHHE.',
-  '..EEEEEEEEEEEE..'
+  '.TEEEEEEEET.',
+  'TEHHHHHHHHET',
+  'EHKEEEEEEKHE',
+  'EHESFFFFSEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHEFFFFFFEHE',
+  'EHESFFFFSEHE',
+  'EHKEEEEEEKHE',
+  'TEHHHHHHHHET',
+  '.TEEEEEEEET.'
 );
 $pixel-select-button: (
-  '..EEEEEEEEEE..',
-  '.EFHHHHHHHHFE.',
-  'EFHFFFFFFFFHFE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHFFFFFFFFFFHE',
-  'EHHFFFFFFFFHHE',
-  'ESHHHHHHHHHHSE',
-  'FESSSSSSSSSSEF',
-  '.FEEEEEEEEEEF.',
-  '..FFFFFFFFFF..'
+  '.EEEEEEEEEEEEEE.',
+  'EFHHHHHHHHHHHHFE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EHFFFFFFFFFFFFHE',
+  'EFHHHHHHHHHHHHFE',
+  'ESSSSSSSSSSSSSSE',
+  '.EEEEEEEEEEEEEE.'
 );
 $pixel-select-arrow: (
   '.........',
@@ -487,7 +483,6 @@ $pixel-select-arrow: (
         'F': $face,
         'H': $band,
         'S': $shade,
-        'K': #101114,
       )
     )};
   --pixel-select-picker: #{pixel-grid(
@@ -498,7 +493,7 @@ $pixel-select-arrow: (
         'H': #4069c2,
         'S': $shade,
         'K': #2a4185,
-        'D': #101114,
+        'T': #0006,
       )
     )};
   --pixel-select-button: #{pixel-grid(
@@ -517,9 +512,8 @@ $pixel-select-arrow: (
         'S': $face,
       )
     )};
-  --ase-select-menu: #{$menu};
   --ase-select-text: #{$text};
-  --ase-select-focus: #4069c2;
+  --ase-select-menu: #{$menu};
 }
 
 @mixin pixel-surface($frame) {
