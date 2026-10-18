@@ -151,10 +151,6 @@
   --ase-dim: #655561;
 }
 
-:root[data-theme='light'] .brand-header {
-  border-bottom-color: transparent;
-}
-
 * {
   @include scrollbars();
 }
@@ -504,7 +500,7 @@ form > label {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.4rem 2rem;
-  border-bottom: 1px solid var(--ase-border);
+  border-bottom: 0;
   background: var(--ase-face);
 }
 .brand-header .brand-line {
