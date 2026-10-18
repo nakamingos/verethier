@@ -27,11 +27,13 @@ import { ruleEditFields, ruleEditVersion } from '@/utils/rule-edit.util';
 import { prepareRuleCriteria } from '@/services/rule-create.util';
 import { normalizeRoleName } from '@/services/discord-commands/utils/role-management.util';
 import { PortalSession } from './portal-auth.service';
+import { normalizeBlockedWallet } from '@/services/wallet-block.service';
 import {
   PortalRuleDto,
   PortalEditDto,
   PortalSettingsDto,
   PortalMessageDto,
+  PortalWalletBlockDto,
 } from './portal.dto';
 
 const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
@@ -506,6 +508,8 @@ export class PortalService {
       (data.server_id !== server || data.actor_id !== session.user.id)
     )
       throw new ConflictException('Request conflict.');
+    if (data && !['create', 'edit', 'delete', 'reverse'].includes(data.kind))
+      throw new ConflictException('Request conflict.');
     return data ? this.safeAction(data) : null;
   }
   private async mutate(
@@ -532,6 +536,17 @@ export class PortalService {
     return this.safeAction(data);
   }
   private safeAction(a: any) {
+    if (['wallet_block', 'wallet_unblock'].includes(a.kind))
+      return {
+        id: a.id,
+        kind: a.kind,
+        created_at: a.created_at,
+        actor_id: a.actor_id,
+        wallet: a.after_rule || a.before_rule,
+        before_rule: null,
+        after_rule: null,
+        reverts: null,
+      };
     return {
       id: a.id,
       kind: a.kind,
@@ -586,7 +601,9 @@ export class PortalService {
       const used = new Set(reversed.data.map((a) => a.reverts));
       items = items.map((a) => ({
         ...this.safeAction(a),
-        reversible: !used.has(a.id),
+        reversible:
+          ['create', 'edit', 'delete', 'reverse'].includes(a.kind) &&
+          !used.has(a.id),
       }));
     }
     return {
@@ -714,6 +731,26 @@ export class PortalService {
       id,
       new Set((wallets || []).map((wallet) => wallet.address)),
     );
+    const restrictions = new Map<string, any>();
+    const addresses = [
+      ...new Set(
+        [...(wallets || []), ...removedWallets].map((wallet) => wallet.address),
+      ),
+    ];
+    for (let offset = 0; offset < addresses.length; offset += 100) {
+      const { data, error } = await this.db
+        .from('verifier_wallet_blocks')
+        .select('address,reason,blocked_at')
+        .eq('server_id', server)
+        .in('address', addresses.slice(offset, offset + 100));
+      this.dbError(error);
+      for (const block of data || []) restrictions.set(block.address, block);
+    }
+    const withRestriction = (wallet: any) => ({
+      ...wallet,
+      blocked: restrictions.has(wallet.address),
+      block: restrictions.get(wallet.address) || null,
+    });
     const roles = [];
     const serverRules = check ? await this.rules.getRoleMappings(server) : [];
     const context = {
@@ -747,10 +784,45 @@ export class PortalService {
       name: member.displayName,
       username: member.user.username,
       avatar: member.displayAvatarURL(),
-      wallets: wallets || [],
-      removed_wallets: removedWallets,
+      wallets: (wallets || []).map(withRestriction),
+      removed_wallets: removedWallets.map(withRestriction),
       roles,
     };
+  }
+  async walletBlock(
+    session: PortalSession,
+    server: string,
+    id: string,
+    dto: PortalWalletBlockDto,
+  ) {
+    const member = await this.member(session, server, id, false);
+    let address: string;
+    try {
+      address = normalizeBlockedWallet(dto.address);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+    if (
+      ![...member.wallets, ...member.removed_wallets].some(
+        (wallet) => wallet.address === address,
+      )
+    )
+      throw new BadRequestException(
+        'This wallet is not in the selected member’s saved history.',
+      );
+    const { data, error } = await this.db.rpc('verifier_portal_wallet_block', {
+      p_server: server,
+      p_actor: session.user.id,
+      p_address: address,
+      p_blocked: dto.blocked,
+      p_reason: dto.reason?.trim() || null,
+      p_request: dto.request_id,
+    });
+    if (error)
+      throw new ConflictException(
+        'Could not update this wallet restriction. Refresh the member and try again.',
+      );
+    return data;
   }
   private async removedWallets(userId: string, current: Set<string>) {
     const removed = new Map<string, any>();

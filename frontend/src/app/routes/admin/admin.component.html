@@ -954,6 +954,28 @@
                               [title]="wallet.address + ' · Open in explorer'"
                               >{{ walletAddress(wallet.address) }}</a
                             >
+                            @if (wallet.blocked) {
+                              <span
+                                class="badge wallet-block-status"
+                                [title]="
+                                  wallet.block?.reason ||
+                                  'Blocked in this server'
+                                "
+                                >Blocked</span
+                              >
+                            }
+                            <button
+                              class="wallet-restriction-action"
+                              (click)="reviewWalletRestriction(wallet)"
+                              [disabled]="busy"
+                              [attr.aria-label]="
+                                (wallet.blocked
+                                  ? 'Unblock wallet '
+                                  : 'Block wallet ') + wallet.address
+                              "
+                            >
+                              {{ wallet.blocked ? 'Unblock' : 'Block' }}
+                            </button>
                           </td>
                           <td>
                             @if (wallet.last_verified_at) {
@@ -1013,6 +1035,28 @@
                                 }}:
                                 {{ wallet.removed_at | date: 'short' }}</time
                               >
+                              @if (wallet.blocked) {
+                                <span
+                                  class="badge wallet-block-status"
+                                  [title]="
+                                    wallet.block?.reason ||
+                                    'Blocked in this server'
+                                  "
+                                  >Blocked</span
+                                >
+                              }
+                              <button
+                                class="wallet-restriction-action"
+                                (click)="reviewWalletRestriction(wallet)"
+                                [disabled]="busy"
+                                [attr.aria-label]="
+                                  (wallet.blocked
+                                    ? 'Unblock wallet '
+                                    : 'Block wallet ') + wallet.address
+                                "
+                              >
+                                {{ wallet.blocked ? 'Unblock' : 'Block' }}
+                              </button>
                             </td>
                             <td>
                               @if (wallet.last_verified_at) {
@@ -1030,6 +1074,59 @@
                         }
                       </tbody>
                     </table>
+                  }
+                  @if (walletRestriction; as restriction) {
+                    <section
+                      class="panel wallet-block-review"
+                      aria-label="Wallet restriction review"
+                    >
+                      <h3>
+                        {{
+                          restriction.blocked
+                            ? 'Block wallet'
+                            : 'Unblock wallet'
+                        }}
+                      </h3>
+                      <p class="address">{{ restriction.address }}</p>
+                      <p>
+                        @if (restriction.blocked) {
+                          This address will be blocked from verification and
+                          contributing holdings in {{ data.server.name }}.
+                        } @else {
+                          This address will be allowed to verify and contribute
+                          holdings in {{ data.server.name }} again.
+                        }
+                        The current linked account’s previously earned roles
+                        will be rechecked using its eligible wallets.
+                      </p>
+                      @if (restriction.blocked) {
+                        <label
+                          >Reason (optional):<input
+                            type="text"
+                            maxlength="200"
+                            [(ngModel)]="restriction.reason"
+                            (ngModelChange)="changeWalletBlockReason()"
+                            [disabled]="busy"
+                        /></label>
+                      }
+                      <div class="actions">
+                        <button
+                          (click)="saveWalletRestriction()"
+                          [disabled]="busy"
+                        >
+                          {{
+                            restriction.blocked
+                              ? 'Confirm block'
+                              : 'Confirm unblock'
+                          }}</button
+                        ><button
+                          (click)="walletRestriction = null"
+                          [disabled]="busy"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </section>
                   }
                   <h3>Previously earned roles:</h3>
                   <table
@@ -1125,7 +1222,7 @@
                             <th scope="col">Updated</th>
                           } @else if (activity.kind === 'changes') {
                             <th scope="col">Change</th>
-                            <th scope="col">Role</th>
+                            <th scope="col">Details</th>
                             <th scope="col">Date</th>
                             <th scope="col">Action</th>
                           } @else {
@@ -1160,18 +1257,36 @@
                               </td>
                             } @else if (activity.kind === 'changes') {
                               <td data-label="Change">
-                                <strong
-                                  >{{ item.kind }} · Rule
-                                  {{
-                                    item.after_rule?.id || item.before_rule?.id
-                                  }}</strong
-                                >
+                                @if (item.wallet) {
+                                  <strong>{{
+                                    item.kind === 'wallet_block'
+                                      ? 'Blocked wallet'
+                                      : 'Unblocked wallet'
+                                  }}</strong>
+                                  <p class="history-note address">
+                                    {{ walletAddress(item.wallet.address) }}
+                                  </p>
+                                } @else {
+                                  <strong
+                                    >{{ item.kind }} · Rule
+                                    {{
+                                      item.after_rule?.id ||
+                                        item.before_rule?.id
+                                    }}</strong
+                                  >
+                                }
                               </td>
-                              <td data-label="Role">
-                                {{
-                                  item.after_rule?.role_name ||
-                                    item.before_rule?.role_name
-                                }}
+                              <td data-label="Details">
+                                @if (item.wallet) {
+                                  {{
+                                    item.wallet.reason || 'No reason provided'
+                                  }}
+                                } @else {
+                                  {{
+                                    item.after_rule?.role_name ||
+                                      item.before_rule?.role_name
+                                  }}
+                                }
                               </td>
                               <td data-label="Date">
                                 <time>{{

@@ -93,6 +93,8 @@ const base = {
         actions = 0;
       const requests = [],
         errors = [];
+      const walletBlocks = new Map();
+      let failWalletBlock = true;
       const context = await browser.newContext({
         viewport: { width, height: 900 },
         hasTouch: width <= 800,
@@ -348,7 +350,22 @@ const base = {
                 },
               ],
             };
-          else if (p.includes('/members/'))
+          else if (p.endsWith('/wallet-block')) {
+            const body = request.postDataJSON();
+            assert.equal(request.headers()['x-csrf-token'], 'csrf-test');
+            if (failWalletBlock) {
+              failWalletBlock = false;
+              status = 503;
+              data = {
+                message: 'Wallet restriction is temporarily unavailable.',
+              };
+            } else {
+              if (body.blocked)
+                walletBlocks.set(body.address, { reason: body.reason });
+              else walletBlocks.delete(body.address);
+              data = { address: body.address, blocked: body.blocked, jobs: 1 };
+            }
+          } else if (p.includes('/members/')) {
             data = {
               id: '555555555555555555',
               name: 'Collector',
@@ -384,7 +401,11 @@ const base = {
                 },
               ],
             };
-          else if (p.endsWith('/settings')) data = request.postDataJSON();
+            for (const wallet of [...data.wallets, ...data.removed_wallets]) {
+              wallet.blocked = walletBlocks.has(wallet.address);
+              wallet.block = walletBlocks.get(wallet.address) || null;
+            }
+          } else if (p.endsWith('/settings')) data = request.postDataJSON();
           else if (p.endsWith('/message'))
             data = {
               url: `https://discord.com/channels/${server}/${channel}/123`,
@@ -1951,6 +1972,100 @@ const base = {
         await page.getByRole('cell', { name: 'Bitcoin:', exact: true }).count(),
         1,
       );
+      const blockAddress = '0x1111111111111111111111111111111111111111';
+      await page
+        .getByRole('button', {
+          name: 'Block wallet ' + blockAddress,
+          exact: true,
+        })
+        .click();
+      const blockReview = page.getByRole('region', {
+        name: 'Wallet restriction review',
+      });
+      await blockReview
+        .getByRole('button', { name: 'Cancel', exact: true })
+        .click();
+      assert(
+        !requests.some((r) => r.path.endsWith('/wallet-block')),
+        'Cancel does not change restrictions',
+      );
+      await page
+        .getByRole('button', {
+          name: 'Block wallet ' + blockAddress,
+          exact: true,
+        })
+        .click();
+      await page
+        .getByLabel('Reason (optional):', { exact: true })
+        .fill('Repeated abuse');
+      await blockReview
+        .getByRole('button', { name: 'Confirm block', exact: true })
+        .click();
+      await page
+        .getByText('Wallet restriction is temporarily unavailable.', {
+          exact: true,
+        })
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await blockReview
+        .getByRole('button', { name: 'Confirm block', exact: true })
+        .click();
+      await page
+        .getByRole('button', {
+          name: 'Unblock wallet ' + blockAddress,
+          exact: true,
+        })
+        .waitFor();
+      let blockRequests = requests.filter((r) =>
+        r.path.endsWith('/wallet-block'),
+      );
+      assert.equal(
+        blockRequests[0].body.request_id,
+        blockRequests[1].body.request_id,
+        'A failed response preserves the retry receipt',
+      );
+      assert.equal(blockRequests[1].body.address, blockAddress);
+      assert.equal(blockRequests[1].body.blocked, true);
+      assert.equal(blockRequests[1].body.reason, 'Repeated abuse');
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await page
+        .getByRole('button', {
+          name: 'Unblock wallet ' + blockAddress,
+          exact: true,
+        })
+        .click();
+      await blockReview
+        .getByRole('button', { name: 'Confirm unblock', exact: true })
+        .click();
+      await page
+        .getByRole('button', {
+          name: 'Block wallet ' + blockAddress,
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        requests.filter((r) => r.path.endsWith('/wallet-block')).at(-1).body
+          .blocked,
+        false,
+      );
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await savedWallets
+        .getByRole('button', { name: 'Block wallet bc1p-example', exact: true })
+        .click();
+      await blockReview
+        .getByRole('button', { name: 'Confirm block', exact: true })
+        .click();
+      await savedWallets
+        .getByRole('button', {
+          name: 'Unblock wallet bc1p-example',
+          exact: true,
+        })
+        .waitFor();
+      await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await page.screenshot({
+        path: `${artifacts}/wallet-blocks-${width}.png`,
+        fullPage: true,
+      });
       await page.getByLabel('Username or user ID').fill('555555555555555555');
       if (width <= 800)
         await page

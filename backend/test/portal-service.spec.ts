@@ -181,12 +181,28 @@ describe('Portal server boundaries', () => {
       order: jest.fn().mockReturnThis(),
       range: jest.fn().mockResolvedValue({ data: history, error: null }),
     };
+    const block = {
+      address: '0xremoved',
+      reason: 'Repeated abuse',
+      blocked_at: '2026-10-18T13:00:00Z',
+    };
+    const blockQuery: any = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({ data: [block], error: null }),
+    };
     db.from.mockImplementation((table) =>
-      table === 'user_wallets' ? walletQuery : removedQuery,
+      table === 'user_wallets'
+        ? walletQuery
+        : table === 'verifier_wallet_blocks'
+          ? blockQuery
+          : removedQuery,
     );
     rules.getEarnedRoleAssignments.mockResolvedValue([]);
     const result = await service.member(session, server, target, false);
-    expect(result.wallets).toEqual([current]);
+    expect(result.wallets).toEqual([
+      { ...current, blocked: false, block: null },
+    ]);
     expect(result.removed_wallets).toEqual([
       {
         address: '0xremoved',
@@ -194,6 +210,8 @@ describe('Portal server boundaries', () => {
         last_verified_at: '2026-10-17T12:00:00Z',
         removed_at: '2026-10-18T12:00:00Z',
         transferred: false,
+        blocked: true,
+        block,
       },
       {
         address: 'bc1p-moved',
@@ -201,9 +219,17 @@ describe('Portal server boundaries', () => {
         last_verified_at: null,
         removed_at: '2026-10-15T12:00:00Z',
         transferred: true,
+        blocked: false,
+        block: null,
       },
     ]);
     expect(walletQuery.eq).toHaveBeenCalledWith('user_id', target);
+    expect(blockQuery.eq).toHaveBeenCalledWith('server_id', server);
+    expect(blockQuery.in).toHaveBeenCalledWith('address', [
+      '0xcurrent',
+      '0xremoved',
+      'bc1p-moved',
+    ]);
     expect(removedQuery.eq).toHaveBeenCalledWith('user_id', target);
     expect(removedQuery.in).toHaveBeenCalledWith('kind', [
       'wallet_remove',
@@ -213,6 +239,66 @@ describe('Portal server boundaries', () => {
       ['created_at', { ascending: false }],
       ['id', { ascending: false }],
     ]);
+  });
+  it('restricts wallet actions to the selected member’s recorded addresses and authenticated server admin', async () => {
+    const address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const view = jest.spyOn(service, 'member').mockResolvedValue({
+      wallets: [],
+      removed_wallets: [{ address }],
+    } as any);
+    db.rpc = jest.fn().mockResolvedValue({
+      data: { address, blocked: true, jobs: 1 },
+      error: null,
+    });
+    const dto = {
+      address: address.toUpperCase().replace('0X', '0x'),
+      blocked: true,
+      reason: '  Abuse  ',
+      request_id: 'request',
+    };
+    expect(await service.walletBlock(session, server, 'member', dto)).toEqual({
+      address,
+      blocked: true,
+      jobs: 1,
+    });
+    expect(view).toHaveBeenCalledWith(session, server, 'member', false);
+    expect(db.rpc).toHaveBeenCalledWith('verifier_portal_wallet_block', {
+      p_server: server,
+      p_actor: user,
+      p_address: address,
+      p_blocked: true,
+      p_reason: 'Abuse',
+      p_request: 'request',
+    });
+    db.rpc.mockClear();
+    await expect(
+      service.walletBlock(session, server, 'member', {
+        ...dto,
+        address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      }),
+    ).rejects.toThrow('not in the selected');
+    expect(db.rpc).not.toHaveBeenCalled();
+    view.mockRejectedValueOnce(new Error('Not an administrator'));
+    await expect(
+      service.walletBlock(session, server, 'member', dto),
+    ).rejects.toThrow('Not an administrator');
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it('renders wallet restrictions as non-rule audit entries', () => {
+    const action = {
+      id: 'action',
+      kind: 'wallet_block',
+      actor_id: user,
+      after_rule: { address: '0xabc', reason: 'Abuse' },
+    };
+    expect((service as any).safeAction(action)).toEqual(
+      expect.objectContaining({
+        kind: 'wallet_block',
+        wallet: action.after_rule,
+        before_rule: null,
+        after_rule: null,
+      }),
+    );
   });
   it('rejects channels from another guild', async () => {
     guild.members.fetch.mockResolvedValue({
@@ -389,5 +475,23 @@ describe('Portal activity sort parameters', () => {
     ).rejects.toThrow();
     expect(auth.session).not.toHaveBeenCalled();
     expect(portal.activity).not.toHaveBeenCalled();
+  });
+});
+
+describe('Portal wallet block mutations', () => {
+  it('requires CSRF before dispatching an authenticated block request', async () => {
+    const session = { user: { id: 'admin' } };
+    const auth = {
+      session: jest.fn().mockResolvedValue(session),
+      assertMutation: jest.fn(() => {
+        throw new Error('Unconfirmed request');
+      }),
+    };
+    const portal = { walletBlock: jest.fn() };
+    const controller = new PortalController(auth as any, portal as any);
+    await expect(
+      controller.walletBlock({} as any, 'server', 'member', {} as any),
+    ).rejects.toThrow('Unconfirmed request');
+    expect(portal.walletBlock).not.toHaveBeenCalled();
   });
 });

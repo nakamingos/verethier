@@ -52,6 +52,12 @@ export class PortalDeleteDto {
 export class PortalActionDto {
   @IsUUID() request_id: string;
 }
+export class PortalWalletBlockDto {
+  @IsString() @MaxLength(100) address: string;
+  @IsBoolean() blocked: boolean;
+  @IsOptional() @IsString() @MaxLength(200) reason?: string;
+  @IsUUID() request_id: string;
+}
 
 export class PortalSettingsDto {
   @IsBoolean() background_checks_enabled: boolean;

@@ -87,6 +87,14 @@ export class AdminComponent implements OnInit, OnDestroy {
   editRoleId = '';
   editRoleName = '';
   member: any = null;
+  walletRestriction: {
+    address: string;
+    blocked: boolean;
+    reason: string;
+    request_id: string;
+    server: string;
+    memberId: string;
+  } | null = null;
   messageChannel = '';
   messageAction = 'refresh';
   undo: any = null;
@@ -265,6 +273,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.groupFilter = '';
         this.editor = null;
         this.member = null;
+        this.walletRestriction = null;
         this.activity = {
           items: [],
           page: 1,
@@ -824,6 +833,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         check ? { request_id: crypto.randomUUID() } : undefined,
       );
       this.memberId = this.member.id;
+      this.walletRestriction = null;
     });
   }
   async retry(item: any) {
@@ -833,6 +843,52 @@ export class AdminComponent implements OnInit, OnDestroy {
       });
       await this.loadActivity();
       this.notice = 'Fresh role check queued.';
+    });
+  }
+  reviewWalletRestriction(wallet: any) {
+    if (this.busy || !this.member) return;
+    this.walletRestriction = {
+      address: wallet.address,
+      blocked: !wallet.blocked,
+      reason: '',
+      request_id: crypto.randomUUID(),
+      server: this.selected,
+      memberId: this.member.id,
+    };
+  }
+  changeWalletBlockReason() {
+    if (this.walletRestriction)
+      this.walletRestriction.request_id = crypto.randomUUID();
+  }
+  async saveWalletRestriction() {
+    const draft = this.walletRestriction;
+    if (!draft || this.busy) return;
+    await this.run(async () => {
+      if (this.selected !== draft.server || this.member?.id !== draft.memberId)
+        throw new Error(
+          'Look up this member again before updating wallet restrictions.',
+        );
+      const result = await this.api(
+        `/servers/${draft.server}/members/${draft.memberId}/wallet-block`,
+        {
+          address: draft.address,
+          blocked: draft.blocked,
+          reason: draft.reason.trim(),
+          request_id: draft.request_id,
+        },
+      );
+      for (const wallet of [
+        ...this.member.wallets,
+        ...(this.member.removed_wallets || []),
+      ])
+        if (wallet.address === result.address) {
+          wallet.blocked = result.blocked;
+          wallet.block = result.blocked
+            ? { reason: draft.reason.trim() || null }
+            : null;
+        }
+      this.walletRestriction = null;
+      this.notice = `Wallet ${result.blocked ? 'blocked' : 'unblocked'} in ${this.data.server.name}.${result.jobs ? ' Earned-role checks queued. See Audit Log → Role checks.' : ''}`;
     });
   }
   async fix() {
