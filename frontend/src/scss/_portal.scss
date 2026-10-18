@@ -163,8 +163,8 @@ a.button {
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  min-height: 3.6rem;
-  padding: 0.65rem 1.2rem 0.45rem;
+  min-height: 3.5rem;
+  padding: 0.55rem 1.2rem 0.45rem;
   border: 1px solid var(--ase-border);
   @include pixel-surface(var(--pixel-face));
   color: var(--ase-text);
@@ -230,12 +230,12 @@ textarea {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 3.6rem;
+  min-height: 3.5rem;
   color: var(--ase-text);
   font: inherit;
   line-height: 1.4;
   border: 1px solid var(--ase-border);
-  padding: 0.55rem 0.8rem 0.35rem;
+  padding: 0.45rem 0.8rem 0.35rem;
   @include pixel-surface(var(--pixel-entry));
   border-image-slice: 8 fill;
   border-image-width: 8px;
@@ -266,8 +266,8 @@ button.pixel-select-trigger:hover {
   gap: 0;
   justify-content: stretch;
   width: 100%;
-  height: 3.6rem;
-  min-height: 3.6rem;
+  height: 3.5rem;
+  min-height: 3.5rem;
   padding: 0;
   border: 0;
   border-image: none;
@@ -292,7 +292,7 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 2px 4.2rem 0 0.8rem;
+  padding: 1px 4.1rem 0 0.8rem;
   border: 1px solid transparent;
   border-image: var(--pixel-select-field) 10 0 10 10 fill / 10px 0 10px 10px;
 }
@@ -307,9 +307,9 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   inset: 0 0 0 auto;
   display: grid;
   place-items: center;
-  width: 3.6rem;
+  width: 3.5rem;
   height: 100%;
-  padding-top: 2px;
+  padding-top: 1px;
   border: 1px solid transparent;
   border-image: var(--pixel-select-button) 6 6 8 6 fill / 6px 6px 8px 6px;
 }
@@ -452,7 +452,7 @@ form > label {
 }
 .brand-header .button {
   font-size: 1.6rem;
-  min-height: 3.2rem;
+  min-height: 3.5rem;
 }
 .brand-header .header-auth {
   min-width: 0;
@@ -460,16 +460,17 @@ form > label {
 }
 .brand-header .theme-toggle {
   position: relative;
-  width: 28px;
-  min-width: 28px;
-  height: 32px;
-  min-height: 32px;
+  width: 35px;
+  min-width: 35px;
+  height: 35px;
+  min-height: 35px;
   padding: 0;
 }
 .theme-toggle img {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: calc(50% - 2px);
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: block;
   width: 20px;
   height: 20px;
@@ -690,6 +691,7 @@ app-root:has(app-admin) .app-footer {
   font-size: 1.7rem;
   // Share the bottom outline/shadow with the next button's top outline.
   margin-bottom: -4px;
+  padding-top: 0.65rem;
   padding-bottom: 0.85rem;
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
@@ -814,8 +816,8 @@ app-root:has(app-admin) .app-footer {
   border-image-source: var(--pixel-count);
   border-image-slice: 8 8 12 8 fill;
   border-image-width: 8px 8px 12px 8px;
-  min-height: 3.2rem;
-  padding: 0.35rem 1rem 0.45rem;
+  min-height: 3.1rem;
+  padding: 0.35rem 1rem 0.35rem;
   font-size: 1.8rem;
   line-height: 1.1;
   color: #fff;

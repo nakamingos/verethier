@@ -522,8 +522,8 @@ const base = {
         'single-line menu options have compact vertical spacing',
       );
       const themeFrame = await page.locator('.theme-toggle').boundingBox();
-      assert.equal(themeFrame.width, 28);
-      assert.equal(themeFrame.height, 32);
+      assert.equal(themeFrame.width, 35);
+      assert.equal(themeFrame.height, 35);
       const fieldLabel = page
         .locator('.portal-content .toolbar > label')
         .filter({ has: assetPicker });
