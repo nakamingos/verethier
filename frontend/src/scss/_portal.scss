@@ -42,7 +42,7 @@
   @include pixel-input-controls();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
-  --ase-scrollbar-thumb: #41444a;
+  @include pixel-scrollbar(#41444a);
   --ase-face: #2c2c30;
   --ase-text: #c0c0c0;
   --ase-dim: #999b9f;
@@ -121,7 +121,7 @@
     $inner-shade: #c6c6c6
   );
   --ase-bg: #7d929e;
-  --ase-scrollbar-thumb: #7c919d;
+  @include pixel-scrollbar(#7c919d);
   --ase-face: #d3cbbe;
   --ase-text: #000;
   --ase-dim: #655561;
@@ -1461,15 +1461,28 @@ button:disabled:hover,
     position: static;
   }
   .server-list {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+  .server-list.panel {
+    // Account for the shared 2px outline at each column's right edge.
+    padding-right: calc(1.5rem + 2px);
   }
   .server-list button,
   .server-list .button {
-    width: auto;
-    margin: 0;
-    max-width: 100%;
+    width: calc(100% + 2px);
+    min-width: 0;
+    max-width: none;
+    // Share outlines horizontally and outline/shadow vertically.
+    margin: 0 -2px -4px 0;
+  }
+  .server-list > :is(button, .button):last-child,
+  .server-list > :is(button, .button):nth-last-child(2):nth-child(odd) {
+    margin-bottom: 0;
+  }
+  .server-list > p {
+    grid-column: 1 / -1;
   }
   .portal-content {
     --content-panel-padding: 1.2rem;

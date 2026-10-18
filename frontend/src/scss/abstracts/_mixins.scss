@@ -84,9 +84,10 @@
     background: #000;
   }
   &::-webkit-scrollbar-thumb {
-    background: var(--ase-scrollbar-thumb);
+    background: transparent;
     border-radius: 0;
-    border: 0;
+    border: 2px solid transparent;
+    border-image: var(--pixel-scrollbar-thumb) 4 fill / 2px;
   }
   &::-webkit-scrollbar-button {
     display: none;
