@@ -4,6 +4,8 @@
 
 Open `https://bouncer.up.railway.app/admin` and sign in with Discord. Only server owners and current administrators can manage a server. An OAuth server list is used for navigation; Bouncer fetches the actor's current membership and permissions again for each server operation.
 
+Discord sign-in appears in the header when configured and signed out. The active server and rule count sit beside the Control room title while signed in; logout or session expiry hides that summary. Header and ordinary admin buttons share the server toolbar frames, while tabs, dropdowns and member suggestions keep their dedicated styles. Keyboard focus uses an underline, with system outlines in high-contrast mode.
+
 The control room provides rules with asset filters and search, create/edit/delete forms, review before saving, Undo/Redo, bot settings, verification-message controls, member lookup and paginated activity. Rules keep today's asset capabilities and count-combining behavior. The existing `/setup` commands remain available. `/help` and `/join` are member-facing shortcuts; Discord may need a reload after commands refresh.
 
 Edit opens beneath the selected rule, extending its card. Combined badges and the Rule group filter show the collectible rules sharing a channel, role and minimum. A group view includes all contributors across asset types and provides links to each rule. ERC-20 balances do not combine with collectible counts.
