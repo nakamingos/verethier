@@ -14,6 +14,8 @@ Leave out both optional add-ons, Rule Blender and LinkWarden; all social-profile
 
 Accepted scope: ship the admin dashboard first, followed by the member portal. Communities shows joined servers only; public discovery is deferred. Additional networks and wallet/address formats, including broader Bitcoin addresses, are deferred until the user chooses which integrations to implement. Phases 6–7 below are a future reference, not authorized integration work for this release.
 
+Track optional ideas separately in the [optional feature backlog](optional-features.md).
+
 ## Conflicts and recommended decisions
 
 These recommendations deliberately preserve established Bouncer behavior where the guide proposes a different policy. They need to be settled before implementing the affected phase; adding a portal must not silently change them.
