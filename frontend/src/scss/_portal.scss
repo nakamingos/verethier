@@ -230,12 +230,12 @@ textarea {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 4rem;
+  min-height: 3.8rem;
   color: var(--ase-text);
   font: inherit;
   line-height: 1.4;
   border: 1px solid var(--ase-border);
-  padding: 0.8rem 1rem;
+  padding: 0.55rem 0.8rem;
   @include pixel-surface(var(--pixel-entry));
   border-image-slice: 8 fill;
   border-image-width: 8px;
@@ -266,8 +266,8 @@ button.pixel-select-trigger:hover {
   gap: 0;
   justify-content: stretch;
   width: 100%;
-  height: 4rem;
-  min-height: 4rem;
+  height: 3.8rem;
+  min-height: 3.8rem;
   padding: 0;
   border: 0;
   border-image: none;
@@ -292,7 +292,7 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 0 4.6rem 0 1rem;
+  padding: 0 4.4rem 0 0.8rem;
   border: 1px solid transparent;
   border-image: var(--pixel-select-field) 10 0 10 10 fill / 10px 0 10px 10px;
 }
@@ -307,15 +307,15 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   inset: 0 0 0 auto;
   display: grid;
   place-items: center;
-  width: 4rem;
+  width: 3.8rem;
   height: 100%;
   border: 1px solid transparent;
   border-image: var(--pixel-select-button) 6 6 8 6 fill / 6px 6px 8px 6px;
 }
 .pixel-select-arrow::after {
   content: '';
-  width: 27px;
-  height: 24px;
+  width: 22px;
+  height: 20px;
   background: var(--pixel-select-arrow) center / contain no-repeat;
 }
 .pixel-select-menu {
@@ -732,8 +732,32 @@ app-root:has(app-admin) .app-footer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+// Compact content without changing the server menu or workspace tabs.
 .portal-content {
   min-width: 0;
+  --content-panel-padding: 1.6rem;
+}
+.portal-content .panel {
+  padding: var(--content-panel-padding);
+}
+.portal-content > .panel {
+  margin-bottom: 1.2rem;
+}
+.portal-content p:not(.eyebrow) {
+  margin-block: 0.5rem 1rem;
+}
+.portal-content .section-heading {
+  gap: 0.8rem;
+}
+.portal-content .form-grid label input,
+.portal-content .form-grid label textarea,
+.portal-content .select-control {
+  margin-top: 0.45rem;
+  margin-bottom: 0.8rem;
+}
+.portal-content .toolbar label input,
+.portal-content .toolbar .select-control {
+  margin-bottom: 0;
 }
 .portal-content.is-loading {
   opacity: 0.5;
@@ -842,9 +866,9 @@ app-root:has(app-admin) .app-footer {
 .toolbar {
   display: flex;
   align-items: end;
-  gap: 1rem;
+  gap: 0.8rem;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.2rem;
 }
 .toolbar label {
   flex: 1;
@@ -864,7 +888,7 @@ app-root:has(app-admin) .app-footer {
   margin-bottom: 0;
 }
 .settings-actions label {
-  flex: 0 1 28rem;
+  flex: 0 1 32rem;
   min-width: min(100%, 15rem);
 }
 .settings-actions > button {
@@ -880,7 +904,7 @@ app-root:has(app-admin) .app-footer {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
-  gap: 1.5rem;
+  gap: 1.2rem;
   align-items: stretch;
 }
 .rule-card {
@@ -897,7 +921,7 @@ app-root:has(app-admin) .app-footer {
   align-items: center;
   gap: 0.8rem;
   margin-top: auto;
-  padding-top: 1.2rem;
+  padding-top: 1rem;
 }
 .rule-card-footer .actions {
   flex-wrap: nowrap;
@@ -914,7 +938,7 @@ app-root:has(app-admin) .app-footer {
 }
 .rule-card.editing {
   z-index: 5;
-  border-image-source: var(--pixel-card-open);
+  border-image-source: var(--pixel-card-open-highlight);
 }
 .inline-rule-editor {
   position: absolute;
@@ -923,7 +947,7 @@ app-root:has(app-admin) .app-footer {
   right: -1px;
   border: 1px solid transparent;
   border-top: 0;
-  @include pixel-surface(var(--pixel-card-lower));
+  @include pixel-surface(var(--pixel-card-lower-highlight));
   border-image-slice: 6 fill;
   border-image-width: 6px;
 }
@@ -954,6 +978,13 @@ app-root:has(app-admin) .app-footer {
   .combined-short {
     display: inline;
   }
+}
+.rule-editor .editor-heading {
+  align-items: center;
+}
+.editor-heading h2 {
+  margin: 0;
+  line-height: 1.25;
 }
 .editor-heading .actions {
   margin: 0;
@@ -1042,7 +1073,7 @@ app-root:has(app-admin) .app-footer {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem 1.5rem;
+  gap: 0.6rem 1.2rem;
 }
 .form-grid .wide {
   grid-column: 1/-1;
@@ -1285,6 +1316,9 @@ button:disabled:hover,
     width: auto;
     margin: 0;
     max-width: 100%;
+  }
+  .portal-content {
+    --content-panel-padding: 1.2rem;
   }
   .rule-list,
   .form-grid {

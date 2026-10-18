@@ -117,9 +117,15 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     if (!this.options[index]?.disabled) this.active = index;
   }
   private reveal() {
-    this.menu.nativeElement.children[this.active]?.scrollIntoView({
-      block: 'nearest',
-    });
+    const menu = this.menu.nativeElement;
+    const option = menu.children[this.active] as HTMLElement | undefined;
+    if (!option) return;
+    // Scroll only the popup; scrolling the page can reposition it mid-selection.
+    const top = menu.getBoundingClientRect().top + menu.clientTop;
+    const bottom = top + menu.clientHeight;
+    const rect = option.getBoundingClientRect();
+    if (rect.top < top) menu.scrollTop -= top - rect.top;
+    else if (rect.bottom > bottom) menu.scrollTop += rect.bottom - bottom;
   }
   private move(direction: number, edge = false) {
     const enabled = this.options
@@ -217,6 +223,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   private position() {
     const rect = this.trigger.nativeElement.getBoundingClientRect();
     const menu = this.menu.nativeElement;
+    const scrollTop = menu.scrollTop;
     const margin = 8;
     const gap = 0;
     menu.style.width = `${Math.min(rect.width, innerWidth - margin * 2)}px`;
@@ -229,5 +236,6 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     menu.style.maxHeight = `${Math.min(320, available)}px`;
     menu.style.left = `${Math.max(margin, Math.min(rect.left, innerWidth - rect.width - margin))}px`;
     menu.style.top = `${up ? rect.top - Math.min(height, available) - gap : rect.bottom + gap}px`;
+    menu.scrollTop = scrollTop;
   }
 }
