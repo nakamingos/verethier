@@ -499,8 +499,7 @@ form > label {
       .tabs button,
       .pixel-select-trigger,
       .member-matches button,
-      .danger-text,
-      .combined-badge
+      .danger-text
     )
   ) {
   color: var(--ase-server-text);
@@ -974,7 +973,6 @@ app-root:has(app-admin) .app-footer {
 .combined-badge {
   font-size: 1.6rem;
   min-height: 3rem;
-  color: var(--ase-selected);
 }
 .combined-short {
   display: none;
