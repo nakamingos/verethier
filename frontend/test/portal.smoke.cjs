@@ -463,6 +463,31 @@ const base = {
       });
       await assetPicker.hover();
       const closedPicker = await assetPicker.boundingBox();
+      const addRuleBox = await page
+        .getByRole('button', { name: '+ Add rule', exact: true })
+        .boundingBox();
+      assert.equal(
+        closedPicker.height,
+        addRuleBox.height,
+        'dropdowns match the default button height',
+      );
+      const arrowBox = await assetPicker
+        .locator('.pixel-select-arrow')
+        .boundingBox();
+      assert.equal(
+        arrowBox.width,
+        addRuleBox.height,
+        'arrow button matches the default button size',
+      );
+      const searchBox = await page
+        .getByPlaceholder('Role or collection…')
+        .boundingBox();
+      assert.equal(
+        searchBox.height,
+        addRuleBox.height,
+        'text fields match control height without reducing the font',
+      );
+
       await page.mouse.down();
       assert.deepEqual(
         await assetPicker.boundingBox(),
@@ -891,6 +916,31 @@ const base = {
         Math.max(...expandedHeights) - Math.min(...expandedHeights) < 1,
         'opening the editor must keep card heights equal',
       );
+      const editorHeading = page.locator('#edit-rule-1 .editor-heading');
+      const headingTitle = await editorHeading.locator('h2').boundingBox();
+      const reviewButton = await editorHeading
+        .getByRole('button', { name: 'Review changes', exact: true })
+        .boundingBox();
+      if (width > 320)
+        assert.ok(
+          Math.abs(
+            headingTitle.y +
+              headingTitle.height / 2 -
+              reviewButton.y -
+              reviewButton.height / 2,
+          ) < 1,
+          'Review changes is centered with the editor title',
+        );
+      for (const selector of ['#rule-1', '#rule-1 .inline-rule-editor']) {
+        assert.ok(
+          await page
+            .locator(selector)
+            .evaluate((el) =>
+              getComputedStyle(el).borderImageSource.includes('%234069c2'),
+            ),
+          'both parts of the expanded card use the blue indicator band',
+        );
+      }
       await page.screenshot({
         path: `${artifacts}/inline-editor-${width}.png`,
         fullPage: true,
@@ -972,7 +1022,13 @@ const base = {
         'New Comrade',
         'keyboard skips unassignable roles',
       );
+      const pageScrollBeforeOption = await page.evaluate(() => scrollY);
       await rolePicker.press('End');
+      assert.equal(
+        await page.evaluate(() => scrollY),
+        pageScrollBeforeOption,
+        'navigating popup options does not scroll the page',
+      );
       const lastRoleId = await rolePicker.getAttribute('aria-activedescendant');
       const longMenu = await page.getByRole('listbox').boundingBox();
       const lastRole = await page.locator('#' + lastRoleId).boundingBox();
@@ -983,7 +1039,8 @@ const base = {
       assert.ok(
         lastRole.y >= longMenu.y &&
           lastRole.y + lastRole.height <= longMenu.y + longMenu.height,
-        'keyboard keeps the focused option visible in a long menu',
+        'keyboard keeps the focused option visible in a long menu: ' +
+          JSON.stringify({ longMenu, lastRole }),
       );
       await rolePicker.press('Home');
       await rolePicker.press('Escape');
