@@ -562,7 +562,12 @@ $pixel-select-arrow: (
   $text: #c0c0c0,
   $inset: #101114,
   $focus: #4069c2,
-  $focus-corner: #2a4185
+  $focus-corner: #2a4185,
+  $button-face: $face,
+  $button-band: $band,
+  $button-shade: $shade,
+  $menu-corner: #0006,
+  $menu-shade: $shade
 ) {
   --pixel-entry: #{pixel-grid(
       $pixel-entry,
@@ -601,25 +606,25 @@ $pixel-select-arrow: (
         'E': #000,
         'F': $menu,
         'H': $focus,
-        'S': $shade,
+        'S': $menu-shade,
         'K': $focus-corner,
-        'T': #0006,
+        'T': $menu-corner,
       )
     )};
   --pixel-select-button: #{pixel-grid(
       $pixel-select-button,
       (
         'E': #000,
-        'F': $face,
-        'H': $band,
-        'S': $shade,
+        'F': $button-face,
+        'H': $button-band,
+        'S': $button-shade,
       )
     )};
   --pixel-select-arrow: #{pixel-grid(
       $pixel-select-arrow,
       (
         'H': $text,
-        'S': $face,
+        'S': $button-face,
       )
     )};
   --ase-select-text: #{$text};

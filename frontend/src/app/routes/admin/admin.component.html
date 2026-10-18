@@ -922,7 +922,7 @@
                     saved wallets and alternative rules; it preserves roles when
                     a provider is unavailable.
                   </p>
-                  <h3>Saved wallets</h3>
+                  <h3>Saved wallets:</h3>
                   <table
                     class="history-table wallet-table"
                     aria-label="Saved wallets"
@@ -936,7 +936,15 @@
                     <tbody>
                       @for (wallet of member.wallets; track wallet.address) {
                         <tr>
-                          <td>{{ wallet.wallet_type }}</td>
+                          <td>
+                            {{
+                              wallet.wallet_type === 'evm'
+                                ? 'EVM'
+                                : wallet.wallet_type === 'bitcoin'
+                                  ? 'Bitcoin'
+                                  : wallet.wallet_type
+                            }}:
+                          </td>
                           <td class="address">{{ wallet.address }}</td>
                         </tr>
                       } @empty {
@@ -946,7 +954,7 @@
                       }
                     </tbody>
                   </table>
-                  <h3>Previously earned roles</h3>
+                  <h3>Previously earned roles:</h3>
                   <table
                     class="history-table"
                     aria-label="Previously earned roles"
@@ -1121,9 +1129,7 @@
                                   <span
                                     >{{ item.result.verified || 0 }} eligible ·
                                     {{ item.result.revoked || 0 }} ineligible ·
-                                    {{
-                                      item.result.errors || 0
-                                    }}
+                                    {{ item.result.errors || 0 }}
                                     unavailable</span
                                   >
                                   @if (item.result.error) {
