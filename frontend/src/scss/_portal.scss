@@ -1288,6 +1288,8 @@ app-root:has(app-admin) .app-footer {
 .wallet-table th:first-child {
   width: 8rem;
 }
+.wallet-table th:last-child { width:30%; }
+.wallet-table .address a { text-decoration:underline; text-underline-offset:3px; }
 .history-table .table-actions {
   text-align: right;
 }

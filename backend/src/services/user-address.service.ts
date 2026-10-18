@@ -1,6 +1,8 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeWalletAddress, WalletType } from '@/utils/wallet-address.util';
+import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
+import { randomUUID } from 'crypto';
 
 interface UserWallet {
   id: number;
@@ -20,6 +22,7 @@ interface AddAddressResult {
   wasTransferred?: boolean;
   previousUserId?: string;
   previousUserName?: string | null;
+  reconciliationQueued?: boolean;
 }
 
 interface UserAddressSummary {
@@ -75,9 +78,23 @@ export class UserAddressService {
    * If the address is already linked to a different user, ownership is moved
    * to the newly verified user instead of being rejected.
    */
-  async addUserAddress(userId: string, address: string, userName?: string | null, walletType: WalletType = 'evm'): Promise<AddAddressResult> {
+  async addUserAddress(userId: string, address: string, userName?: string | null, walletType: WalletType = 'evm', activity?: WalletVerificationActivity): Promise<AddAddressResult> {
     try {
       const normalizedAddress = normalizeWalletAddress(address, walletType);
+      if (activity) {
+        const { data, error } = await this.supabase.rpc('verifier_link_verified_wallet', {
+          p_user: userId,
+          p_address: normalizedAddress,
+          p_type: walletType,
+          p_name: userName || null,
+          p_request: randomUUID(),
+          p_source: activity.source,
+          p_server: activity.serverId,
+          p_channel: activity.channelId || null,
+        });
+        if (error || !data?.success) return { success: false, error: 'Could not save wallet verification.' };
+        return data;
+      }
       // Log user address operations only in development
       if (process.env.NODE_ENV === 'development') {
         this.logger.debug(`Adding address ${normalizedAddress} for user: ${userId}${userName ? ` (${userName})` : ''}`);

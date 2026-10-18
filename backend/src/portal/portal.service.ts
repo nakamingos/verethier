@@ -710,6 +710,10 @@ export class PortalService {
       .select('address,wallet_type,last_verified_at')
       .eq('user_id', id);
     this.dbError(error);
+    const removedWallets = await this.removedWallets(
+      id,
+      new Set((wallets || []).map((wallet) => wallet.address)),
+    );
     const roles = [];
     const serverRules = check ? await this.rules.getRoleMappings(server) : [];
     const context = {
@@ -744,8 +748,34 @@ export class PortalService {
       username: member.user.username,
       avatar: member.displayAvatarURL(),
       wallets: wallets || [],
+      removed_wallets: removedWallets,
       roles,
     };
+  }
+  private async removedWallets(userId: string, current: Set<string>) {
+    const removed = new Map<string, any>();
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await this.db
+        .from('verifier_member_actions')
+        .select('id,address,wallet_type,kind,created_at,last_proven_at')
+        .eq('user_id', userId)
+        .in('kind', ['wallet_remove', 'wallet_transfer_out'])
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + 999);
+      this.dbError(error);
+      for (const row of data || [])
+        if (!current.has(row.address) && !removed.has(row.address))
+          removed.set(row.address, {
+            address: row.address,
+            wallet_type: row.wallet_type,
+            last_verified_at: row.last_proven_at,
+            removed_at: row.created_at,
+            transferred: row.kind === 'wallet_transfer_out',
+          });
+      if (!data || data.length < 1000) break;
+    }
+    return [...removed.values()];
   }
   async fix(
     session: PortalSession,

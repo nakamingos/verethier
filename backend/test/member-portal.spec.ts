@@ -367,6 +367,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     });
     expect(result.counts).toEqual({ wallets: 1, communities: 1, roles: 1 });
     expect(result.communities[0].channels.map((c) => c.id)).toEqual([channel]);
+    expect(result.communities[0].channels[0].rules[0]).toMatchObject({roleId:'holder',earned:true,previouslyEarned:true});
     expect(JSON.stringify(result)).not.toContain('staff-only');
     expect(JSON.stringify(result)).not.toContain('private-role');
     expect(walletQuery.eq).toHaveBeenCalledWith('user_id', user);

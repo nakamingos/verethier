@@ -38,7 +38,18 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         signatures = 0,
         flow,
         wallets = [],
-        actions = [],
+        actions = [
+          {
+            id: 'discord-event',
+            kind: 'wallet_verify',
+            address: account.address,
+            source: 'discord',
+            community: 'NoMoreLabs',
+            channel: 'verify',
+            created_at: '2026-10-18T12:00:00Z',
+            jobs: [],
+          },
+        ],
         pending = null,
         failRemoval = false;
       const communities = [
@@ -55,8 +66,58 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
                 {
                   id: '1',
                   role: 'Holder',
+                  roleId: 'role',
+                  earned: true,
+                  previouslyEarned: true,
                   asset: 'ethscription',
                   collection: 'nakamingos',
+                  minimum: 1,
+                },
+                {
+                  id: '2',
+                  roleId: 'collector',
+                  role: 'Collector role',
+                  earned: false,
+                  previouslyEarned: false,
+                  asset: 'ethscription',
+                  collection: 'nakamingos',
+                  minimum: 2,
+                },
+                {
+                  id: '3',
+                  roleId: 'collector',
+                  role: 'Collector role',
+                  earned: false,
+                  previouslyEarned: false,
+                  asset: 'nft',
+                  network: 1,
+                  collection: 'Combined collection',
+                  minimum: 2,
+                },
+                {
+                  id: '4',
+                  roleId: 'alumni',
+                  role: 'Alumni',
+                  earned: false,
+                  previouslyEarned: true,
+                  asset: 'ethscription',
+                  collection: 'Old collection',
+                  minimum: 1,
+                },
+              ],
+            },
+            {
+              id: '444444444444444444',
+              name: 'other-channel',
+              rules: [
+                {
+                  id: '5',
+                  roleId: 'side',
+                  role: 'Side role',
+                  earned: false,
+                  previouslyEarned: false,
+                  asset: 'ordinal',
+                  collection: 'Other collection',
                   minimum: 1,
                 },
               ],
@@ -316,11 +377,68 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       await page
         .getByRole('button', { name: 'View communities', exact: true })
         .click();
-      await page.getByText('Holder · nakamingos', { exact: false }).waitFor();
+      await page
+        .locator('.community-role')
+        .filter({ hasText: 'Collector role' })
+        .waitFor();
+      assert.equal(
+        await page.locator('.community-role').count(),
+        2,
+        'Available roles are grouped and exclude earned roles',
+      );
+      assert.equal(
+        await page
+          .locator('.community-role')
+          .filter({ hasText: 'Collector role' })
+          .locator('li')
+          .count(),
+        2,
+        'Combined requirements remain grouped under their role',
+      );
+      const reads = requests.length;
+      async function choose(label, option) {
+        await page
+          .getByRole('combobox', { name: label, exact: true })
+          .locator('.pixel-select-arrow')
+          .click();
+        await page.getByRole('option', { name: option, exact: true }).click();
+      }
+      await choose('Show roles', 'Earned roles');
+      assert.equal(await page.locator('.community-role').count(), 1);
+      await page
+        .locator('.community-role')
+        .filter({ hasText: 'Holder' })
+        .waitFor();
+      await choose('Verification channel', '#other-channel');
+      await page.getByText('No earned roles in this channel yet.').waitFor();
+      await choose('Show roles', 'Available roles');
+      await page
+        .locator('.community-role')
+        .filter({ hasText: 'Side role' })
+        .waitFor();
+      await choose('Verification channel', '#verify');
+      await page
+        .locator('.community-role')
+        .filter({ hasText: 'Collector role' })
+        .waitFor();
+      assert.equal(
+        requests.length,
+        reads,
+        'Role/channel switches do not start backend ownership scans',
+      );
+      await page.screenshot({
+        path: path.join(artifacts, width + '-communities.png'),
+        fullPage: true,
+      });
       await page.getByRole('searchbox').fill('absent');
       await page.getByText('No communities match your search.').waitFor();
       await page.getByRole('searchbox').fill('');
       await page.getByRole('button', { name: 'Wallets', exact: true }).click();
+      await page
+        .locator('.wallet-activity')
+        .filter({ hasText: 'Verified' })
+        .getByText('Discord · NoMoreLabs · #verify', { exact: true })
+        .waitFor();
       await page
         .getByRole('button', { name: 'Add wallet', exact: true })
         .click();

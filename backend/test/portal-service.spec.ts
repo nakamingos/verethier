@@ -126,6 +126,94 @@ describe('Portal server boundaries', () => {
     expect(db.from).not.toHaveBeenCalled();
     expect(rules.getEarnedRoleAssignments).not.toHaveBeenCalled();
   });
+  it('returns removed wallet history only after current admin/member checks, keeping current wallets separate', async () => {
+    const target = '555555555555555555';
+    guild.members.fetch
+      .mockResolvedValueOnce({ id: user, permissions: { has: () => true } })
+      .mockResolvedValueOnce({
+        id: target,
+        displayName: 'Collector',
+        user: { username: 'collector' },
+        displayAvatarURL: () => null,
+        roles: { cache: new Map() },
+      });
+    const current = {
+      address: '0xcurrent',
+      wallet_type: 'evm',
+      last_verified_at: '2026-10-18T12:00:00Z',
+    };
+    const history = [
+      {
+        address: '0xremoved',
+        wallet_type: 'evm',
+        kind: 'wallet_remove',
+        last_proven_at: '2026-10-17T12:00:00Z',
+        created_at: '2026-10-18T12:00:00Z',
+      },
+      {
+        address: '0xcurrent',
+        wallet_type: 'evm',
+        kind: 'wallet_remove',
+        created_at: '2026-10-17T12:00:00Z',
+      },
+      {
+        address: '0xremoved',
+        wallet_type: 'evm',
+        kind: 'wallet_remove',
+        created_at: '2026-10-16T12:00:00Z',
+      },
+      {
+        address: 'bc1p-moved',
+        wallet_type: 'bitcoin',
+        kind: 'wallet_transfer_out',
+        last_proven_at: null,
+        created_at: '2026-10-15T12:00:00Z',
+      },
+    ];
+    const walletQuery: any = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({ data: [current], error: null }),
+    };
+    const removedQuery: any = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      range: jest.fn().mockResolvedValue({ data: history, error: null }),
+    };
+    db.from.mockImplementation((table) =>
+      table === 'user_wallets' ? walletQuery : removedQuery,
+    );
+    rules.getEarnedRoleAssignments.mockResolvedValue([]);
+    const result = await service.member(session, server, target, false);
+    expect(result.wallets).toEqual([current]);
+    expect(result.removed_wallets).toEqual([
+      {
+        address: '0xremoved',
+        wallet_type: 'evm',
+        last_verified_at: '2026-10-17T12:00:00Z',
+        removed_at: '2026-10-18T12:00:00Z',
+        transferred: false,
+      },
+      {
+        address: 'bc1p-moved',
+        wallet_type: 'bitcoin',
+        last_verified_at: null,
+        removed_at: '2026-10-15T12:00:00Z',
+        transferred: true,
+      },
+    ]);
+    expect(walletQuery.eq).toHaveBeenCalledWith('user_id', target);
+    expect(removedQuery.eq).toHaveBeenCalledWith('user_id', target);
+    expect(removedQuery.in).toHaveBeenCalledWith('kind', [
+      'wallet_remove',
+      'wallet_transfer_out',
+    ]);
+    expect(removedQuery.order.mock.calls).toEqual([
+      ['created_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+  });
   it('rejects channels from another guild', async () => {
     guild.members.fetch.mockResolvedValue({
       id: user,

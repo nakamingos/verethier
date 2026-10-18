@@ -72,11 +72,21 @@ describe('WalletService', () => {
   });
 
   describe('verifySignature', () => {
+    it.each([[true,'portal'],[false,'discord']])('uses trusted nonce context for the activity source (%s)',async(memberPortal,source)=>{
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
+      mockNonceService.consumeNonce.mockResolvedValueOnce({memberPortal,channelId:'channel'});
+      mockUserAddressService.addUserAddress.mockResolvedValueOnce({success:true,wasTransferred:true,reconciliationQueued:true});
+      const result=await service.verifySignature(baseData,'sig');
+      expect(result.activity).toMatchObject({source,serverId:'d',channelId:'channel',walletType:'evm'});
+      expect(mockUserAddressService.addUserAddress).toHaveBeenCalledWith('u','0xabc','test-user','evm',result.activity);
+      expect(mockDynamicRoleService.reverifyUser).not.toHaveBeenCalled();
+    });
     it('consumes the EVM proof before linking and preserves its channel context', async () => {
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockResolvedValue('0xabc');
       mockNonceService.consumeNonce.mockResolvedValueOnce({ channelId: 'chosen-channel' });
-      expect(await service.verifySignature(baseData, 'sig')).toEqual({address:'0xabc',walletOwnershipTransferred:false,nonceContext:{channelId:'chosen-channel',messageId:undefined}});
+      expect(await service.verifySignature(baseData, 'sig')).toMatchObject({address:'0xabc',walletOwnershipTransferred:false,nonceContext:{channelId:'chosen-channel',messageId:undefined}});
       expect(mockNonceService.consumeNonce).toHaveBeenCalledWith('u','d','n');
       expect(mockNonceService.consumeNonce.mock.invocationCallOrder[0]).toBeLessThan(mockUserAddressService.addUserAddress.mock.invocationCallOrder[0]);
       mockNonceService.consumeNonce.mockRejectedValueOnce(new Error('Invalid or expired nonce.'));
@@ -135,7 +145,7 @@ describe('WalletService', () => {
       
       const result = await service.verifySignature(baseData, 'sig');
       
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         address: '0xabc',
         walletOwnershipTransferred: false,
       });
@@ -199,7 +209,7 @@ describe('WalletService', () => {
         await expect(service.verifySignature(data, signature)).rejects.toThrow('Invalid signature.');
         expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
       } else {
-        await expect(service.verifySignature(data, signature)).resolves.toEqual({
+        await expect(service.verifySignature(data, signature)).resolves.toMatchObject({
           address: account.address, walletOwnershipTransferred: false,
         });
       }
@@ -223,7 +233,7 @@ describe('WalletService', () => {
 
       const result = await service.verifySignature(minimalData, 'sig');
       
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         address: '0x123',
         walletOwnershipTransferred: false,
       });
@@ -248,7 +258,7 @@ describe('WalletService', () => {
 
       const result = await service.verifySignature(completeData, 'valid_sig');
       
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         address: '0x456',
         walletOwnershipTransferred: false,
       });
@@ -276,7 +286,7 @@ describe('WalletService', () => {
         previousUserId: 'previous-user',
       });
 
-      await expect(service.verifySignature(baseData, 'sig')).resolves.toEqual({
+      await expect(service.verifySignature(baseData, 'sig')).resolves.toMatchObject({
         address: '0xabc',
         walletOwnershipTransferred: true,
       });

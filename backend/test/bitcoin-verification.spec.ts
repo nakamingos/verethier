@@ -161,7 +161,8 @@ describe('Bitcoin wallet proof', () => {
     const wallet = new WalletService(nonces, addresses as any, { getUser: jest.fn().mockResolvedValue({ username: 'User' }) } as any, roles as any, { assertAllowed: jest.fn().mockResolvedValue(undefined) } as any, signatures);
     const { data, signature } = await proof();
     const result = await wallet.verifySignature(data, signature);
-    expect(addresses.addUserAddress).toHaveBeenCalledWith('user', vector.address, 'User', 'bitcoin');
+    expect(addresses.addUserAddress).toHaveBeenCalledWith('user', vector.address, 'User', 'bitcoin', result.activity);
+    expect(result.activity).toMatchObject({source:'discord',serverId:'guild',channelId:'channel',walletType:'bitcoin'});
     expect(result.walletOwnershipTransferred).toBe(true);
     expect(result.nonceContext).toEqual({ messageId: 'message', channelId: 'channel' });
     expect(roles.reverifyUser).toHaveBeenCalledWith('previous');
