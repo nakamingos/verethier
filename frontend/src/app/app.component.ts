@@ -1,6 +1,6 @@
-import { Component, EventEmitter, OnDestroy } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { PortalSessionService } from './services/portal-session.service';
 
 @Component({
   selector: 'app-root',
@@ -8,12 +8,12 @@ import { Subscription } from 'rxjs';
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })
-export class AppComponent implements OnDestroy {
+export class AppComponent {
   title = 'Bouncer';
   light = false;
-  showSignIn = false;
-  portalAuth: PortalAuthSource | null = null;
-  private signInVisibilitySubscription?: Subscription;
+  showPortalAuth = false;
+  readonly session = inject(PortalSessionService);
+  activeAdmin: PortalAuthSource | null = null;
 
   constructor() {
     try {
@@ -22,20 +22,15 @@ export class AppComponent implements OnDestroy {
     document.documentElement.dataset['theme'] = this.light ? 'light' : 'dark';
   }
 
-  onRouteActivate(component: unknown) {
-    this.signInVisibilitySubscription?.unsubscribe();
-    this.showSignIn = false;
-    this.portalAuth = null;
-    if (isPortalAuthSource(component)) {
-      this.portalAuth = component;
-      this.signInVisibilitySubscription = component.signInVisibility.subscribe(
-        (visible) => (this.showSignIn = visible),
-      );
-    }
+  onRouteActivate(component: unknown, path?: string) {
+    this.activeAdmin = isPortalAuthSource(component) ? component : null;
+    this.showPortalAuth = path === 'admin' || path === 'help';
+    if (path === 'help') void this.session.load().catch(() => {});
   }
 
-  ngOnDestroy() {
-    this.signInVisibilitySubscription?.unsubscribe();
+  async logout() {
+    if (this.activeAdmin) await this.activeAdmin.logout();
+    else await this.session.logout();
   }
 
   toggleTheme() {
@@ -48,7 +43,6 @@ export class AppComponent implements OnDestroy {
 }
 
 interface PortalAuthSource {
-  signInVisibility: EventEmitter<boolean>;
   user: { name: string } | null;
   busy: boolean;
   logout(): Promise<void>;
@@ -61,8 +55,6 @@ function isPortalAuthSource(component: unknown): component is PortalAuthSource {
     'user' in component &&
     'busy' in component &&
     'logout' in component &&
-    typeof component.logout === 'function' &&
-    'signInVisibility' in component &&
-    component.signInVisibility instanceof EventEmitter
+    typeof component.logout === 'function'
   );
 }

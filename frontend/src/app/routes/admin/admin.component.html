@@ -1,15 +1,19 @@
 <section class="portal">
   <div class="portal-heading">
     <div class="portal-title">
-      <h1>Control room</h1>
       @if (user && data) {
         <div class="community-title">
           @if (data.server.icon) {
             <img [src]="data.server.icon" alt="" />
           }
-          <h2>{{ data.server.name }}</h2>
+          <h1>
+            <span class="server-title">{{ data.server.name }}</span> Control
+            Room
+          </h1>
           <span class="badge">{{ data.rules.length }} rules</span>
         </div>
+      } @else {
+        <h1>Control Room</h1>
       }
     </div>
   </div>
@@ -932,7 +936,7 @@
                   }
                   <h3>Previously earned roles</h3>
                   @for (role of member.roles; track role.id) {
-                    <div class="history-row">
+                    <div class="history-row earned-role">
                       <strong>{{ role.name }}</strong
                       ><span>{{
                         role.held ? 'In Discord' : 'Missing in Discord'

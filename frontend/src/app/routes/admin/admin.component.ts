@@ -1,12 +1,7 @@
-import {
-  Component,
-  EventEmitter,
-  OnDestroy,
-  OnInit,
-  Output,
-} from '@angular/core';
+import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { PortalSessionService } from '../../services/portal-session.service';
 import {
   PixelSelectComponent,
   SelectChoice,
@@ -18,10 +13,16 @@ import {
   templateUrl: './admin.component.html',
 })
 export class AdminComponent implements OnInit, OnDestroy {
-  @Output() signInVisibility = new EventEmitter<boolean>();
-  user: any = null;
-  csrf = '';
-  configured = true;
+  private readonly session = inject(PortalSessionService);
+  get user() {
+    return this.session.user;
+  }
+  get csrf() {
+    return this.session.csrf;
+  }
+  get configured() {
+    return this.session.configured;
+  }
   ready = false;
   busy = false;
   error = '';
@@ -146,10 +147,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async ngOnInit() {
     try {
-      const session = await this.api('/session');
-      this.user = session.user;
-      this.csrf = session.csrf;
-      this.configured = session.configured;
+      await this.session.load();
       if (new URLSearchParams(location.search).get('sign_in') === 'failed')
         this.error =
           'Discord sign-in could not be completed. Please try again.';
@@ -176,7 +174,6 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.failure(e);
     } finally {
       this.ready = true;
-      this.signInVisibility.emit(!this.user && this.configured);
     }
   }
   async api(path: string, body?: any, signal?: AbortSignal) {
@@ -199,8 +196,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     }
     if (!result.ok) {
       if (result.status === 401) {
-        this.user = null;
-        this.signInVisibility.emit(this.configured);
+        this.session.clear();
       }
       throw new Error(
         Array.isArray(data.message)
@@ -289,12 +285,10 @@ export class AdminComponent implements OnInit, OnDestroy {
     await this.run(async () => {
       await this.api('/auth/logout', {});
       this.cancelActivity();
-      this.user = null;
+      this.session.clear();
       this.data = null;
       this.servers = [];
       this.newRuleDrafts.clear();
-      this.csrf = '';
-      this.signInVisibility.emit(this.configured);
     });
   }
   get rules() {
