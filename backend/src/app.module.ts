@@ -3,6 +3,8 @@ import { PortalController } from './portal/portal.controller';
 import { PortalAuthService } from './portal/portal-auth.service';
 import { PortalService } from './portal/portal.service';
 import { PortalJobsService } from './portal/portal-jobs.service';
+import { MemberController } from './portal/member.controller';
+import { MemberService } from './portal/member.service';
 import { AuditLogHandler } from './services/discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './services/discord-commands/handlers/wallet-block.handler';
 import { WalletBlockService } from './services/wallet-block.service';
@@ -100,7 +102,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
       limit: CONSTANTS.RATE_LIMIT.LONG.LIMIT,   // 100 requests max
     }]),
   ],
-  controllers: [AppController, PortalController],
+  controllers: [AppController, PortalController, MemberController],
   providers: [
     // Supabase client provider with optimized configuration
     {
@@ -136,6 +138,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Core application services
     AppService,
     PortalAuthService, PortalService, PortalJobsService,
+    MemberService,
     Erc20OwnershipService,
 
     // Discord integration services

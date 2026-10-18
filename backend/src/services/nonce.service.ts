@@ -27,6 +27,7 @@ export interface NonceData {
   messageId?: string;
   channelId?: string;
   expiry?: number;
+  memberPortal?: boolean;
   verificationData?: {
     userTag: string;
     avatar: string;
@@ -96,10 +97,12 @@ export class NonceService {
     guildId: string,
     messageId?: string, 
     channelId?: string,
-    verificationData?: NonceData['verificationData']
+    verificationData?: NonceData['verificationData'],
+    memberPortal = false
   ): Promise<string> {
     const nonce = randomBytes(32).toString('hex');
     const data: NonceData = { userId, guildId, nonce, messageId, channelId,
+      ...(memberPortal ? { memberPortal: true } : {}),
       ...(verificationData ? { verificationData } : {}),
       expiry: Math.floor((Date.now() + NONCE_EXPIRY) / 1000) };
     await this.cache.set(this.getCacheKey(nonce), data, NONCE_EXPIRY);

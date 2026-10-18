@@ -1,5 +1,6 @@
 import { PortalAuthService } from '../src/portal/portal-auth.service';
 import { createHash } from 'crypto';
+import { PortalController } from '../src/portal/portal.controller';
 
 describe('Portal authentication', () => {
   const original = { ...process.env };
@@ -24,6 +25,24 @@ describe('Portal authentication', () => {
     jest.restoreAllMocks();
   });
   const response = () => ({ cookie: jest.fn(), redirect: jest.fn() }) as any;
+  it('returns a failed member sign-in to the member portal using only validated OAuth state', async () => {
+    const state = 's'.repeat(43),
+      res = response();
+    query.maybeSingle.mockResolvedValue({
+      data: { return_to: '/member' },
+      error: null,
+    });
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false } as Response);
+    const controller = new PortalController(auth, {} as any);
+    await controller.callback(
+      { headers: { cookie: '__Host-bouncer_oauth=' + state } } as any,
+      res,
+      'code',
+      state,
+    );
+    expect(res.redirect).toHaveBeenCalledWith('/member?sign_in=failed');
+    expect(res.locals.portalReturnTo).toBe('/member');
+  });
   it('stores only a hash of a single-use login state and sets a secure cookie', async () => {
     const res = response();
     await auth.start(res, 'https://evil.example');

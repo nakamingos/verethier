@@ -67,9 +67,23 @@ For development, proxy `/api` to a local backend through the frontend dev server
 
 Before the schema upgrade, create private roles/schema/data dumps and test restoring them. `backend/test/check-portal-migration.py BACKUP_DIRECTORY` restores the application data in a disposable database, checks that the migration preserves all values, and exercises transaction/replay/version/Undo/Redo/job/permission behavior. Production history predates the repository's migration files, so do not repair or erase that older history just to make `db push` proceed. Apply the tested new migration and record only its version in one guarded transaction.
 
+## Member portal
+
+Open `/member` from the footer or Help. Discord sign-in returns members to their account, with **Overview**, **Wallets**, and **Communities**. Counts and previously earned roles come from saved records; opening the dashboard never starts ownership scans. Communities lists joined servers with Bouncer, rechecks live membership, and shows rules only for channels the member can view. A temporarily unavailable community does not prevent wallet management. Sign in again after joining another server to refresh Discord's server list.
+
+Wallets supports copy/view, adding EVM or Bitcoin mainnet Taproot Ordinals wallets through the existing EVM/Xverse/UniSat connection and signing services, and **Remove wallet from Bouncer**. Linking requires a fresh, ten-minute account-bound proof with a distinct wallet-link purpose. EVM messages also bind the frontend origin and exact address. Linking does not award community roles or bypass server wallet blocks. If a wallet belongs to another account, its fresh proof must be followed by explicit transfer confirmation; previous-account role checks are queued without exposing that account's identity or communities.
+
+Removal previews communities with previously earned roles. The wallet deletion, activity record and per-community reconciliation jobs commit in one transaction. Other wallets remain linked. The existing previously-earned-only engine checks all remaining qualifying paths, preserves roles on provider uncertainty, and retries failed changes. Wallet activity shows durable progress with Refresh and Retry check; repeating a removal request does not enqueue duplicate work. Closing a wallet app is separate from deleting its saved Bouncer link.
+
+Communities uses the configured default verification channel, or asks the member to choose. Verify opens the existing personal verification page and checks only that channel for new roles; earned-role reconciliation retains its existing broader alternative-rule checks. EVM and Bitcoin proofs are consumed before changing a wallet link, so concurrent submissions cannot replay a proof. Existing direct Discord links and approved EVM connections continue working.
+
+One pending account flow is saved on the backend. Continue rechecks identity/context and expiry; an invalid challenge is replaced with a fresh one. A completed verification marks only its matching pending flow complete. Not now hides the banner for the current visit and leaves the flow available after a reload. Wallet signatures are never persisted in the browser or database.
+
+The member migration adds only flow/action bookkeeping and links to the existing reconciliation queue. It does not add an inventory or metadata catalog. Rehearse `20261018010000_add_member_portal.sql` against a private backup with `python3 backend/test/check-member-migration.py BACKUP_DIRECTORY` before applying the guarded upgrade. Run `yarn --cwd frontend test:member-smoke` for desktop/phone signing, transfer, removal/retry, joined-community verification and resume coverage.
+
 ## Following releases
 
-The member portal follows the admin live review. It will list joined communities only, manage saved wallets with fresh ownership proofs, and reconcile earned roles after wallet removal. Public discovery, optional add-ons, additional networks and broader wallet/address support are deferred.
+Public discovery, optional add-ons, additional networks and broader wallet/address support remain deferred.
 
 The guide's multi-trait AND/OR editor and expanded ERC-721 ID selections are separate rule-engine work. This admin milestone uses the existing, tested single-trait criteria and token-ID limits rather than advertising unsupported combinations.
 

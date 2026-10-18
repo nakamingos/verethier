@@ -95,6 +95,8 @@ Done when an admin can explain a missing role, safely repair an earned role, and
 
 ### 5. Member portal and saved-wallet management
 
+Implemented October 18, 2026: `/member`, separate fresh account-link proofs, explicit transfers, atomic removals and durable reconciliation, joined-community channel selection, and backend pending flows. Validation and operational details are in `docs/portals.md`. Public discovery and additional wallet/network families remain deferred.
+
 - Add `/member` with **Overview**, **Wallets** and **Communities**. Populate wallet/community/role counts from existing linked-wallet and assignment records; rendering a dashboard should not run new ownership scans.
 - Keep the existing direct Discord-to-`/verify/:nonce` flow available. Use Discord login for portal/account management while preserving the current verification experience.
 - **Wallets** shows shortened addresses, network/type, copy/view actions, **Add wallet** and **Remove wallet from Bouncer**. New links and transfers require fresh ownership proof and respect server wallet blocks.

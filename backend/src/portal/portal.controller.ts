@@ -96,7 +96,9 @@ export class PortalController {
     try {
       await this.auth.callback(req, res, code, state);
     } catch {
-      res.redirect('/admin?sign_in=failed');
+      res.redirect(
+        `${res.locals?.portalReturnTo === '/member' ? '/member' : '/admin'}?sign_in=failed`,
+      );
     }
   }
   @Post('auth/logout') async logout(

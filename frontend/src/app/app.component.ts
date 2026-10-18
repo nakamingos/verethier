@@ -12,6 +12,7 @@ export class AppComponent {
   title = 'Bouncer';
   light = false;
   showPortalAuth = false;
+  signInDestination = '/admin';
   readonly session = inject(PortalSessionService);
   activeAdmin: PortalAuthSource | null = null;
 
@@ -24,7 +25,8 @@ export class AppComponent {
 
   onRouteActivate(component: unknown, path?: string) {
     this.activeAdmin = isPortalAuthSource(component) ? component : null;
-    this.showPortalAuth = path === 'admin' || path === 'help';
+    this.showPortalAuth = path === 'admin' || path === 'help' || path === 'member';
+    this.signInDestination = path === 'member' ? '/member' : '/admin';
     if (path === 'help') void this.session.load().catch(() => {});
   }
 

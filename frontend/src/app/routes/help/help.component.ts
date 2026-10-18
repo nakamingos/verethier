@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-help',
+  imports: [RouterLink],
   template: `<article class="panel" style="max-width:76rem;margin:auto">
     <p class="eyebrow">Bouncer help</p>
     <h1>Verify your wallet. Get your roles.</h1>
@@ -16,6 +18,11 @@ import { Component } from '@angular/core';
       phrase or private key.
     </p>
     <h2>Wallets</h2>
+    <p>
+      <a routerLink="/member">Open the member portal</a> to manage saved wallets
+      and verify in communities you’ve joined. Removing a wallet from Bouncer is
+      separate from disconnecting your wallet app.
+    </p>
     <p>
       Ethereum: use an Ethereum wallet through the connection picker. Bitcoin
       Ordinals: choose Xverse, UniSat or Phantom and use your Bitcoin mainnet

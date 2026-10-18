@@ -161,6 +161,9 @@ export class PortalAuthService {
       throw new UnauthorizedException(
         'Discord sign-in expired. Please try again.',
       );
+    res.locals = res.locals || {};
+    res.locals.portalReturnTo =
+      attempt.return_to === '/member' ? '/member' : '/admin';
     const token = await this.discord('/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

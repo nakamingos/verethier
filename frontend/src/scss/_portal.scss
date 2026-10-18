@@ -605,14 +605,14 @@ form > label {
   margin: auto;
   padding: 3rem 2rem;
 }
-app-root:has(app-admin) {
+app-root:has(app-admin, app-member) {
   min-height: 100svh;
   background: var(--ase-workspace);
 }
-body:has(app-admin) {
+body:has(app-admin, app-member) {
   background: var(--ase-tab-strip);
 }
-.route-content:has(app-admin) {
+.route-content:has(app-admin, app-member) {
   display: flex;
   flex-direction: column;
   width: 100%;

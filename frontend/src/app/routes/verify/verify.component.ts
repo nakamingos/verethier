@@ -1,7 +1,7 @@
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { Component } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
 import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap, switchMap, shareReplay } from 'rxjs';
@@ -33,6 +33,7 @@ interface State {
     selector: 'app-verify',
     imports: [
         AsyncPipe,
+        RouterLink,
         NgTemplateOutlet
     ],
     providers: [
@@ -42,6 +43,7 @@ interface State {
     styleUrl: './verify.component.scss'
 })
 export class VerifyComponent {
+  readonly fromMember = new URL(window.location.href).searchParams.get('from') === 'member';
 
   routeData$!: Observable<DecodedData | null>;
   private evmAccount?: GetAccountReturnType;
