@@ -66,24 +66,31 @@
 }
 
 @mixin scrollbars() {
-  /* Firefox */
-  scrollbar-width: auto;
-  scrollbar-color: #ff03b4 #00ff73;
-  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ase-scrollbar-thumb) #000;
 
-  /* Chrome, Edge, and Safari */
+  // Native color properties override WebKit pseudo-elements in Chromium.
+  // Use those pseudo-elements where supported so the arrow buttons can be hidden.
+  @supports selector(::-webkit-scrollbar) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
   &::-webkit-scrollbar {
-    width: 1rem;
+    width: 10px;
+    height: 10px;
   }
-
-  &::-webkit-scrollbar-track {
-    background: #00ff73;
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: #000;
   }
-
   &::-webkit-scrollbar-thumb {
-    background-color: #ff03b4;
+    background: var(--ase-scrollbar-thumb);
     border-radius: 0;
-    border: none;
-    border-left: .3rem solid rgba(0, 0, 0, 0);
+    border: 0;
+  }
+  &::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }

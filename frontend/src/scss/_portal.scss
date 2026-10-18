@@ -42,6 +42,7 @@
   @include pixel-input-controls();
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
+  --ase-scrollbar-thumb: #41444a;
   --ase-face: #2c2c30;
   --ase-text: #c0c0c0;
   --ase-dim: #999b9f;
@@ -120,6 +121,7 @@
     $inner-shade: #c6c6c6
   );
   --ase-bg: #7d929e;
+  --ase-scrollbar-thumb: #7c919d;
   --ase-face: #d3cbbe;
   --ase-text: #000;
   --ase-dim: #655561;
@@ -146,6 +148,10 @@
 
 :root[data-theme='light'] .brand-header {
   border-bottom-color: transparent;
+}
+
+* {
+  @include scrollbars();
 }
 
 body {
