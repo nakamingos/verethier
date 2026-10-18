@@ -30,6 +30,7 @@ import {
   PortalMessageDto,
   PortalRuleDto,
   PortalSettingsDto,
+  PortalWalletBlockDto,
 } from './portal.dto';
 
 @Catch()
@@ -260,6 +261,14 @@ export class PortalController {
       id,
       body.request_id,
     );
+  }
+  @Post('servers/:server/members/:id/wallet-block') async walletBlock(
+    @Req() req: Request,
+    @Param('server') server: string,
+    @Param('id') id: string,
+    @Body() body: PortalWalletBlockDto,
+  ) {
+    return this.portal.walletBlock(await this.mutation(req), server, id, body);
   }
   @Post('servers/:server/jobs/:id/retry') async retry(
     @Req() req: Request,
