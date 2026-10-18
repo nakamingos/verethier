@@ -86,8 +86,8 @@
   &::-webkit-scrollbar-thumb {
     background: transparent;
     border-radius: 0;
-    border: 2px solid transparent;
-    border-image: var(--pixel-scrollbar-thumb) 4 fill / 2px;
+    border: 3px solid transparent;
+    border-image: var(--pixel-scrollbar-thumb) 6 fill / 3px;
   }
   &::-webkit-scrollbar-button {
     display: none;

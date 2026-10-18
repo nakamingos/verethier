@@ -51,7 +51,7 @@ const base = {
     args: ['--no-sandbox'],
   });
   try {
-    for (const width of [1280, 393, 320]) {
+    for (const width of [1280, 768, 393, 320]) {
       let holdEdit = false,
         releaseEdit,
         editEntered;
@@ -1266,12 +1266,29 @@ const base = {
       const saveSize = await page
         .getByRole('button', { name: 'Save rule', exact: true })
         .boundingBox();
+      await page
+        .getByRole('button', { name: 'Light theme', exact: true })
+        .click();
+      const selectedServer = page.locator(
+        '.server-list button[aria-current="true"]',
+      );
+      const selectedFrame = await selectedServer.evaluate(
+        (el) => getComputedStyle(el).borderImageSource,
+      );
       holdEdit = true;
       const editStarted = new Promise((resolve) => {
         editEntered = resolve;
       });
       await page.getByRole('button', { name: 'Save rule' }).click();
       await editStarted;
+      assert.equal(await selectedServer.isDisabled(), true);
+      assert.equal(
+        await selectedServer.evaluate(
+          (el) => getComputedStyle(el).borderImageSource,
+        ),
+        selectedFrame,
+        'selected server retains its white fill during requests',
+      );
       assert.equal(
         await page
           .locator('.brand-header')
@@ -1293,6 +1310,9 @@ const base = {
         checkingSize.height,
         'save button height must stay stable while checking',
       );
+      await page
+        .getByRole('button', { name: 'Dark theme', exact: true })
+        .click();
       releaseEdit();
       const titleBeforeNotice = await page
         .locator('.community-title')
