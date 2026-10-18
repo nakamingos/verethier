@@ -41,6 +41,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   review = false;
   activity: any = { items: [], page: 1, pages: 1, total: 0, kind: 'roles' };
   activityKind = 'roles';
+  activityLoading = false;
+  activityReady = false;
+  private activityRequest?: AbortController;
+  private activityEpoch = 0;
   memberId = '';
   memberQuery = '';
   memberMatches: any[] = [];
@@ -208,6 +212,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   async select(id: string) {
     await this.run(async () => {
+      this.cancelActivity();
       this.resetMemberSearch();
       this.suggestionEpoch++;
       this.loadingServer = id;
@@ -221,6 +226,15 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.groupFilter = '';
         this.editor = null;
         this.member = null;
+        this.activity = {
+          items: [],
+          page: 1,
+          pages: 1,
+          total: 0,
+          kind: 'roles',
+        };
+        this.activityKind = 'roles';
+        this.activityReady = false;
         this.undo = null;
         this.tab = 'rules';
         requestAnimationFrame(() => {
@@ -245,6 +259,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   async logout() {
     await this.run(async () => {
       await this.api('/auth/logout', {});
+      this.cancelActivity();
       this.user = null;
       this.data = null;
       this.servers = [];
@@ -544,29 +559,64 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   messageUrl = '';
   async switchTab(tab: string) {
+    if (this.busy) return;
     this.tab = tab;
     this.error = '';
     this.notice = '';
-    if (tab === 'audit') await this.run(() => this.loadActivity(1));
+    if (tab === 'audit') await this.readActivity(1);
+    else this.cancelActivity();
   }
   async pageActivity(direction: number) {
-    await this.run(() => this.loadActivity(this.activity.page + direction));
+    if (this.activityLoading || !this.activityReady) return;
+    await this.readActivity(this.activity.page + direction);
+  }
+  private async readActivity(page: number) {
+    if (this.busy || !this.selected) return;
+    this.error = '';
+    this.notice = '';
+    try {
+      await this.loadActivity(page);
+    } catch (error) {
+      this.failure(error);
+    }
+  }
+  private cancelActivity() {
+    this.activityEpoch++;
+    this.activityRequest?.abort();
+    this.activityRequest = undefined;
+    this.activityLoading = false;
   }
   async loadActivity(page = this.activity.page) {
+    this.cancelActivity();
+    const epoch = this.activityEpoch;
+    const request = (this.activityRequest = new AbortController());
+    const server = this.selected;
     const kind = this.activityKind;
+    this.activityLoading = true;
     try {
       const data = await this.api(
-        `/servers/${this.selected}/activity?kind=${kind}&page=${page}`,
+        `/servers/${server}/activity?kind=${kind}&page=${page}`,
+        undefined,
+        request.signal,
       );
+      if (epoch !== this.activityEpoch || server !== this.selected) return;
       this.activity = { ...data, kind };
+      this.activityReady = true;
       requestAnimationFrame(() => {
+        if (epoch !== this.activityEpoch || this.tab !== 'audit') return;
         const entries =
           document.querySelector<HTMLElement>('.activity-results');
         if (entries) entries.scrollTop = 0;
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (epoch !== this.activityEpoch || error?.name === 'AbortError') return;
       this.activityKind = this.activity.kind;
       throw error;
+    } finally {
+      if (epoch === this.activityEpoch) {
+        this.activityLoading = false;
+        this.activityRequest = undefined;
+      }
     }
   }
   private resetMemberSearch() {
@@ -582,6 +632,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.memberSearchError = '';
   }
   ngOnDestroy() {
+    this.cancelActivity();
     this.resetMemberSearch();
   }
   queueMemberSearch() {

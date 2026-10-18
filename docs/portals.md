@@ -8,6 +8,8 @@ Discord sign-in appears in the header when configured and signed out. The active
 
 The control room provides rules with asset filters and search, create/edit/delete forms, review before saving, Undo/Redo, bot settings, verification-message controls, member lookup and paginated activity. Rules keep today's asset capabilities and count-combining behavior. The existing `/setup` commands remain available. `/help` and `/join` are member-facing shortcuts; Discord may need a reload after commands refresh.
 
+Audit Log opens immediately without dimming the tabs or showing a loading indicator. Refreshes keep the current entries until fresh data arrives, and navigating away cancels the pending read.
+
 Edit opens beneath the selected rule, extending its card. Combined badges and the Rule group filter show the collectible rules sharing a channel, role and minimum. A group view includes all contributors across asset types and provides links to each rule. ERC-20 balances do not combine with collectible counts.
 
 Cards keep equal heights, a reserved group-badge slot and actions aligned at the bottom. Changing button labels reserve their largest size. Holding a button or tab keeps its position, size and bevel unchanged; hover, focus and selected states remain distinct. Notifications use a fixed, dismissible area with Undo/Redo. Server loading retains the current view, makes it inert, and replaces the server ID and data together only after a successful response; initial loads show static placeholders. Audit results scroll within a stable area so pagination stays in place. The primary font is preloaded to reduce text reflow.
