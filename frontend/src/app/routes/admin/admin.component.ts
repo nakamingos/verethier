@@ -13,6 +13,14 @@ import {
   templateUrl: './admin.component.html',
 })
 export class AdminComponent implements OnInit, OnDestroy {
+  walletExplorer(address: string) {
+    return address.startsWith('0x')
+      ? 'https://etherscan.io/address/' + address
+      : 'https://mempool.space/address/' + address;
+  }
+  walletAddress(address: string) {
+    return address.slice(0, 8) + '…' + address.slice(-6);
+  }
   private readonly session = inject(PortalSessionService);
   get user() {
     return this.session.user;

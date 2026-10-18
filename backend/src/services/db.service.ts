@@ -6,6 +6,7 @@ import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
 import { OrdinalTraitSnapshot, OrdinalAttributeRow } from '@/models/ordinal-collection.interface';
 import { RULE_EDIT_GUARD_FIELDS, RULE_EDIT_MUTABLE_FIELDS } from '@/utils/rule-edit.util';
+import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
 
 /**
  * Database Service
@@ -39,6 +40,21 @@ export class DbService {
   constructor(
     @Inject('SUPABASE_CLIENT') private readonly supabase: SupabaseClient
   ) {}
+
+  async recordWalletVerification(userId: string, address: string, activity: WalletVerificationActivity): Promise<void> {
+    const { error } = await this.supabase.from('verifier_member_actions').upsert({
+      id: activity.id,
+      user_id: userId,
+      kind: 'wallet_verify',
+      address: address.toLowerCase(),
+      wallet_type: activity.walletType,
+      source: activity.source,
+      server_id: activity.serverId,
+      channel_id: activity.channelId || null,
+      last_proven_at: activity.provenAt,
+    }, { onConflict: 'id', ignoreDuplicates: true });
+    if (error) throw new Error('Could not save wallet activity.');
+  }
 
   async getOrdinalCollection(slug: string): Promise<unknown> {
     const { data, error } = await this.supabase.rpc('get_ordinal_collection', { p_slug: slug });

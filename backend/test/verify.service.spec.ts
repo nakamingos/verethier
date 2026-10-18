@@ -39,6 +39,7 @@ const mockDataService = {
   checkAssetOwnershipWithCriteria: jest.fn().mockResolvedValue(1)
 };
 const mockDbService = {
+  recordWalletVerification:jest.fn().mockResolvedValue(undefined),
   getServerRole: jest.fn(),
   logUserRole: jest.fn(),
   getRoleMappings: jest.fn(),
@@ -140,6 +141,20 @@ describe('VerifyService', () => {
     expect(mockNonceService.getNonceData).toHaveBeenCalledWith('u', 'n');
     expect(mockNonceService.invalidateNonce).toHaveBeenCalledWith('n');
     expect(mockDiscordVerificationService.addUserRole).toHaveBeenCalledTimes(2);
+  });
+  it('records successful manual verification but not failed eligibility or bad signatures',async()=>{
+    const activity={id:'event',source:'discord',serverId:'g',channelId:'ch',walletType:'evm',provenAt:'2026-01-01T00:00:00Z'};
+    mockWalletService.verifySignature.mockResolvedValue({address:'0xabc',walletOwnershipTransferred:false,activity});
+    const complete=jest.spyOn(service as any,'completeVerification').mockResolvedValue({assignedRoles:['holder']});
+    await service.verifySignatureFlow({userId:'u'} as any,'sig');
+    expect(mockDbService.recordWalletVerification).toHaveBeenCalledWith('u','0xabc',activity);
+    mockDbService.recordWalletVerification.mockClear();complete.mockRejectedValueOnce(new Error('No matching holdings'));
+    await expect(service.verifySignatureFlow({userId:'u'} as any,'sig')).rejects.toThrow('No matching holdings');
+    expect(mockDbService.recordWalletVerification).not.toHaveBeenCalled();
+    mockWalletService.verifySignature.mockRejectedValueOnce(new Error('bad signature'));
+    await expect(service.verifySignatureFlow({userId:'u'} as any,'sig')).rejects.toThrow('bad signature');
+    expect(mockDbService.recordWalletVerification).not.toHaveBeenCalled();
+    complete.mockRestore();
   });
 
   it('throws error if no match', async () => {

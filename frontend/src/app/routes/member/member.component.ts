@@ -9,6 +9,9 @@ import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
 import { PixelSelectComponent } from '@/components/pixel-select/pixel-select.component';
 
 interface Requirement {
+  roleId: string;
+  earned: boolean;
+  previouslyEarned: boolean;
   tokenStandard?: string | null;
   tokenSymbol?: string | null;
   id: string;
@@ -59,6 +62,10 @@ interface Account {
     kind: string;
     address: string;
     created_at: string;
+    transferred?: boolean;
+    source: 'portal' | 'discord';
+    community: string | null;
+    channel: string | null;
     jobs: Array<{ id: string; status: string; community: string; result: any }>;
   }>;
 }
@@ -87,6 +94,11 @@ export class MemberComponent {
   notice = '';
   search = '';
   channels: Record<string, string> = {};
+  roleViews: Record<string, 'earned' | 'available'> = {};
+  readonly roleViewOptions = [
+    { value: 'available', label: 'Available roles' },
+    { value: 'earned', label: 'Earned roles' },
+  ];
   hiddenPending = '';
   addOpen = false;
   walletKind = 'evm';
@@ -172,9 +184,11 @@ export class MemberComponent {
     const data = await this.api<Account>();
     if (!this.live) return;
     this.data = data;
-    for (const c of data.communities)
+    for (const c of data.communities) {
+      this.roleViews[c.id] ||= 'available';
       if (!c.channels.some((ch) => ch.id === this.channels[c.id]))
         this.channels[c.id] = c.defaultChannel;
+    }
   }
   async logout() {
     if (this.busy || this.connecting) return;
@@ -407,11 +421,46 @@ export class MemberComponent {
       ...community.channels.map((c) => ({ value: c.id, label: '#' + c.name })),
     ];
   }
-  requirements(community: Community) {
-    return (
-      community.channels.find((c) => c.id === this.channels[community.id])
-        ?.rules || community.channels.flatMap((c) => c.rules)
+  communityRoles(community: Community) {
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        channel: string;
+        earned: boolean;
+        previouslyEarned: boolean;
+        rules: Requirement[];
+      }
+    >();
+    for (const channel of community.channels.filter(
+      (c) =>
+        !this.channels[community.id] || c.id === this.channels[community.id],
+    )) {
+      for (const rule of channel.rules) {
+        const key = channel.id + ':' + rule.roleId;
+        if (!groups.has(key))
+          groups.set(key, {
+            id: key,
+            name: rule.role,
+            channel: channel.name,
+            earned: rule.earned,
+            previouslyEarned: rule.previouslyEarned,
+            rules: [],
+          });
+        groups.get(key)!.rules.push(rule);
+      }
+    }
+    return [...groups.values()].filter((role) =>
+      this.roleViews[community.id] === 'earned' ? role.earned : !role.earned,
     );
+  }
+  activityLabel(action: Account['actions'][number]) {
+    if (action.kind === 'wallet_verify') return 'Verified';
+    if (action.kind === 'wallet_remove') return 'Removed';
+    if (action.kind === 'wallet_transfer_out')
+      return 'Transferred from this account';
+    return action.transferred ? 'Transferred to this account' : 'Linked';
   }
   assetLabel(asset: string) {
     return (
@@ -445,7 +494,7 @@ export class MemberComponent {
     return rule.asset === 'nft' || rule.asset === 'erc20'
       ? rule.network === 4663
         ? 'Robinhood'
-        : rule.network === 1
+        : !rule.network || rule.network === 1
           ? 'Ethereum'
           : `Chain ${rule.network}`
       : '';

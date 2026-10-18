@@ -101,6 +101,16 @@ export class MemberService {
           .map((rule) => ({
             id: String(rule.id),
             role: rule.role_name || rule.role_id,
+            roleId: rule.role_id,
+            earned: assignments.some(
+              (row) =>
+                row.server_id === server &&
+                row.role_id === rule.role_id &&
+                row.status === 'active',
+            ),
+            previouslyEarned: assignments.some(
+              (row) => row.server_id === server && row.role_id === rule.role_id,
+            ),
             asset: rule.asset_type || 'ethscription',
             network: rule.chain_id,
             collection:
@@ -158,9 +168,12 @@ export class MemberService {
       this.rules.getEarnedRoleAssignments({ userId: session.user.id }),
       this.db
         .from('verifier_member_actions')
-        .select('id,kind,address,created_at')
+        .select(
+          'id,kind,address,wallet_type,transferred,source,server_id,channel_id,created_at',
+        )
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(20),
     ]);
     const communities = [];
@@ -212,7 +225,22 @@ export class MemberService {
         ),
       },
       actions: history.map((action) => ({
-        ...action,
+        id: action.id,
+        kind: action.kind,
+        address: action.address,
+        wallet_type: action.wallet_type,
+        transferred: action.transferred,
+        source: action.source,
+        created_at: action.created_at,
+        community: action.server_id
+          ? communities.find((c) => c.id === action.server_id)?.name ||
+            'Previous community'
+          : null,
+        channel: action.channel_id
+          ? communities
+              .find((c) => c.id === action.server_id)
+              ?.channels.find((c) => c.id === action.channel_id)?.name || null
+          : null,
         jobs: jobs
           .filter((job) => job.member_action_id === action.id)
           .map((job) => ({

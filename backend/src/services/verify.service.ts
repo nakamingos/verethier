@@ -56,7 +56,12 @@ export class VerifyService {
     const walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
     const finish = this.ordinalRequests?.beginVerification();
     try {
-      return await this.completeVerification(payload, walletVerification);
+      const result = await this.completeVerification(payload, walletVerification);
+      if (walletVerification.activity) {
+        try { await this.dbSvc.recordWalletVerification(payload.userId, walletVerification.address, walletVerification.activity); }
+        catch { Logger.warn('Successful verification activity could not be saved.'); }
+      }
+      return result;
     } finally {
       finish?.();
       Logger.log(`Verification total: user=${payload.userId}; ${Date.now() - startedAt}ms`);

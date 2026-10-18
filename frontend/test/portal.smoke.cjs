@@ -352,7 +352,29 @@ const base = {
             data = {
               id: '555555555555555555',
               name: 'Collector',
-              wallets: [{ wallet_type: 'bitcoin', address: 'bc1p-example' }],
+              wallets: [
+                {
+                  wallet_type: 'bitcoin',
+                  address: 'bc1p-example',
+                  last_verified_at: '2026-10-18T12:00:00Z',
+                },
+              ],
+              removed_wallets: [
+                {
+                  wallet_type: 'evm',
+                  address: '0x1111111111111111111111111111111111111111',
+                  last_verified_at: '2026-10-17T12:00:00Z',
+                  removed_at: '2026-10-18T12:00:00Z',
+                  transferred: false,
+                },
+                {
+                  wallet_type: 'evm',
+                  address: '0x2222222222222222222222222222222222222222',
+                  last_verified_at: null,
+                  removed_at: '2026-10-18T12:00:00Z',
+                  transferred: true,
+                },
+              ],
               roles: [
                 {
                   id: role,
@@ -1872,6 +1894,44 @@ const base = {
         path: `${artifacts}/member-${width}.png`,
         fullPage: true,
       });
+      const savedWallets = page.getByRole('table', {
+          name: 'Saved wallets',
+          exact: true,
+        }),
+        removedWallets = page.getByRole('table', {
+          name: 'Removed wallets',
+          exact: true,
+        });
+      assert.equal(
+        await savedWallets
+          .getByRole('columnheader', { name: 'Last proven', exact: true })
+          .count(),
+        1,
+      );
+      assert.equal(
+        await savedWallets.locator('time').first().getAttribute('datetime'),
+        '2026-10-18T12:00:00Z',
+      );
+      assert.equal(
+        await savedWallets.getByRole('link').first().getAttribute('href'),
+        'https://mempool.space/address/bc1p-example',
+      );
+      assert.equal(await removedWallets.getByRole('row').count(), 3);
+      assert.equal(
+        await removedWallets.getByRole('link').first().getAttribute('href'),
+        'https://etherscan.io/address/0x1111111111111111111111111111111111111111',
+      );
+      assert.equal(
+        await removedWallets.getByRole('link').first().getAttribute('target'),
+        '_blank',
+      );
+      assert.equal(
+        await removedWallets
+          .getByRole('cell', { name: 'Unknown', exact: true })
+          .count(),
+        1,
+        'Older unavailable proof dates are not invented',
+      );
       assert.equal(
         await page
           .getByRole('heading', { name: 'Saved wallets:', exact: true })

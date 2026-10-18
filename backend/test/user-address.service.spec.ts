@@ -37,6 +37,15 @@ describe('UserAddressService', () => {
     mockSupabaseClient.order.mockResolvedValueOnce({ data: null, error: new Error('Database unavailable') });
     await expect(service.getUserAddresses('user')).rejects.toThrow('Database unavailable');
   });
+  it('records verification-driven wallet changes atomically with trusted source/channel context',async()=>{
+    mockSupabaseClient.rpc=jest.fn().mockResolvedValue({data:{success:true,wasTransferred:true,reconciliationQueued:true},error:null});
+    const activity={id:'event',source:'discord' as const,serverId:'server',channelId:'channel',walletType:'evm' as const,provenAt:'2026-01-01T00:00:00Z'};
+    expect(await service.addUserAddress('member','0xABC','Collector','evm',activity)).toMatchObject({success:true,wasTransferred:true,reconciliationQueued:true});
+    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('verifier_link_verified_wallet',expect.objectContaining({p_user:'member',p_address:'0xabc',p_type:'evm',p_source:'discord',p_server:'server',p_channel:'channel'}));
+    expect(mockSupabaseClient.from).not.toHaveBeenCalled();
+    mockSupabaseClient.rpc.mockResolvedValueOnce({error:{message:'private database error'}});
+    expect(await service.addUserAddress('member','0xABC','Collector','evm',activity)).toEqual({success:false,error:'Could not save wallet verification.'});
+  });
 
   it('transfers an address that is already linked to another user', async () => {
     mockSupabaseClient.order.mockResolvedValueOnce({

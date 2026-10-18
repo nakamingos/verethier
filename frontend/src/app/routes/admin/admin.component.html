@@ -931,6 +931,7 @@
                       <tr>
                         <th scope="col">Type</th>
                         <th scope="col">Address</th>
+                        <th scope="col">Last proven</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -945,15 +946,91 @@
                                   : wallet.wallet_type
                             }}:
                           </td>
-                          <td class="address">{{ wallet.address }}</td>
+                          <td class="address">
+                            <a
+                              [href]="walletExplorer(wallet.address)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              [title]="wallet.address + ' · Open in explorer'"
+                              >{{ walletAddress(wallet.address) }}</a
+                            >
+                          </td>
+                          <td>
+                            @if (wallet.last_verified_at) {
+                              <time [attr.datetime]="wallet.last_verified_at">{{
+                                wallet.last_verified_at | date: 'short'
+                              }}</time>
+                            } @else {
+                              Unknown
+                            }
+                          </td>
                         </tr>
                       } @empty {
                         <tr>
-                          <td colspan="2">No wallets saved.</td>
+                          <td colspan="3">No wallets saved.</td>
                         </tr>
                       }
                     </tbody>
                   </table>
+                  @if (member.removed_wallets?.length) {
+                    <h3>Removed wallets:</h3>
+                    <table
+                      class="history-table wallet-table"
+                      aria-label="Removed wallets"
+                    >
+                      <thead>
+                        <tr>
+                          <th scope="col">Type</th>
+                          <th scope="col">Address</th>
+                          <th scope="col">Last proven</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (
+                          wallet of member.removed_wallets;
+                          track wallet.address
+                        ) {
+                          <tr>
+                            <td>
+                              {{
+                                wallet.wallet_type === 'bitcoin'
+                                  ? 'Bitcoin'
+                                  : 'EVM'
+                              }}:
+                            </td>
+                            <td class="address">
+                              <a
+                                [href]="walletExplorer(wallet.address)"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                [title]="wallet.address + ' · Open in explorer'"
+                                >{{ walletAddress(wallet.address) }}</a
+                              ><time [attr.datetime]="wallet.removed_at"
+                                >{{
+                                  wallet.transferred
+                                    ? 'Transferred'
+                                    : 'Removed'
+                                }}:
+                                {{ wallet.removed_at | date: 'short' }}</time
+                              >
+                            </td>
+                            <td>
+                              @if (wallet.last_verified_at) {
+                                <time
+                                  [attr.datetime]="wallet.last_verified_at"
+                                  >{{
+                                    wallet.last_verified_at | date: 'short'
+                                  }}</time
+                                >
+                              } @else {
+                                Unknown
+                              }
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
                   <h3>Previously earned roles:</h3>
                   <table
                     class="history-table"

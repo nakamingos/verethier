@@ -8,6 +8,8 @@ import { DiscordService } from '@/services/discord.service';
 import { DecodedData } from '@/models/app.interface';
 import { BitcoinSignatureService } from './bitcoin-signature.service';
 import { WalletBlockService } from './wallet-block.service';
+import { randomUUID } from 'crypto';
+import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
 
 /**
  * WalletService
@@ -52,7 +54,7 @@ export class WalletService {
   async verifySignature(
     data: DecodedData,
     signature: string
-  ): Promise<{ address: string; walletOwnershipTransferred: boolean; nonceContext?: { channelId?: string; messageId?: string } }> {
+  ): Promise<{ address: string; walletOwnershipTransferred: boolean; nonceContext?: { channelId?: string; messageId?: string }; activity?: WalletVerificationActivity }> {
     if (data.walletType === 'bitcoin') return this.verifyBitcoinSignature(data, signature);
     if (data.walletType && data.walletType !== 'evm') throw new Error('Invalid wallet type.');
 
@@ -137,6 +139,14 @@ export class WalletService {
     // Reserve the fresh proof before any link/transfer or ownership work, just
     // as the Bitcoin path does. Concurrent tabs cannot submit the same proof.
     const context = await this.nonceSvc.consumeNonce(data.userId, data.discordId, data.nonce);
+    const activity: WalletVerificationActivity = {
+      id: randomUUID(),
+      source: context.memberPortal ? 'portal' : 'discord',
+      serverId: data.discordId,
+      channelId: context.channelId,
+      walletType: 'evm',
+      provenAt: new Date().toISOString(),
+    };
     
     let walletOwnershipTransferred = false;
 
@@ -156,7 +166,7 @@ export class WalletService {
         // Continue without username
       }
 
-      const result = await this.userAddressService.addUserAddress(data.userId, address, userName);
+      const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'evm', activity);
       if (!result.success) {
         // Log warning but don't fail verification - address storage is supplementary
         Logger.warn(`Failed to store address for user ${data.userId}: ${result.error}`);
@@ -164,7 +174,7 @@ export class WalletService {
         walletOwnershipTransferred = result.wasTransferred === true;
         Logger.debug(`Successfully ${result.isNewAddress ? 'added new' : 'updated existing'} address for user ${data.userId}${userName ? ` (${userName})` : ''}`);
 
-        if (walletOwnershipTransferred && result.previousUserId) {
+        if (walletOwnershipTransferred && result.previousUserId && !result.reconciliationQueued) {
           Logger.log(
             `Wallet ${address} moved from Discord user ${result.previousUserId} to ${data.userId}`
           );
@@ -179,6 +189,7 @@ export class WalletService {
     return {
       address,
       walletOwnershipTransferred,
+      activity,
       ...(context.channelId || context.messageId ? {
         nonceContext: { channelId: context.channelId, messageId: context.messageId },
       } : {}),
@@ -214,13 +225,21 @@ export class WalletService {
       const user = await this.discordService.getUser(data.userId);
       userName = user?.globalName || user?.username || null;
     } catch { /* Username is optional display information. */ }
-    const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'bitcoin');
+    const activity: WalletVerificationActivity = {
+      id: randomUUID(),
+      source: context.memberPortal ? 'portal' : 'discord',
+      serverId: data.discordId,
+      channelId: context.channelId,
+      walletType: 'bitcoin',
+      provenAt: new Date().toISOString(),
+    };
+    const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'bitcoin', activity);
     if (!result.success) throw new Error('Could not save the Bitcoin wallet verification. Please try again from Discord.');
-    if (result.wasTransferred && result.previousUserId) {
+    if (result.wasTransferred && result.previousUserId && !result.reconciliationQueued) {
       this.schedulePreviousOwnerReverification(result.previousUserId, data.userId, address);
     }
     return {
-      address, walletOwnershipTransferred: result.wasTransferred === true,
+      address, walletOwnershipTransferred: result.wasTransferred === true, activity,
       nonceContext: { channelId: context.channelId, messageId: context.messageId },
     };
   }

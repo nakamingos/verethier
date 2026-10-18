@@ -311,11 +311,18 @@
                 @for (action of account.actions; track action.id) {
                   <div class="wallet-activity">
                     <p>
-                      {{
-                        action.kind === 'wallet_remove' ? 'Removed' : 'Linked'
-                      }}
+                      {{ activityLabel(action) }}
                       {{ short(action.address) }}
                       <time>{{ action.created_at | date: 'short' }}</time>
+                    </p>
+                    <p class="muted">
+                      {{ action.source === 'discord' ? 'Discord' : 'Portal' }}
+                      @if (action.community) {
+                        · {{ action.community }}
+                      }
+                      @if (action.channel) {
+                        · #{{ action.channel }}
+                      }
                     </p>
                     @for (job of action.jobs; track job.id) {
                       <p class="muted">
@@ -334,8 +341,12 @@
                         }
                       </p>
                     }
-                    @if (!action.jobs.length) {
-                      <p class="muted">No role checks required.</p>
+                    @if (
+                      !action.jobs.length && action.kind === 'wallet_remove'
+                    ) {
+                      <p class="muted">
+                        No previously earned roles needed checking.
+                      </p>
                     }
                   </div>
                 }
@@ -377,8 +388,15 @@
                         label="Verification channel"
                         [options]="channelOptions(community)"
                         [(ngModel)]="channels[community.id]"
-                        [disabled]="busy" /></label
-                    ><button
+                        [disabled]="busy"
+                    /></label>
+                    <label
+                      >Show roles:<app-pixel-select
+                        label="Show roles"
+                        [options]="roleViewOptions"
+                        [(ngModel)]="roleViews[community.id]"
+                    /></label>
+                    <button
                       (click)="verify(community)"
                       [disabled]="busy || !channels[community.id]"
                     >
@@ -390,36 +408,64 @@
                     sharing a role and minimum can combine holdings across
                     wallets and collections. Tokens are checked separately.
                   </p>
-                  <ul class="requirements">
-                    @for (rule of requirements(community); track rule.id) {
-                      <li>
-                        <strong>{{ rule.role }}</strong> ·
-                        {{ rule.collection }} · {{ rule.minimum }}
-                        {{ assetLabel(rule.asset) }}
-                        @if (rule.tokenSymbol) {
-                          · {{ rule.tokenSymbol }}
+                  <p class="muted">
+                    Available roles show requirements you can verify. Earned
+                    status comes from saved verification records.
+                  </p>
+                  @for (role of communityRoles(community); track role.id) {
+                    <section class="community-role">
+                      <h3>
+                        {{ role.name }}
+                        @if (!channels[community.id]) {
+                          <span class="muted"> · #{{ role.channel }}</span>
                         }
-                        @if (network(rule)) {
-                          · {{ network(rule) }}
+                        <span class="badge">{{
+                          role.earned
+                            ? 'Earned'
+                            : role.previouslyEarned
+                              ? 'Previously earned'
+                              : 'Available'
+                        }}</span>
+                      </h3>
+                      <ul class="requirements">
+                        @for (rule of role.rules; track rule.id) {
+                          <li>
+                            {{ rule.collection }} · {{ rule.minimum }}
+                            {{ assetLabel(rule.asset) }}
+                            @if (rule.tokenSymbol) {
+                              · {{ rule.tokenSymbol }}
+                            }
+                            @if (network(rule)) {
+                              · {{ network(rule) }}
+                            }
+                            @if (selection(rule)) {
+                              · {{ selection(rule) }}
+                            }
+                            @if (
+                              rule.tokenStandard === 'erc1155' &&
+                              !rule.tokenIds?.length
+                            ) {
+                              · IDs 0–99
+                            }
+                            @if (rule.trait) {
+                              · {{ rule.trait }}
+                            }
+                            @if (rule.tokenIds?.length) {
+                              · IDs: {{ rule.tokenIds!.join(', ') }}
+                            }
+                          </li>
                         }
-                        @if (selection(rule)) {
-                          · {{ selection(rule) }}
-                        }
-                        @if (
-                          rule.tokenStandard === 'erc1155' &&
-                          !rule.tokenIds?.length
-                        ) {
-                          · IDs 0–99
-                        }
-                        @if (rule.trait) {
-                          · {{ rule.trait }}
-                        }
-                        @if (rule.tokenIds?.length) {
-                          · IDs: {{ rule.tokenIds!.join(', ') }}
-                        }
-                      </li>
-                    }
-                  </ul>
+                      </ul>
+                    </section>
+                  } @empty {
+                    <p>
+                      {{
+                        roleViews[community.id] === 'earned'
+                          ? 'No earned roles in this channel yet.'
+                          : 'No additional roles available in this channel.'
+                      }}
+                    </p>
+                  }
                 } @else {
                   <p>
                     No verification channels are available to you. Ask a
