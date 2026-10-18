@@ -12,6 +12,7 @@ export class AppComponent implements OnDestroy {
   title = 'Bouncer';
   light = false;
   showSignIn = false;
+  portalAuth: PortalAuthSource | null = null;
   private signInVisibilitySubscription?: Subscription;
 
   constructor() {
@@ -24,11 +25,12 @@ export class AppComponent implements OnDestroy {
   onRouteActivate(component: unknown) {
     this.signInVisibilitySubscription?.unsubscribe();
     this.showSignIn = false;
-    if (isSignInVisibilitySource(component)) {
-      this.signInVisibilitySubscription =
-        component.signInVisibility.subscribe(
-          (visible) => (this.showSignIn = visible),
-        );
+    this.portalAuth = null;
+    if (isPortalAuthSource(component)) {
+      this.portalAuth = component;
+      this.signInVisibilitySubscription = component.signInVisibility.subscribe(
+        (visible) => (this.showSignIn = visible),
+      );
     }
   }
 
@@ -45,16 +47,21 @@ export class AppComponent implements OnDestroy {
   }
 }
 
-interface SignInVisibilitySource {
+interface PortalAuthSource {
   signInVisibility: EventEmitter<boolean>;
+  user: { name: string } | null;
+  busy: boolean;
+  logout(): Promise<void>;
 }
 
-function isSignInVisibilitySource(
-  component: unknown,
-): component is SignInVisibilitySource {
+function isPortalAuthSource(component: unknown): component is PortalAuthSource {
   return (
     typeof component === 'object' &&
     component !== null &&
+    'user' in component &&
+    'busy' in component &&
+    'logout' in component &&
+    typeof component.logout === 'function' &&
     'signInVisibility' in component &&
     component.signInVisibility instanceof EventEmitter
   );

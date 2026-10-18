@@ -365,6 +365,15 @@ const base = {
         0,
         'signed-in users do not see the sign-in link',
       );
+      assert.equal(
+        await page
+          .locator('.brand-header')
+          .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+          .count(),
+        1,
+        'signed-in account action lives in the header',
+      );
+      assert.equal(await page.locator('.portal-heading button').count(), 0);
       await page.evaluate(() => document.fonts.ready);
       const assetPicker = page.getByRole('combobox', {
         name: 'Asset type',
@@ -543,8 +552,12 @@ const base = {
         .filter({ hasText: 'could not be loaded' })
         .waitFor();
       assert.equal(
-        await page.locator('.server-list button.selected').textContent(),
-        ' NoMoreLabs ',
+        (
+          await page
+            .locator('.server-list button.selected .server-name')
+            .textContent()
+        ).trim(),
+        'NoMoreLabs',
       );
       assert.deepEqual(
         await page.locator('.portal-content').boundingBox(),
@@ -574,7 +587,9 @@ const base = {
       );
       assert.equal(
         (
-          await page.locator('.server-list button.selected').textContent()
+          await page
+            .locator('.server-list button.selected .server-name')
+            .textContent()
         ).trim(),
         'NoMoreLabs',
       );
@@ -584,7 +599,9 @@ const base = {
         .waitFor();
       assert.equal(
         (
-          await page.locator('.server-list button.selected').textContent()
+          await page
+            .locator('.server-list button.selected .server-name')
+            .textContent()
         ).trim(),
         'Another community',
       );
@@ -765,6 +782,14 @@ const base = {
       });
       await page.getByRole('button', { name: 'Save rule' }).click();
       await editStarted;
+      assert.equal(
+        await page
+          .locator('.brand-header')
+          .getByRole('button', { name: 'Sign out · Snepsid', exact: true })
+          .isDisabled(),
+        true,
+        'header logout retains the mutation busy guard',
+      );
       const checkingSize = await page
         .getByRole('button', { name: 'Checking requirements…', exact: true })
         .boundingBox();

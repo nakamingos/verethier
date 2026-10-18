@@ -12,11 +12,6 @@
         </div>
       }
     </div>
-    @if (user) {
-      <button (click)="logout()" [disabled]="busy">
-        Sign out · {{ user.name }}
-      </button>
-    }
   </div>
   @if (error || notice || (loadingServer && data)) {
     <aside class="portal-feedback" aria-label="Notifications">
@@ -132,6 +127,21 @@
       <div class="portal-layout">
         <aside class="panel server-list">
           <h2>Servers</h2>
+          <ng-template #serverLabel let-server>
+            <span class="server-avatar" aria-hidden="true">
+              @if (server.icon) {
+                <img [src]="server.icon" alt="" />
+              } @else {
+                {{ server.name.slice(0, 1).toUpperCase() }}
+              }
+            </span>
+            <span class="server-name" [title]="server.name">
+              @if (!server.installed) {
+                +
+              }
+              {{ server.name }}
+            </span>
+          </ng-template>
           @for (server of servers; track server.id) {
             @if (server.installed) {
               <button
@@ -140,10 +150,10 @@
                 (click)="select(server.id)"
                 [disabled]="busy"
               >
-                @if (server.icon) {
-                  <img [src]="server.icon" alt="" />
-                }
-                {{ server.name }}
+                <ng-container
+                  [ngTemplateOutlet]="serverLabel"
+                  [ngTemplateOutletContext]="{ $implicit: server }"
+                />
               </button>
             } @else {
               <a
@@ -151,13 +161,16 @@
                 [href]="server.invite"
                 target="_blank"
                 rel="noopener"
-                >+ {{ server.name }}</a
-              >
+                ><ng-container
+                  [ngTemplateOutlet]="serverLabel"
+                  [ngTemplateOutletContext]="{ $implicit: server }"
+              /></a>
             }
           }
           @if (invite) {
             <a class="button" [href]="invite" target="_blank" rel="noopener"
-              >+ Add Bouncer</a
+              ><span class="server-avatar" aria-hidden="true">+</span
+              ><span class="server-name">Add Bouncer</span></a
             >
           }
           @if (!servers.length) {
