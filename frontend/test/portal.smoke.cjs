@@ -623,7 +623,11 @@ const base = {
           getComputedStyle(el.querySelector('.select-control')).marginTop,
         ),
       );
-      assert.equal(labelGap, 2, 'labels sit close to their fields');
+      assert.equal(
+        labelGap,
+        0,
+        'field titles have no extra gap before the control',
+      );
       assert.ok(
         popupBox.x >= 0 && popupBox.x + popupBox.width <= width,
         'popup fits viewport',
@@ -691,6 +695,17 @@ const base = {
           .locator('.workspace-surface')
           .evaluate((el) => getComputedStyle(el).backgroundColor),
         'rgb(125, 146, 158)',
+      );
+      await page.mouse.move(0, 0);
+      assert.equal(
+        await page
+          .locator('.theme-toggle')
+          .evaluate((el) => getComputedStyle(el).borderImageSource),
+        await page
+          .locator('.brand-header nav a.button')
+          .first()
+          .evaluate((el) => getComputedStyle(el).borderImageSource),
+        'theme toggle keeps the ordinary button border in light mode',
       );
       await assetPicker.click();
       await page.screenshot({
@@ -1687,6 +1702,25 @@ const base = {
         path: `${artifacts}/member-${width}.png`,
         fullPage: true,
       });
+      assert.equal(
+        await page
+          .getByRole('heading', { name: 'Saved wallets:', exact: true })
+          .count(),
+        1,
+      );
+      assert.equal(
+        await page
+          .getByRole('heading', {
+            name: 'Previously earned roles:',
+            exact: true,
+          })
+          .count(),
+        1,
+      );
+      assert.equal(
+        await page.getByRole('cell', { name: 'Bitcoin:', exact: true }).count(),
+        1,
+      );
       await page.getByLabel('Username or user ID').fill('555555555555555555');
       await page.getByRole('button', { name: 'Look up', exact: true }).click();
       await page

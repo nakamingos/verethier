@@ -78,3 +78,7 @@ The guide's multi-trait AND/OR editor and expanded ERC-721 ID selections are sep
 Light mode uses the Aseprite Default light theme's XML colors and sampled sheet pixels: header `#d3cbbe`, workspace/active tab `#7d929e`, tab rim `#adcade`, button/card face `#c6c6c6`, selected toolbar shade `#7c919d`, white fields and highlights, black text/outlines, inset rim/separators `#958174`, inset shade `#7c7c7c`, and menu selection `#ff5555` with white text. Frame geometry stays shared between themes. Search icons invert in light mode; the supplied 9×9 check icons render at 2× and invert in dark mode. Table dividers use a 2px-high repeating 4px dash / 2px gap, with no trailing divider after the final entry.
 
 Mobile header links retain the same side padding as default buttons. Navigation aligns beside the title where it fits and wraps intact on very narrow screens; authentication remains right-aligned below.
+
+Light dropdowns have white outer/focus rims, white field/menu faces, coral selection with white text, black text/arrows, gray (`#c6c6c6`) arrow buttons, white button highlights and `#7c7c7c` button shading. Brown (`#958174`) inset/corner pixels remain distinct from the white rims. The theme toggle keeps ordinary button chrome in both themes; its `aria-pressed` state does not apply selected-server colors.
+
+Field titles use a compact 20px line height and no extra top margin before their dropdowns or text inputs; control heights and font sizes remain unchanged.

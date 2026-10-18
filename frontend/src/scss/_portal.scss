@@ -104,14 +104,19 @@
   );
   @include pixel-cards(#c6c6c6, #fff, #7d929e, #7d929e);
   @include pixel-input-controls(
-    #fff,
-    #958174,
-    #c6c6c6,
-    #fff,
-    #000,
-    #7c7c7c,
-    #000,
-    #958174
+    $face: #fff,
+    $band: #fff,
+    $shade: #958174,
+    $menu: #fff,
+    $text: #000,
+    $inset: #c6c6c6,
+    $focus: #fff,
+    $focus-corner: #958174,
+    $button-face: #c6c6c6,
+    $button-band: #fff,
+    $button-shade: #7c7c7c,
+    $menu-corner: #958174,
+    $menu-shade: #c6c6c6
   );
   --ase-bg: #7d929e;
   --ase-face: #d3cbbe;
@@ -231,10 +236,12 @@ button:disabled {
   opacity: 1;
   cursor: not-allowed;
 }
-button[aria-pressed='true']:not(.primary):not(.selected) {
+button[aria-pressed='true']:not(.primary):not(.selected):not(.theme-toggle) {
   border-image-source: var(--pixel-choice);
 }
-button[aria-pressed='true']:not(.primary):not(.selected):hover {
+button[aria-pressed='true']:not(.primary):not(.selected):not(
+    .theme-toggle
+  ):hover {
   border-image-source: var(--pixel-choice-hover);
 }
 :focus-visible {
@@ -278,7 +285,7 @@ textarea::selection {
 .select-control {
   display: block;
   position: relative;
-  margin: 0.2rem 0 1rem;
+  margin: 0 0 1rem;
 }
 app-pixel-select {
   display: block;
@@ -385,13 +392,14 @@ textarea {
 }
 label {
   display: block;
+  line-height: 1.25;
   font-size: 1.6rem;
   color: var(--ase-dim);
 }
 label input,
 label select,
 label textarea {
-  margin: 0.2rem 0 1rem;
+  margin: 0 0 1rem;
   color: var(--ase-text);
 }
 label .select-control select {
@@ -399,6 +407,7 @@ label .select-control select {
 }
 label.checkbox {
   display: flex;
+  line-height: 1.5;
   align-items: center;
   gap: 1rem;
   color: var(--ase-text);
@@ -542,9 +551,11 @@ form > label {
   border-image-source: var(--pixel-server-button-hover);
 }
 :where(.brand-header, app-admin .portal)
-  button[aria-pressed='true']:not(.primary):not(.selected),
+  button[aria-pressed='true']:not(.primary):not(.selected):not(.theme-toggle),
 :where(.brand-header, app-admin .portal)
-  button[aria-pressed='true']:not(.primary):not(.selected):hover {
+  button[aria-pressed='true']:not(.primary):not(.selected):not(
+    .theme-toggle
+  ):hover {
   border-image-source: var(--pixel-server-button-selected);
   color: var(--ase-server-text);
 }
@@ -795,7 +806,7 @@ app-root:has(app-admin) .app-footer {
 .portal-content .form-grid label input,
 .portal-content .form-grid label textarea,
 .portal-content .select-control {
-  margin-top: 0.2rem;
+  margin-top: 0;
   margin-bottom: 0.8rem;
 }
 .portal-content .toolbar label input,
@@ -1059,7 +1070,7 @@ app-root:has(app-admin) .app-footer {
 .search-field {
   position: relative;
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0;
 }
 .search-field > img {
   position: absolute;
@@ -1342,7 +1353,7 @@ button:disabled:hover,
   }
   button.selected,
   .server-list button.selected,
-  button[aria-pressed='true'] {
+  button[aria-pressed='true']:not(.theme-toggle) {
     border-color: Highlight;
   }
   :focus-visible,
