@@ -568,6 +568,35 @@ const base = {
             font: getComputedStyle(el).fontSize,
           })),
         );
+      if (width <= 800) {
+        const boxes = await page
+          .locator('.server-list > :is(button, a.button)')
+          .evaluateAll((buttons) =>
+            buttons.map((el) => {
+              const r = el.getBoundingClientRect();
+              return {
+                x: r.x,
+                y: r.y,
+                right: r.right,
+                bottom: r.bottom,
+                width: r.width,
+              };
+            }),
+          );
+        assert.ok(
+          boxes.every((box) => Math.abs(box.width - boxes[0].width) < 1),
+          'mobile server buttons have equal widths',
+        );
+        assert.equal(boxes[0].y, boxes[1].y, 'mobile servers use two columns');
+        assert.ok(
+          Math.abs(boxes[0].right - boxes[1].x - 2) < 1,
+          'mobile columns share one outline',
+        );
+        assert.ok(
+          Math.abs(boxes[0].bottom - boxes[2].y - 4) < 1,
+          'mobile rows share their outline and shadow',
+        );
+      }
       for (const row of serverRows) {
         assert.equal(
           row.height,

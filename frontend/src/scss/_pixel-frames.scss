@@ -368,6 +368,17 @@ $pixel-select-arrow: (
   @return url('data:image/svg+xml,#{$svg}');
 }
 
+// Stepped ends for vertical and horizontal scrollbar thumbs.
+@mixin pixel-scrollbar($thumb) {
+  --ase-scrollbar-thumb: #{$thumb};
+  --pixel-scrollbar-thumb: #{pixel-grid(
+      ('..FF..', '.FFFF.', 'FFFFFF', 'FFFFFF', '.FFFF.', '..FF..'),
+      (
+        'F': $thumb,
+      )
+    )};
+}
+
 @mixin pixel-tokens(
   $face,
   $editor,
