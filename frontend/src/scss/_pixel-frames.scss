@@ -200,20 +200,25 @@ $pixel-server-button-selected: (
   '.DDDDDDDDDDDDDD.'
 );
 
-// Dropdown field, focused picker and arrow sampled from the source theme.
+// The dropdown uses sunken2_normal: an inset top band and an open right edge
+// covered by the arrow button, rather than the symmetric sunken_normal frame.
 $pixel-select-field: (
-  '............',
-  '..HHHHHHHH..',
-  '.HSEEEEEESH.',
-  '.HESFFFFSEH.',
-  '.HEFFFFFFEH.',
-  '.HEFFFFFFEH.',
-  '.HEFFFFFFEH.',
-  '.HEFFFFFFEH.',
-  '.HESFFFFSEH.',
-  '.HSEEEEEESH.',
-  '..HHHHHHHH..',
-  '............'
+  '................',
+  '..HHHHHHHHHHHHHH',
+  '.HFSSSSSSSSSSSSS',
+  '.HSEEEEEEEEEEEEE',
+  '.HEISSSSSSSSSSSS',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HEFFFFFFFFFFFFF',
+  '.HESFFFFFFFFFFFF',
+  '.HSEEEEEEEEEEEEE',
+  '..HHHHHHHHHHHHHH',
+  '................'
 );
 $pixel-select-picker: (
   '.TEEEEEEEET.',
@@ -474,7 +479,8 @@ $pixel-select-arrow: (
   $band: #41444a,
   $shade: #202125,
   $menu: #41444a,
-  $text: #c0c0c0
+  $text: #c0c0c0,
+  $inset: #101114
 ) {
   --pixel-select-field: #{pixel-grid(
       $pixel-select-field,
@@ -483,6 +489,7 @@ $pixel-select-arrow: (
         'F': $face,
         'H': $band,
         'S': $shade,
+        'I': $inset,
       )
     )};
   --pixel-select-picker: #{pixel-grid(
