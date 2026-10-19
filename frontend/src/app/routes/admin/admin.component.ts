@@ -1018,8 +1018,9 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.undoLabel = 'Undo';
       this.editor = null;
       await this.reload();
-      this.notice =
-        'Rule saved. Previously earned roles are queued for a fresh check.';
+      this.notice = creating
+        ? 'Rule created.'
+        : 'Rule saved. Previously earned roles are queued for a fresh check.';
     });
   }
   async remove(rule: any) {
