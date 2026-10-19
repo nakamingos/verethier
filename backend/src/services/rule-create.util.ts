@@ -188,12 +188,6 @@ export async function prepareRuleCriteria(
       getNftNetworkId(input.network || 'ethereum'),
     );
     Object.assign(assetFields, traits());
-    if (
-      assetFields.token_standard === 'erc721' &&
-      assetFields.token_ids &&
-      minItems !== 1
-    )
-      throw new Error('A specific ERC-721 token rule requires min_items:1.');
     await services.nfts.validateTraits({
       ...assetFields,
       attribute_key: trait.key,

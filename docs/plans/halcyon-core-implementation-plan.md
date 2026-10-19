@@ -18,13 +18,13 @@ Track optional ideas separately in the [optional feature backlog](optional-featu
 
 ## Current implementation status
 
-Checkpoint: October 18, 2026, through setup assistance and Check Setup. Earlier portal follow-ups include member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
+Checkpoint: October 18, 2026, through multi-trait rules and ERC-721 ID selections/quantity thresholds. Earlier portal follow-ups include member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
 
 | Phase | Delivered | Remaining |
 | --- | --- | --- |
 | 1. Shared backend and authentication | Authenticated portal APIs, live server authorization, shared rule operations and durable reconciliation. | Maintain these guarantees as features are added. |
 | 2. Admin dashboard and setup | All four admin tabs, invite/return flow, reviewed channel selection/creation, resumable setup, verification-message controls, live **Check Setup** with provider probes and reviewed message recovery, `/help` and `/join`. | Maintain diagnostics as supported operations/providers expand. Bounded setup probes and unchecked wallet inventories are labeled explicitly; see the [setup notes](../portals.md#installation-and-check-setup). |
-| 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo, multi-trait AND/OR conditions and reconciliation for rule changes and signed verification. | ERC-721 ID lists/ranges with quantity thresholds. Remove guarded legacy trait projection columns after the compatibility rollout. |
+| 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo, multi-trait AND/OR conditions, bounded ERC-721 ID lists/ranges with quantity thresholds and reconciliation for rule changes and signed verification. | Remove guarded legacy trait projection columns after the compatibility rollout. |
 | 4. Settings and member troubleshooting | Background-check toggle, member lookup, fresh Check Roles and earned-role repairs. | No separate unfinished milestone identified. |
 | 5. Member portal | Wallet management, fresh proofs/transfers, removal reconciliation, joined-community verification and resumable flows. | Public discovery and signature-free rechecks remain optional. |
 | 6–7. Additional integrations | Existing supported assets and wallet formats remain available. | Deferred until the user chooses integrations. |
@@ -32,7 +32,7 @@ Checkpoint: October 18, 2026, through setup assistance and Check Setup. Earlier 
 
 Portal follow-ups have also shipped: unified wallet activity, Earned/Available community role views, removed-wallet history with last-proof dates and explorer links, server wallet blocks, role-removal actions, shared-wallet-history audits and wallet-address lookup. See [portal behavior and operational notes](../portals.md).
 
-Next recommended milestone: ERC-721 ID lists/ranges and quantity thresholds in phase 3. Multi-trait rules use canonical JSON; legacy single-trait columns remain guarded compatibility projections until rollout cleanup. Privacy/sharing/export ideas and wallet-first/X accounts remain in the [optional backlog](optional-features.md#privacy-sharing-and-registration).
+The accepted core feature milestones are delivered. Remaining maintenance: retire guarded legacy trait projection columns after the compatibility rollout. Multi-trait rules use canonical JSON; the old columns remain compatibility projections rather than an independent definition. Additional network and wallet integrations still require the user to choose the scope. Privacy/sharing/export ideas and wallet-first/X accounts remain in the [optional backlog](optional-features.md#privacy-sharing-and-registration).
 
 ## Conflicts and recommended decisions
 
@@ -56,7 +56,7 @@ These recommendations deliberately preserve established Bouncer behavior where t
 | Combined holdings | Describes independent token criteria and an optional role-composition add-on. | Collectible counts can combine across collections/protocols for matching role/minimum groups; ERC-20 balances are evaluated separately. | Preserve Bouncer's existing aggregation and deduplication. Display the combined group and evaluation scope clearly in the dashboard. The guide does not specify equivalent count aggregation. |
 | Trait matching | Exact trait matches; multiple pairs can use AND/OR. | Case-insensitive AND/OR conditions in the portal, with simple single-trait slash inputs. | Preserve same-asset matching and quantity behavior as providers expand. AND means all pairs on the same asset, not different assets satisfying different pairs. |
 | ERC-1155 IDs | Mandatory except the marketplace collection shortcut. | Custom IDs/ranges are supported; otherwise checks cover IDs 0–99. | Keep existing rules valid. Show the bounded default explicitly and allow a custom scope; do not label that default as an exhaustive collection scan. |
-| ERC-721 ID selections | Describes token-ID lists, ranges and mixed entries in the generic NFT rule editor. | Specific ERC-721 rules accept one ID and require a minimum of one; ERC-1155 supports lists/ranges. | Add bounded ERC-721 ID lists/ranges with matching quantity rules. Preserve the existing single-ID behavior as a valid special case. |
+| ERC-721 ID selections | Describes token-ID lists, ranges and mixed entries in the generic NFT rule editor. | Both ERC-721 and ERC-1155 support lists/ranges up to 1,000 unique IDs and positive quantity thresholds. | Preserve existing single-ID rules and per-asset deduplication. ERC-1155 copies retain their quantities. |
 | Rule/API representation | Generic JSON and pass/fail results. | Typed rule fields, count aggregation, and passed/failed/unavailable outcomes. | Reuse the validated model and retain unavailable as distinct from zero holdings. Do not replace it with an unchecked JSON blob or boolean-only result. |
 | Bitcoin addresses | Members can verify whichever payment/Ordinals address holds the asset. | Bitcoin proofs and storage accept mainnet single-key Taproot Ordinals addresses. | Broader Bitcoin address/proof support is required before offering the guide's payment-address behavior. |
 | Multisig | Describes one owner signing and receiving the multisig's roles. | EVM proof validation currently recovers an externally owned account's signature. | Add contract-wallet validation. Do not treat an owner's personal signature alone as proof of a multisig's entire holdings. |

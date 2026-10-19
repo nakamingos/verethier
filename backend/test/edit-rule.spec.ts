@@ -137,7 +137,7 @@ describe('Rule edit validation', () => {
     expect(result).toMatchObject({ id: 173, chain_id: 46630, role_id: 'holder', token_ids: ['1', '3'] });
     nfts.prepareRule.mockResolvedValue({ token_standard: 'erc721', token_ids: ['1'] });
     await expect(service.prepare(nft, inputs(nft))).rejects.toThrow('standard changed');
-    await expect(service.prepare({ ...nft, token_standard: 'erc721' }, { ...inputs(nft), min_items: '2' })).rejects.toThrow('requires min_items:1');
+    expect(await service.prepare({ ...nft, token_standard: 'erc721' }, { ...inputs(nft), min_items: '2' })).toMatchObject({token_ids:['1'], min_items:2});
   });
   it('rebuilds an Ordinal snapshot when traits change and clears it when removed', async () => {
     const { editor: service, ordinals } = editor(); const before = { ...ordinal, ordinal_trait_snapshot: snapshot() };

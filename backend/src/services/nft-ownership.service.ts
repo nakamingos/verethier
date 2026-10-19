@@ -90,8 +90,8 @@ export class NftOwnershipService {
     const [erc721, erc1155] = await Promise.all([supports('0x80ac58cd'), supports('0xd9b67a26')])
       .catch(() => { throw new Error(`Could not read the NFT contract on ${network.name}. Check the address and try again.`); });
     if (erc721 === erc1155) throw new Error('This contract must support exactly one of ERC-721 or ERC-1155.');
-    const ids = erc1155 || tokenIds != null ? parseTokenIds(tokenIds) : null;
-    if (erc721 && ids && ids.length !== 1) throw new Error('For a specific ERC-721 token, enter one token ID.');
+    const selection = tokenIds?.trim();
+    const ids = erc1155 || selection ? parseTokenIds(selection) : null;
     let name = label?.trim();
     if (name && name.length > 100) throw new Error('Collection names must be 100 characters or fewer.');
     if (!name) {
@@ -256,7 +256,7 @@ export class NftOwnershipService {
     const parameters = { address: rule.contract_address as Address, abi: ABI, blockNumber };
     if (rule.token_standard === 'erc721') {
       if (rule.token_ids?.length) {
-        return addresses.includes(await this.owner(rule, rule.token_ids[0], blockNumber) as Address) ? 1n : 0n;
+        return BigInt((await this.cachedOwnedTokens(rule, addresses, context)).size);
       }
       const balances = await Promise.all(addresses.map(owner => client.readContract({ ...parameters, functionName: 'balanceOf', args: [owner] })));
       return balances.reduce((sum, balance) => sum + balance, BigInt(0));

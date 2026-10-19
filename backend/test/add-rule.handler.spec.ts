@@ -638,12 +638,12 @@ describe('AddRuleHandler', () => {
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('NFT rules require contract_address') });
     });
-    it('rejects quantity greater than one for a specific ERC-721 ID', async () => {
-      mockNftService.prepareRule.mockResolvedValue({ ...fields, token_standard: 'erc721', token_ids: ['0'] });
-      const interaction = interactionFor({ token_ids: '0' }, 2);
+    it.each([{ids:['0'],minimum:2},{ids:['0','1','2'],minimum:3}])('accepts ERC-721 selections with higher/combined quantity thresholds: %j', async ({ids,minimum}) => {
+      const selected={ ...fields, token_standard: 'erc721' as const, token_ids: ids };
+      mockNftService.prepareRule.mockResolvedValue(selected);
+      const interaction = interactionFor({ token_ids: ids.join(',') }, minimum);
       await handler.handle(interaction);
-      expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
-      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('requires min_items:1') });
+      expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id','Guild','channel-id','verify','ALL','role-id','Holder','ALL','ALL',minimum,selected);
     });
     it('normalizes trait inputs and carries them through duplicate checks and saving', async () => {
       mockNftService.prepareRule.mockResolvedValue(fields);
