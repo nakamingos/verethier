@@ -172,6 +172,16 @@ describe('ListRulesHandler', () => {
       });
     });
 
+    it('attaches complete oversized multi-trait criteria without truncating conditions', async () => {
+      const rule={id:1,server_id:'test-guild-id',channel_id:'channel',role_id:'role',slug:'comrades',asset_type:'ethscription',min_items:1,
+        attribute_key:'Hat',attribute_value:'Crown',trait_filter:{operator:'AND',conditions:[{key:'Hat',value:'Crown'},{key:'Description',value:'x'.repeat(3000)},{key:'Notes',value:'y'.repeat(3000)}]}};
+      await (handler as any).showRulesPage(mockInteraction,[rule],0);
+      const result=getLastEditReplyPayload();
+      expect(result.embeds[0].toJSON().description.length).toBeLessThanOrEqual(4096);
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].attachment.toString()).toContain('Hat=Crown');
+      expect(result.files[0].attachment.toString()).toContain('x'.repeat(3000));
+    });
     it('paginates long inscription lists without dropping rules or exceeding Discord limits', async () => {
       const rules = Array.from({ length: 20 }, (_, i) => ({ id: i + 1, server_id: 'guild', channel_id: 'channel', role_id: 'role',
         asset_type: 'ordinal', slug: null, attribute_key: 'ALL', attribute_value: 'ALL', min_items: 1,

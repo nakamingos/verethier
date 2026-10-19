@@ -6,6 +6,7 @@ import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
 import { OrdinalTraitSnapshot, OrdinalAttributeRow } from '@/models/ordinal-collection.interface';
 import { RULE_EDIT_GUARD_FIELDS, RULE_EDIT_MUTABLE_FIELDS } from '@/utils/rule-edit.util';
+import { ruleTraits, traitFilterKey } from '@/utils/trait-filter.util';
 import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
 
 /**
@@ -135,11 +136,12 @@ export class DbService {
   async cacheOrdinalTraitSnapshot(rule: VerifierRole, snapshot: OrdinalTraitSnapshot): Promise<void> {
     // Match the criteria as well as the ID: a scan started before a rule edit
     // must never attach its IDs to the edited rule or replace a newer scan.
-    const { error } = await this.supabase.from('verifier_rules')
+    let query = this.supabase.from('verifier_rules')
       .update({ ordinal_trait_snapshot: snapshot })
-      .eq('id', rule.id).eq('asset_type', 'ordinal').eq('slug', rule.slug)
-      .eq('attribute_key', rule.attribute_key).eq('attribute_value', rule.attribute_value)
-      .or(`ordinal_trait_snapshot.is.null,ordinal_trait_snapshot->>criteria_hash.neq.${snapshot.criteria_hash},ordinal_trait_snapshot->>fetched_at.lte.${snapshot.fetched_at}`);
+      .eq('id', rule.id).eq('asset_type', 'ordinal').eq('slug', rule.slug);
+    query = rule.trait_filter !== undefined ? query.eq('trait_filter', JSON.stringify(ruleTraits(rule)))
+      : query.eq('attribute_key', rule.attribute_key).eq('attribute_value', rule.attribute_value);
+    const { error } = await query.or(`ordinal_trait_snapshot.is.null,ordinal_trait_snapshot->>criteria_hash.neq.${snapshot.criteria_hash},ordinal_trait_snapshot->>fetched_at.lte.${snapshot.fetched_at}`);
     if (error) throw new Error('Ordinals trait snapshot could not be saved.');
   }
 
@@ -281,9 +283,9 @@ export class DbService {
       .from('verifier_rules')
       .select('*')
       .eq('server_id', serverId)
-      .eq('channel_id', channelId)
-      .eq('attribute_key', finalAttrKey)
-      .eq('attribute_value', finalAttrVal);
+      .eq('channel_id', channelId);
+    const traits = ruleTraits({ ...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal });
+    query = traits ? query.eq('trait_key', traitFilterKey({ trait_filter: traits })) : query.is('trait_key', null);
     query = assetFields?.asset_type === 'erc20' ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
@@ -611,9 +613,9 @@ export class DbService {
       .select('*')
       .eq('server_id', serverId)
       .eq('channel_id', channelId)
-      .eq('attribute_key', finalAttrKey)
-      .eq('attribute_value', finalAttrVal)
       .eq('role_id', roleId);
+    const traits = ruleTraits({ ...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal });
+    query = traits ? query.eq('trait_key', traitFilterKey({ trait_filter: traits })) : query.is('trait_key', null);
     query = assetFields?.asset_type === 'erc20' ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
@@ -709,13 +711,13 @@ export class DbService {
 
   /** Apply an edit atomically only if the definition still matches the opened form. */
   async editRule(before: VerifierRole, after: VerifierRole): Promise<VerifierRole> {
-    const changes = Object.fromEntries(RULE_EDIT_MUTABLE_FIELDS.map(key => [key, after[key] ?? null]));
+    const changes = Object.fromEntries(RULE_EDIT_MUTABLE_FIELDS.map(key => [key, key === 'trait_filter' ? ruleTraits(after) : after[key] ?? null]));
     let query = this.supabase.from('verifier_rules').update(changes).eq('id', before.id);
     for (const key of RULE_EDIT_GUARD_FIELDS) {
-      const value = before[key] ?? null;
+      const value = key === 'trait_filter' ? ruleTraits(before) : before[key] ?? null;
       if (value === null) query = query.is(key, null);
       else {
-        const serialized = key === 'inscription_criteria' ? JSON.stringify(value)
+        const serialized = ['trait_filter', 'inscription_criteria'].includes(key) ? JSON.stringify(value)
           : key === 'token_ids' ? `{${(value as string[]).join(',')}}` : value;
         query = query.eq(key, serialized);
       }
@@ -1138,6 +1140,7 @@ export class DbService {
           slug: removedRule.slug,
           attribute_key: removedRule.attribute_key,
           attribute_value: removedRule.attribute_value,
+          ...(removedRule.trait_filter !== undefined ? { trait_filter: ruleTraits(removedRule) } : {}),
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
           ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria, rule_label: removedRule.rule_label ?? null } : {}),

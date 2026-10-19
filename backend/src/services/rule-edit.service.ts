@@ -6,6 +6,7 @@ import { nftTrait } from '@/utils/nft-trait.util';
 import { ordinalCollectionId, ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { parseTokenBalance } from '@/utils/erc20-rule.util';
 import { ruleEditFields, ruleCriteriaKey } from '@/utils/rule-edit.util';
+import { normalizeTraitFilter, ruleTraits } from '@/utils/trait-filter.util';
 import { DataService } from './data.service';
 import { NftOwnershipService } from './nft-ownership.service';
 import { OrdinalsOwnershipService } from './ordinals-ownership.service';
@@ -19,6 +20,7 @@ export class RuleEditService {
 
   async prepare(before: VerifierRole, inputs: Record<string, string>): Promise<VerifierRole> {
     const allowed = new Set(ruleEditFields(before).map(field => field.key));
+    if (!before.inscription_criteria && before.asset_type !== 'erc20') allowed.add('trait_filter');
     if (Object.keys(inputs).some(key => !allowed.has(key))) throw new Error('This field cannot be edited for this rule.');
     const candidate = { ...before };
     if (before.asset_type === 'erc20') {
@@ -44,6 +46,16 @@ export class RuleEditService {
     }
     candidate.attribute_key = normalizeCriteriaOption(inputs.attribute_key);
     candidate.attribute_value = normalizeCriteriaOption(inputs.attribute_value);
+    if (inputs.trait_filter !== undefined) {
+      if (inputs.attribute_key !== undefined || inputs.attribute_value !== undefined) throw new Error('Use the trait editor or single attribute fields, not both.');
+      try { candidate.trait_filter = normalizeTraitFilter(JSON.parse(inputs.trait_filter)); }
+      catch (error) { throw new Error(`Invalid trait conditions: ${error.message}`); }
+      candidate.attribute_key = candidate.trait_filter?.conditions[0].key || 'ALL';
+      candidate.attribute_value = candidate.trait_filter?.conditions[0].value || 'ALL';
+    } else {
+      if ((ruleTraits(before)?.conditions.length || 0) > 1) throw new Error('Edit multi-trait conditions in the Control Room; single fields cannot replace them.');
+      if (before.trait_filter !== undefined) candidate.trait_filter = ruleTraits({ attribute_key: candidate.attribute_key, attribute_value: candidate.attribute_value });
+    }
     if (before.asset_type === 'nft') {
       const trait = nftTrait(candidate);
       const prepared = await this.nfts.prepareRule(before.contract_address, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id);
@@ -68,6 +80,17 @@ export class RuleEditService {
         candidate.ordinal_trait_snapshot = await this.ordinals.prepareTraitSnapshot({ ...candidate, slug: candidate.slug });
       }
       return candidate;
+    }
+    const filter = ruleTraits(candidate);
+    if (candidate.trait_filter !== undefined && filter) {
+      const conditions = [];
+      for (const condition of filter.conditions) {
+        const checked = await validateEthscriptionCriteria(this.data, candidate.slug, condition.key, condition.value);
+        if (!checked.isValid) throw new Error(checked.message);
+        candidate.slug = checked.criteria.slug;
+        conditions.push({ key: checked.criteria.attributeKey, value: checked.criteria.attributeValue });
+      }
+      candidate.trait_filter = normalizeTraitFilter({ operator: filter.operator, conditions });
     }
     const validated = await validateEthscriptionCriteria(this.data, candidate.slug, candidate.attribute_key, candidate.attribute_value);
     if (!validated.isValid) throw new Error(validated.message);

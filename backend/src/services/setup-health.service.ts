@@ -1,3 +1,4 @@
+import { ruleTraits } from '@/utils/trait-filter.util';
 import { Injectable } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { VerifierRole } from '@/models/verifier-role.interface';
@@ -48,7 +49,7 @@ export class SetupHealthService {
       probes.get(id).rules.push(rule);
     };
     for (const rule of rules) {
-      const traits = !!rule.attribute_key && rule.attribute_key !== 'ALL';
+      const traits = !!ruleTraits(rule);
       if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
         add(
           `rpc:${rule.chain_id}`,

@@ -29,7 +29,9 @@ export class AssetOwnershipService {
     const criteria = inscriptionCriteria(rule);
     if (criteria && !this.ethscriptionsSvc) throw new Error('Ethscriptions verification is not configured.');
     const ids = criteria ? await this.ethscriptionsSvc.matchingIds(evm, criteria, context)
-      : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1, context);
+      : rule.trait_filter !== undefined
+        ? await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', 'ALL', 'ALL', 1, context, rule.trait_filter)
+        : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1, context);
     return new Map(ids.map(id => [id.toLowerCase(), 1n]));
   }
 
@@ -54,6 +56,7 @@ export class AssetOwnershipService {
       if (!run.checks.has(key)) run.checks.set(key, this.ethscriptionsSvc.countSelection(wallets, criteria, run));
       return run.checks.get(key);
     }
+    if (rule.trait_filter !== undefined) return BigInt((await this.matchingAssets(rule, evmAddresses, context || { checks: new Map() })).size);
     const count = await this.dataSvc.checkAssetOwnershipWithCriteria(
       [...new Set(evmAddresses.map(address => address.toLowerCase()))],
       rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1,

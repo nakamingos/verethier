@@ -1,9 +1,11 @@
 import { InscriptionCriteria } from './inscription-criteria.interface';
 import { OrdinalTraitSnapshot } from './ordinal-collection.interface';
+import { TraitFilter } from '@/utils/trait-filter.util';
 
 export type AssetCount = number | string;
 
 export interface NftRuleFields {
+  trait_filter?: TraitFilter | null;
   asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20';
   min_balance?: string | null;
   token_decimals?: number | null;

@@ -96,6 +96,22 @@ describe('DataService', () => {
     ], error: null});
     expect(await service.checkAssetOwnershipWithCriteria('0x123', 'pizza-comrades', 'eyecolor', 'gold crown', 1)).toBe(2);
   });
+  it('evaluates AND/OR per asset, deduplicates OR and shares inventory across predicates', async () => {
+    queueQuery({data:[
+      {hashId:'A',slug:'comrades',attributes_new:{values:{Background:'Blue',Hat:'Crown'}}},
+      {hashId:'B',slug:'comrades',attributes_new:{values:{Background:'Blue'}}},
+      {hashId:'C',slug:'comrades',attributes_new:{values:{Hat:'Crown'}}},
+    ],error:null});
+    const context={checks:new Map()};
+    const conditions=[{key:'Background',value:'Blue'},{key:'Hat',value:'Crown'}];
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'AND',conditions})).toEqual(['a']);
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'OR',conditions})).toEqual(['a','b','c']);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+  });
+  it('preserves uncertainty when multi-trait metadata is missing', async () => {
+    queueQuery({data:[{hashId:'A',slug:'comrades',attributes_new:null}],error:null});
+    await expect(service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,undefined,{operator:'AND',conditions:[{key:'Hat',value:'Crown'},{key:'Background',value:'Blue'}]})).rejects.toThrow('unavailable');
+  });
   it('offers values from arbitrary mixed-case keys without changing their spelling', async () => {
     queueQuery({data: [{values: {EyeColor: 'Gold Crown'}}, {values: {eYeCoLoR: 'Silver Crown'}}], error: null});
     expect(await service.getAllAttributeValues('eyecolor', 'pizza-comrades')).toEqual(['Gold Crown', 'Silver Crown']);

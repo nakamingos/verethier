@@ -3,11 +3,15 @@ import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria, inscriptionRuleScope } from './inscription-rule.util';
 import { createHash } from 'node:crypto';
 import { OrdinalCollectionSnapshot, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
+import { matchesTraits, ruleTraits, traitFilterKey, traitFilterLabel } from './trait-filter.util';
 
 export const ORDINAL_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const ORDINAL_INSCRIPTION_ID = /^[0-9a-f]{64}i\d+$/;
 
 export function ordinalTrait(rule: Partial<VerifierRole>) {
+  const filter = ruleTraits(rule);
+  if (rule.trait_filter !== undefined && filter?.conditions.some(c => c.key === 'ALL' || c.key.length > 100 || c.value.length > 100)) throw new Error('Ordinals attribute keys and values must be 1–100 characters; choose a key before a value.');
+  if (rule.trait_filter !== undefined) return { key: filter?.conditions[0].key || 'ALL', value: filter?.conditions[0].value || 'ALL', enabled: !!filter };
   const key = (rule.attribute_key ?? 'ALL').trim();
   const value = (rule.attribute_value ?? 'ALL').trim();
   if (!key || !value || key.length > 100 || value.length > 100) throw new Error('Ordinals attribute keys and values must be 1–100 characters.');
@@ -17,6 +21,9 @@ export function ordinalTrait(rule: Partial<VerifierRole>) {
 
 export function ordinalTraitHash(rule: Partial<VerifierRole>): string {
   const trait = ordinalTrait(rule);
+  const filter = ruleTraits(rule);
+  // Retain existing one-trait snapshot hashes during the backfill.
+  if ((filter?.conditions.length || 0) > 1) return createHash('sha256').update(JSON.stringify(['ordinal-trait-v2', ordinalCollectionId(rule.slug), traitFilterKey(rule)])).digest('hex');
   return createHash('sha256').update(JSON.stringify([
     'ordinal-trait-v1', ordinalCollectionId(rule.slug), trait.enabled, trait.key.toLowerCase(),
     trait.value === 'ALL' ? null : trait.value.toLowerCase(),
@@ -24,9 +31,8 @@ export function ordinalTraitHash(rule: Partial<VerifierRole>): string {
 }
 
 export function matchesOrdinalTrait(traits: Array<{ type: string; value: string }>, rule: Partial<VerifierRole>): boolean {
-  const { key, value } = ordinalTrait(rule);
-  return traits.some(trait => trait.type.trim().toLowerCase() === key.toLowerCase()
-    && (value === 'ALL' || trait.value.trim().toLowerCase() === value.toLowerCase()));
+  ordinalTrait(rule);
+  return matchesTraits(traits.map(t => ({ key: t.type.trim(), value: t.value.trim() })), rule);
 }
 
 export function buildOrdinalTraitSnapshot(rule: Partial<VerifierRole>, collection: OrdinalCollectionSnapshot): OrdinalTraitSnapshot {
@@ -62,7 +68,7 @@ export function ordinalCollectionId(value: string): string {
 export function ordinalRuleScope(rule: Partial<VerifierRole>): string {
   if (inscriptionCriteria(rule)) return inscriptionRuleScope(rule);
   const trait = ordinalTrait(rule);
-  const attribute = trait.enabled ? ` · ${trait.key}${trait.value === 'ALL' ? ' (any value)' : '=' + trait.value}` : '';
+  const attribute = trait.enabled ? ` · ${traitFilterLabel(rule)}` : '';
   return `${rule.collection_name || rule.slug || 'Ordinals collection'} · Bitcoin · Ordinals${attribute}`;
 }
 

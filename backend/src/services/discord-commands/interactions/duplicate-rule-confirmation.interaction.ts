@@ -1,3 +1,4 @@
+import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
@@ -263,7 +264,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
       
       fields.push({
         name: '**Attribute**',
-        value: formatAttribute(rule.attribute_key, rule.attribute_value),
+        value: ruleTraits(rule) ? traitFilterLabel(rule) : formatAttribute(rule.attribute_key, rule.attribute_value),
         inline: true
       });
     }
@@ -277,6 +278,6 @@ export class DuplicateRuleConfirmationInteractionHandler {
       });
     }
     
-    return fields;
+    return fields.map(field => field.value.length > 1024 ? {...field, value: 'See the Control Room or /setup list-rules for the complete criteria.'} : field);
   }
 }

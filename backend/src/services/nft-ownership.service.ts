@@ -5,6 +5,7 @@ import { NftRuleFields } from '@/models/verifier-role.interface';
 import { NFT_BATCH_SIZE, nftRuleLabel, parseTokenIds } from '@/utils/nft-rule.util';
 import { getNftNetwork } from '@/utils/nft-network.util';
 import { NftAttributes, matchesNftTrait, nftTrait } from '@/utils/nft-trait.util';
+import { traitFilterKey } from '@/utils/trait-filter.util';
 import { NftMetadataService } from './nft-metadata.service';
 import { OrdinalCheckDetails, OrdinalCollectionSnapshot, OrdinalTraitSnapshot, OrdinalWalletInventory } from '@/models/ordinal-collection.interface';
 import { EthscriptionAsset, EthscriptionOwnership } from '@/models/ethscription-ownership.interface';
@@ -113,7 +114,7 @@ export class NftOwnershipService {
     if (!addresses.length) return BigInt(0);
     const trait = nftTrait(rule);
     const run = context || { checks: new Map<string, Promise<bigint>>() };
-    const key = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort(), trait.key.toLowerCase(), trait.value.toLowerCase()]);
+    const key = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort(), traitFilterKey(rule)]);
     if (!run.checks.has(key)) run.checks.set(key, trait.enabled ? this.readTraitBalances(rule, addresses, run) : this.readBalances(rule, addresses, run));
     return run.checks.get(key);
   }

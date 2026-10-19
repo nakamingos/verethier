@@ -17,6 +17,7 @@ import {
 } from 'class-validator';
 
 export class PortalRuleDto {
+  @IsOptional() @IsObject() trait_filter?: import('@/utils/trait-filter.util').TraitFilter | null;
   @IsIn(['ethscription', 'ordinal', 'nft', 'erc20']) asset_type: string;
   @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) role_id?: string;
@@ -43,13 +44,13 @@ export class PortalRuleDto {
 export class PortalEditDto {
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) role_id?: string;
   @IsOptional() @IsString() @MaxLength(100) role_name?: string;
-  @IsString() @MaxLength(32000) version: string;
+  @IsString() @MaxLength(64000) version: string;
   @IsObject() inputs: Record<string, string>;
   @IsUUID() request_id: string;
 }
 
 export class PortalDeleteDto {
-  @IsString() @MaxLength(32000) version: string;
+  @IsString() @MaxLength(64000) version: string;
   @IsUUID() request_id: string;
 }
 

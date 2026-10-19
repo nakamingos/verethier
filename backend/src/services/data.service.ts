@@ -5,6 +5,7 @@ import { AppLogger } from '@/utils/app-logger.util';
 import { CONSTANTS } from '@/constants';
 import type { NftCheckContext } from './nft-ownership.service';
 import type { EthscriptionAsset } from '@/models/ethscription-ownership.interface';
+import { matchesTraits, normalizeTraitFilter, TraitFilter } from '@/utils/trait-filter.util';
 
 // Validate environment on service load
 EnvironmentConfig.validate();
@@ -483,7 +484,8 @@ export class DataService {
     attributeKey?: string,
     attributeValue?: string,
     minItems: number = 1,
-    context?: NftCheckContext
+    context?: NftCheckContext,
+    traitFilter?: TraitFilter | null,
   ): Promise<string[]> {
     if (slug?.includes(',')) throw new Error('Use one collection per rule.');
     const wallets = [...new Set((Array.isArray(address) ? address : [address]).map(wallet => wallet.toLowerCase()))].sort();
@@ -498,6 +500,23 @@ export class DataService {
     const collection = slug?.trim();
     const scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
       ? assets.filter(asset => asset.slug === collection) : assets;
+    if (traitFilter !== undefined) {
+      const filter = normalizeTraitFilter(traitFilter);
+      const matching = scoped.filter(asset => {
+        if (!filter) return true;
+        const values = asset.attributes_new?.values;
+        if (!values || typeof values !== 'object' || Array.isArray(values)) {
+          if (filter.conditions.length > 1) throw new Error('Ethscriptions trait metadata is unavailable.');
+          return false;
+        }
+        const attributes = Object.entries(values).filter(([, value]) => value != null).map(([key, value]) => {
+          if (!['string', 'number', 'boolean'].includes(typeof value)) throw new Error('Ethscriptions trait metadata is unavailable.');
+          return { key, value: String(value) };
+        });
+        return matchesTraits(attributes, { trait_filter: filter });
+      });
+      return [...new Set(matching.map(asset => asset.hashId.toLowerCase()))];
+    }
     const matching: EthscriptionAsset[] = this.hasAttributeCriteria(attributeKey, attributeValue)
       ? this.filterByAttributes(scoped, attributeKey || 'ALL', attributeValue) : scoped;
     return [...new Set(matching.map(asset => asset.hashId.toLowerCase()))];

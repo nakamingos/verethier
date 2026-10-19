@@ -1,4 +1,5 @@
 import { NftRuleFields } from '@/models/verifier-role.interface';
+import { matchesTraits, ruleTraits } from './trait-filter.util';
 
 export type NftAttributes = Array<{ trait_type: string; value: string }>;
 export interface NftMetadataRow {
@@ -9,7 +10,10 @@ export interface NftMetadataRow {
   fetched_at: string;
 }
 
-export function nftTrait(rule: Pick<NftRuleFields, 'attribute_key' | 'attribute_value'>) {
+export function nftTrait(rule: Pick<NftRuleFields, 'attribute_key' | 'attribute_value' | 'trait_filter'>) {
+  const filter = ruleTraits(rule);
+  if (rule.trait_filter !== undefined && filter?.conditions.some(c => c.key === 'ALL' || c.key.length > 100 || c.value.length > 100)) throw new Error('NFT attribute keys and values must be 1–100 characters; choose a key before a value.');
+  if (rule.trait_filter !== undefined) return { key: filter?.conditions[0].key || 'ALL', value: filter?.conditions[0].value || 'ALL', enabled: !!filter };
   const key = (rule.attribute_key ?? 'ALL').trim();
   const value = (rule.attribute_value ?? 'ALL').trim();
   if (!key || !value || key.length > 100 || value.length > 100) throw new Error('NFT attribute keys and values must be 1–100 characters.');
@@ -18,9 +22,8 @@ export function nftTrait(rule: Pick<NftRuleFields, 'attribute_key' | 'attribute_
 }
 
 export function matchesNftTrait(attributes: NftAttributes, rule: NftRuleFields): boolean {
-  const { key, value } = nftTrait(rule);
-  return attributes.some(attribute => attribute.trait_type.toLowerCase() === key.toLowerCase()
-    && (value === 'ALL' || attribute.value.toLowerCase() === value.toLowerCase()));
+  nftTrait(rule);
+  return matchesTraits(attributes.map(a => ({ key: a.trait_type, value: a.value })), rule);
 }
 
 export function nftTokenId(value: unknown): string {
