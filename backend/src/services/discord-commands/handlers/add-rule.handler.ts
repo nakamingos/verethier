@@ -1,3 +1,4 @@
+import { singleTrait } from '@/utils/trait-filter.util';
 import { prepareRuleCriteria } from '../../rule-create.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
 import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
@@ -280,8 +281,8 @@ export class AddRuleHandler {
       ...existingRule,
       role_id: existingRule.role_id,
       slug: existingRule.slug,
-      attribute_key: existingRule.attribute_key,
-      attribute_value: existingRule.attribute_value,
+      attribute_key: singleTrait(existingRule).key,
+      attribute_value: singleTrait(existingRule).value,
       min_items: existingRule.min_items
     };
 

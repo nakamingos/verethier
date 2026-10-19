@@ -1,3 +1,4 @@
+import {singleTrait,ruleTraits,traitFilterLabel} from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -266,8 +267,8 @@ export class RestoreUndoInteractionHandler {
       channel_name: restoredRuleData.channel_name,
       ...restoredRuleData,
       slug: restoredRuleData.slug,
-      attribute_key: restoredRuleData.attribute_key,
-      attribute_value: restoredRuleData.attribute_value,
+      attribute_key: singleTrait(restoredRuleData).key,
+      attribute_value: singleTrait(restoredRuleData).value,
       min_items: restoredRuleData.min_items
     });
     embed.addFields(ruleInfoFields);
@@ -342,7 +343,7 @@ export class RestoreUndoInteractionHandler {
       // Add clean rule info for each removed rule using list format
       successful.forEach(s => {
         const rule = s.originalData;
-        const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);
+        const attribute = (ruleTraits(rule)?.conditions.length || 0)>1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
         const slug = rule.slug || 'ALL';
         const minItems = rule.min_items || 1;
         

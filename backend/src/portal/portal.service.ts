@@ -371,8 +371,8 @@ export class PortalService {
       role_id: role.id,
       role_name: role.name,
       slug: prepared.slug,
-      attribute_key: prepared.attributeKey,
-      attribute_value: prepared.attributeValue,
+
+      trait_filter: ruleTraits({...prepared.assetFields,attribute_key:prepared.attributeKey,attribute_value:prepared.attributeValue}),
       min_items: prepared.minItems,
       chain_id: 1,
       ...prepared.assetFields,

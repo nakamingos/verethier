@@ -1,3 +1,4 @@
+import {singleTrait,ruleTraits,traitFilterLabel} from '@/utils/trait-filter.util';
 import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
 import { EditRuleHandler } from './discord-commands/handlers/edit-rule.handler';
@@ -113,8 +114,8 @@ export class DiscordCommandsService {
     const existingRuleFormatted = {
       role_id: existingRule.role_id,
       slug: existingRule.slug,
-      attribute_key: existingRule.attribute_key,
-      attribute_value: existingRule.attribute_value,
+      attribute_key: singleTrait(existingRule).key,
+      attribute_value: singleTrait(existingRule).value,
       min_items: existingRule.min_items
     };
 
@@ -723,7 +724,7 @@ export class DiscordCommandsService {
       
       // Add clean rule info for each removed rule using list format
       successful.forEach(s => {
-        const attribute = this.formatAttribute(s.data.attribute_key, s.data.attribute_value);
+        const attribute = (ruleTraits(s.data)?.conditions.length || 0)>1 ? traitFilterLabel(s.data) : this.formatAttribute(singleTrait(s.data).key, singleTrait(s.data).value);
         const slug = s.data.slug || 'ALL';
         const minItems = s.data.min_items || 1;
         
@@ -804,7 +805,7 @@ export class DiscordCommandsService {
       // Add clean rule info for each restored rule using list format
       successful.forEach(s => {
         const rule = s.rule || s.originalData;
-        const attribute = this.formatAttribute(rule.attribute_key, rule.attribute_value);
+        const attribute = (ruleTraits(rule)?.conditions.length || 0)>1 ? traitFilterLabel(rule) : this.formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
         const slug = rule.slug || 'ALL';
         const minItems = rule.min_items || 1;
         
@@ -972,8 +973,8 @@ export class DiscordCommandsService {
     const existingRuleFormatted = {
       role_id: existingRule.role_id,
       slug: existingRule.slug,
-      attribute_key: existingRule.attribute_key,
-      attribute_value: existingRule.attribute_value,
+      attribute_key: singleTrait(existingRule).key,
+      attribute_value: singleTrait(existingRule).value,
       min_items: existingRule.min_items
     };
 

@@ -1,4 +1,4 @@
-import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
+import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -272,7 +272,7 @@ export class ListRulesHandler {
       if (rule.asset_type === 'erc20') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
-      const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(rule.attribute_key, rule.attribute_value);
+      const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
       const slug = rule.slug || 'ALL';
       const minItems = rule.min_items || 1;
       const ruleId = rule.id || 'N/A';

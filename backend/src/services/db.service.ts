@@ -139,8 +139,8 @@ export class DbService {
     let query = this.supabase.from('verifier_rules')
       .update({ ordinal_trait_snapshot: snapshot })
       .eq('id', rule.id).eq('asset_type', 'ordinal').eq('slug', rule.slug);
-    query = rule.trait_filter !== undefined ? query.eq('trait_filter', JSON.stringify(ruleTraits(rule)))
-      : query.eq('attribute_key', rule.attribute_key).eq('attribute_value', rule.attribute_value);
+    const traits = ruleTraits(rule);
+    query = traits ? query.eq('trait_filter', JSON.stringify(traits)) : query.is('trait_filter', null);
     const { error } = await query.or(`ordinal_trait_snapshot.is.null,ordinal_trait_snapshot->>criteria_hash.neq.${snapshot.criteria_hash},ordinal_trait_snapshot->>fetched_at.lte.${snapshot.fetched_at}`);
     if (error) throw new Error('Ordinals trait snapshot could not be saved.');
   }
@@ -324,6 +324,7 @@ export class DbService {
     const finalAttrVal = attrVal || 'ALL';
     const finalMinItems = minItems != null ? minItems : 1;
 
+    const {attribute_key: _key, attribute_value: _value, ...storedAssetFields}=assetFields || {};
     const { data, error } = await this.supabase
       .from('verifier_rules')
       .insert({
@@ -334,10 +335,9 @@ export class DbService {
         slug: ['nft', 'erc20'].includes(assetFields?.asset_type) || assetFields?.inscription_criteria != null ? null : finalSlug,
         role_id: roleId,
         role_name: roleName,
-        attribute_key: finalAttrKey,
-        attribute_value: finalAttrVal,
+        trait_filter: ruleTraits({...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal}),
         min_items: assetFields?.asset_type === 'erc20' ? null : finalMinItems,
-        ...(assetFields ? assetFields : {})
+        ...storedAssetFields
       })
       .select()
       .single();
@@ -574,17 +574,18 @@ export class DbService {
     const finalAttrVal = attrVal || 'ALL';
     const finalMinItems = minItems != null ? minItems : 1;
 
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from('verifier_rules')
       .select('*')
       .eq('server_id', serverId)
       .eq('channel_id', channelId)
       .eq('role_id', roleId)
       .eq('slug', finalSlug)
-      .eq('attribute_key', finalAttrKey)
-      .eq('attribute_value', finalAttrVal)
-      .eq('min_items', finalMinItems)
-      .single();
+
+      .eq('min_items', finalMinItems);
+    const traits = ruleTraits({attribute_key:finalAttrKey,attribute_value:finalAttrVal});
+    query = traits ? query.eq('trait_key',traitFilterKey({trait_filter:traits})) : query.is('trait_key',null);
+    const {data,error}=await query.single();
     
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
       throw error;
@@ -1138,9 +1139,7 @@ export class DbService {
           role_id: removedRule.role_id,
           role_name: removedRule.role_name,
           slug: removedRule.slug,
-          attribute_key: removedRule.attribute_key,
-          attribute_value: removedRule.attribute_value,
-          ...(removedRule.trait_filter !== undefined ? { trait_filter: ruleTraits(removedRule) } : {}),
+          trait_filter: ruleTraits(removedRule),
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
           ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria, rule_label: removedRule.rule_label ?? null } : {}),

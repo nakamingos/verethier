@@ -1,4 +1,4 @@
-import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
+import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -251,8 +251,8 @@ export class RemoveRuleHandler {
       channel_name: removedRuleData.channel_name,
       ...removedRuleData,
       slug: removedRuleData.slug,
-      attribute_key: removedRuleData.attribute_key,
-      attribute_value: removedRuleData.attribute_value,
+      attribute_key: singleTrait(removedRuleData).key,
+      attribute_value: singleTrait(removedRuleData).value,
       min_items: removedRuleData.min_items
     });
     const embed = AdminFeedback.destructive(
@@ -298,7 +298,7 @@ export class RemoveRuleHandler {
       
       // Add clean rule info for each removed rule using list format
       successful.forEach(s => {
-        const attribute = ruleTraits(s.data) ? traitFilterLabel(s.data) : formatAttribute(s.data.attribute_key, s.data.attribute_value);
+        const attribute = ruleTraits(s.data) ? traitFilterLabel(s.data) : formatAttribute(singleTrait(s.data).key, singleTrait(s.data).value);
         const slug = s.data.slug || 'ALL';
         const minItems = s.data.min_items || 1;
         

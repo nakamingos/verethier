@@ -1,3 +1,4 @@
+import { singleTrait } from '@/utils/trait-filter.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ButtonInteraction, ChatInputCommandInteraction, ComponentType, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { DbService } from '../../db.service';
@@ -145,8 +146,8 @@ export class RuleConfirmationInteractionHandler {
         channel_name: ruleToRemove.channel_name,
         ...ruleToRemove,
         slug: ruleToRemove.slug,
-        attribute_key: ruleToRemove.attribute_key,
-        attribute_value: ruleToRemove.attribute_value,
+        attribute_key: singleTrait(ruleToRemove).key,
+        attribute_value: singleTrait(ruleToRemove).value,
         min_items: ruleToRemove.min_items
       });
       const embedTitle = confirmationInfo.isDuplicateRule 
