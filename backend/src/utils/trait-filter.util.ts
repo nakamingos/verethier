@@ -6,6 +6,7 @@ export interface TraitFilter {
   operator: 'AND' | 'OR';
   conditions: TraitCondition[];
 }
+/** Legacy fields are accepted only for command inputs and historical audit snapshots. */
 export interface TraitRule {
   trait_filter?: TraitFilter | null;
   attribute_key?: string | null;
@@ -80,6 +81,10 @@ export function ruleTraits(rule: TraitRule): TraitFilter | null {
   return key === 'ALL' && value === 'ALL'
     ? null
     : normalizeTraitFilter({ operator: 'AND', conditions: [{ key, value }] });
+}
+/** Single-condition command/display adapter; never a second stored definition. */
+export function singleTrait(rule: TraitRule): TraitCondition {
+  return ruleTraits(rule)?.conditions[0] || {key:'ALL',value:'ALL'};
 }
 export function traitFilterKey(rule: TraitRule): string {
   const filter = ruleTraits(rule);

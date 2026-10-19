@@ -1,4 +1,4 @@
-import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
+import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope } from '@/utils/nft-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
@@ -254,7 +254,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20'].includes(rule.asset_type) && rule.attribute_key && rule.attribute_value) {
+    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20'].includes(rule.asset_type) && singleTrait(rule).key && singleTrait(rule).value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;
@@ -264,7 +264,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
       
       fields.push({
         name: '**Attribute**',
-        value: ruleTraits(rule) ? traitFilterLabel(rule) : formatAttribute(rule.attribute_key, rule.attribute_value),
+        value: ruleTraits(rule) ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value),
         inline: true
       });
     }

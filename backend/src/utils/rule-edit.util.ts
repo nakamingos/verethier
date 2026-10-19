@@ -1,7 +1,7 @@
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria } from './inscription-rule.util';
 import { tokenAmount, tokenMinimum } from './erc20-rule.util';
-import { ruleTraits, traitFilterKey, traitFilterLabel } from './trait-filter.util';
+import { ruleTraits, singleTrait, traitFilterKey, traitFilterLabel } from './trait-filter.util';
 
 // Ignore provider display names and the trait snapshot, which scheduled checks can
 // refresh while an administrator has the editor open.
@@ -57,8 +57,8 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
   const traits: RuleEditField[] = (ruleTraits(rule)?.conditions.length || 0) > 1 ? [
     { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 }, minimum,
   ] : [
-    { key: 'attribute_key', label: 'Attribute key (ALL for any)', value: rule.attribute_key || 'ALL', maxLength: traitLimit },
-    { key: 'attribute_value', label: 'Attribute value (ALL for any)', value: rule.attribute_value || 'ALL', maxLength: traitLimit }, minimum];
+    { key: 'attribute_key', label: 'Attribute key (ALL for any)', value: singleTrait(rule).key, maxLength: traitLimit },
+    { key: 'attribute_value', label: 'Attribute value (ALL for any)', value: singleTrait(rule).value, maxLength: traitLimit }, minimum];
   if (rule.asset_type === 'nft') return [{
     key: 'token_ids', label: rule.token_standard === 'erc1155' ? 'Token IDs (blank = 0-99)' : 'Token IDs (blank = any)',
     value: compactTokenIds(rule.token_ids), list: true

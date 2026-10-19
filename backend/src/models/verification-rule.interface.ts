@@ -9,7 +9,7 @@ import { NftRuleFields } from './verifier-role.interface';
  * Rules support flexible matching including:
  * - Collection-specific or all collections (slug)
  * - Channel-specific or server-wide application (channel_id)
- * - Attribute-based filtering (attribute_key/attribute_value)
+ * - Canonical trait_filter conditions (legacy fields only for command/audit input)
  * - Minimum quantity requirements (min_items)
  * 
  * This is a flexible partial interface that supports both complete rule objects
@@ -18,8 +18,8 @@ import { NftRuleFields } from './verifier-role.interface';
 export interface VerificationRule extends NftRuleFields {
   role_id: string;                        // Discord role ID to assign
   slug: string;                           // Collection slug ('ALL' for any collection)
-  attribute_key: string;                  // Asset attribute key to match ('ALL' for any)
-  attribute_value: string;                // Asset attribute value to match ('ALL' for any)
+  attribute_key?: string;                  // Asset attribute key to match ('ALL' for any)
+  attribute_value?: string;                // Asset attribute value to match ('ALL' for any)
   min_items: number | null;               // Minimum number of matching assets required
   channel_id?: string | null;             // Discord channel ID (null for server-wide)
 }

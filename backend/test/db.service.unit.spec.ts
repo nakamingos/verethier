@@ -236,8 +236,7 @@ describe('DbService (Unit Tests)', () => {
         slug: 'test-slug',
         role_id: 'role123',
         role_name: 'Test Role',
-        attribute_key: 'attribute',
-        attribute_value: 'value',
+        trait_filter: {operator:'AND',conditions:[{key:'attribute',value:'value'}]},
         min_items: 1
       });
       expect(mockSupabaseClient.select).toHaveBeenCalled();
@@ -272,8 +271,7 @@ describe('DbService (Unit Tests)', () => {
         slug: 'ALL',
         role_id: 'role123',
         role_name: 'Test Role',
-        attribute_key: 'ALL',
-        attribute_value: 'ALL',
+        trait_filter: null,
         min_items: 1
       });
     });

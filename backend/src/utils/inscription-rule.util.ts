@@ -1,3 +1,4 @@
+import { ruleTraits } from './trait-filter.util';
 import { escapeMarkdown } from 'discord.js';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
@@ -58,7 +59,7 @@ export function inscriptionCriteria(rule: Partial<VerifierRole>): InscriptionCri
         || (index > 0 && BigInt(range[0]) <= BigInt(criteria.ranges[index - 1][1]) + 1n))) return invalid();
   } else return invalid();
   if (!['ordinal', 'ethscription'].includes(rule.asset_type ?? 'ethscription') || rule.slug != null
-    || (rule.attribute_key ?? 'ALL') !== 'ALL' || (rule.attribute_value ?? 'ALL') !== 'ALL' || rule.ordinal_trait_snapshot != null) return invalid();
+    || !!ruleTraits(rule) || rule.ordinal_trait_snapshot != null) return invalid();
   return criteria;
 }
 

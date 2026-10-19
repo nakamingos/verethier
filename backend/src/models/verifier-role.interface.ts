@@ -31,8 +31,6 @@ export interface VerifierRole extends NftRuleFields {
   slug: string | null;
   role_id: string;
   role_name: string | null;
-  attribute_key: string | null;
-  attribute_value: string | null;
   min_items: number | null;
   // message_id removed - using channel-based verification
   // ...other fields as needed

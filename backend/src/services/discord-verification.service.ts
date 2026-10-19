@@ -1,4 +1,4 @@
-import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
+import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { AssetOwnershipService } from './asset-ownership.service';
 import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
@@ -227,8 +227,8 @@ export class DiscordVerificationService {
     }
 
     const useCollectionName =
-      (!rule.attribute_key || rule.attribute_key === 'ALL') &&
-      (!rule.attribute_value || rule.attribute_value === 'ALL');
+      (!singleTrait(rule).key || singleTrait(rule).key === 'ALL') &&
+      (!singleTrait(rule).value || singleTrait(rule).value === 'ALL');
     const separator = useCollectionName && labels.length > 1 ? '\u00A0\u2228 ' : (useCollectionName ? ' ∨ ' : ', ');
 
     return labels.join(separator);
@@ -248,8 +248,8 @@ export class DiscordVerificationService {
     }
 
     const useCollectionName =
-      (!rule.attribute_key || rule.attribute_key === 'ALL') &&
-      (!rule.attribute_value || rule.attribute_value === 'ALL');
+      (!singleTrait(rule).key || singleTrait(rule).key === 'ALL') &&
+      (!singleTrait(rule).value || singleTrait(rule).value === 'ALL');
 
     return slugs.map(value => {
       const collectionName = collectionNames[value];
@@ -326,11 +326,11 @@ export class DiscordVerificationService {
     }
     const slugCount = this.parseRuleSlugs(rule.slug).length;
     const hasAttributeKey =
-      !!rule.attribute_key &&
-      rule.attribute_key !== 'ALL';
+      !!singleTrait(rule).key &&
+      singleTrait(rule).key !== 'ALL';
     const hasSpecificAttributeValue =
-      !!rule.attribute_value &&
-      rule.attribute_value !== 'ALL';
+      !!singleTrait(rule).value &&
+      singleTrait(rule).value !== 'ALL';
     const hasAttributeCriteria = hasAttributeKey || hasSpecificAttributeValue;
     const isCollectionOnly = !hasAttributeCriteria;
     const currentCount = typeof matchingCount === 'number' ? matchingCount : minItems;
@@ -363,9 +363,9 @@ export class DiscordVerificationService {
         : `Own ${minItems}+ ${collectionReference}`;
 
       if (hasAttributeKey) {
-        requirement += ` with ${this.humanizeAttributeKey(rule.attribute_key!)}`;
+        requirement += ` with ${this.humanizeAttributeKey(singleTrait(rule).key!)}`;
         if (hasSpecificAttributeValue) {
-          requirement += `: ${rule.attribute_value}`;
+          requirement += `: ${singleTrait(rule).value}`;
         }
       }
 
@@ -376,12 +376,12 @@ export class DiscordVerificationService {
       return requirement;
     }
 
-    if (rule.attribute_key && rule.attribute_key !== 'ALL') {
+    if (singleTrait(rule).key && singleTrait(rule).key !== 'ALL') {
       let requirement = style === 'holding'
-        ? `${currentCount} NFTs with ${this.humanizeAttributeKey(rule.attribute_key)}`
-        : `Own ${minItems}+ NFTs with ${this.humanizeAttributeKey(rule.attribute_key)}`;
-      if (rule.attribute_value && rule.attribute_value !== 'ALL') {
-        requirement += `: ${rule.attribute_value}`;
+        ? `${currentCount} NFTs with ${this.humanizeAttributeKey(singleTrait(rule).key)}`
+        : `Own ${minItems}+ NFTs with ${this.humanizeAttributeKey(singleTrait(rule).key)}`;
+      if (singleTrait(rule).value && singleTrait(rule).value !== 'ALL') {
+        requirement += `: ${singleTrait(rule).value}`;
       }
       if (shouldShowRequirementProgress) {
         requirement += ` (${matchingCount}/${minItems})`;
@@ -1299,8 +1299,8 @@ export class DiscordVerificationService {
     rule: Pick<VerificationDisplayRule, 'slug' | 'attribute_key' | 'attribute_value' | 'trait_filter'>
   ): boolean {
     const hasAttributeCriteria =
-      (!!rule.attribute_key && rule.attribute_key !== 'ALL') ||
-      (!!rule.attribute_value && rule.attribute_value !== 'ALL');
+      (!!singleTrait(rule).key && singleTrait(rule).key !== 'ALL') ||
+      (!!singleTrait(rule).value && singleTrait(rule).value !== 'ALL');
 
     return !ruleTraits(rule) && !hasAttributeCriteria && this.parseRuleSlugs(rule.slug).length > 0;
   }
