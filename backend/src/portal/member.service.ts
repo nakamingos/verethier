@@ -1,3 +1,4 @@
+import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import {
   BadRequestException,
   ConflictException,
@@ -122,8 +123,8 @@ export class MemberService {
             minimum:
               rule.asset_type === 'erc20' ? rule.min_balance : rule.min_items,
             trait:
-              rule.attribute_key && rule.attribute_key !== 'ALL'
-                ? `${rule.attribute_key}: ${rule.attribute_value}`
+              ruleTraits(rule)
+                ? traitFilterLabel(rule)
                 : null,
             tokenIds: rule.token_ids,
             tokenStandard: rule.token_standard,

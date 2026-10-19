@@ -1,3 +1,4 @@
+import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { AssetOwnershipService } from './asset-ownership.service';
 import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
@@ -318,6 +319,11 @@ export class DiscordVerificationService {
         : `Own ${minItems}+ ${rule.inscription_criteria ? 'matching' : 'from'} ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
     }
     const collectionLabel = this.formatCollectionLabel(rule, collectionNames);
+    if ((ruleTraits(rule)?.conditions.length || 0) > 1) {
+      const scope = `${collectionLabel} with ${traitFilterLabel(rule)}`;
+      return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
+        : `Own ${minItems}+ from ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
+    }
     const slugCount = this.parseRuleSlugs(rule.slug).length;
     const hasAttributeKey =
       !!rule.attribute_key &&
@@ -1290,13 +1296,13 @@ export class DiscordVerificationService {
   }
 
   private isCollectionOnlyRule(
-    rule: Pick<VerificationDisplayRule, 'slug' | 'attribute_key' | 'attribute_value'>
+    rule: Pick<VerificationDisplayRule, 'slug' | 'attribute_key' | 'attribute_value' | 'trait_filter'>
   ): boolean {
     const hasAttributeCriteria =
       (!!rule.attribute_key && rule.attribute_key !== 'ALL') ||
       (!!rule.attribute_value && rule.attribute_value !== 'ALL');
 
-    return !hasAttributeCriteria && this.parseRuleSlugs(rule.slug).length > 0;
+    return !ruleTraits(rule) && !hasAttributeCriteria && this.parseRuleSlugs(rule.slug).length > 0;
   }
 
   private formatRoleDisplay(roleName: string, requirements: string[]): string {

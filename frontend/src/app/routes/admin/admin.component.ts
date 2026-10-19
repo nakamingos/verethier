@@ -48,6 +48,102 @@ export class AdminComponent implements OnInit, OnDestroy {
   inputs: Record<string, string> = {};
   draft: any = {};
   mode = 'collection';
+  editTraits: any = { operator: 'AND', conditions: [] };
+  readonly traitOperatorChoices: SelectChoice[] = [
+    { value: 'AND', label: 'AND — match every condition' },
+    { value: 'OR', label: 'OR — match any condition' },
+  ];
+  get traitsEnabled() {
+    return this.data?.capabilities?.multi_trait === true;
+  }
+  get traitModel(): any {
+    return this.editor?.new ? this.draft.trait_filter : this.editTraits;
+  }
+  get hasTraitEditor() {
+    return this.editor?.new
+      ? this.draft.asset_type !== 'erc20' &&
+          (this.draft.asset_type === 'nft' || this.mode === 'collection')
+      : this.editor &&
+          this.editor.asset_type !== 'erc20' &&
+          !this.editor.inscription_criteria;
+  }
+  traitState(rule: any) {
+    return rule.trait_filter !== undefined
+      ? structuredClone(
+          rule.trait_filter || { operator: 'AND', conditions: [] },
+        )
+      : {
+          operator: 'AND',
+          conditions:
+            (rule.attribute_key && rule.attribute_key !== 'ALL') ||
+            (rule.attribute_value && rule.attribute_value !== 'ALL')
+              ? [
+                  {
+                    key: rule.attribute_key || 'ALL',
+                    value: rule.attribute_value || 'ALL',
+                  },
+                ]
+              : [],
+        };
+  }
+  traitPayload() {
+    const model = this.traitModel;
+    return model?.conditions.length
+      ? {
+          operator: model.conditions.length === 1 ? 'AND' : model.operator,
+          conditions: model.conditions.map((c: any) => ({
+            key: c.key.trim(),
+            value: c.value.trim() || 'ALL',
+          })),
+        }
+      : null;
+  }
+  addTrait() {
+    this.traitModel.conditions.push({ key: '', value: 'ALL' });
+    this.traitsChanged();
+  }
+  removeTrait(index: number) {
+    this.traitModel.conditions.splice(index, 1);
+    this.traitsChanged();
+  }
+  traitsChanged() {
+    this.review = false;
+    if (!this.editor?.new) {
+      if (this.traitsEnabled) {
+        delete this.inputs['attribute_key'];
+        delete this.inputs['attribute_value'];
+        this.inputs['trait_filter'] = JSON.stringify(this.traitPayload());
+      } else {
+        this.inputs['attribute_key'] =
+          this.traitModel.conditions[0]?.key || 'ALL';
+        this.inputs['attribute_value'] =
+          this.traitModel.conditions[0]?.value || 'ALL';
+      }
+    }
+  }
+  async suggestTrait(index: number, field: string) {
+    const row = this.traitModel.conditions[index];
+    const rule = this.editor.new ? this.draft : this.editor;
+    const params = new URLSearchParams({
+      asset: rule.asset_type,
+      field,
+      slug: this.editor.new ? rule.slug || '' : this.inputs['slug'] || '',
+      key: row.key || '',
+      contract: rule.contract_address || '',
+      network:
+        rule.network || (rule.chain_id === 4663 ? 'robinhood' : 'ethereum'),
+    });
+    const epoch = ++this.suggestionEpoch;
+    try {
+      const result = await this.api(
+        `/servers/${this.selected}/suggestions?${params}`,
+      );
+      if (epoch === this.suggestionEpoch)
+        this.suggestions[field] = result.values;
+    } catch {
+      if (epoch === this.suggestionEpoch) this.suggestions[field] = [];
+    }
+  }
   review = false;
   private newRuleDrafts = new Map<
     string,
@@ -646,8 +742,14 @@ export class AdminComponent implements OnInit, OnDestroy {
     );
   }
   describe(r: any) {
-    const traits =
-      r.attribute_key && r.attribute_key !== 'ALL'
+    const traits = r.trait_filter
+      ? ' · ' +
+        r.trait_filter.conditions
+          .map((c: any) =>
+            c.value === 'ALL' ? `${c.key} (any value)` : `${c.key}=${c.value}`,
+          )
+          .join(` ${r.trait_filter.operator} `)
+      : r.attribute_key && r.attribute_key !== 'ALL'
         ? ` · ${r.attribute_key}=${r.attribute_value}`
         : '';
     const selection = r.inscription_criteria;
@@ -778,6 +880,7 @@ export class AdminComponent implements OnInit, OnDestroy {
           min_items: this.activeGroup?.minimum || 1,
           network: 'ethereum',
         };
+    this.draft.trait_filter ||= this.traitState(this.draft);
   }
   edit(rule: any) {
     if (this.busy) return;
@@ -793,6 +896,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.inputs = Object.fromEntries(
       rule.fields.map((f: any) => [f.key, f.value]),
     );
+    this.editTraits = this.traitState(rule);
     requestAnimationFrame(() =>
       document
         .getElementById('edit-rule-' + rule.id)
@@ -812,6 +916,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       role_name: name,
       min_items: 1,
       network: 'ethereum',
+      trait_filter: { operator: 'AND', conditions: [] },
     };
     this.mode = 'collection';
     this.review = false;
@@ -872,6 +977,15 @@ export class AdminComponent implements OnInit, OnDestroy {
     for (const key of fields)
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
+    if (this.hasTraitEditor) {
+      delete result.attribute_key;
+      delete result.attribute_value;
+      if (this.traitsEnabled) result.trait_filter = this.traitPayload();
+      else if (this.traitPayload()) {
+        result.attribute_key = this.traitModel.conditions[0].key;
+        result.attribute_value = this.traitModel.conditions[0].value || 'ALL';
+      }
+    }
     return result;
   }
   get changedRole() {

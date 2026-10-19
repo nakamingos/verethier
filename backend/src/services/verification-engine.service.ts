@@ -1,3 +1,4 @@
+import { ruleTraits } from '@/utils/trait-filter.util';
 import { tokenMinimum, tokenAmount, tokenRuleScope } from '@/utils/erc20-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
@@ -135,6 +136,7 @@ export class VerificationEngine {
           collection: rule.asset_type === 'erc20' ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: rule.attribute_key || 'ALL',
           attributeValue: rule.attribute_value || 'ALL',
+          ...((ruleTraits(rule)?.conditions.length || 0) > 1 ? {traitFilter: ruleTraits(rule)} : {}),
           minItems: requiredDisplay,
           foundAssets: assetCount,
           ...(blockedWallets.length ? { blockedWallets } : {}),
@@ -489,6 +491,7 @@ export interface VerificationResult {
     collection: string;
     attributeKey: string;
     attributeValue: string;
+    traitFilter?: ReturnType<typeof ruleTraits>;
     minItems: AssetCount;
     foundAssets: AssetCount;
     blockedWallets?: string[];

@@ -1,10 +1,11 @@
+import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { Injectable, Logger } from '@nestjs/common';
-import { ChatInputCommandInteraction, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ButtonInteraction } from 'discord.js';
+import { AttachmentBuilder, ChatInputCommandInteraction, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ButtonInteraction } from 'discord.js';
 import { DbService } from '../../db.service';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { formatAttribute } from '../utils/rule-validation.util';
@@ -185,17 +186,21 @@ export class ListRulesHandler {
     const title = `${assetType ? ASSET_TYPE_LABELS[assetType] + ' ' : ''}Verification Rules (Page ${page + 1}/${totalPages})`;
     const footer = `Showing ${rulesForPage.length} of ${allRules.length} total rules`;
 
-    const embed = AdminFeedback.info(title, description)
+    const oversized = description.length > 4096;
+    const files = oversized ? [new AttachmentBuilder(Buffer.from(description, 'utf8'), {name: 'rule-criteria.txt'})] : [];
+    const embed = AdminFeedback.info(title, oversized ? 'The complete rule criteria exceed Discord’s message limit. See the attached file.' : description)
       .setFooter({ text: footer });
 
     if (isUpdate && interaction instanceof ButtonInteraction) {
       await interaction.update({
         embeds: [embed],
+        attachments: [], files,
         components: [actionRow]
       });
     } else {
       await interaction.editReply({
         embeds: [embed],
+        attachments: [], files,
         components: [actionRow]
       });
     }
@@ -267,7 +272,7 @@ export class ListRulesHandler {
       if (rule.asset_type === 'erc20') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
-      const attribute = formatAttribute(rule.attribute_key, rule.attribute_value);
+      const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(rule.attribute_key, rule.attribute_value);
       const slug = rule.slug || 'ALL';
       const minItems = rule.min_items || 1;
       const ruleId = rule.id || 'N/A';

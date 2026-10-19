@@ -506,7 +506,7 @@ describe('Portal server boundaries', () => {
     );
     expect(portalRule(rule).fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: 'attribute_value', value: 'Gold' }),
+        expect.objectContaining({ key: 'trait_filter', value: JSON.stringify({operator:'AND',conditions:[{key:'Category',value:'Gold'}]}) }),
       ]),
     );
   });

@@ -1,6 +1,7 @@
 import { AssetCount, NftRuleFields } from '@/models/verifier-role.interface';
 import { nftNetworkLabel } from './nft-network.util';
 import { nftTrait } from './nft-trait.util';
+import { traitFilterLabel } from './trait-filter.util';
 
 export const NFT_BATCH_SIZE = 100;
 export const NFT_MAX_IDS = 1000;
@@ -44,7 +45,7 @@ export function nftRuleScope(rule: Partial<NftRuleFields>): string {
       : ` · IDs ${ids.length <= 8 ? ids.join(', ') : `${ids.slice(0, 5).join(', ')}, … (${ids.length} IDs)`}`;
   }
   const trait = nftTrait(rule);
-  const attribute = trait.enabled ? ` · ${trait.key}${trait.value === 'ALL' ? ' (any value)' : `=${trait.value}`}` : '';
+  const attribute = trait.enabled ? ` · ${traitFilterLabel(rule)}` : '';
   return `${nftRuleLabel(rule)} · ${nftNetworkLabel(rule.chain_id)} · ${rule.token_standard === 'erc1155' ? 'ERC-1155' : 'ERC-721'}${scope}${attribute}`;
 }
 

@@ -87,6 +87,15 @@ describe('Fresh on-chain NFT traits', () => {
     expect(await service.count({ ...funkSeats, token_standard: 'erc1155', token_ids: ['50'] }, [wallet])).toBe(3n);
     expect(rpc.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'uri', args: [50n], blockNumber: 789n }));
   });
+  it('counts ERC-1155 copies once for OR and isolates the complete predicate in the cache', async () => {
+    const context: NftCheckContext = {checks:new Map()};
+    const conditions=[{key:'Eyewear',value:'Nerd Glasses'},{key:'Hat',value:'Crown'}];
+    const multi={...funkSeats,token_standard:'erc1155' as const,token_ids:['50'],trait_filter:{operator:'OR' as const,conditions}};
+    expect(await service.count(multi,[wallet],context)).toBe(3n);
+    expect(await service.count({...multi,trait_filter:{operator:'AND',conditions}},[wallet],context)).toBe(0n);
+    expect(await service.count({...multi,trait_filter:{operator:'OR',conditions:[conditions[0],{key:'Hat',value:'Cap'}]}},[wallet],context)).toBe(3n);
+    expect(rpc.readContract.mock.calls.filter(([call])=>call.functionName==='uri')).toHaveLength(1);
+  });
   it('does not add metadata RPC calls to quantity-only verification', async () => {
     expect(await service.count({ ...funkSeats, attribute_key: 'ALL', attribute_value: 'ALL' }, [wallet])).toBe(1n);
     expect(rpc.readContract).toHaveBeenCalledTimes(1);

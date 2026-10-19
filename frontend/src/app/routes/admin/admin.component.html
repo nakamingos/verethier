@@ -623,21 +623,7 @@
                           draft.asset_type !== 'erc20' &&
                           (draft.asset_type === 'nft' || mode === 'collection')
                         ) {
-                          <label
-                            >Attribute key (optional):<input
-                              name="key"
-                              [(ngModel)]="draft.attribute_key"
-                              list="key-suggestions"
-                              (focus)="suggest('attribute_key')"
-                              placeholder="ALL" /></label
-                          ><label
-                            >Attribute value (optional):<input
-                              name="value"
-                              [(ngModel)]="draft.attribute_value"
-                              list="value-suggestions"
-                              (focus)="suggest('attribute_value')"
-                              placeholder="ALL"
-                          /></label>
+                          <ng-container *ngTemplateOutlet="traitControls" />
                         }
                         @if (draft.asset_type === 'erc20') {
                           <label
@@ -693,28 +679,124 @@
                           /></label>
                         }
                         @for (field of editor.fields; track field.key) {
-                          <label [class.wide]="field.list"
-                            >{{ field.label
-                            }}{{ field.label.endsWith(':') ? '' : ':' }}
-                            @if (field.list) {
-                              <textarea
-                                [name]="field.key"
-                                [(ngModel)]="inputs[field.key]"
-                                rows="3"
-                                [maxlength]="field.maxLength || 8000"
-                              ></textarea>
-                            } @else {
-                              <input
-                                [name]="field.key"
-                                [(ngModel)]="inputs[field.key]"
-                                [required]="field.required || false"
-                                [maxlength]="field.maxLength || 8000"
-                              />
-                            }
-                          </label>
+                          @if (
+                            !hasTraitEditor ||
+                            ![
+                              'attribute_key',
+                              'attribute_value',
+                              'trait_filter',
+                            ].includes(field.key)
+                          ) {
+                            <label [class.wide]="field.list"
+                              >{{ field.label
+                              }}{{ field.label.endsWith(':') ? '' : ':' }}
+                              @if (field.list) {
+                                <textarea
+                                  [name]="field.key"
+                                  [(ngModel)]="inputs[field.key]"
+                                  rows="3"
+                                  [maxlength]="field.maxLength || 8000"
+                                ></textarea>
+                              } @else {
+                                <input
+                                  [name]="field.key"
+                                  [(ngModel)]="inputs[field.key]"
+                                  [required]="field.required || false"
+                                  [maxlength]="field.maxLength || 8000"
+                                />
+                              }
+                            </label>
+                          }
+                        }
+                        @if (hasTraitEditor) {
+                          <ng-container *ngTemplateOutlet="traitControls" />
                         }
                       </div>
                     }
+                    <ng-template #traitControls>
+                      @if (traitModel; as traits) {
+                        <div class="wide">
+                          <div class="actions">
+                            <span>Trait conditions:</span>
+                            <button
+                              type="button"
+                              (click)="addTrait()"
+                              [disabled]="
+                                busy ||
+                                traits.conditions.length >=
+                                  (traitsEnabled ? 10 : 1)
+                              "
+                            >
+                              Add trait
+                            </button>
+                          </div>
+                          @if (traits.conditions.length > 1) {
+                            <label
+                              >Match:<span class="select-control"
+                                ><app-pixel-select
+                                  name="traitOperator"
+                                  [(ngModel)]="traits.operator"
+                                  (ngModelChange)="traitsChanged()"
+                                  [options]="traitOperatorChoices"
+                                  label="Trait matching" /></span
+                            ></label>
+                          }
+                          @for (
+                            condition of traits.conditions;
+                            track $index;
+                            let i = $index
+                          ) {
+                            <div class="form-grid">
+                              <label
+                                >Attribute key:<input
+                                  [name]="'traitKey' + i"
+                                  [(ngModel)]="condition.key"
+                                  (ngModelChange)="traitsChanged()"
+                                  (focus)="suggestTrait(i, 'attribute_key')"
+                                  list="key-suggestions"
+                                  required
+                                  [maxlength]="
+                                    (editor.new
+                                      ? draft.asset_type
+                                      : editor.asset_type) === 'ethscription'
+                                      ? 4000
+                                      : 100
+                                  "
+                              /></label>
+                              <label
+                                >Attribute value:<input
+                                  [name]="'traitValue' + i"
+                                  [(ngModel)]="condition.value"
+                                  (ngModelChange)="traitsChanged()"
+                                  (focus)="suggestTrait(i, 'attribute_value')"
+                                  list="value-suggestions"
+                                  placeholder="ALL"
+                                  [maxlength]="
+                                    (editor.new
+                                      ? draft.asset_type
+                                      : editor.asset_type) === 'ethscription'
+                                      ? 4000
+                                      : 100
+                                  "
+                              /></label>
+                              <button
+                                type="button"
+                                (click)="removeTrait(i)"
+                                [disabled]="busy"
+                                [attr.aria-label]="'Remove trait ' + (i + 1)"
+                              >
+                                Remove trait
+                              </button>
+                            </div>
+                          }
+                          <p class="muted">
+                            Conditions apply to each collectible. ALL matches
+                            any value. Minimum items counts matching
+                            collectibles; OR counts each item once.
+                          </p>
+                        </div>
+                      }
+                    </ng-template>
                   </form>
                   @if (review) {
                     <div class="notice">

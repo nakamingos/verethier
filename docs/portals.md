@@ -127,7 +127,13 @@ Optional ideas are tracked in the [optional feature backlog](plans/optional-feat
 
 Public discovery, optional add-ons, additional networks and broader wallet/address support remain deferred.
 
-The guide's multi-trait AND/OR editor and expanded ERC-721 ID selections are separate rule-engine work. This admin milestone uses the existing, tested single-trait criteria and token-ID limits rather than advertising unsupported combinations.
+The rule editor supports up to ten trait conditions on NFT, Ordinals and Ethscriptions collection rules. Choose AND to require every condition on the same collectible, or OR to accept any condition. Matching is case-insensitive; `ALL` as a value accepts any value for that key. Remove all conditions for quantity-only rules. OR counts an asset once, and ERC-1155 matching copies retain their quantities. Conditions do not combine across different assets. Nested groups are not supported.
+
+The editor retains conditions when Add rule collapses a draft. Review/Save, edit, Undo/Redo and duplicate detection use the full predicate. Discord add commands keep their existing single-trait options; multi-trait rules display every condition, and the simple Discord edit modal directs administrators to the Control Room instead of truncating the rule. ERC-721 ID lists/ranges and quantity thresholds remain the next milestone; current single-ID restrictions still apply.
+
+Migration `20261018060000_multi_trait_rules.sql` backfills canonical `trait_filter` JSON and its normalized identity without changing IDs, assignments, proof history or single-trait snapshot hashes. Database triggers guard legacy single-trait input/projection columns, prevent single-field edits from truncating multi-trait rules and invalidate stale Ordinals snapshots. Those projection columns are temporary rollout compatibility, not a second authoritative definition; physical removal remains a follow-up after older application versions are retired. Apply the migration before releasing the new backend/editor. Do not create multi-trait rules while an older verification worker remains active.
+
+Rehearse with `python3 backend/test/check-multi-trait-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. The harness checks application-value preservation and exercises canonicalization, duplicates, legacy inputs, portal edits/Undo, snapshot invalidation and permissions. `node frontend/test/multi-trait.smoke.cjs` covers complete edit payloads and draft retention at desktop and mobile widths.
 
 ## Theme reference colors
 

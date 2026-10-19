@@ -30,6 +30,7 @@ import { prepareRuleCriteria } from '@/services/rule-create.util';
 import { normalizeRoleName } from '@/services/discord-commands/utils/role-management.util';
 import { PortalSession } from './portal-auth.service';
 import { normalizeBlockedWallet } from '@/services/wallet-block.service';
+import { ruleTraits } from '@/utils/trait-filter.util';
 import {
   PortalRuleDto,
   PortalEditDto,
@@ -45,10 +46,18 @@ import {
 const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
 export const portalRule = (rule: VerifierRole) => {
   const { ordinal_trait_snapshot, ...safe } = rule;
+  const fields = ruleEditFields(rule);
+  if (!rule.inscription_criteria && rule.asset_type !== 'erc20') {
+    const first = fields.findIndex(f => ['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
+    const clean = fields.filter(f => !['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
+    clean.splice(first, 0, { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 });
+    fields.splice(0, fields.length, ...clean);
+  }
   return {
     ...safe,
+    trait_filter: ruleTraits(rule),
     version: ruleEditVersion(rule),
-    fields: ruleEditFields(rule),
+    fields,
   };
 };
 @Injectable()
@@ -155,6 +164,7 @@ export class PortalService {
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
       rules: rules.map(portalRule),
+      capabilities: { multi_trait: true },
       settings,
       role_actions: actions.data || [],
       channels: [...channels.values()]
@@ -386,18 +396,15 @@ export class PortalService {
     if (
       !input.inputs ||
       Object.keys(input.inputs).length > 8 ||
-      Object.values(input.inputs).some(
-        (v) => typeof v !== 'string' || v.length > 8000,
+      Object.entries(input.inputs).some(
+        ([key, v]) => typeof v !== 'string' || v.length > (key === 'trait_filter' ? 20000 : 8000),
       )
     )
       throw new BadRequestException('Invalid rule fields.');
     const before = await this.rule(server, id, input.version);
     const fields = ruleEditFields(before);
-    const sameCriteria =
-      fields.every((field) => input.inputs[field.key] === field.value) &&
-      Object.keys(input.inputs).every((key) =>
-        fields.some((field) => field.key === key),
-      );
+    const sameCriteria = [fields, portalRule(before).fields].some(set =>
+      set.every(field => input.inputs[field.key] === field.value) && Object.keys(input.inputs).every(key => set.some(field => field.key === key)));
     const after = sameCriteria
       ? { ...before }
       : await this.edits.prepare(before, input.inputs);

@@ -11,6 +11,7 @@ import { VerifierRole } from '@/models/verifier-role.interface';
 import { ruleCriteriaKey, ruleEditFields, ruleEditSummary, ruleEditVersion, splitRuleEditList } from '@/utils/rule-edit.util';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
+import { ruleTraits } from '@/utils/trait-filter.util';
 
 interface EditSession {
   owner: string; server: string; before: VerifierRole; after?: VerifierRole;
@@ -37,6 +38,7 @@ export class EditRuleHandler {
       if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) throw new Error('Enter one valid rule ID from /setup list-rules.');
       const before = await this.db.getRuleForServer(id, interaction.guildId);
       if (!before || before.server_id !== interaction.guildId) throw new Error('This rule was not found in this server.');
+      if ((ruleTraits(before)?.conditions.length || 0) > 1) throw new Error('This rule has multiple trait conditions. Edit it in the web Control Room to preserve the complete filter.');
       const modal = new ModalBuilder().setCustomId(`edit-rule-form-${interaction.id}`).setTitle(`Edit rule ${id}`);
       for (const field of ruleEditFields(before)) {
         const values = field.list ? splitRuleEditList(field.value) : [field.value];

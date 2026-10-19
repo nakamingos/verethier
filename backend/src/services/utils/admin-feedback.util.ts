@@ -1,3 +1,4 @@
+import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -162,7 +163,7 @@ export class AdminFeedback {
     if (rule.inscription_criteria) return result + `**Inscriptions:** ${inscriptionRuleScope(rule)} · min ${rule.min_items || 1}`;
     if (rule.asset_type === 'ordinal') return result + `**Collection:** ${ordinalRuleCriteria(rule)}`;
     result += `**Collection:** ${rule.slug}\n`;
-    result += `**Attribute:** ${formatAttribute(rule.attribute_key, rule.attribute_value)}\n`;
+    result += `**Attribute:** ${ruleTraits(rule) ? traitFilterLabel(rule) : formatAttribute(rule.attribute_key, rule.attribute_value)}\n`;
     result += `**Min Items:** ${rule.min_items}`;
     
     return result;

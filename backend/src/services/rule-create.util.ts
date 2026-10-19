@@ -6,6 +6,7 @@ import {
 import { normalizeRuleLabel } from '@/utils/inscription-rule.util';
 import { nftTrait } from '@/utils/nft-trait.util';
 import { ordinalTrait } from '@/utils/ordinal-rule.util';
+import { normalizeTraitFilter, TraitFilter } from '@/utils/trait-filter.util';
 import { getNftNetworkId } from '@/utils/nft-network.util';
 import { DataService } from './data.service';
 import { NftOwnershipService } from './nft-ownership.service';
@@ -15,6 +16,7 @@ import { Erc20OwnershipService } from './erc20-ownership.service';
 import { validateEthscriptionCriteria } from './discord-commands/utils/rule-validation.util';
 
 export interface RuleCreateInput {
+  trait_filter?: TraitFilter | null;
   asset_type: string;
   slug?: string;
   attribute_key?: string;
@@ -46,6 +48,13 @@ export async function prepareRuleCriteria(
   if (slug === 'all') slug = 'ALL';
   let attributeKey = normalizeCriteriaOption(input.attribute_key);
   let attributeValue = normalizeCriteriaOption(input.attribute_value);
+  let filter = input.trait_filter === undefined ? undefined : normalizeTraitFilter(input.trait_filter);
+  if (filter !== undefined) {
+    if (attributeKey !== 'ALL' || attributeValue !== 'ALL') throw new Error('Use trait_filter or the single attribute fields, not both.');
+    attributeKey = filter?.conditions[0].key || 'ALL';
+    attributeValue = filter?.conditions[0].value || 'ALL';
+  }
+  const traits = () => filter === undefined ? {} : { trait_filter: filter };
   const minItems = input.min_items ?? 1;
   if (!Number.isSafeInteger(minItems) || minItems < 1)
     throw new Error('Minimum items must be a positive whole number.');
@@ -73,6 +82,7 @@ export async function prepareRuleCriteria(
       input.collection_name != null ||
       selected ||
       input.min_items != null
+      || !!filter
     ) {
       throw new Error(
         'Token rules use contract_address, min_balance, and optional network. Leave collection, NFT, and inscription options empty.',
@@ -107,6 +117,7 @@ export async function prepareRuleCriteria(
       attributeKey !== 'ALL' ||
       attributeValue !== 'ALL' ||
       evmOptions
+      || !!filter
     ) {
       throw new Error(
         'Specific inscription rules use IDs or numbers with min_items. Leave slug, attributes, and NFT options empty.',
@@ -140,10 +151,12 @@ export async function prepareRuleCriteria(
     if (!services.ordinals)
       throw new Error('Ordinals verification is not configured.');
     const trait = ordinalTrait({
+      ...traits(),
       attribute_key: attributeKey,
       attribute_value: attributeValue,
     });
     assetFields = await services.ordinals.prepareRule(slug);
+    Object.assign(assetFields, traits());
     if (trait.enabled)
       assetFields.ordinal_trait_snapshot =
         await services.ordinals.prepareTraitSnapshot({
@@ -164,6 +177,7 @@ export async function prepareRuleCriteria(
     if (!input.contract_address || slug !== 'ALL')
       throw new Error('NFT rules require contract_address. Leave slug empty.');
     const trait = nftTrait({
+      ...traits(),
       attribute_key: attributeKey,
       attribute_value: attributeValue,
     });
@@ -173,6 +187,7 @@ export async function prepareRuleCriteria(
       input.collection_name ?? null,
       getNftNetworkId(input.network || 'ethereum'),
     );
+    Object.assign(assetFields, traits());
     if (
       assetFields.token_standard === 'erc721' &&
       assetFields.token_ids &&
@@ -196,6 +211,17 @@ export async function prepareRuleCriteria(
     throw new Error(
       'Use /setup add-nft-rule for network, contract_address, token_ids, or collection_name.',
     );
+  if (filter) {
+    const conditions = [];
+    for (const condition of filter.conditions) {
+      const checked = await validateEthscriptionCriteria(services.data, slug, condition.key, condition.value);
+      if (!checked.isValid) throw new Error(checked.message);
+      slug = checked.criteria.slug;
+      conditions.push({ key: checked.criteria.attributeKey, value: checked.criteria.attributeValue });
+    }
+    filter = normalizeTraitFilter({ operator: filter.operator, conditions });
+    attributeKey = filter.conditions[0].key; attributeValue = filter.conditions[0].value;
+  }
   const validated = await validateEthscriptionCriteria(
     services.data,
     slug,
@@ -210,6 +236,6 @@ export async function prepareRuleCriteria(
     attributeKey,
     attributeValue,
     minItems,
-    assetFields: { asset_type: 'ethscription' } as NftRuleFields,
+    assetFields: { asset_type: 'ethscription', ...traits() } as NftRuleFields,
   };
 }
