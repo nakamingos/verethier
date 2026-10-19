@@ -654,8 +654,10 @@
                       </p>
                       @if (draft.asset_type === 'nft') {
                         <p class="muted">
-                          ERC-721 supports one specific token ID or any token.
-                          For ERC-1155, a blank ID list checks IDs 0–99.
+                          Use token ID lists or ranges such as 1,5,20-30, up to
+                          1,000 unique IDs. Minimum items counts matching tokens
+                          across saved wallets. A blank list checks any ERC-721
+                          token, or IDs 0–99 for ERC-1155.
                         </p>
                       }
                     } @else {

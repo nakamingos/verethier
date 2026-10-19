@@ -89,11 +89,13 @@ describe('NFT ownership', () => {
     await expect(service.prepareRule(contract)).rejects.toThrow('exactly one');
   });
 
-  it('supports an ERC-721 collection or one specified ID', async () => {
+  it('supports ERC-721 collections, single IDs and bounded mixed lists/ranges', async () => {
     rpc.readContract.mockImplementation(async ({ functionName, args }) => functionName === 'name' ? 'Collection' : args[0] === '0x80ac58cd');
     expect((await service.prepareRule(contract)).token_ids).toBeNull();
     expect((await service.prepareRule(contract, '0')).token_ids).toEqual(['0']);
-    await expect(service.prepareRule(contract, '0-1')).rejects.toThrow('one token ID');
+    expect((await service.prepareRule(contract, '0-1,5,0001')).token_ids).toEqual(['0','1','5']);
+    expect((await service.prepareRule(contract, '   ')).token_ids).toBeNull();
+    await expect(service.prepareRule(contract, '0-1000')).rejects.toThrow('1000');
   });
 
   it('rejects non-mainnet RPC configuration', async () => {

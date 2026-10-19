@@ -60,7 +60,6 @@ export class RuleEditService {
       const trait = nftTrait(candidate);
       const prepared = await this.nfts.prepareRule(before.contract_address, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id);
       if (prepared.token_standard !== before.token_standard) throw new Error('The NFT contract standard changed. Recreate this rule after checking the contract.');
-      if (prepared.token_standard === 'erc721' && prepared.token_ids && candidate.min_items !== 1) throw new Error('A specific ERC-721 token rule requires min_items:1.');
       candidate.token_ids = prepared.token_ids;
       candidate.attribute_key = trait.key; candidate.attribute_value = trait.value;
       await this.nfts.validateTraits(candidate);
