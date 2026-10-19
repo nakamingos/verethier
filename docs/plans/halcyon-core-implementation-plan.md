@@ -24,7 +24,7 @@ Checkpoint: October 18, 2026, through multi-trait rules and ERC-721 ID selection
 | --- | --- | --- |
 | 1. Shared backend and authentication | Authenticated portal APIs, live server authorization, shared rule operations and durable reconciliation. | Maintain these guarantees as features are added. |
 | 2. Admin dashboard and setup | All four admin tabs, invite/return flow, reviewed channel selection/creation, resumable setup, verification-message controls, live **Check Setup** with provider probes and reviewed message recovery, `/help` and `/join`. | Maintain diagnostics as supported operations/providers expand. Bounded setup probes and unchecked wallet inventories are labeled explicitly; see the [setup notes](../portals.md#installation-and-check-setup). |
-| 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo, multi-trait AND/OR conditions, bounded ERC-721 ID lists/ranges with quantity thresholds and reconciliation for rule changes and signed verification. | Remove guarded legacy trait projection columns after the compatibility rollout. |
+| 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo, multi-trait AND/OR conditions, bounded ERC-721 ID lists/ranges with quantity thresholds and reconciliation for rule changes and signed verification. | No unfinished core milestone; legacy trait columns have been retired. |
 | 4. Settings and member troubleshooting | Background-check toggle, member lookup, fresh Check Roles and earned-role repairs. | No separate unfinished milestone identified. |
 | 5. Member portal | Wallet management, fresh proofs/transfers, removal reconciliation, joined-community verification and resumable flows. | Public discovery and signature-free rechecks remain optional. |
 | 6–7. Additional integrations | Existing supported assets and wallet formats remain available. | Deferred until the user chooses integrations. |
@@ -32,7 +32,7 @@ Checkpoint: October 18, 2026, through multi-trait rules and ERC-721 ID selection
 
 Portal follow-ups have also shipped: unified wallet activity, Earned/Available community role views, removed-wallet history with last-proof dates and explorer links, server wallet blocks, role-removal actions, shared-wallet-history audits and wallet-address lookup. See [portal behavior and operational notes](../portals.md).
 
-The accepted core feature milestones are delivered. Remaining maintenance: retire guarded legacy trait projection columns after the compatibility rollout. Multi-trait rules use canonical JSON; the old columns remain compatibility projections rather than an independent definition. Additional network and wallet integrations still require the user to choose the scope. Privacy/sharing/export ideas and wallet-first/X accounts remain in the [optional backlog](optional-features.md#privacy-sharing-and-registration).
+The accepted core feature milestones are delivered. Canonical trait storage cleanup is complete: the old columns and synchronization trigger are removed, while command input and historical audit JSON are translated at their boundaries. Compatible existing rules were consolidated with an audit trail and unchanged eligibility. Additional network and wallet integrations still require the user to choose the scope. Privacy/sharing/export ideas and wallet-first/X accounts remain in the [optional backlog](optional-features.md#privacy-sharing-and-registration).
 
 ## Conflicts and recommended decisions
 

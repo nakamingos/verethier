@@ -2023,6 +2023,11 @@
                                   <p class="history-note address">
                                     {{ walletAddress(item.wallet.address) }}
                                   </p>
+                                } @else if (item.kind === 'merge') {
+                                  <strong
+                                    >Merged rule {{ item.before_rule?.id }} into
+                                    {{ item.after_rule?.id }}</strong
+                                  >
                                 } @else {
                                   <strong
                                     >{{ item.kind }} · Rule
