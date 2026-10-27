@@ -1,0 +1,30 @@
+import { Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
+@Component({
+  selector: 'app-privacy',
+  imports: [RouterLink],
+  template: `<section class="portal"><div class="portal-heading"><h1>Bouncer privacy policy</h1></div><article class="panel">
+ <p>Effective October 27, 2026. Bouncer is operated by Snepsid (alias), an individual based in Michigan, USA. Contact <a href="mailto:nomorelabs@gmail.com">nomorelabs@gmail.com</a> for privacy questions, access/correction requests or deletion requests.</p>
+ <h2>Information Bouncer uses</h2>
+ <p>Bouncer stores Discord account IDs and display names, wallet addresses and types, successful proof timestamps, wallet-link/removal/transfer activity, server/channel context, role assignments and check results, privacy choices and notice versions. It also stores the server configuration, administrative actions, deletion requests and operational/security records needed to run verification.</p>
+ <p>A wallet connection alone is not a saved proof of ownership. Wallet signatures are used to validate fresh proofs, rather than stored as account credentials. Bouncer does not need your seed phrase or private key. Short-lived unsigned challenges and verification flows expire separately.</p>
+ <h2>How the information is used</h2>
+ <p>We use these records to link proven wallets to the correct account, check holdings, grant or reconcile Discord roles, handle wallet transfers/removals, investigate wallet reuse and abuse, enforce wallet restrictions, troubleshoot and operate the service. Public blockchain data is read as needed. Automated role checks can grant eligible roles during verification and reconcile previously earned roles; provider uncertainty retains existing roles.</p>
+ <h2>Community sharing and exports</h2>
+ <p>Community admins can see wallet/member associations only when that community has enabled sharing and you have allowed it. Each community has separate choices in the <a routerLink="/member">member portal</a>. Export inclusion is a separate choice. Discord names/IDs in an ordinary community export require permission to share the association as well as export permission.</p>
+ <p>Exports can be filtered by network, roles, verification channel, dates and rule criteria. Even an address-only list can reveal associations through small groups, public blockchain information or comparisons with other lists. Downloaded files cannot be recalled or removed from a recipient’s computer after you withdraw permission.</p>
+ <p>Some optional access and rewards offered by server admins may require the relevant sharing or export permission. Declining these choices does not disable ordinary Bouncer verification or remove otherwise qualifying roles.</p>
+ <h2>Bouncer operator access</h2>
+ <p>Private means hidden from ordinary community admins. Explicitly authorized Bouncer operators retain administrative access to view and export retained records, including when community sharing or export permission is off. Operator export overrides require a reason and create an audit record. Operator access does not extend retention periods or replace deletion handling.</p>
+ <h2>Providers, hosting and sessions</h2>
+ <p>Discord processes sign-in and role changes. Railway hosts the application and Supabase stores application records. Wallet connections use the selected wallet app and, where applicable, Reown/WalletConnect. Configured Ethereum/Robinhood RPC and metadata providers and Ordinals providers such as ord.net, Xverse, Ordiscan, Subfrost and Sandshrew receive the addresses, collection/token identifiers or requests needed for the selected check. They operate under their own policies.</p>
+ <p>Discord access tokens are used during sign-in and are not stored by Bouncer. The portal uses an HTTP-only session cookie, with a server-side hashed session token; sessions last up to eight hours. Temporary OAuth state expires after ten minutes. Theme and wallet-connection preferences may use browser storage. Hosting/provider logs may contain IP addresses, technical errors and account/request identifiers.</p>
+ <h2>Retention and removal</h2>
+ <p>Active saved wallet links remain while in use. Removing or transferring a wallet stops that link contributing to the former account’s eligibility. Ordinary records connecting a removed wallet to that account are retained for one year after removal and then erased/redacted by scheduled cleanup, including copied role-check evidence. Removal is separate from deleting your account.</p>
+ <p>Request account deletion in the member portal or through the privacy contact. An operator reviews the request, records the outcome, removes active wallets and waits for required role reconciliation before erasing ordinary account and wallet records. Minimum wallet-block, security and administrative audit records can be retained separately where needed, with the review outcome explaining exceptions. A restricted account fingerprint and deletion date are retained to prevent recovery from an older backup from undoing completed deletions; this fingerprint contains no wallet address.</p>
+ <p>Temporary export results expire after thirty minutes and downloads require a snapshot checked within fifteen minutes. Expired results are inaccessible and cleared by scheduled cleanup. Backups can retain older copies until replaced or deleted; they are restricted to recovery and must have deletion/expiry cleanup applied before restored data is used. Removing data from the active database does not immediately rewrite backup files or copies already downloaded by others.</p>
+ <h2>Your choices</h2>
+ <p>Use the member portal to change community permissions, remove wallets, view activity or submit a deletion request. Withdrawal applies to future community access and downloads. A community enabling sharing again begins a new permission period; information recorded while private is not automatically exposed. Contact the operator about inaccurate records, access or other privacy concerns. Applicable rights depend on your location and circumstances.</p>
+ </article></section>`,
+})
+export class PrivacyComponent {}

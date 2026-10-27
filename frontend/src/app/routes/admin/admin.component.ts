@@ -1,3 +1,5 @@
+import { WalletExportsComponent } from '@/components/wallet-exports/wallet-exports.component';
+import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,7 +11,13 @@ import {
 
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, PixelSelectComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    PixelSelectComponent,
+    WalletExportsComponent,
+    DeletionRequestsComponent,
+  ],
   templateUrl: './admin.component.html',
 })
 export class AdminComponent implements OnInit, OnDestroy {
@@ -22,6 +30,35 @@ export class AdminComponent implements OnInit, OnDestroy {
     return address.slice(0, 8) + '…' + address.slice(-6);
   }
   private readonly session = inject(PortalSessionService);
+  get adminTabs() {
+    return [
+      ['rules', 'Rules'],
+      ['settings', 'Bot Settings'],
+      ['members', 'Member Lookup'],
+      ['audit', 'Audit Log'],
+      ['exports', 'Exports'],
+      ...(this.isOperator ? [['operator', 'Operator']] : []),
+    ];
+  }
+  get isOperator() {
+    return this.session.operator;
+  }
+  async savePrivacySettings() {
+    if (this.busy) return;
+    this.busy = true;
+    this.error = '';
+    try {
+      this.data.privacy = await this.api(`/servers/${this.selected}/privacy`, {
+        sharing_enabled: this.data.privacy.sharing_enabled,
+      });
+      this.notice =
+        'Privacy setting saved. Changed sharing settings start a new member permission period.';
+    } catch (e) {
+      this.error = (e as Error).message;
+    } finally {
+      this.busy = false;
+    }
+  }
   get user() {
     return this.session.user;
   }

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { PrivacyService, privacyChoice, privacyProof } from '@/portal/privacy.service';
+import { Injectable, Optional } from '@nestjs/common';
 import { Verifier } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { DecodedData } from '@/models/app.interface';
@@ -8,9 +9,9 @@ import { NonceData, NonceService } from './nonce.service';
 
 @Injectable()
 export class BitcoinSignatureService {
-  constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService) {}
+  constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService, @Optional() private readonly privacy?: PrivacyService) {}
 
-  async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; data?: DecodedData }> {
+  async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; data?: DecodedData; privacy?: any }> {
     const context = userId !== undefined || guildId !== undefined
       ? await this.nonceSvc.getActiveNonce(userId, guildId, nonce)
       : await this.nonceSvc.getActiveNonceByToken(nonce);
@@ -23,6 +24,7 @@ export class BitcoinSignatureService {
     if (rules.some(rule => rule.asset_type === 'ordinal')) walletTypes.push('bitcoin');
     return {
       walletTypes,
+      ...(this.privacy ? {privacy: await this.privacy.policy(context.guildId,context.userId)} : {}),
       expiry: context.expiry,
       ...(context.verificationData ? { data: {
         ...context.verificationData,
@@ -35,7 +37,7 @@ export class BitcoinSignatureService {
     };
   }
 
-  async createChallenge(userId: string, guildId: string, nonce: string, address: string) {
+  async createChallenge(userId: string, guildId: string, nonce: string, address: string, choice?: unknown) {
     const { walletTypes, expiry } = await this.getContext(userId, guildId, nonce);
     if (!walletTypes.includes('bitcoin')) throw new Error('This verification channel does not support Ordinals.');
     const context = await this.nonceSvc.getActiveNonce(userId, guildId, nonce);
@@ -53,8 +55,9 @@ export class BitcoinSignatureService {
       `Discord channel: ${context.channelId || 'server'}`, `Nonce: ${context.nonce}`,
       `Expires at: ${new Date(expiry * 1000).toISOString()}`, '',
       'Sign this message to verify your collection for eligible Discord roles.',
+      ...(choice !== undefined ? ['Privacy: ' + privacyProof(choice)] : []),
     ].join('\n');
-    await this.nonceSvc.saveBitcoinChallenge(userId, guildId, nonce, { address: normalizedAddress, message });
+    await this.nonceSvc.saveBitcoinChallenge(userId, guildId, nonce, { address: normalizedAddress, message, ...(choice !== undefined ? {privacy:privacyChoice(choice)} : {}) });
     return { address: normalizedAddress, message, expiry };
   }
 
@@ -63,6 +66,7 @@ export class BitcoinSignatureService {
     const address = normalizeBitcoinAddress(data.address);
     const challenge = context.bitcoinChallenge;
     if (!challenge || challenge.address !== address || context.expiry !== data.expiry) throw new Error('Invalid Bitcoin verification challenge.');
+    if (JSON.stringify(challenge.privacy) !== JSON.stringify(data.privacy === undefined ? undefined : privacyChoice(data.privacy))) throw new Error('Invalid Bitcoin verification challenge.');
     this.verifyMessage(address, challenge.message, signature);
     // Consume before linking the address, including concurrent submissions of the same proof.
     const consumed = await this.nonceSvc.consumeNonce(data.userId, data.discordId, data.nonce);

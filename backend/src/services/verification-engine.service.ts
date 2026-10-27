@@ -76,7 +76,7 @@ export class VerificationEngine {
     let checkedRule: VerifierRole | undefined;
     let checkedAddresses: string[] = [];
     try {
-      Logger.debug(`VerificationEngine: Starting verification for user ${userId} with rule ${ruleId} and address ${address}`);
+      Logger.debug(`VerificationEngine: Starting verification for user ${userId} with rule ${ruleId}`);
       
       // Fetch the rule details
       const rule = loadedRule || await this.getRuleById(ruleId);
@@ -104,10 +104,10 @@ export class VerificationEngine {
       const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes(address.toLowerCase()));
       
       if (addressesToCheck.length !== userAddresses.length) {
-        Logger.warn(`Address ${address} not found in getUserAddresses for user ${userId}, adding it manually to prevent race condition`);
+        Logger.warn(`Signed address not found among saved wallets for user ${userId}, adding it manually to prevent race condition`);
       }
       
-      Logger.debug(`VerificationEngine: Checking ${addressesToCheck.length} wallet(s) for user ${userId}: ${addressesToCheck.join(', ')}`);
+      Logger.debug(`VerificationEngine: Checking ${addressesToCheck.length} wallet(s) for user ${userId}`);
 
       // Apply verification logic - now checks across ALL user's wallets
       Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
@@ -346,7 +346,7 @@ export class VerificationEngine {
         };
       }
 
-      Logger.debug(`VerificationEngine: Found ${userAddresses.length} addresses for user ${userId}: ${userAddresses.join(', ')}`);
+      Logger.debug(`VerificationEngine: Found ${userAddresses.length} saved wallets for user ${userId}`);
 
       const result = await this.verifyUser(userId, ruleId, userAddresses[0]);
       return { ...result, verifiedAddress: result.isValid ? userAddresses[0] : undefined, totalAddressesChecked: userAddresses.length };

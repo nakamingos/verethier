@@ -143,6 +143,7 @@ export class OrdinalsOwnershipService {
     if (!criteria) {
       try { catalog = await this.catalog.snapshot(rule.slug, context); }
       catch {
+        if (context.freshExport) throw new Error(UNAVAILABLE);
         // An outage must not force us to discard a complete, usable trait list.
         const snapshot = trait.enabled ? usableOrdinalTraitSnapshot(rule) : null;
         if (trait.enabled && !snapshot) throw new Error(UNAVAILABLE);
@@ -300,7 +301,7 @@ export class OrdinalsOwnershipService {
         }
         return count;
       } catch (error) {
-        if (!EnvironmentConfig.XVERSE_API_KEY) throw error;
+        if (context.freshExport || !EnvironmentConfig.XVERSE_API_KEY) throw error;
       }
     }
     this.detail(context, key, { provider: 'xverse', source: traits ? 'trait-snapshot' : 'live' });

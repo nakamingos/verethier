@@ -36,6 +36,13 @@ describe('Alchemy NFT metadata', () => {
     await service.attributes({ ...rule, chain_id: 4663 }, ['1']);
     expect(request.mock.calls[1][0]).toContain('https://robinhood-mainnet.g.alchemy.com/nft/v3/rh-test-key/');
   });
+  it('refreshes hosted traits for an export rather than substituting cached eligibility metadata', async () => {
+    db.getCachedNftMetadata.mockResolvedValue([{chain_id:1,contract_address:contract,token_id:'1',attributes}]);
+    const changed=token('1');changed.raw.metadata.attributes=[{trait_type:'Color',value:'Blue'}];respond([changed]);
+    expect((await service.attributes(rule,['1'],undefined,true)).get('1')).toEqual([{trait_type:'Color',value:'Blue'}]);
+    expect(db.getCachedNftMetadata).not.toHaveBeenCalled();
+  });
+
   it('can use a separate Alchemy key with a different RPC provider', async () => {
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://other-rpc.example');
     jest.replaceProperty(EnvironmentConfig, 'ALCHEMY_API_KEY', 'separate-test-key');

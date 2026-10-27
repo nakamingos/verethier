@@ -5,6 +5,7 @@ export class PortalSessionService {
   user: { id: string; name: string } | null = null;
   csrf = '';
   configured = false;
+  operator = false;
   ready = false;
   busy = false;
   error = '';
@@ -30,6 +31,7 @@ export class PortalSessionService {
       const session = await response.json();
       if (!response.ok) throw new Error('Could not load Discord sign-in.');
       this.user = session.user;
+      this.operator = session.operator === true;
       this.csrf = session.csrf || '';
       this.configured = !!session.configured;
       this.ready = true;
@@ -42,6 +44,7 @@ export class PortalSessionService {
 
   clear() {
     this.user = null;
+    this.operator = false;
     this.csrf = '';
     this.error = '';
   }

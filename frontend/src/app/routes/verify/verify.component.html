@@ -1,4 +1,8 @@
-@if (fromMember) {<p class="member-return"><a class="button" routerLink="/member">Back to member portal</a></p>}
+@if (fromMember) {
+  <p class="member-return">
+    <a class="button" routerLink="/member">Back to member portal</a>
+  </p>
+}
 @if (routeData$ | async; as data) {
   <div class="user-info-wrapper">
     <div class="avatar-wrapper">
@@ -43,9 +47,9 @@
         !state.messageVerified
       "
     >
-      @if (state.walletTypes.includes('bitcoin') && !state.messageVerified) {
+      @if (state.walletTypes.includes("bitcoin") && !state.messageVerified) {
         <div class="wallet-choice" role="group" aria-label="Wallet">
-          @if (state.walletTypes.includes('evm')) {
+          @if (state.walletTypes.includes("evm")) {
             <button
               type="button"
               [attr.aria-pressed]="state.walletType === 'evm'"
@@ -87,14 +91,14 @@
         <div class="content">
           <div class="title">
             {{
-              state.walletType === 'bitcoin'
-                ? state.bitcoinProvider === 'unisat'
-                  ? 'Connect your UniSat wallet'
-                  : 'Connect your Xverse wallet'
-                : 'Connect your wallet'
+              state.walletType === "bitcoin"
+                ? state.bitcoinProvider === "unisat"
+                  ? "Connect your UniSat wallet"
+                  : "Connect your Xverse wallet"
+                : "Connect your wallet"
             }}
           </div>
-          @if (state.walletType === 'bitcoin') {
+          @if (state.walletType === "bitcoin") {
             <div
               class="bitcoin-wallet-choice"
               role="group"
@@ -147,8 +151,8 @@
           }
           <div class="actions">
             @if (
-              state.walletType === 'bitcoin' &&
-              state.bitcoinProvider === 'unisat' &&
+              state.walletType === "bitcoin" &&
+              state.bitcoinProvider === "unisat" &&
               !bitcoinWalletSvc.isUniSatAvailable()
             ) {
               <button type="button" (click)="openUniSatMobile()">
@@ -166,10 +170,10 @@
                   ><span aria-hidden="true">Connect</span
                   ><span>{{
                     state.walletConnecting
-                      ? 'Connecting...'
+                      ? "Connecting..."
                       : state.walletConnected
-                        ? 'Connected'
-                        : 'Connect'
+                        ? "Connected"
+                        : "Connect"
                   }}</span></span
                 >
               </button>
@@ -188,6 +192,19 @@
         </div>
         <div class="content">
           <div class="title">Verify Ownership.</div>
+          @if (privacyPolicy && !state.messageVerified) {
+            <app-privacy-choices
+              [policy]="privacyPolicy"
+              [(choice)]="privacyChoice"
+              [disabled]="state.messageSigning || state.verificationSubmitting"
+            />
+          }
+          <p class="sub">
+            Wallet/account records are retained for verification and security.
+            <a routerLink="/privacy" target="_blank" rel="noopener"
+              >Read the privacy policy</a
+            >.
+          </p>
           <div class="sub">
             Sign a message with your wallet to check your collection for
             eligible roles in the
@@ -231,7 +248,7 @@
               </span>
             </button>
             @if (
-              state.walletType === 'evm' &&
+              state.walletType === "evm" &&
               state.walletConnected &&
               !state.messageVerified
             ) {

@@ -1,3 +1,4 @@
+import { PrivacyService } from './privacy.service';
 import {
   ArgumentsHost,
   BadRequestException,
@@ -77,6 +78,7 @@ export class PortalController {
   constructor(
     private readonly auth: PortalAuthService,
     private readonly portal: PortalService,
+    private readonly privacy: PrivacyService,
   ) {}
   @Get('session') async session(@Req() req: Request) {
     const session = await this.auth.session(req, false);
@@ -84,6 +86,7 @@ export class PortalController {
       user: session?.user || null,
       csrf: session?.csrf || null,
       configured: this.auth.configured,
+      operator: !!session && this.privacy.isOperator(session.user.id),
     };
   }
   @Get('auth/login') login(

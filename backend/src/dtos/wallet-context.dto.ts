@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength, IsObject } from 'class-validator';
 
 export class VerificationContextDto {
   @IsOptional() @IsString() @IsNotEmpty() @MaxLength(32)
@@ -19,6 +19,7 @@ export class WalletContextDto {
 }
 
 export class BitcoinChallengeDto extends WalletContextDto {
+  @IsOptional() @IsObject() privacy?: import('@/portal/privacy.service').PrivacyChoice;
   @IsString() @IsNotEmpty() @MaxLength(90)
   address: string;
 }

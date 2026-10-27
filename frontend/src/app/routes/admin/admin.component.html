@@ -11,6 +11,9 @@
             Room
           </h1>
           <span class="badge">{{ data.rules.length }} rules</span>
+          @if (isOperator) {
+            <span class="badge">Bouncer Operator</span>
+          }
         </div>
       } @else {
         <h1>Control Room</h1>
@@ -25,7 +28,7 @@
         [attr.role]="error ? 'alert' : 'status'"
         aria-atomic="true"
       >
-        <p>{{ error || notice || 'Loading ' + loadingServerName + '…' }}</p>
+        <p>{{ error || notice || "Loading " + loadingServerName + "…" }}</p>
         @if (!loadingServer) {
           <div class="actions">
             @if (undo && notice && !error) {
@@ -48,8 +51,8 @@
       <p class="muted">
         {{
           loadingServer
-            ? 'Loading ' + loadingServerName + '…'
-            : 'Loading your control room…'
+            ? "Loading " + loadingServerName + "…"
+            : "Loading your control room…"
         }}
       </p>
       <div aria-hidden="true">
@@ -73,15 +76,7 @@
   </ng-template>
   <ng-template #workspaceTabs>
     <nav class="tabs workspace-tabs" aria-label="Server settings">
-      @for (
-        item of [
-          ['rules', 'Rules'],
-          ['settings', 'Bot Settings'],
-          ['members', 'Member Lookup'],
-          ['audit', 'Audit Log'],
-        ];
-        track item[0]
-      ) {
+      @for (item of adminTabs; track item[0]) {
         <button
           [class.selected]="tab === item[0]"
           (click)="switchTab(item[0])"
@@ -220,7 +215,7 @@
                 }
               </details>
             }
-            @if (tab === 'rules') {
+            @if (tab === "rules") {
               <div class="toolbar">
                 <label
                   >Asset type:<span class="select-control"
@@ -300,7 +295,7 @@
                           track id;
                           let last = $last
                         ) {
-                          {{ roleName(id) }}{{ last ? '' : ', ' }}
+                          {{ roleName(id) }}{{ last ? "" : ", " }}
                         }
                       </p>
                       <div class="actions">
@@ -330,8 +325,8 @@
                         <h3>
                           {{
                             action.existing
-                              ? 'Edit role action'
-                              : 'Add role action'
+                              ? "Edit role action"
+                              : "Add role action"
                           }}
                         </h3>
                         <div class="toolbar">
@@ -439,13 +434,13 @@
                   [id]="editor.new ? 'new-rule-editor' : null"
                 >
                   <datalist id="slug-suggestions">
-                    @for (value of suggestions['slug'] || []; track value) {
+                    @for (value of suggestions["slug"] || []; track value) {
                       <option [value]="value"></option>
                     }
                   </datalist>
                   <datalist id="key-suggestions">
                     @for (
-                      value of suggestions['attribute_key'] || [];
+                      value of suggestions["attribute_key"] || [];
                       track value
                     ) {
                       <option [value]="value"></option>
@@ -453,7 +448,7 @@
                   </datalist>
                   <datalist id="value-suggestions">
                     @for (
-                      value of suggestions['attribute_value'] || [];
+                      value of suggestions["attribute_value"] || [];
                       track value
                     ) {
                       <option [value]="value"></option>
@@ -467,8 +462,8 @@
                       <h2>
                         {{
                           editor.new
-                            ? 'Create a rule'
-                            : 'Edit rule ' + editor.id
+                            ? "Create a rule"
+                            : "Edit rule " + editor.id
                         }}
                       </h2>
                       <div class="actions">
@@ -531,8 +526,8 @@
                           /></label>
                         }
                         @if (
-                          draft.asset_type === 'ordinal' ||
-                          draft.asset_type === 'ethscription'
+                          draft.asset_type === "ordinal" ||
+                          draft.asset_type === "ethscription"
                         ) {
                           <label
                             >Match by:<span class="select-control"
@@ -542,7 +537,7 @@
                                 [options]="matchChoices"
                                 label="Match by" /></span
                           ></label>
-                          @if (mode === 'collection') {
+                          @if (mode === "collection") {
                             <label
                               >Collection slug:<input
                                 name="slug"
@@ -555,9 +550,9 @@
                           } @else {
                             <label class="wide"
                               >{{
-                                mode === 'ids'
-                                  ? 'Inscription IDs / hashes'
-                                  : 'Inscription numbers and ranges'
+                                mode === "ids"
+                                  ? "Inscription IDs / hashes"
+                                  : "Inscription numbers and ranges"
                               }}:<textarea
                                 [name]="mode"
                                 [(ngModel)]="
@@ -586,8 +581,8 @@
                           }
                         }
                         @if (
-                          draft.asset_type === 'nft' ||
-                          draft.asset_type === 'erc20'
+                          draft.asset_type === "nft" ||
+                          draft.asset_type === "erc20"
                         ) {
                           <label
                             >Network:<span class="select-control"
@@ -605,7 +600,7 @@
                               maxlength="42"
                               placeholder="0x…"
                           /></label>
-                          @if (draft.asset_type === 'nft') {
+                          @if (draft.asset_type === "nft") {
                             <label
                               >Token IDs (optional):<input
                                 name="tokenIds"
@@ -620,12 +615,12 @@
                           }
                         }
                         @if (
-                          draft.asset_type !== 'erc20' &&
-                          (draft.asset_type === 'nft' || mode === 'collection')
+                          draft.asset_type !== "erc20" &&
+                          (draft.asset_type === "nft" || mode === "collection")
                         ) {
                           <ng-container *ngTemplateOutlet="traitControls" />
                         }
-                        @if (draft.asset_type === 'erc20') {
+                        @if (draft.asset_type === "erc20") {
                           <label
                             >Minimum token balance:<input
                               name="balance"
@@ -652,7 +647,7 @@
                         collectible counts across collections and protocols. An
                         item counts once.
                       </p>
-                      @if (draft.asset_type === 'nft') {
+                      @if (draft.asset_type === "nft") {
                         <p class="muted">
                           Use token ID lists or ranges such as 1,5,20-30, up to
                           1,000 unique IDs. Minimum items counts matching tokens
@@ -684,14 +679,14 @@
                           @if (
                             !hasTraitEditor ||
                             ![
-                              'attribute_key',
-                              'attribute_value',
-                              'trait_filter',
+                              "attribute_key",
+                              "attribute_value",
+                              "trait_filter",
                             ].includes(field.key)
                           ) {
                             <label [class.wide]="field.list"
                               >{{ field.label
-                              }}{{ field.label.endsWith(':') ? '' : ':' }}
+                              }}{{ field.label.endsWith(":") ? "" : ":" }}
                               @if (field.list) {
                                 <textarea
                                   [name]="field.key"
@@ -819,8 +814,8 @@
                       <p>
                         {{
                           editor.new
-                            ? 'Create this rule with the requirements above.'
-                            : 'Replace this rule’s requirements with the values above.'
+                            ? "Create this rule with the requirements above."
+                            : "Replace this rule’s requirements with the values above."
                         }}
                         Previously earned roles will be checked against all
                         remaining rules and saved wallets.
@@ -839,7 +834,7 @@
                               >Checking requirements…</span
                             ><span aria-hidden="true">Save rule</span
                             ><span>{{
-                              busy ? 'Checking requirements…' : 'Save rule'
+                              busy ? "Checking requirements…" : "Save rule"
                             }}</span></span
                           ></button
                         ><button (click)="review = false" [disabled]="busy">
@@ -927,7 +922,7 @@
                             ><span aria-hidden="true">Cancel</span
                             ><span aria-hidden="true">Edit</span
                             ><span>{{
-                              editor?.id === rule.id ? 'Cancel' : 'Edit'
+                              editor?.id === rule.id ? "Cancel" : "Edit"
                             }}</span></span
                           ></button
                         ><button (click)="remove(rule)" [disabled]="busy">
@@ -977,7 +972,35 @@
                 }
               </div>
             }
-            @if (tab === 'settings') {
+            @if (tab === "exports") {
+              <app-wallet-exports [server]="selected" [data]="data" />
+            }
+            @if (tab === "operator" && isOperator) {
+              <app-deletion-requests [operator]="true" />
+            }
+            @if (tab === "settings") {
+              @if (data.privacy) {
+                <section class="panel">
+                  <h2>Community privacy</h2>
+                  <label class="checkbox-label"
+                    ><input
+                      type="checkbox"
+                      [(ngModel)]="data.privacy.sharing_enabled"
+                      [disabled]="busy"
+                    />
+                    Enable members to share wallet associations with server
+                    admins.</label
+                  >
+                  <p>
+                    Members must also choose to share. Disabling or re-enabling
+                    starts a new permission period. Bouncer Operator access is
+                    separate.
+                  </p>
+                  <button (click)="savePrivacySettings()" [disabled]="busy">
+                    Save privacy settings
+                  </button>
+                </section>
+              }
               <ng-template #settingsActionLabel let-text>
                 <span class="button-label">
                   <span aria-hidden="true">Save settings</span>
@@ -1080,7 +1103,7 @@
                 </div>
                 @if (setupReport; as report) {
                   <p class="muted">
-                    Checked {{ report.checked_at | date: 'medium' }}. Setup
+                    Checked {{ report.checked_at | date: "medium" }}. Setup
                     checks do not scan member wallets or change roles.
                   </p>
                   @if (!report.issues.length) {
@@ -1094,15 +1117,15 @@
                       <p>
                         <strong>{{ issue.message }}</strong>
                         {{
-                          issue.status === 'unavailable'
-                            ? 'Check unavailable.'
-                            : ''
+                          issue.status === "unavailable"
+                            ? "Check unavailable."
+                            : ""
                         }}
                       </p>
                       <p>{{ issue.remedy }}</p>
                       @if (issue.rule_ids.length) {
                         <p class="muted">
-                          Affected rules: {{ issue.rule_ids.join(', ') }}
+                          Affected rules: {{ issue.rule_ids.join(", ") }}
                         </p>
                       }
                       @if (issue.repairable) {
@@ -1138,17 +1161,17 @@
                             <td data-label="Provider">{{ provider.label }}</td>
                             <td data-label="Status">
                               <span class="badge">{{
-                                provider.status === 'not_checked'
-                                  ? 'Not checked'
-                                  : provider.status === 'healthy'
-                                    ? 'Reachable'
-                                    : 'Unavailable'
+                                provider.status === "not_checked"
+                                  ? "Not checked"
+                                  : provider.status === "healthy"
+                                    ? "Reachable"
+                                    : "Unavailable"
                               }}</span>
                             </td>
                             <td data-label="Details">
                               {{ provider.detail }}
                               <p class="muted">
-                                Rules: {{ provider.rule_ids.join(', ') }}
+                                Rules: {{ provider.rule_ids.join(", ") }}
                               </p>
                             </td>
                           </tr>
@@ -1319,18 +1342,18 @@
                   >
                     <h2>
                       {{
-                        review.plan.kind === 'channels'
-                          ? 'Review channel setup'
-                          : 'Review message recovery'
+                        review.plan.kind === "channels"
+                          ? "Review channel setup"
+                          : "Review message recovery"
                       }}
                     </h2>
-                    @if (review.plan.kind === 'channels') {
+                    @if (review.plan.kind === "channels") {
                       <p>
                         <strong>Admin: #{{ review.plan.admin.name }}</strong> —
                         {{
                           review.plan.admin.create
-                            ? 'Create a private channel, visible to server administrators and Bouncer.'
-                            : 'Use this existing channel with its current permissions.'
+                            ? "Create a private channel, visible to server administrators and Bouncer."
+                            : "Use this existing channel with its current permissions."
                         }}
                         Post or reuse a Control Room link; opening it still
                         requires owner or Administrator permission.
@@ -1344,8 +1367,8 @@
                         —
                         {{
                           review.plan.verification.create
-                            ? 'Create a channel members can view and read, with ordinary member message posting disabled. Bouncer can post.'
-                            : 'Use this existing channel with its current permissions.'
+                            ? "Create a channel members can view and read, with ordinary member message posting disabled. Bouncer can post."
+                            : "Use this existing channel with its current permissions."
                         }}
                       </p>
                       <p>
@@ -1358,8 +1381,8 @@
                       <p>
                         {{
                           review.plan.recover_verification
-                            ? 'Reuse or recover the verification message using this channel’s current rules.'
-                            : 'Add a rule for this channel, then recover its verification message.'
+                            ? "Reuse or recover the verification message using this channel’s current rules."
+                            : "Add a rule for this channel, then recover its verification message."
                         }}
                       </p>
                     } @else {
@@ -1416,7 +1439,7 @@
                 }
               </ng-template>
             }
-            @if (tab === 'members') {
+            @if (tab === "members") {
               <section class="panel">
                 <div class="section-heading">
                   <h2>Member Lookup</h2>
@@ -1490,9 +1513,9 @@
                               >
                               @if (match.wallet_match) {
                                 <small>{{
-                                  match.wallet_match === 'current'
-                                    ? 'Current wallet link'
-                                    : 'Wallet history'
+                                  match.wallet_match === "current"
+                                    ? "Current wallet link"
+                                    : "Wallet history"
                                 }}</small>
                               }
                             </span>
@@ -1506,9 +1529,9 @@
                 <p class="muted" role="status">
                   {{
                     memberSearching
-                      ? 'Searching members…'
+                      ? "Searching members…"
                       : memberSearchError ||
-                        'Names are case insensitive. Use a full EVM or Bitcoin Ordinals address for wallet lookup. Choose a member when several matches appear.'
+                        "Names are case insensitive. Use a full EVM or Bitcoin Ordinals address for wallet lookup. Choose a member when several matches appear."
                   }}
                 </p>
               </section>
@@ -1520,12 +1543,12 @@
                       {{
                         audit.member_id
                           ? audit.member_name || audit.member_id
-                          : 'All members'
+                          : "All members"
                       }}
                     </h2>
                     <span class="badge"
                       >{{ audit.total }} shared
-                      {{ audit.total === 1 ? 'wallet' : 'wallets' }}</span
+                      {{ audit.total === 1 ? "wallet" : "wallets" }}</span
                     >
                   </div>
                   <p>
@@ -1537,10 +1560,10 @@
                     Wallet activity history
                     {{
                       audit.history_since
-                        ? 'begins ' + (audit.history_since | date: 'short')
-                        : 'has no retained events'
+                        ? "begins " + (audit.history_since | date: "short")
+                        : "has no retained events"
                     }}. Earlier associations may be missing. Checked
-                    {{ audit.checked_at | date: 'short' }}.
+                    {{ audit.checked_at | date: "short" }}.
                   </p>
                   @if (!audit.total) {
                     <p>
@@ -1580,8 +1603,8 @@
                               <p class="history-note">
                                 {{
                                   account.in_server
-                                    ? 'Current member'
-                                    : 'Past server record'
+                                    ? "Current member"
+                                    : "Past server record"
                                 }}
                               </p>
                               @if (account.in_server) {
@@ -1596,22 +1619,22 @@
                             <td data-label="Wallet link">
                               {{
                                 account.current
-                                  ? 'Currently linked'
-                                  : 'History only'
+                                  ? "Currently linked"
+                                  : "History only"
                               }}
                             </td>
                             <td data-label="First recorded">
-                              {{ account.first_seen | date: 'short' }}
+                              {{ account.first_seen | date: "short" }}
                             </td>
                             <td data-label="Last proven">
                               {{
                                 account.last_proven
-                                  ? (account.last_proven | date: 'short')
-                                  : 'Unknown'
+                                  ? (account.last_proven | date: "short")
+                                  : "Unknown"
                               }}
                             </td>
                             <td data-label="Last recorded">
-                              {{ account.last_seen | date: 'short' }}
+                              {{ account.last_seen | date: "short" }}
                             </td>
                           </tr>
                         }
@@ -1679,10 +1702,10 @@
                         <tr>
                           <td>
                             {{
-                              wallet.wallet_type === 'evm'
-                                ? 'EVM'
-                                : wallet.wallet_type === 'bitcoin'
-                                  ? 'Bitcoin'
+                              wallet.wallet_type === "evm"
+                                ? "EVM"
+                                : wallet.wallet_type === "bitcoin"
+                                  ? "Bitcoin"
                                   : wallet.wallet_type
                             }}:
                           </td>
@@ -1714,13 +1737,13 @@
                                   : 'Block wallet ') + wallet.address
                               "
                             >
-                              {{ wallet.blocked ? 'Unblock' : 'Block' }}
+                              {{ wallet.blocked ? "Unblock" : "Block" }}
                             </button>
                           </td>
                           <td>
                             @if (wallet.last_verified_at) {
                               <time [attr.datetime]="wallet.last_verified_at">{{
-                                wallet.last_verified_at | date: 'short'
+                                wallet.last_verified_at | date: "short"
                               }}</time>
                             } @else {
                               Unknown
@@ -1734,6 +1757,12 @@
                       }
                     </tbody>
                   </table>
+                  @if (member.wallets_private) {
+                    <p>
+                      This member’s wallet associations are private. Role checks
+                      continue using their saved wallets.
+                    </p>
+                  }
                   @if (member.removed_wallets?.length) {
                     <h3>Removed wallets:</h3>
                     <table
@@ -1755,9 +1784,9 @@
                           <tr>
                             <td>
                               {{
-                                wallet.wallet_type === 'bitcoin'
-                                  ? 'Bitcoin'
-                                  : 'EVM'
+                                wallet.wallet_type === "bitcoin"
+                                  ? "Bitcoin"
+                                  : "EVM"
                               }}:
                             </td>
                             <td class="address">
@@ -1770,10 +1799,10 @@
                               ><time [attr.datetime]="wallet.removed_at"
                                 >{{
                                   wallet.transferred
-                                    ? 'Transferred'
-                                    : 'Removed'
+                                    ? "Transferred"
+                                    : "Removed"
                                 }}:
-                                {{ wallet.removed_at | date: 'short' }}</time
+                                {{ wallet.removed_at | date: "short" }}</time
                               >
                               @if (wallet.blocked) {
                                 <span
@@ -1795,7 +1824,7 @@
                                     : 'Block wallet ') + wallet.address
                                 "
                               >
-                                {{ wallet.blocked ? 'Unblock' : 'Block' }}
+                                {{ wallet.blocked ? "Unblock" : "Block" }}
                               </button>
                             </td>
                             <td>
@@ -1803,7 +1832,7 @@
                                 <time
                                   [attr.datetime]="wallet.last_verified_at"
                                   >{{
-                                    wallet.last_verified_at | date: 'short'
+                                    wallet.last_verified_at | date: "short"
                                   }}</time
                                 >
                               } @else {
@@ -1823,8 +1852,8 @@
                       <h3>
                         {{
                           restriction.blocked
-                            ? 'Block wallet'
-                            : 'Unblock wallet'
+                            ? "Block wallet"
+                            : "Unblock wallet"
                         }}
                       </h3>
                       <p class="address">{{ restriction.address }}</p>
@@ -1856,8 +1885,8 @@
                         >
                           {{
                             restriction.blocked
-                              ? 'Confirm block'
-                              : 'Confirm unblock'
+                              ? "Confirm block"
+                              : "Confirm unblock"
                           }}</button
                         ><button
                           (click)="walletRestriction = null"
@@ -1891,12 +1920,12 @@
                           </td>
                           <td data-label="Discord">
                             {{
-                              role.held ? 'In Discord' : 'Missing in Discord'
+                              role.held ? "In Discord" : "Missing in Discord"
                             }}
                           </td>
                           <td data-label="Status">
                             <span class="badge">{{
-                              role.status.replace('_', ' ')
+                              role.status.replace("_", " ")
                             }}</span>
                           </td>
                         </tr>
@@ -1912,7 +1941,7 @@
                 </section>
               }
             }
-            @if (tab === 'audit') {
+            @if (tab === "audit") {
               <section class="panel activity-panel">
                 <div class="toolbar">
                   <h2>Activity</h2>
@@ -1955,12 +1984,12 @@
                     <table class="history-table" aria-label="Activity log">
                       <thead>
                         <tr>
-                          @if (activity.kind === 'roles') {
+                          @if (activity.kind === "roles") {
                             <th scope="col">Member</th>
                             <th scope="col">Role</th>
                             <th scope="col">Status</th>
                             <th scope="col">Updated</th>
-                          } @else if (activity.kind === 'changes') {
+                          } @else if (activity.kind === "changes") {
                             <th scope="col">Change</th>
                             <th scope="col">Details</th>
                             <th scope="col">Date</th>
@@ -1977,7 +2006,7 @@
                       <tbody>
                         @for (item of activity.items; track item.id) {
                           <tr class="history-row">
-                            @if (activity.kind === 'roles') {
+                            @if (activity.kind === "roles") {
                               <td data-label="Member">
                                 <strong>{{
                                   item.user_name || item.user_id
@@ -1992,16 +2021,16 @@
                               <td data-label="Updated">
                                 <time>{{
                                   item.updated_at || item.created_at
-                                    | date: 'medium'
+                                    | date: "medium"
                                 }}</time>
                               </td>
-                            } @else if (activity.kind === 'changes') {
+                            } @else if (activity.kind === "changes") {
                               <td data-label="Change">
                                 @if (item.role_action) {
                                   <strong>{{
-                                    item.kind === 'role_action_delete'
-                                      ? 'Deleted role action'
-                                      : 'Saved role action'
+                                    item.kind === "role_action_delete"
+                                      ? "Deleted role action"
+                                      : "Saved role action"
                                   }}</strong>
                                   <p class="history-note">
                                     {{
@@ -2010,20 +2039,20 @@
                                   </p>
                                 } @else if (item.setup) {
                                   <strong>{{
-                                    item.kind === 'setup_channels'
-                                      ? 'Saved channel setup'
-                                      : 'Recovered verification message'
+                                    item.kind === "setup_channels"
+                                      ? "Saved channel setup"
+                                      : "Recovered verification message"
                                   }}</strong>
                                 } @else if (item.wallet) {
                                   <strong>{{
-                                    item.kind === 'wallet_block'
-                                      ? 'Blocked wallet'
-                                      : 'Unblocked wallet'
+                                    item.kind === "wallet_block"
+                                      ? "Blocked wallet"
+                                      : "Unblocked wallet"
                                   }}</strong>
                                   <p class="history-note address">
                                     {{ walletAddress(item.wallet.address) }}
                                   </p>
-                                } @else if (item.kind === 'merge') {
+                                } @else if (item.kind === "merge") {
                                   <strong>
                                     @if (
                                       item.before_rule?.id ===
@@ -2055,7 +2084,7 @@
                                     track id;
                                     let last = $last
                                   ) {
-                                    {{ roleName(id) }}{{ last ? '' : ', ' }}
+                                    {{ roleName(id) }}{{ last ? "" : ", " }}
                                   }
                                 } @else if (item.setup) {
                                   <a
@@ -2071,7 +2100,7 @@
                                   >
                                 } @else if (item.wallet) {
                                   {{
-                                    item.wallet.reason || 'No reason provided'
+                                    item.wallet.reason || "No reason provided"
                                   }}
                                 } @else {
                                   {{
@@ -2082,7 +2111,7 @@
                               </td>
                               <td data-label="Date">
                                 <time>{{
-                                  item.created_at | date: 'medium'
+                                  item.created_at | date: "medium"
                                 }}</time>
                               </td>
                               <td data-label="Action" class="table-actions">
@@ -2101,8 +2130,8 @@
                               <td data-label="Subject">
                                 <strong>{{
                                   item.user_id
-                                    ? 'Member ' + item.user_id
-                                    : 'Role ' + item.role_id
+                                    ? "Member " + item.user_id
+                                    : "Role " + item.role_id
                                 }}</strong>
                                 @if (item.role_action_role_id) {
                                   <p class="history-note">
@@ -2144,11 +2173,11 @@
                               <td data-label="Updated">
                                 <time>{{
                                   item.updated_at || item.created_at
-                                    | date: 'medium'
+                                    | date: "medium"
                                 }}</time>
                               </td>
                               <td data-label="Action" class="table-actions">
-                                @if (item.status === 'failed') {
+                                @if (item.status === "failed") {
                                   <button
                                     (click)="retry(item)"
                                     [disabled]="busy"

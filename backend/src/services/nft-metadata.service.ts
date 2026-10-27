@@ -69,7 +69,7 @@ export class NftMetadataService {
     throw new Error(UNAVAILABLE);
   }
 
-  async attributes(rule: NftRuleFields, ids: string[], readUri?: (id: string) => Promise<string | null>): Promise<Map<string, NftAttributes>> {
+  async attributes(rule: NftRuleFields, ids: string[], readUri?: (id: string) => Promise<string | null>, refresh = false): Promise<Map<string, NftAttributes>> {
     const result = new Map<string, NftAttributes>();
     const uniqueIds = [...new Set(ids.map(nftTokenId))];
     for (let offset = 0; offset < uniqueIds.length; offset += 50) {
@@ -91,7 +91,7 @@ export class NftMetadataService {
       const hosted = batch.filter(id => !result.has(id));
       if (fresh.length) await this.dbSvc.cacheNftMetadata(fresh);
       if (!hosted.length) continue;
-      const rows = await this.dbSvc.getCachedNftMetadata(rule.chain_id, rule.contract_address, hosted, new Date(Date.now() - CACHE_TTL).toISOString());
+      const rows = refresh ? [] : await this.dbSvc.getCachedNftMetadata(rule.chain_id, rule.contract_address, hosted, new Date(Date.now() - CACHE_TTL).toISOString());
       for (const row of rows) {
         if (row.chain_id !== rule.chain_id || row.contract_address !== rule.contract_address || !hosted.includes(row.token_id)) continue;
         try { result.set(row.token_id, parseNftAttributes(row.attributes)); } catch { /* Refresh malformed cache entries. */ }

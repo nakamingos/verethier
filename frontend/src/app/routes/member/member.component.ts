@@ -1,3 +1,5 @@
+import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
+import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -25,6 +27,8 @@ interface Requirement {
   criteria: unknown;
 }
 interface Community {
+  privacy?: any;
+  privacy_choice?: any;
   id: string;
   name: string;
   icon: string | null;
@@ -72,7 +76,14 @@ interface Account {
 
 @Component({
   selector: 'app-member',
-  imports: [FormsModule, RouterLink, DatePipe, PixelSelectComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    DatePipe,
+    PixelSelectComponent,
+    PrivacyChoicesComponent,
+    DeletionRequestsComponent,
+  ],
   providers: [BitcoinWalletService],
   templateUrl: './member.component.html',
   styleUrl: './member.component.scss',
@@ -185,10 +196,24 @@ export class MemberComponent {
     if (!this.live) return;
     this.data = data;
     for (const c of data.communities) {
+      if (c.privacy)
+        c.privacy_choice = {
+          epoch: c.privacy.epoch,
+          share: !!c.privacy.share_since,
+          exports: !!c.privacy.export_since,
+          notice: c.privacy.notice,
+        };
       this.roleViews[c.id] ||= 'available';
       if (!c.channels.some((ch) => ch.id === this.channels[c.id]))
         this.channels[c.id] = c.defaultChannel;
     }
+  }
+  async savePrivacy(c: Community) {
+    await this.run(async () => {
+      c.privacy = await this.api('/privacy/' + c.id, c.privacy_choice);
+      this.notice =
+        'Privacy choices saved. Verify again to share newly proven wallet records.';
+    });
   }
   async logout() {
     if (this.busy || this.connecting) return;

@@ -115,7 +115,7 @@ describe('Setup authorization and mutation boundaries', () => {
       setupRecovery: jest.fn(),
       setupRequest: jest.fn(),
     };
-    const controller = new PortalController(auth as any, portal as any);
+    const controller = new PortalController(auth as any, portal as any, { isOperator: () => false } as any);
     for (const action of [
       () => controller.checkSetup({} as any, 'server'),
       () => controller.setupChannels({} as any, 'server', {} as any),

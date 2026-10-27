@@ -2,6 +2,13 @@ import { Routes } from '@angular/router';
 
 export const routes: Routes = [
   {
+    path: 'privacy',
+    loadComponent: () =>
+      import('./routes/privacy/privacy.component').then(
+        (m) => m.PrivacyComponent,
+      ),
+  },
+  {
     path: 'help',
     loadComponent: () =>
       import('./routes/help/help.component').then((m) => m.HelpComponent),

@@ -22,7 +22,7 @@ export class OrdinalCollectionCacheService {
   snapshot(slug: string, context: NftCheckContext): Promise<OrdinalCollectionSnapshot> {
     const id = ordinalCollectionId(slug);
     context.ordinalCatalogs ||= new Map();
-    if (!context.ordinalCatalogs.has(id)) context.ordinalCatalogs.set(id, this.read(id, ordinalRequestWork(context)));
+    if (!context.ordinalCatalogs.has(id)) context.ordinalCatalogs.set(id, context.freshExport ? this.refresh(id, ordinalRequestWork(context)) : this.read(id, ordinalRequestWork(context)));
     return context.ordinalCatalogs.get(id);
   }
 
