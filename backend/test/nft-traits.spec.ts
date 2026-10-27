@@ -136,8 +136,12 @@ describe('NFT trait ownership', () => {
   it('counts only matching ERC-721s at one RPC block', async () => {
     expect(await service.count(rule, [wallet])).toBe(1n);
     expect(metadata.ownedIds).toHaveBeenCalledWith(rule, wallet);
-    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2'], expect.any(Function));
+    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2'], expect.any(Function), false);
     rpc.readContract.mock.calls.forEach(([call]) => expect(call.blockNumber).toBe(123n));
+  });
+  it('passes export freshness through to hosted trait reads', async () => {
+    await service.count(rule, [wallet], {checks:new Map(),freshExport:true});
+    expect(metadata.attributes).toHaveBeenCalledWith(rule,['1','2'],expect.any(Function),true);
   });
   it('shares token discovery, metadata and ownership across different traits in a run', async () => {
     const context: NftCheckContext = { checks: new Map() };
@@ -157,7 +161,7 @@ describe('NFT trait ownership', () => {
       ? args[0] === wallet ? 1n : 2n : args[0] === 1n ? wallet : other);
     expect(await service.count(rule, [wallet, wallet.toUpperCase(), other])).toBe(2n);
     expect(metadata.ownedIds).toHaveBeenCalledTimes(2);
-    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2', '3'], expect.any(Function));
+    expect(metadata.attributes).toHaveBeenCalledWith(rule, ['1', '2', '3'], expect.any(Function), false);
   });
   it('refuses a partial ERC-721 inventory instead of returning a lower count', async () => {
     metadata.ownedIds.mockResolvedValue(['1']);
@@ -176,7 +180,7 @@ describe('NFT trait ownership', () => {
     expect(await service.count({ ...rule, token_ids: ['1'] }, [wallet])).toBe(1n);
     expect(metadata.ownedIds).not.toHaveBeenCalled();
     expect(rpc.readContract).toHaveBeenCalledTimes(1);
-    expect(metadata.attributes).toHaveBeenCalledWith(expect.anything(), ['1'], expect.any(Function));
+    expect(metadata.attributes).toHaveBeenCalledWith(expect.anything(), ['1'], expect.any(Function), false);
   });
   it('does not fetch metadata for tokens the wallet no longer owns', async () => {
     rpc.readContract.mockResolvedValue(other);
@@ -200,7 +204,7 @@ describe('NFT trait ownership', () => {
     rpc.readContract.mockImplementation(async ({ args }) => args[0].map((owner, index) => args[1][index] === 1n ? owner === wallet ? 3n : 4n : args[1][index] === 2n ? 10n : 0n));
     const erc1155 = { ...rule, token_standard: 'erc1155' as const, token_ids: ['1', '2', '500'] };
     expect(await service.count(erc1155, [wallet, other, wallet])).toBe(7n);
-    expect(metadata.attributes).toHaveBeenCalledWith(erc1155, ['1', '2'], expect.any(Function));
+    expect(metadata.attributes).toHaveBeenCalledWith(erc1155, ['1', '2'], expect.any(Function), false);
     expect(metadata.ownedIds).not.toHaveBeenCalled();
   });
   it('refuses incomplete ERC-1155 balance batches', async () => {

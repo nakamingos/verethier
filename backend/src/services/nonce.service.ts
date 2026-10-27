@@ -34,7 +34,7 @@ export interface NonceData {
     discordName: string;
     discordIcon: string;
   };
-  bitcoinChallenge?: { address: string; message: string };
+  bitcoinChallenge?: { address: string; message: string; privacy?: import('@/portal/privacy.service').PrivacyChoice };
 }
 
 /**
@@ -198,7 +198,7 @@ export class NonceService {
     return this.getActiveNonce(data.userId, data.guildId, nonce);
   }
 
-  async saveBitcoinChallenge(userId: string, guildId: string, nonce: string, challenge: { address: string; message: string }): Promise<void> {
+  async saveBitcoinChallenge(userId: string, guildId: string, nonce: string, challenge: { address: string; message: string; privacy?: import('@/portal/privacy.service').PrivacyChoice }): Promise<void> {
     await this.withNonceLock(nonce, async () => {
       const data = await this.getActiveNonce(userId, guildId, nonce);
       const ttl = (data.expiry || 0) * 1000 - Date.now();

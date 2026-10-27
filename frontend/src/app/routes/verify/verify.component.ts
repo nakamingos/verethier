@@ -1,3 +1,4 @@
+import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { Component } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -34,7 +35,8 @@ interface State {
     imports: [
         AsyncPipe,
         RouterLink,
-        NgTemplateOutlet
+        NgTemplateOutlet,
+        PrivacyChoicesComponent
     ],
     providers: [
         BitcoinWalletService
@@ -45,6 +47,8 @@ interface State {
 export class VerifyComponent {
   readonly fromMember = new URL(window.location.href).searchParams.get('from') === 'member';
 
+  privacyPolicy: any = null;
+  privacyChoice: any = null;
   routeData$!: Observable<DecodedData | null>;
   private evmAccount?: GetAccountReturnType;
   private errorSource: 'connection' | 'verification' | null = null;
@@ -74,11 +78,13 @@ export class VerifyComponent {
     // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
       map((params: any) => this.decodeData(params.data)),
-      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number; data?: DecodedData }>(env.apiUrl + '/verification-context', {
+      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
         ...(data.userId !== undefined ? { userId: data.userId } : {}),
         ...(data.discordId !== undefined ? { discordId: data.discordId } : {}),
         nonce: data.nonce,
       }).pipe(map(context => {
+        this.privacyPolicy = context.privacy || null;
+        this.privacyChoice = context.privacy ? { epoch: context.privacy.epoch, share: !!context.privacy.share_since, exports: !!context.privacy.export_since, notice: context.privacy.notice } : null;
         if (!context.walletTypes?.length) throw new Error('No supported wallets for this verification channel.');
         const resolvedData = { ...data, ...context.data, expiry: context.expiry };
         if (!resolvedData.userId || !resolvedData.discordId || !resolvedData.nonce
@@ -217,6 +223,11 @@ export class VerifyComponent {
         Expiry: data.expiry,
       };
 
+      const choice = this.privacyChoice ? { epoch: this.privacyChoice.epoch, share: this.privacyChoice.share, exports: this.privacyChoice.exports, notice: this.privacyChoice.notice } : undefined;
+      if (choice) {
+        types.Verification.push({ name: 'Privacy', type: 'string' });
+        (message as any).Privacy = JSON.stringify(choice);
+      }
       const typedData = {
         types,
         domain,
@@ -225,11 +236,11 @@ export class VerifyComponent {
       };
 
       let proof: { signature: string; address: string };
-      let verificationData = { ...data, walletType: this.state$.value.walletType };
+      let verificationData = { ...data, ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
       if (verificationData.walletType === 'bitcoin') {
         const address = await this.bitcoinWalletSvc.syncConnectedAccount();
         const challenge = await firstValueFrom(this.http.post<{ address: string; message: string; expiry: number }>(env.apiUrl + '/bitcoin-challenge', {
-          userId: data.userId, discordId: data.discordId, nonce: data.nonce, address,
+          userId: data.userId, discordId: data.discordId, nonce: data.nonce, address, ...(choice ? { privacy: choice } : {}),
         }));
         proof = await this.bitcoinWalletSvc.signMessage(challenge.address, challenge.message);
         verificationData = { ...verificationData, expiry: challenge.expiry };

@@ -38,9 +38,10 @@
     <nav class="tabs workspace-tabs" aria-label="Member portal">
       @for (
         item of [
-          ['overview', 'Overview'],
-          ['wallets', 'Wallets'],
-          ['communities', 'Communities'],
+          ["overview", "Overview"],
+          ["wallets", "Wallets"],
+          ["communities", "Communities"],
+          ["privacy", "Privacy"],
         ];
         track item[0]
       ) {
@@ -77,9 +78,9 @@
               <h2>Continue where you left off</h2>
               <p>
                 {{
-                  account.pending.purpose === 'wallet_link'
-                    ? 'Finish linking your wallet.'
-                    : 'Continue your community verification.'
+                  account.pending.purpose === "wallet_link"
+                    ? "Finish linking your wallet."
+                    : "Continue your community verification."
                 }}
               </p>
               <div class="actions">
@@ -94,7 +95,7 @@
               </div>
             </section>
           }
-          @if (tab === 'overview') {
+          @if (tab === "overview") {
             <section class="panel">
               <h2>Welcome, {{ user.name }}</h2>
               <div class="member-counts">
@@ -145,7 +146,12 @@
               }
             </section>
           }
-          @if (tab === 'wallets') {
+          @if (tab === "wallets") {
+            <p>
+              Saved wallets and proof history are retained as described in the
+              <a routerLink="/privacy">privacy policy</a>. Community
+              sharing/export choices are separate from linking a wallet.
+            </p>
             <div class="section-heading">
               <h2>Saved wallets:</h2>
               <button
@@ -204,14 +210,14 @@
                     <button (click)="connect()" [disabled]="busy || connecting">
                       {{
                         connecting
-                          ? 'Connecting…'
+                          ? "Connecting…"
                           : address
-                            ? 'Change wallet'
-                            : 'Connect wallet'
+                            ? "Change wallet"
+                            : "Connect wallet"
                       }}
                     </button>
                     @if (
-                      walletKind === 'unisat' && !bitcoin.isUniSatAvailable()
+                      walletKind === "unisat" && !bitcoin.isUniSatAvailable()
                     ) {
                       <button
                         (click)="openUniSat()"
@@ -224,7 +230,7 @@
                       (click)="link()"
                       [disabled]="!address || busy || connecting"
                     >
-                      {{ busy ? 'Linking…' : 'Sign & link wallet' }}
+                      {{ busy ? "Linking…" : "Sign & link wallet" }}
                     </button>
                   </div>
                 }
@@ -243,13 +249,13 @@
                 <div class="section-heading">
                   <h2 [title]="wallet.address">{{ short(wallet.address) }}</h2>
                   <span class="badge">{{
-                    wallet.wallet_type === 'bitcoin'
-                      ? 'Bitcoin · Ordinals'
-                      : 'EVM'
+                    wallet.wallet_type === "bitcoin"
+                      ? "Bitcoin · Ordinals"
+                      : "EVM"
                   }}</span>
                 </div>
                 <p class="muted">
-                  Last proven: {{ wallet.last_verified_at | date: 'medium' }}
+                  Last proven: {{ wallet.last_verified_at | date: "medium" }}
                 </p>
                 <div class="actions">
                   <button (click)="copy(wallet.address)" [disabled]="busy">
@@ -313,10 +319,10 @@
                     <p>
                       {{ activityLabel(action) }}
                       {{ short(action.address) }}
-                      <time>{{ action.created_at | date: 'short' }}</time>
+                      <time>{{ action.created_at | date: "short" }}</time>
                     </p>
                     <p class="muted">
-                      {{ action.source === 'discord' ? 'Discord' : 'Portal' }}
+                      {{ action.source === "discord" ? "Discord" : "Portal" }}
                       @if (action.community) {
                         · {{ action.community }}
                       }
@@ -334,7 +340,7 @@
                             · Unavailable: {{ job.result.errors }}
                           }
                         }
-                        @if (job.status === 'failed') {
+                        @if (job.status === "failed") {
                           <button (click)="retry(job.id)" [disabled]="busy">
                             Retry check
                           </button>
@@ -342,7 +348,7 @@
                       </p>
                     }
                     @if (
-                      !action.jobs.length && action.kind === 'wallet_remove'
+                      !action.jobs.length && action.kind === "wallet_remove"
                     ) {
                       <p class="muted">
                         No previously earned roles needed checking.
@@ -353,7 +359,18 @@
               </section>
             }
           }
-          @if (tab === 'communities') {
+          @if (tab === "privacy") {
+            <section class="panel">
+              <h2>Privacy choices</h2>
+              <p>
+                Change sharing and export choices separately for each community
+                in Communities.
+                <a routerLink="/privacy">Read the privacy policy</a>.
+              </p>
+            </section>
+            <app-deletion-requests />
+          }
+          @if (tab === "communities") {
             <div class="toolbar">
               <label
                 >Find a community:<span class="search-field"
@@ -386,6 +403,15 @@
                   }
                   <h2>{{ community.name }}</h2>
                 </div>
+                @if (community.privacy) {
+                  <app-privacy-choices
+                    [policy]="community.privacy"
+                    [(choice)]="community.privacy_choice"
+                    [disabled]="busy"
+                  /><button (click)="savePrivacy(community)" [disabled]="busy">
+                    Save privacy choices
+                  </button>
+                }
                 @if (community.channels.length) {
                   <div class="community-controls">
                     <label
@@ -426,10 +452,10 @@
                         }
                         <span class="badge">{{
                           role.earned
-                            ? 'Earned'
+                            ? "Earned"
                             : role.previouslyEarned
-                              ? 'Previously earned'
-                              : 'Available'
+                              ? "Previously earned"
+                              : "Available"
                         }}</span>
                       </h3>
                       <ul class="requirements">
@@ -447,7 +473,7 @@
                               · {{ selection(rule) }}
                             }
                             @if (
-                              rule.tokenStandard === 'erc1155' &&
+                              rule.tokenStandard === "erc1155" &&
                               !rule.tokenIds?.length
                             ) {
                               · IDs 0–99
@@ -456,7 +482,7 @@
                               · {{ rule.trait }}
                             }
                             @if (rule.tokenIds?.length) {
-                              · IDs: {{ rule.tokenIds!.join(', ') }}
+                              · IDs: {{ rule.tokenIds!.join(", ") }}
                             }
                           </li>
                         }
@@ -465,9 +491,9 @@
                   } @empty {
                     <p>
                       {{
-                        roleViews[community.id] === 'earned'
-                          ? 'No earned roles in this channel yet.'
-                          : 'No additional roles available in this channel.'
+                        roleViews[community.id] === "earned"
+                          ? "No earned roles in this channel yet."
+                          : "No additional roles available in this channel."
                       }}
                     </p>
                   }

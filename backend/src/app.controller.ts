@@ -78,6 +78,7 @@ export class AppController {
       // Transform DTO data to match expected DecodedData interface
       const decodedData = {
         address: body.data.address || '',
+        ...(body.data.privacy !== undefined ? { privacy: body.data.privacy } : {}),
         ...(body.data.walletType !== undefined ? { walletType: body.data.walletType } : {}),
         userId: body.data.userId || '',
         userTag: body.data.userTag || '',
@@ -167,7 +168,7 @@ export class AppController {
 
   @Post('bitcoin-challenge')
   async bitcoinChallenge(@Body() body: BitcoinChallengeDto) {
-    try { return await this.bitcoinSvc.createChallenge(body.userId, body.discordId, body.nonce, body.address); }
+    try { return await this.bitcoinSvc.createChallenge(body.userId, body.discordId, body.nonce, body.address, body.privacy); }
     catch (error) {
       throw new HttpException(error.message?.startsWith('Use ') ? error.message : 'Could not create the Bitcoin verification message. Please return to Discord and request a new link.', HttpStatus.BAD_REQUEST);
     }

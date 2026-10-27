@@ -1,3 +1,4 @@
+import { PrivacyService } from '@/portal/privacy.service';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { AssetOwnershipService } from './asset-ownership.service';
@@ -116,6 +117,7 @@ export class DiscordVerificationService {
     private readonly ownershipSvc: AssetOwnershipService,
     private readonly walletBlocks: WalletBlockService,
     @Optional() private readonly roleActions?: RoleActionService,
+    @Optional() private readonly privacy?: PrivacyService,
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {
@@ -553,11 +555,19 @@ export class DiscordVerificationService {
 
     // Check if user already has the role
     // We can use the already fetched member as Discord.js handles caching appropriately
+    await this.privacy?.assertActive(userId);
     const wasAlreadyAssigned = member.roles.cache.has(roleId);
 
     if (!wasAlreadyAssigned) {
       const updated = await member.roles.add(role);
       context?.set(`${guildId}:${userId}`, Promise.resolve(updated));
+    }
+
+    // A deletion approved while the Discord request was in flight must not leave a new grant.
+    try { await this.privacy?.assertActive(userId); }
+    catch (error) {
+      if (!wasAlreadyAssigned) await member.roles.remove(role, 'Bouncer account deletion in progress');
+      throw error;
     }
 
     // Always track role assignment - the trackRoleAssignment method handles existing records properly
@@ -584,6 +594,11 @@ export class DiscordVerificationService {
       // Don't fail the entire process if tracking fails
     }
 
+    try { await this.privacy?.assertActive(userId); }
+    catch (error) {
+      if (!wasAlreadyAssigned) await member.roles.remove(role, 'Bouncer account deletion in progress');
+      throw error;
+    }
     return {
       roleId,
       roleName: role.name,
@@ -821,6 +836,7 @@ export class DiscordVerificationService {
         return 'suppressed';
       }
 
+      await this.privacy?.assertActive(userId);
       // Check if user already has the role
       if (member.roles.cache.has(roleId)) {
         Logger.debug(`User ${userId} already has role ${roleId} in guild ${serverId}`);
@@ -829,6 +845,11 @@ export class DiscordVerificationService {
 
       const updated = await member.roles.add(role, 'Dynamic role verification: holdings meet criteria');
       context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
+      try { await this.privacy?.assertActive(userId); }
+      catch (error) {
+        await member.roles.remove(role, 'Bouncer account deletion in progress');
+        throw error;
+      }
       Logger.log(`✅ Added role "${role.name}" to user ${userId} in ${guild.name}`);
       return true;
 

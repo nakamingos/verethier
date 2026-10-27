@@ -199,6 +199,7 @@ describe('Portal server boundaries', () => {
           : removedQuery,
     );
     rules.getEarnedRoleAssignments.mockResolvedValue([]);
+    (service as any).privacy = { isOperator: () => false, policy: async () => ({share_since:'2026-01-01T00:00:00Z'}), visible: (since,time) => !!time && Date.parse(time)>=Date.parse(since) };
     const result = await service.member(session, server, target, false);
     expect(result.wallets).toEqual([
       { ...current, blocked: false, block: null },
@@ -241,6 +242,7 @@ describe('Portal server boundaries', () => {
     ]);
   });
   it('restricts wallet actions to the selected member’s recorded addresses and authenticated server admin', async () => {
+    jest.spyOn(service, 'access').mockResolvedValue(guild);
     const address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     const view = jest.spyOn(service, 'member').mockResolvedValue({
       wallets: [],
@@ -324,6 +326,7 @@ describe('Portal server boundaries', () => {
       p_limit: 20,
       p_address: null,
       p_account_after: null,
+      p_operator: false,
     });
     expect(result.items[0].accounts[0]).toEqual({
       user_id: user,
@@ -516,7 +519,7 @@ describe('Portal activity sort parameters', () => {
   const session = { user: { id: 'admin' } };
   const auth = { session: jest.fn().mockResolvedValue(session) };
   const portal = { activity: jest.fn().mockResolvedValue({ items: [] }) };
-  const controller = new PortalController(auth as any, portal as any);
+  const controller = new PortalController(auth as any, portal as any, { isOperator: () => false } as any);
   beforeEach(() => jest.clearAllMocks());
   it('preserves newest-first ordering when sort is omitted', async () => {
     await controller.activity({} as any, 'server');
@@ -570,7 +573,7 @@ describe('Portal wallet block mutations', () => {
         }),
       };
       const portal = { [method]: jest.fn() };
-      const controller = new PortalController(auth as any, portal as any);
+      const controller = new PortalController(auth as any, portal as any, { isOperator: () => false } as any);
       await expect(
         controller[method]({} as any, 'server', {} as any),
       ).rejects.toThrow('Unconfirmed');
@@ -586,7 +589,7 @@ describe('Portal wallet block mutations', () => {
       }),
     };
     const portal = { walletBlock: jest.fn() };
-    const controller = new PortalController(auth as any, portal as any);
+    const controller = new PortalController(auth as any, portal as any, { isOperator: () => false } as any);
     await expect(
       controller.walletBlock({} as any, 'server', 'member', {} as any),
     ).rejects.toThrow('Unconfirmed request');

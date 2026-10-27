@@ -1,3 +1,6 @@
+import { PrivacyService } from './portal/privacy.service';
+import { PrivacyController } from './portal/privacy.controller';
+import { WalletExportService } from './portal/wallet-export.service';
 import { PortalThrottleGuard } from './portal/portal-throttle.guard';
 import { PortalController } from './portal/portal.controller';
 import { PortalAuthService } from './portal/portal-auth.service';
@@ -105,7 +108,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
       limit: CONSTANTS.RATE_LIMIT.LONG.LIMIT,   // 100 requests max
     }]),
   ],
-  controllers: [AppController, PortalController, MemberController],
+  controllers: [AppController, PortalController, MemberController, PrivacyController],
   providers: [
     // Supabase client provider with optimized configuration
     {
@@ -141,7 +144,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Core application services
     AppService,
     PortalAuthService, PortalService, PortalJobsService, ServerSetupService, SetupHealthService,
-    MemberService,
+    MemberService, PrivacyService, WalletExportService,
     Erc20OwnershipService,
 
     // Discord integration services

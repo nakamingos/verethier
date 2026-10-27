@@ -114,14 +114,6 @@ export class AuditLogHandler {
     const timestamp = Number.isNaN(date.getTime()) ? 'Unknown time' : `<t:${Math.floor(date.getTime() / 1000)}:R>`;
     const age = new Date(entry.updated_at).getTime() - new Date(entry.created_at).getTime();
     const action = entry.status === 'revoked' ? '🗑️' : entry.status === 'expired' ? '⌛' : age > 3600000 ? '🔄' : '✅';
-    const wallets = Array.isArray(entry.user_wallets) ? entry.user_wallets : [];
-    const address = wallets[0]?.address;
-    let wallet = 'Unknown';
-    if (typeof address === 'string' && (/^0x[0-9a-fA-F]{40}$/.test(address) || /^bc1p[a-z0-9]{58}$/.test(address))) {
-      const label = `${address.slice(0, 5)}…${address.slice(-5)}`;
-      const url = address.startsWith('bc1p') ? `https://mempool.space/address/${address}` : `https://ethscriptions.com/${address}`;
-      wallet = `[${label}](${url})${wallets.length > 1 ? ` +${wallets.length - 1}` : ''}`;
-    }
-    return `${action}│${this.displayText(entry.user_name, 'Unknown User')}│${this.displayText(entry.role_name || entry.role_id, 'Unknown Role')} (${wallet}) ${timestamp}`;
+    return `${action}│${this.displayText(entry.user_name, 'Unknown User')}│${this.displayText(entry.role_name || entry.role_id, 'Unknown Role')} ${timestamp}`;
   }
 }

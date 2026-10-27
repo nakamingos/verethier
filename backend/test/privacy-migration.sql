@@ -1,0 +1,60 @@
+-- All fixtures are synthetic and the harness rolls them back.
+CREATE FUNCTION pg_temp.assert(ok boolean,message text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION '%',message; END IF; END $$;
+TRUNCATE public.user_wallets, public.verifier_member_actions, public.verifier_reconciliation_jobs, public.verifier_user_roles CASCADE;
+INSERT INTO public.verifier_privacy_servers(server_id) VALUES('privacy-test');
+INSERT INTO public.user_wallets(user_id,address,wallet_type,last_verified_at) VALUES('privacy-user-a','0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','evm',now()),('privacy-user-b','0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','evm',now());
+INSERT INTO public.verifier_member_actions(id,user_id,kind,address,wallet_type,created_at,last_proven_at,server_id) VALUES
+(gen_random_uuid(),'privacy-user-b','wallet_transfer_out','0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','evm',now()-interval '367 days',now()-interval '367 days','privacy-test');
+SELECT pg_temp.assert(NOT public.verifier_privacy_visible('privacy-test','privacy-user-a',now()),'Existing wallets must default private');
+SELECT pg_temp.assert((public.verifier_portal_wallet_audit('privacy-test',ARRAY['privacy-user-a','privacy-user-b'],NULL,NULL)->>'total')::int=0,'Private association count leaked');
+SELECT pg_temp.assert((public.verifier_portal_wallet_audit('privacy-test',ARRAY['privacy-user-a','privacy-user-b'],NULL,NULL,20,NULL,NULL,true)->>'total')::int=1,'Operator audit must retain history');
+SELECT public.verifier_privacy_server('privacy-test','operator',true);
+SELECT public.verifier_privacy_choose('privacy-test','privacy-user-a',epoch,true,true,'2026-10-27') FROM public.verifier_privacy_servers WHERE server_id='privacy-test';
+SELECT pg_temp.assert(public.verifier_privacy_visible('privacy-test','privacy-user-a',now()),'New granted proof should be visible');
+SELECT pg_temp.assert(NOT public.verifier_privacy_visible('privacy-test','privacy-user-a',now()-interval '1 day'),'Old private history became visible');
+SELECT pg_temp.assert((SELECT count(*)=1 FROM public.verifier_privacy_wallet_matches('privacy-test','0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'Private historical user appeared in lookup');
+SELECT public.verifier_privacy_server('privacy-test','operator',false);
+SELECT public.verifier_privacy_server('privacy-test','operator',true);
+SELECT pg_temp.assert(NOT public.verifier_privacy_visible('privacy-test','privacy-user-a',now()),'Re-enabling resurrected stale permission');
+DO $$ BEGIN
+ BEGIN PERFORM public.verifier_privacy_choose('privacy-test','privacy-user-a','00000000-0000-4000-8000-000000000000',true,true,'2026-10-27'); RAISE EXCEPTION 'Stale epoch accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM='Stale epoch accepted' THEN RAISE; END IF; END;
+END $$;
+SELECT pg_temp.assert(NOT has_function_privilege('anon','public.verifier_privacy_cleanup(integer)','EXECUTE'),'Anonymous cleanup allowed');
+SELECT pg_temp.assert(NOT has_table_privilege('authenticated','public.verifier_wallet_exports','SELECT'),'Client can read private exports');
+SELECT pg_temp.assert(NOT has_function_privilege('authenticated','public.verifier_portal_wallet_audit(text,text[],text,text,integer,text,text,boolean)','EXECUTE'),'Client operator override allowed');
+INSERT INTO public.verifier_member_actions(id,user_id,kind,address,wallet_type,created_at,last_proven_at) VALUES(gen_random_uuid(),'privacy-user-a','wallet_remove','0xcccccccccccccccccccccccccccccccccccccccc','evm',now()-interval '367 days',now()-interval '367 days');
+INSERT INTO public.verifier_user_roles(user_id,server_id,role_id,verification_data) VALUES('privacy-user-a','privacy-evidence','evidence-role','{"wallets":{"0xcccccccccccccccccccccccccccccccccccccccc":"history"},"checks":[{"address":"0xcccccccccccccccccccccccccccccccccccccccc"}],"other":"preserve"}');
+SELECT public.verifier_privacy_cleanup();
+SELECT pg_temp.assert((SELECT verification_data->>'other'='preserve' AND position('0xcccccccccccccccccccccccccccccccccccccccc' IN verification_data::text)=0 FROM public.verifier_user_roles WHERE server_id='privacy-evidence'),'Copied historical evidence was not scrubbed');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.verifier_member_actions WHERE address='0xcccccccccccccccccccccccccccccccccccccccc'),'Expired removed association retained');
+SELECT pg_temp.assert((SELECT count(*)=2 FROM public.user_wallets),'Active wallets erased by ordinary retention');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.verifier_member_actions WHERE user_id='privacy-user-b'),'Former member transfer association was retained past expiry');
+INSERT INTO public.verifier_user_roles(user_id,server_id,role_id) VALUES('privacy-user-a','privacy-test','privacy-role');
+INSERT INTO public.verifier_privacy_deletions(id,user_id) VALUES('00000000-0000-4000-8000-000000000001','privacy-user-a');
+SELECT public.verifier_privacy_review('00000000-0000-4000-8000-000000000001','operator',true,'Approved ordinary deletion.');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.user_wallets WHERE user_id='privacy-user-a'),'Approval left wallet linked');
+SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_reconciliation_jobs WHERE user_id='privacy-user-a' AND status='pending'),'Approval failed to queue role reconciliation');
+DO $$ BEGIN
+ BEGIN INSERT INTO public.user_wallets(user_id,address,wallet_type) VALUES('privacy-user-a','0xcccccccccccccccccccccccccccccccccccccccc','evm'); RAISE EXCEPTION 'Deletion allowed relink'; EXCEPTION WHEN raise_exception THEN IF SQLERRM='Deletion allowed relink' THEN RAISE; END IF; END;
+END $$;
+DO $$ BEGIN
+ BEGIN INSERT INTO public.verifier_user_roles(user_id,server_id,role_id) VALUES('privacy-user-a','privacy-test','another-role'); RAISE EXCEPTION 'Deletion allowed new role record'; EXCEPTION WHEN raise_exception THEN IF SQLERRM='Deletion allowed new role record' THEN RAISE; END IF; END;
+END $$;
+UPDATE public.verifier_user_roles SET status='revoked' WHERE user_id='privacy-user-a';
+UPDATE public.verifier_privacy_deletions SET reviewed_at=now()-interval '20 minutes' WHERE user_id='privacy-user-a';
+SELECT public.verifier_privacy_cleanup();
+SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE status='processing'),'Erasure ran before role checks');
+UPDATE public.verifier_reconciliation_jobs SET status='completed' WHERE user_id='privacy-user-a';
+SELECT public.verifier_privacy_cleanup();
+SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE status='completed' AND user_id IS NULL),'Account not erased after role checks');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.verifier_member_actions WHERE user_id='privacy-user-a'),'Deleted account wallet history remains');
+SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE subject_hash=encode(sha256(convert_to('privacy-user-a','UTF8')),'hex')),'Missing restricted recovery marker');
+INSERT INTO public.user_wallets(user_id,address,wallet_type,last_verified_at) VALUES('privacy-user-a','0xdddddddddddddddddddddddddddddddddddddddd','evm',now()-interval '1 day');
+SELECT pg_temp.assert(public.verifier_privacy_reapply_deletions((SELECT jsonb_agg(jsonb_build_object('subject_hash',subject_hash,'completed_at',completed_at)) FROM public.verifier_privacy_deletions WHERE subject_hash IS NOT NULL))=1,'Recovery failed to reapply completed deletion');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM public.user_wallets WHERE user_id='privacy-user-a'),'Restored deleted wallet remains linked');
+INSERT INTO public.verifier_wallet_exports(id,server_id,actor_id,filters) VALUES('00000000-0000-4000-8000-000000000002','privacy-test','operator','{}');
+SELECT pg_temp.assert((SELECT count(*)=1 FROM public.verifier_privacy_claim_export('00000000-0000-4000-8000-000000000003')),'Export not claimed');
+SELECT pg_temp.assert((SELECT count(*)=0 FROM public.verifier_privacy_claim_export('00000000-0000-4000-8000-000000000004')),'Export lease taken twice');
+UPDATE public.verifier_wallet_exports SET expires_at=now()-interval '1 minute',result='{"rows":["private"]}';
+SELECT public.verifier_privacy_cleanup();
+SELECT pg_temp.assert((SELECT bool_and(result IS NULL AND status='expired') FROM public.verifier_wallet_exports),'Expired export data retained');

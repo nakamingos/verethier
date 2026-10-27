@@ -1,3 +1,4 @@
+import { PrivacyService } from './privacy.service';
 import {
   BadRequestException,
   ConflictException,
@@ -76,6 +77,7 @@ export class PortalService {
     private readonly tokens: Erc20OwnershipService,
     private readonly metadata: NftMetadataService,
     @Optional() private readonly setup?: ServerSetupService,
+    @Optional() private readonly privacy?: PrivacyService,
   ) {}
 
   client() {
@@ -85,6 +87,14 @@ export class PortalService {
         'Bouncer is reconnecting to Discord. Please try again shortly.',
       );
     return client;
+  }
+  async readAccess(session: PortalSession, server: string, operation = 'admin_read'): Promise<Guild> {
+    if (!this.privacy?.isOperator(session.user.id)) return this.access(session,server);
+    if (!snowflake(server)) throw new BadRequestException('Invalid server ID.');
+    const guild=this.client().guilds.cache.get(server);
+    if (!guild) throw new NotFoundException('Bouncer is not installed in this server.');
+    await this.privacy.audit(session.user.id,server,operation);
+    return guild;
   }
   async access(session: PortalSession, server: string): Promise<Guild> {
     if (!snowflake(server)) throw new BadRequestException('Invalid server ID.');
@@ -114,6 +124,7 @@ export class PortalService {
   }
   servers(session: PortalSession) {
     const client = this.client();
+    const operator = this.privacy?.isOperator(session.user.id) || false;
     const id = client.user.id;
     const invite = new URL('https://discord.com/oauth2/authorize');
     invite.search = new URLSearchParams({
@@ -127,7 +138,7 @@ export class PortalService {
     invite.searchParams.delete('response_type');
     invite.searchParams.delete('redirect_uri');
     return {
-      servers: session.guilds
+      servers: (operator ? [...client.guilds.cache.values()].map(g => ({id:g.id,name:g.name,icon:g.icon,owner:g.ownerId===session.user.id,permissions:'8'})) : session.guilds)
         .filter((g) => {
           try {
             return g.owner || (BigInt(g.permissions) & 8n) !== 0n;
@@ -148,7 +159,7 @@ export class PortalService {
     };
   }
   async overview(session: PortalSession, server: string) {
-    const guild = await this.access(session, server);
+    const guild = await this.readAccess(session, server, 'overview');
     const [channels, roles, rules, settings, actions] = await Promise.all([
       guild.channels.fetch(),
       guild.roles.fetch(),
@@ -164,7 +175,8 @@ export class PortalService {
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
       rules: rules.map(portalRule),
-      capabilities: { multi_trait: true },
+      capabilities: { multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
+      privacy: this.privacy ? await this.privacy.server(server) : null,
       settings,
       role_actions: actions.data || [],
       channels: [...channels.values()]
@@ -220,7 +232,7 @@ export class PortalService {
     contract: string,
     network: string,
   ) {
-    await this.access(session, server);
+    await this.readAccess(session, server, 'suggestions');
     if (
       !['ethscription', 'ordinal', 'nft'].includes(asset) ||
       !['slug', 'attribute_key', 'attribute_value'].includes(field) ||
@@ -618,7 +630,7 @@ export class PortalService {
     sort: 'asc' | 'desc' = 'desc',
     limit = 20,
   ) {
-    await this.access(session, server);
+    await this.readAccess(session, server, 'activity');
     const table =
       kind === 'changes'
         ? 'verifier_portal_actions'
@@ -660,7 +672,7 @@ export class PortalService {
       }));
     }
     return {
-      items,
+      items: kind === 'jobs' && !this.privacy?.isOperator(session.user.id) ? items.map(({ result, ...row }) => ({...row,result:null})) : items,
       total: count || 0,
       page,
       pages: Math.max(1, Math.ceil((count || 0) / limit)),
@@ -693,19 +705,24 @@ export class PortalService {
     return value.length >= 42 && /^(0x|bc1)/i.test(value);
   }
 
-  private async walletMembers(guild: Guild, input: string) {
+  private async walletMembers(guild: Guild, input: string, session: PortalSession) {
     let address: string;
     try {
       address = normalizeBlockedWallet(input);
     } catch (error) {
       throw new BadRequestException(error.message);
     }
+    let ids = new Map<string, 'current' | 'history'>();
+    if (!this.privacy) throw new ServiceUnavailableException('Privacy controls are unavailable.');
+    if (!this.privacy.isOperator(session.user.id)) {
+      for (const row of await this.privacy.walletMatches(guild.id,address)) ids.set(row.user_id,row.wallet_match);
+    } else {
     const current = await this.db
       .from('user_wallets')
       .select('user_id')
       .eq('address', address);
     this.dbError(current.error || (!Array.isArray(current.data) ? {} : null));
-    const ids = new Map<string, 'current' | 'history'>(
+    ids = new Map<string, 'current' | 'history'>(
       current.data.map((row) => [row.user_id, 'current']),
     );
     for (let offset = 0; ; offset += 1000) {
@@ -720,6 +737,7 @@ export class PortalService {
       for (const row of history.data)
         if (!ids.has(row.user_id)) ids.set(row.user_id, 'history');
       if (history.data.length < 1000) break;
+    }
     }
     const matches: { member: any; wallet_match: 'current' | 'history' }[] = [];
     for (const [id, wallet_match] of ids) {
@@ -751,7 +769,7 @@ export class PortalService {
     server: string,
     query: string,
   ) {
-    const guild = await this.access(session, server);
+    const guild = await this.readAccess(session, server, 'memberSuggestions');
     const text = this.memberQuery(query);
     if (text.length < 2) return { members: [] };
     if (this.walletMemberQuery(query)) {
@@ -762,7 +780,7 @@ export class PortalService {
       } catch {
         return { members: [] };
       }
-      const matches = await this.walletMembers(guild, query);
+      const matches = await this.walletMembers(guild, query, session);
       return {
         members: matches.map(({ member, wallet_match }) =>
           this.memberSuggestion(member, wallet_match),
@@ -790,10 +808,10 @@ export class PortalService {
     };
   }
 
-  private async resolveMember(guild: Guild, input: string) {
+  private async resolveMember(guild: Guild, input: string, session: PortalSession) {
     const text = this.memberQuery(input);
     if (this.walletMemberQuery(input)) {
-      const matches = await this.walletMembers(guild, input);
+      const matches = await this.walletMembers(guild, input, session);
       if (!matches.length)
         throw new NotFoundException(
           'No current server member has this wallet in their saved history.',
@@ -852,22 +870,27 @@ export class PortalService {
     id: string,
     check: boolean,
   ) {
-    const guild = await this.access(session, server);
-    const member = await this.resolveMember(guild, id);
+    const guild = await this.readAccess(session, server, 'member');
+    const member = await this.resolveMember(guild, id, session);
     id = member.id;
     const assignments = await this.rules.getEarnedRoleAssignments({
       userId: id,
       serverId: server,
     });
-    const { data: wallets, error } = await this.db
+    if (!this.privacy) throw new ServiceUnavailableException('Privacy controls are unavailable.');
+    const operator=this.privacy.isOperator(session.user.id);
+    const policy=operator ? null : await this.privacy.policy(server,id);
+    const { data: savedWallets, error } = await this.db
       .from('user_wallets')
       .select('address,wallet_type,last_verified_at')
       .eq('user_id', id);
     this.dbError(error);
-    const removedWallets = await this.removedWallets(
+    const wallets=(savedWallets || []).filter(w=>operator || this.privacy.visible(policy.share_since,w.last_verified_at));
+    const removedRows = await this.removedWallets(
       id,
       new Set((wallets || []).map((wallet) => wallet.address)),
     );
+    const removedWallets=removedRows.filter(w=>operator || this.privacy.visible(policy.share_since,w.removed_at)).map(w=>({...w,last_verified_at:operator || this.privacy.visible(policy.share_since,w.last_verified_at)?w.last_verified_at:null}));
     const restrictions = new Map<string, any>();
     const addresses = [
       ...new Set(
@@ -921,6 +944,7 @@ export class PortalService {
       name: member.displayName,
       username: member.user.username,
       avatar: member.displayAvatarURL(),
+      wallets_private: !operator && !policy.share_since,
       wallets: (wallets || []).map(withRestriction),
       removed_wallets: removedWallets.map(withRestriction),
       roles,
@@ -932,6 +956,7 @@ export class PortalService {
     id: string,
     dto: PortalWalletBlockDto,
   ) {
+    await this.access(session, server);
     const member = await this.member(session, server, id, false);
     let address: string;
     try {
@@ -1007,9 +1032,9 @@ export class PortalService {
     server: string,
     dto: PortalWalletAuditDto,
   ) {
-    const guild = await this.access(session, server);
+    const guild = await this.readAccess(session, server, 'walletAudit');
     const target = dto.member_id
-      ? await this.resolveMember(guild, dto.member_id)
+      ? await this.resolveMember(guild, dto.member_id, session)
       : null;
     if (dto.after) {
       try {
@@ -1058,6 +1083,7 @@ export class PortalService {
     }
     const { data, error } = await this.db.rpc('verifier_portal_wallet_audit', {
       p_server: server,
+      p_operator: this.privacy?.isOperator(session.user.id) || false,
       p_users: [...members.keys()],
       p_member: dto.member_id || null,
       p_after: dto.after || null,
@@ -1110,6 +1136,7 @@ export class PortalService {
     id: string,
     request: string,
   ) {
+    await this.access(session, server);
     const member = await this.member(session, server, id, false);
     id = member.id;
     const { data, error } = await this.db

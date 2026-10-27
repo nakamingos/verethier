@@ -52,7 +52,7 @@ describe('Audit log pagination', () => {
     expect(db.getServerAuditLog).toHaveBeenCalledTimes(1);
   });
 
-  it('pages by character limits without dropping rows or splitting wallet links', async () => {
+  it('pages by character limits without dropping rows or exposing wallet associations', async () => {
     db.getServerAuditLog.mockResolvedValue(Array.from({ length: 75 }, (_, index) => entry(index + 1, {
       user_name: `User${index + 1} ` + '_'.repeat(85), role_name: '*'.repeat(100),
       user_wallets: [{ address: bitcoin }],
@@ -70,7 +70,8 @@ describe('Audit log pagination', () => {
       expect(data.description).not.toContain('(truncated)');
       const ids = [...data.description.matchAll(/User(\d+)/g)].map(match => Number(match[1]));
       seen.push(...ids);
-      expect(data.description.split(`](https://mempool.space/address/${bitcoin})`).length - 1).toBe(ids.length);
+      expect(data.description).not.toContain(bitcoin);
+      expect(data.description).not.toContain(address);
       pages++;
       const next = buttons(payload)[1];
       if (next.disabled) break;
@@ -78,7 +79,7 @@ describe('Audit log pagination', () => {
       await handler.handlePaginationButton(click);
       payload = click.update.mock.calls[0][0];
     }
-    expect(pages).toBeGreaterThan(4);
+    expect(pages).toBeGreaterThan(3);
     expect(seen).toEqual(Array.from({ length: 75 }, (_, index) => index + 1));
   });
 

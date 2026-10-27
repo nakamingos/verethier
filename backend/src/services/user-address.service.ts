@@ -97,7 +97,7 @@ export class UserAddressService {
       }
       // Log user address operations only in development
       if (process.env.NODE_ENV === 'development') {
-        this.logger.debug(`Adding address ${normalizedAddress} for user: ${userId}${userName ? ` (${userName})` : ''}`);
+        this.logger.debug('Saving a wallet link.');
       }
 
       const existingWalletsResult = await this.findWalletsByAddress(normalizedAddress);
@@ -140,7 +140,7 @@ export class UserAddressService {
         return { success: false, error: insertError.message };
       }
 
-      this.logger.log(`Successfully added new address ${normalizedAddress} for user ${userId}`);
+      this.logger.log('Wallet link saved.');
       return { 
         success: true, 
         wallet: newWallet, 
@@ -161,7 +161,7 @@ export class UserAddressService {
       const normalizedAddress = address.toLowerCase();
       // Log address removal only in development  
       if (process.env.NODE_ENV === 'development') {
-        this.logger.debug(`Removing address ${normalizedAddress} for user: ${userId}`);
+        this.logger.debug('Removing a saved wallet link.');
       }
 
       const { error } = await this.supabase
@@ -175,7 +175,7 @@ export class UserAddressService {
         return false;
       }
 
-      this.logger.log(`Successfully removed address ${normalizedAddress} for user ${userId}`);
+      this.logger.log('Wallet link removed.');
       return true;
 
     } catch (error) {
@@ -324,14 +324,14 @@ export class UserAddressService {
 
     if (updateError) {
       this.logger.error(
-        `Error transferring address ${existingWallet.address} from user ${existingWallet.user_id} to ${newUserId}:`,
+        'Wallet transfer failed:',
         updateError
       );
       return { success: false, error: updateError.message };
     }
 
     this.logger.log(
-      `Transferred wallet ${existingWallet.address} from user ${existingWallet.user_id} to user ${newUserId}`
+      'Wallet transfer saved.'
     );
 
     return {
@@ -362,8 +362,7 @@ export class UserAddressService {
     }
 
     this.logger.error(
-      `Unique constraint conflict reported for address ${address}, ` +
-      `but no wallet owner was found on re-read for attempted user=${userId}`
+      'Wallet link conflict could not be resolved on re-read.'
     );
     return {
       success: false,

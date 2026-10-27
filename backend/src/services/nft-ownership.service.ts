@@ -22,6 +22,8 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  /** Export jobs require fresh collection metadata as well as live owners. */
+  freshExport?: boolean;
   /** Addresses proven by a fresh signature in this run, including a link whose DB write is retrying. */
   provenAddresses?: Map<string, string>;
   userAddresses?: Map<string, Promise<string[]>>;
@@ -180,7 +182,7 @@ export class NftOwnershipService {
     const metadataScope = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, [...owned.keys()].sort()]);
     if (!context.nftMetadata.has(metadataScope)) {
       context.nftMetadata.set(metadataScope, this.blockNumber(rule.chain_id, context).then(blockNumber =>
-        this.metadataSvc.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber))));
+        this.metadataSvc.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber), !!context.freshExport)));
     }
     const attributes = await context.nftMetadata.get(metadataScope);
     const matching = new Map<string, bigint>();

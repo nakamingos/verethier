@@ -33,7 +33,7 @@ describe('Portal authentication', () => {
       error: null,
     });
     jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false } as Response);
-    const controller = new PortalController(auth, {} as any);
+    const controller = new PortalController(auth, {} as any, { isOperator: () => false } as any);
     await controller.callback(
       { headers: { cookie: '__Host-bouncer_oauth=' + state } } as any,
       res,

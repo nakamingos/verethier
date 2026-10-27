@@ -1,3 +1,4 @@
+import { PrivacyService, privacyProof } from '@/portal/privacy.service';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { recoverTypedDataAddress } from 'viem';
 
@@ -33,7 +34,8 @@ export class WalletService {
     private discordService: DiscordService,
     private dynamicRoleService: DynamicRoleService,
     private readonly walletBlocks: WalletBlockService,
-    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService
+    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
+    @Optional() private readonly privacy?: PrivacyService
   ) {}
   
   /**
@@ -57,11 +59,6 @@ export class WalletService {
   ): Promise<{ address: string; walletOwnershipTransferred: boolean; nonceContext?: { channelId?: string; messageId?: string }; activity?: WalletVerificationActivity }> {
     if (data.walletType === 'bitcoin') return this.verifyBitcoinSignature(data, signature);
     if (data.walletType && data.walletType !== 'evm') throw new Error('Invalid wallet type.');
-
-    // Debug logging to investigate signature verification issues
-    Logger.debug('=== WALLET SERVICE DEBUG ===');
-    Logger.debug('Input data:', JSON.stringify(data, null, 2));
-    Logger.debug('Input signature:', signature);
 
     // Fetch the nonce for the verification context
     const userNonce = await this.nonceSvc.validateNonce(data.userId, data.discordId, data.nonce);
@@ -92,6 +89,10 @@ export class WalletService {
       Expiry: data.expiry,
     };
 
+    if (data.privacy !== undefined) {
+      types.Verification.push({ name: 'Privacy', type: 'string' });
+      (message as any).Privacy = privacyProof(data.privacy);
+    }
     const typedData = {
       types,
       domain: {
@@ -102,7 +103,6 @@ export class WalletService {
       message,
     };
 
-    Logger.debug('EIP-712 typedData for verification:', JSON.stringify(typedData, null, 2));
 
     let address: string | null = null;
 
@@ -117,8 +117,6 @@ export class WalletService {
           signature: signature as `0x${string}`
         });
 
-        Logger.debug('Recovered address:', recoveredAddress);
-
         if (recoveredAddress === data.address) {
           address = recoveredAddress;
           break;
@@ -130,7 +128,6 @@ export class WalletService {
       throw recoveryError;
     }
 
-    Logger.debug('Expected address:', data.address);
 
     if (!address) throw new Error('Invalid signature.');
     // Check before saving or transferring the wallet link. Keep this outside
@@ -139,6 +136,11 @@ export class WalletService {
     // Reserve the fresh proof before any link/transfer or ownership work, just
     // as the Bitcoin path does. Concurrent tabs cannot submit the same proof.
     const context = await this.nonceSvc.consumeNonce(data.userId, data.discordId, data.nonce);
+    await this.privacy?.assertActive(data.userId);
+    if (data.privacy !== undefined) {
+      if (!this.privacy) throw new Error('Privacy controls are unavailable.');
+      await this.privacy.choose(data.discordId,data.userId,data.privacy);
+    }
     const activity: WalletVerificationActivity = {
       id: randomUUID(),
       source: context.memberPortal ? 'portal' : 'discord',
@@ -151,7 +153,7 @@ export class WalletService {
     let walletOwnershipTransferred = false;
 
     // Store the verified address in user_wallets table
-    // CRITICAL: Wait for this to complete before returning to prevent race condition
+    // Wait for this to complete before returning to prevent race condition
     // where verification queries getUserAddresses() before INSERT completes
     try {
       // Get Discord username
@@ -168,22 +170,21 @@ export class WalletService {
 
       const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'evm', activity);
       if (!result.success) {
-        // Log warning but don't fail verification - address storage is supplementary
-        Logger.warn(`Failed to store address for user ${data.userId}: ${result.error}`);
+        throw new Error('Could not save wallet proof.');
       } else {
         walletOwnershipTransferred = result.wasTransferred === true;
         Logger.debug(`Successfully ${result.isNewAddress ? 'added new' : 'updated existing'} address for user ${data.userId}${userName ? ` (${userName})` : ''}`);
 
         if (walletOwnershipTransferred && result.previousUserId && !result.reconciliationQueued) {
           Logger.log(
-            `Wallet ${address} moved from Discord user ${result.previousUserId} to ${data.userId}`
+            'Wallet transfer saved; checking the previous account’s roles.'
           );
           this.schedulePreviousOwnerReverification(result.previousUserId, data.userId, address);
         }
       }
     } catch (error) {
-      // Log error but don't fail verification - address storage is supplementary
-      Logger.error(`Exception storing address for user ${data.userId}:`, error);
+      Logger.error('Could not save wallet proof; verification stopped.');
+      throw new Error('Could not save wallet proof. Request a new verification link and retry.');
     }
     
     return {
@@ -204,13 +205,12 @@ export class WalletService {
     void this.dynamicRoleService.reverifyUser(previousUserId)
       .then(({ verified, revoked }) => {
         Logger.log(
-          `Completed post-transfer reverification for previous wallet owner ${previousUserId} ` +
-          `after moving ${address} to ${currentUserId}: ${verified} verified, ${revoked} revoked`
+          `Completed post-transfer role check: ${verified} verified, ${revoked} revoked`
         );
       })
       .catch((error) => {
         Logger.error(
-          `Failed to reverify previous wallet owner ${previousUserId} after moving ${address} to ${currentUserId}:`,
+          'Post-transfer role check failed:',
           error
         );
       });
@@ -220,6 +220,11 @@ export class WalletService {
     if (!this.bitcoinSvc) throw new Error('Bitcoin verification is not configured.');
     const { address, context } = await this.bitcoinSvc.verify(data, signature);
     await this.walletBlocks.assertAllowed(data.discordId, address);
+    await this.privacy?.assertActive(data.userId);
+    if (data.privacy !== undefined) {
+      if (!this.privacy) throw new Error('Privacy controls are unavailable.');
+      await this.privacy.choose(data.discordId,data.userId,data.privacy);
+    }
     let userName: string | null = null;
     try {
       const user = await this.discordService.getUser(data.userId);

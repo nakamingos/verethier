@@ -32,6 +32,15 @@ describe('persistent Ordinals collection catalogs', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
+  it('requires a live catalog refresh for exports and never substitutes a stored answer after failure', async () => {
+    const saved = await cache.snapshot(slug, run());
+    expect(saved.items.size).toBe(2);
+    ordnet.snapshot.mockRejectedValue(new Error('provider unavailable'));
+    await expect(cache.snapshot(slug, { ...run(), freshExport: true })).rejects.toThrow('unavailable');
+    expect(ordnet.snapshot).toHaveBeenCalledTimes(1);
+    expect(await cache.snapshot(slug, run())).toBe(saved);
+  });
+
   it('loads the complete persistent catalog after a restart and never restores owners', async () => {
     const collection = await cache.snapshot(slug, run());
     expect(collection.items.size).toBe(2);

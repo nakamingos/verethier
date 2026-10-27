@@ -1,3 +1,4 @@
+import { PrivacyService } from './privacy.service';
 import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import {
   BadRequestException,
@@ -7,6 +8,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes, randomUUID } from 'crypto';
@@ -30,6 +32,7 @@ export class MemberService {
     private readonly nonces: NonceService,
     private readonly bitcoin: BitcoinSignatureService,
     private readonly auth: PortalAuthService,
+    @Optional() private readonly privacy?: PrivacyService,
   ) {}
 
   private checked<T extends { error: any; data: any }>(result: T): T['data'] {
@@ -71,6 +74,7 @@ export class MemberService {
       );
     }
   }
+  async privacyMembership(session: PortalSession, server: string) { return this.membership(session,server); }
   private async community(
     session: PortalSession,
     server: string,
@@ -148,6 +152,7 @@ export class MemberService {
     });
     return {
       id: server,
+      privacy: this.privacy ? await this.privacy.policy(server,session.user.id) : null,
       name: guild.name,
       icon: guild.iconURL(),
       channels: choices,
@@ -315,6 +320,7 @@ export class MemberService {
     return this.flow(session);
   }
   async linkChallenge(session: PortalSession, dto: MemberLinkDto) {
+    await this.privacy?.assertActive(session.user.id);
     return this.locked(session, async () => {
       let address: string;
       try {
@@ -470,6 +476,7 @@ export class MemberService {
     return this.locked(session, () => this.startVerify(session, dto));
   }
   private async startVerify(session: PortalSession, dto: MemberVerifyDto) {
+    await this.privacy?.assertActive(session.user.id);
     const { guild, member } = await this.membership(session, dto.server);
     const channel = await guild.channels.fetch(dto.channel);
     if (

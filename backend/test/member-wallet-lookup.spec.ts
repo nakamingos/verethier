@@ -65,7 +65,9 @@ describe('Member lookup by proven wallet address', () => {
       {} as any,
       {} as any,
     );
+    (service as any).privacy = { isOperator: () => true };
     const access = jest.spyOn(service, 'access').mockResolvedValue(guild);
+    jest.spyOn(service, 'readAccess').mockResolvedValue(guild);
     return { service, db, currentQuery, historyQuery, guild, members, access };
   }
   it('normalizes an exact EVM address and confirms live membership before exposing a current match', async () => {
@@ -97,12 +99,12 @@ describe('Member lookup by proven wallet address', () => {
     ]);
     expect(guild.members.fetch).toHaveBeenCalledTimes(2);
     await expect(
-      (service as any).resolveMember(guild, address),
+      (service as any).resolveMember(guild, address, session),
     ).rejects.toThrow('several server members');
   });
   it('can resolve a unique historical address without a current saved link', async () => {
     const { service, guild } = setup([], [previousId]);
-    expect((await (service as any).resolveMember(guild, address)).id).toBe(
+    expect((await (service as any).resolveMember(guild, address, session)).id).toBe(
       previousId,
     );
   });
@@ -112,7 +114,7 @@ describe('Member lookup by proven wallet address', () => {
       members: [],
     });
     await expect(
-      (service as any).resolveMember(guild, address),
+      (service as any).resolveMember(guild, address, session),
     ).rejects.toThrow('No current server member');
   });
   it.each([bitcoin, bitcoin.toUpperCase()])(
@@ -152,6 +154,7 @@ describe('Member lookup by proven wallet address', () => {
   it('checks current administrator access before either wallet lookup route reads identities', async () => {
     const { service, access, db } = setup();
     access.mockRejectedValue(new Error('Not an administrator'));
+    (service.readAccess as jest.Mock).mockImplementation((s,server) => service.access(s,server));
     await expect(
       service.memberSuggestions(session, server, address),
     ).rejects.toThrow('administrator');
