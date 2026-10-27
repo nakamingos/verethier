@@ -337,7 +337,7 @@
                           · Verified: {{ job.result.verified }} · Revoked:
                           {{ job.result.revoked }}
                           @if (job.result.errors) {
-                            · Unavailable: {{ job.result.errors }}
+                            · Errors: {{ job.result.errors }}
                           }
                         }
                         @if (job.status === "failed") {

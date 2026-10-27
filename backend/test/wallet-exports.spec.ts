@@ -164,6 +164,10 @@ describe("Fresh wallet exports", () => {
     } as any);
     await expect(t.service.build(t.job)).rejects.toThrow("unavailable");
   });
+  it('rejects incomplete exact-match evidence even when a combined group proves eligibility',async()=>{
+    const t=setup();t.engine.verifyUserBulk.mockResolvedValue({results:[{isValid:true,status:'passed',rule:t.rule,matchingAssetsIncomplete:true}]} as any);
+    await expect(t.service.build(t.job)).rejects.toThrow('unavailable');
+  });
   it("omits nonconsenting members before invoking holdings providers", async () => {
     const t = setup();
     t.privacy.policy.mockResolvedValue({

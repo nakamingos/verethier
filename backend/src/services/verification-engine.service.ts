@@ -1,3 +1,4 @@
+import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { ruleTraits, singleTrait } from '@/utils/trait-filter.util';
 import { tokenMinimum, tokenAmount, tokenRuleScope } from '@/utils/erc20-rule.util';
 import { Injectable, Logger } from '@nestjs/common';
@@ -144,7 +145,7 @@ export class VerificationEngine {
       };
 
     } catch (error) {
-      Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error);
+      Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error.message);
       let ownershipDetails: OrdinalCheckDetails | undefined;
       try {
         if (checkedRule) ownershipDetails = this.ownershipSvc.checkDetails?.(checkedRule, checkedAddresses, run);
@@ -152,6 +153,7 @@ export class VerificationEngine {
       return {
         isValid: false,
         status: 'unavailable',
+        ...(error instanceof IncompleteEthscriptionTraitsError ? { matchingAssetCount: error.matchingAssets.size, matchingAssetsIncomplete: true } : {}),
         rule: checkedRule ? (({ ordinal_trait_snapshot, inscription_criteria, ...rule }) => rule)(checkedRule) : undefined,
         ownershipDetails,
         error: error.message || 'Unknown verification error',
@@ -255,7 +257,10 @@ export class VerificationEngine {
       for (const checks of domains.values()) {
         if (checks.length === 1) {
           const check = checks[0];
-          if (check.status === 'unavailable' || check.error || check.ownershipDetails?.source === 'collection-upper-bound') unavailable = true;
+          if (check.status === 'unavailable' || check.error || check.ownershipDetails?.source === 'collection-upper-bound') {
+            unavailable = true;
+            if (check.matchingAssetsIncomplete && !context.freshExport) total += BigInt(check.matchingAssetCount || 0);
+          }
           else total += BigInt(check.matchingAssetCount || 0);
           continue;
         }
@@ -270,7 +275,14 @@ export class VerificationEngine {
               // ERC-1155 copies count, but overlapping rules must not add the same copies twice.
               if (copies > (owned.get(id) || 0n)) owned.set(id, copies);
             }
-          } catch { unavailable = true; }
+          } catch (error) {
+            unavailable = true;
+            if (error instanceof IncompleteEthscriptionTraitsError && !context.freshExport) {
+              for (const [id, copies] of error.matchingAssets) {
+                if (copies > (owned.get(id) || 0n)) owned.set(id, copies);
+              }
+            }
+          }
         }
         for (const count of owned.values()) total += count;
       }
@@ -484,6 +496,8 @@ export interface VerificationResult {
   address: string;
   rule?: VerifierRole;
   matchingAssetCount?: AssetCount;
+  /** Matching count is a proven lower bound while some metadata is unavailable. */
+  matchingAssetsIncomplete?: boolean;
   combinedAssetCount?: AssetCount;
   combinedRuleIds?: (string | number)[];
   error?: string;

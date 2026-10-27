@@ -1,3 +1,4 @@
+import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { Erc20OwnershipService } from './erc20-ownership.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
@@ -56,7 +57,17 @@ export class AssetOwnershipService {
       if (!run.checks.has(key)) run.checks.set(key, this.ethscriptionsSvc.countSelection(wallets, criteria, run));
       return run.checks.get(key);
     }
-    if (rule.trait_filter !== undefined) return BigInt((await this.matchingAssets(rule, evmAddresses, context || { checks: new Map() })).size);
+    if (rule.trait_filter !== undefined) {
+      try {
+        return BigInt((await this.matchingAssets(rule, evmAddresses, context || { checks: new Map() })).size);
+      } catch (error) {
+        if (error instanceof IncompleteEthscriptionTraitsError && !context?.freshExport) {
+          const known = BigInt(error.matchingAssets.size);
+          if (known >= BigInt(rule.min_items || 1)) return known;
+        }
+        throw error;
+      }
+    }
     const count = await this.dataSvc.checkAssetOwnershipWithCriteria(
       [...new Set(evmAddresses.map(address => address.toLowerCase()))],
       rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1,

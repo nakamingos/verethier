@@ -1,3 +1,4 @@
+import { IncompleteEthscriptionTraitsError } from '../src/utils/ethscription-traits.util';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 
 const rule = (id: number, type = 'ethscription', minimum = 10, extra = {}) => ({
@@ -59,6 +60,25 @@ describe('combined collectible role counts', () => {
   it('still passes if the known holdings meet the minimum during another provider outage', async () => {
     ownership.count.mockImplementation(async rule => { if (rule.id === 2) throw new Error('offline'); return 10n; });
     expect((await engine.evaluateRole('member', 'server', 'role')).status).toBe('passed');
+  });
+  it('combines known matches from incomplete Ethscription metadata with another protocol', async () => {
+    ownership.count.mockImplementation(async rule=>{if(rule.id===1)throw new IncompleteEthscriptionTraitsError(['a','b','c','d','e','f','g'],1);return 3n;});
+    expect((await verify()).validRules).toHaveLength(2);
+    rules[1]=rule(2,'ordinal',10);ownership.count.mockImplementation(async rule=>{if(rule.id===1)throw new IncompleteEthscriptionTraitsError(['a'],1);return 3n;});
+    expect((await engine.evaluateRole('member','server','role')).status).toBe('unavailable');
+  });
+  it('unions partial matches within a protocol without counting the same asset twice', async () => {
+    rules=[rule(1,'ethscription',3),rule(2,'ethscription',3)];
+    ownership.count.mockRejectedValue(new IncompleteEthscriptionTraitsError(['a','b'],1));
+    ownership.matchingAssets.mockImplementation(async rule=>{throw new IncompleteEthscriptionTraitsError(rule.id===1?['a','b']:['b','c'],1);});
+    expect((await verify()).validRules).toHaveLength(2);
+    ownership.matchingAssets.mockRejectedValue(new IncompleteEthscriptionTraitsError(['a','b'],1));
+    expect((await engine.evaluateRole('member','server','role')).status).toBe('unavailable');
+  });
+  it('does not silently accept partial trait evidence in export checks', async () => {
+    ownership.count.mockImplementation(async rule=>{if(rule.id===1)throw new IncompleteEthscriptionTraitsError(['a','b','c','d','e','f','g'],1);return 3n;});
+    const result=await engine.verifyUserBulk('member',rules.map(r=>r.id),'0x123',rules,{checks:new Map(),freshExport:true});
+    expect(result.results.every(r=>r.status==='unavailable')).toBe(true);
   });
   it('does not treat an Ordinals trait upper bound as an exact matching count', async () => {
     ownership.checkDetails = (rule) => rule.id === 2 ? { source: 'collection-upper-bound', provider: 'xverse' } : undefined;

@@ -1,3 +1,4 @@
+import { IncompleteEthscriptionTraitsError } from '../src/utils/ethscription-traits.util';
 const mockSupabase = {
   from: jest.fn(),
 };
@@ -107,6 +108,30 @@ describe('DataService', () => {
     expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'AND',conditions})).toEqual(['a']);
     expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'OR',conditions})).toEqual(['a','b','c']);
     expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+  });
+  it('accepts real collection list shapes without aborting unrelated trait checks or double counting an OR match', async () => {
+    queueQuery({data:[
+      {hashId:'A',slug:'call-data-comrades',attributes_new:{values:{Type:'Purr People',Affiliation:['Gold Bearer','Pirate']}}},
+      {hashId:'B',slug:'call-data-comrades',attributes_new:{values:{Type:'Pork People',Mouth:['Pipe','Smile']}}},
+    ],error:null});
+    const context={checks:new Map()};
+    expect(await service.matchingAssetIdsWithCriteria('wallet','call-data-comrades','ALL','ALL',1,context,{operator:'OR',conditions:[{key:'Type',value:'Purr People'},{key:'Type',value:'Pork People'}]})).toEqual(['a','b']);
+    expect(await service.matchingAssetIdsWithCriteria('wallet','call-data-comrades','ALL','ALL',1,context,{operator:'OR',conditions:[{key:'Affiliation',value:'Gold Bearer'},{key:'Affiliation',value:'Pirate'}]})).toEqual(['a']);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+  });
+  it('keeps distinct proven matches as a lower bound when other metadata is missing', async () => {
+    queueQuery({data:[
+      {hashId:'A',slug:'comrades',attributes_new:{values:{Type:'Purr People'}}},
+      {hashId:'A',slug:'comrades',attributes_new:{values:{Type:'Purr People'}}},
+      {hashId:'B',slug:'comrades',attributes_new:null},
+    ],error:null});
+    try {
+      await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,undefined,{operator:'AND',conditions:[{key:'Type',value:'Purr People'}]});
+      throw new Error('Expected incomplete evidence');
+    } catch(error) {
+      expect(error).toBeInstanceOf(IncompleteEthscriptionTraitsError);
+      expect(error.matchingAssets).toEqual(new Map([['a',1n]]));expect(error.unknownItems).toBe(1);
+    }
   });
   it('preserves uncertainty when multi-trait metadata is missing', async () => {
     queueQuery({data:[{hashId:'A',slug:'comrades',attributes_new:null}],error:null});
