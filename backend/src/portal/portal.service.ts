@@ -125,6 +125,29 @@ export class PortalService {
   servers(session: PortalSession) {
     const client = this.client();
     const operator = this.privacy?.isOperator(session.user.id) || false;
+    const guilds = new Map(
+      session.guilds
+        .filter((g) => {
+          try {
+            return g.owner || (BigInt(g.permissions) & 8n) !== 0n;
+          } catch {
+            return false;
+          }
+        })
+        .map((g) => [g.id, g]),
+    );
+    // Operator visibility extends the normal admin list, including install choices.
+    if (operator) {
+      for (const guild of client.guilds.cache.values()) {
+        guilds.set(guild.id, {
+          id: guild.id,
+          name: guild.name,
+          icon: guild.icon,
+          owner: guild.ownerId === session.user.id,
+          permissions: '8',
+        });
+      }
+    }
     const id = client.user.id;
     const invite = new URL('https://discord.com/oauth2/authorize');
     invite.search = new URLSearchParams({
@@ -138,23 +161,15 @@ export class PortalService {
     invite.searchParams.delete('response_type');
     invite.searchParams.delete('redirect_uri');
     return {
-      servers: (operator ? [...client.guilds.cache.values()].map(g => ({id:g.id,name:g.name,icon:g.icon,owner:g.ownerId===session.user.id,permissions:'8'})) : session.guilds)
-        .filter((g) => {
-          try {
-            return g.owner || (BigInt(g.permissions) & 8n) !== 0n;
-          } catch {
-            return false;
-          }
-        })
-        .map((g) => ({
-          id: g.id,
-          name: g.name,
-          icon: g.icon
-            ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64`
-            : null,
-          installed: client.guilds.cache.has(g.id),
-          invite: `${invite}&guild_id=${g.id}&disable_guild_select=true`,
-        })),
+      servers: [...guilds.values()].map((g) => ({
+        id: g.id,
+        name: g.name,
+        icon: g.icon
+          ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64`
+          : null,
+        installed: client.guilds.cache.has(g.id),
+        invite: `${invite}&guild_id=${g.id}&disable_guild_select=true`,
+      })),
       invite: invite.toString(),
     };
   }

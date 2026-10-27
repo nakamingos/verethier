@@ -6,6 +6,8 @@ Set `BOUNCER_OPERATOR_DISCORD_IDS` on the backend to exact numeric Discord user 
 
 Operators use normal Discord sign-in. The admin UI displays the capability and an Operator tab for deletion requests. Private inspection and reasoned export overrides are audited. Ordinary Discord admin rights still govern community mutations. Review the backend-only `verifier_operator_access` records when investigating access or export use; do not copy wallet rows into audit reasons.
 
+The operator server menu includes both the normal owner/administrator server list and every server where Bouncer is installed, with duplicates removed. Servers without Bouncer retain installation links. Operator status does not replace those normal installation choices or grant permission to change a server's configuration.
+
 Server settings can enable community identity sharing. Members must then grant permission in the relevant community and prove wallets again; old private history does not become visible. Export participation is separate. Member opt-out affects future reads/downloads, not copies already downloaded.
 
 ## Migration and cleanup
