@@ -56,7 +56,7 @@ import { PortalSessionService } from '@/services/portal-session.service';
         <label
           >Include role:<app-pixel-select
             label="Include role"
-            [options]="roleOptions"
+            [options]="includeRoleOptions"
             [(ngModel)]="includeRole"
             [disabled]="busy || !!job"
         /></label>
@@ -289,6 +289,12 @@ export class WalletExportsComponent implements OnChanges, OnDestroy {
         label: r.name,
       })),
     ];
+  }
+  get includeRoleOptions() {
+    const managed = new Set((this.data?.rules || []).map((r: any) => r.role_id));
+    return this.roleOptions.filter(
+      (role) => !role.value || managed.has(role.value),
+    );
   }
   get ruleOptions() {
     return [

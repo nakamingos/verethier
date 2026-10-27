@@ -78,8 +78,14 @@ const server = "111111111111111111",
           else if (p === `/servers/${server}`)
             data = {
               server: { id: server, name: community.name },
-              rules: [],
-              roles: [{ id: role, name: "Holder", manageable: true }],
+              rules: [1, 2].map((id) => ({
+                id, role_id: role, role_name: "Holder", asset_type: "ethscription",
+                slug: "nakamingos", min_items: 1, trait_filter: null,
+              })),
+              roles: [
+                { id: role, name: "Holder", manageable: true },
+                { id: "555555555555555555", name: "Other community role", manageable: true },
+              ],
               channels: [{ id: channel, name: "verify" }],
               role_actions: [],
               settings: {
@@ -235,6 +241,17 @@ const server = "111111111111111111",
       await page.getByText("pending", { exact: true }).waitFor();
       await page.goto("https://bouncer.test/admin");
       await page.getByRole("button", { name: "Exports", exact: true }).click();
+      await page.getByRole("combobox", { name: "Include role", exact: true })
+        .locator(".pixel-select-arrow").click();
+      assert.deepEqual((await page.getByRole("listbox").getByRole("option").allTextContents()).map(text => text.trim()),
+        ["Choose a role", "Holder"]);
+      await page.getByRole("option", { name: "Holder", exact: true }).click();
+      await page.getByRole("button", { name: "Add role", exact: true }).click();
+      await page.getByRole("button", { name: "Include Holder · Remove", exact: true }).waitFor();
+      await page.getByRole("combobox", { name: "Exclude role", exact: true })
+        .locator(".pixel-select-arrow").click();
+      await page.getByRole("option", { name: "Other community role", exact: true }).waitFor();
+      await page.keyboard.press("Escape");
       await page.getByLabel("Operator override: include wallets regardless of community sharing/export choices.").check();
       await page
         .getByLabel("Override reason:")
