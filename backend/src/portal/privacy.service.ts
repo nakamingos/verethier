@@ -178,6 +178,15 @@ export class PrivacyService {
         "Account deletion is in progress. Contact nomorelabs@gmail.com before linking or verifying again.",
       );
   }
+  async queueGrantRecheck(user: string, server: string, role: string) {
+    this.checked(
+      await this.db.rpc("verifier_privacy_recheck_grant", {
+        p_user: user,
+        p_server: server,
+        p_role: role,
+      }),
+    );
+  }
   async walletMatches(server: string, address: string) {
     return this.checked(
       await this.db.rpc("verifier_privacy_wallet_matches", {

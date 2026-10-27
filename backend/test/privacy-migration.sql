@@ -44,6 +44,8 @@ UPDATE public.verifier_user_roles SET status='revoked' WHERE user_id='privacy-us
 UPDATE public.verifier_privacy_deletions SET reviewed_at=now()-interval '20 minutes' WHERE user_id='privacy-user-a';
 SELECT public.verifier_privacy_cleanup();
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE status='processing'),'Erasure ran before role checks');
+SELECT public.verifier_privacy_recheck_grant('privacy-user-a','privacy-test','racing-new-role');
+SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_user_roles WHERE user_id='privacy-user-a' AND role_id='racing-new-role' AND status='revoked'),'Racing grant lacked a durable revocation target');
 UPDATE public.verifier_reconciliation_jobs SET status='completed' WHERE user_id='privacy-user-a';
 SELECT public.verifier_privacy_cleanup();
 SELECT pg_temp.assert(EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE status='completed' AND user_id IS NULL),'Account not erased after role checks');

@@ -566,7 +566,7 @@ export class DiscordVerificationService {
     // A deletion approved while the Discord request was in flight must not leave a new grant.
     try { await this.privacy?.assertActive(userId); }
     catch (error) {
-      if (!wasAlreadyAssigned) await member.roles.remove(role, 'Bouncer account deletion in progress');
+      if (!wasAlreadyAssigned) await this.undoDeletionGrant(member, role, guildId, userId);
       throw error;
     }
 
@@ -596,7 +596,7 @@ export class DiscordVerificationService {
 
     try { await this.privacy?.assertActive(userId); }
     catch (error) {
-      if (!wasAlreadyAssigned) await member.roles.remove(role, 'Bouncer account deletion in progress');
+      if (!wasAlreadyAssigned) await this.undoDeletionGrant(member, role, guildId, userId);
       throw error;
     }
     return {
@@ -847,7 +847,7 @@ export class DiscordVerificationService {
       context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
       try { await this.privacy?.assertActive(userId); }
       catch (error) {
-        await member.roles.remove(role, 'Bouncer account deletion in progress');
+        await this.undoDeletionGrant(member, role, serverId, userId);
         throw error;
       }
       Logger.log(`✅ Added role "${role.name}" to user ${userId} in ${guild.name}`);
@@ -857,6 +857,13 @@ export class DiscordVerificationService {
       Logger.error(`Failed to add role ${roleId} to user ${userId} in guild ${serverId}:`, error);
       return false;
     }
+  }
+
+  private async undoDeletionGrant(member: GuildMember, role: any, server: string, user: string) {
+    // Queue a durable recheck before contacting Discord. A failed removal must keep
+    // the deletion open, including a role that had not yet been tracked.
+    try { await this.privacy?.queueGrantRecheck(user, server, role.id); }
+    finally { await member.roles.remove(role, 'Bouncer account deletion in progress'); }
   }
 
   private fetchRoleSyncMember(guild: Guild, userId: string, context?: RoleSyncContext): Promise<GuildMember> {

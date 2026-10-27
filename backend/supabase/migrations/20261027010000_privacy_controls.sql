@@ -183,6 +183,17 @@ BEGIN
  reviewed_at=now(),reviewed_by=p_actor,outcome=p_outcome WHERE id=p_request RETURNING * INTO r;
  RETURN to_jsonb(r);
 END $$;
+-- Preserve the revocation target if a deletion races an untracked Discord grant.
+CREATE FUNCTION public.verifier_privacy_recheck_grant(p_user text,p_server text,p_role text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('privacy-user:'||p_user,0));
+ IF NOT EXISTS(SELECT 1 FROM public.verifier_privacy_deletions WHERE user_id=p_user AND status='processing') THEN RETURN; END IF;
+ INSERT INTO public.verifier_user_roles(user_id,server_id,role_id,status) VALUES(p_user,p_server,p_role,'revoked')
+ ON CONFLICT(user_id,server_id,role_id) DO UPDATE SET status='revoked';
+ INSERT INTO public.verifier_reconciliation_jobs(server_id,user_id) VALUES(p_server,p_user);
+END $$;
+
 CREATE FUNCTION public.verifier_privacy_cleanup(p_grace_seconds integer DEFAULT 900) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE pair record; r record; expired integer:=0; erased integer:=0;
@@ -210,6 +221,7 @@ BEGIN
   AND NOT EXISTS(SELECT 1 FROM public.verifier_reconciliation_jobs j WHERE
    (j.user_id=d.user_id OR d.user_id=ANY(j.member_ids)) AND j.status<>'completed') FOR UPDATE LOOP
   PERFORM pg_advisory_xact_lock(hashtextextended('privacy-user:'||r.user_id,0));
+  IF EXISTS(SELECT 1 FROM public.verifier_reconciliation_jobs WHERE (user_id=r.user_id OR r.user_id=ANY(member_ids)) AND status<>'completed') THEN CONTINUE; END IF;
   UPDATE public.verifier_wallet_exports SET result=NULL,status='expired',worker=NULL,locked_until=NULL WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(result->'rows') row WHERE row->>'user_id'=r.user_id);
   DELETE FROM public.user_wallets WHERE user_id=r.user_id;
   DELETE FROM public.verifier_member_flows WHERE user_id=r.user_id;

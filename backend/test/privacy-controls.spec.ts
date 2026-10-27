@@ -201,7 +201,7 @@ describe("Deletion and Discord grant sequencing", () => {
       members: { fetch: async () => member },
       roles: { cache: new Map([["role", role]]), fetch: async () => role },
     };
-    const privacy = { assertActive: jest.fn() },
+    const privacy = { assertActive: jest.fn(), queueGrantRecheck: jest.fn() },
       db = { trackRoleAssignment: jest.fn() };
     const s = new DiscordVerificationService(
       db as any,
@@ -236,6 +236,11 @@ describe("Deletion and Discord grant sequencing", () => {
       s.addUserRole(other, "role", server, "reverification"),
     ).rejects.toThrow("deletion");
     expect(member.roles.add).toHaveBeenCalled();
+    expect(privacy.queueGrantRecheck).toHaveBeenCalledWith(
+      other,
+      server,
+      "role",
+    );
     expect(member.roles.remove).toHaveBeenCalledWith(
       expect.objectContaining({ id: "role" }),
       "Bouncer account deletion in progress",
