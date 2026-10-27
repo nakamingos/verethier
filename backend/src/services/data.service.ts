@@ -5,7 +5,8 @@ import { AppLogger } from '@/utils/app-logger.util';
 import { CONSTANTS } from '@/constants';
 import type { NftCheckContext } from './nft-ownership.service';
 import type { EthscriptionAsset } from '@/models/ethscription-ownership.interface';
-import { matchesTraits, normalizeTraitFilter, TraitFilter } from '@/utils/trait-filter.util';
+import { normalizeTraitFilter, TraitFilter } from '@/utils/trait-filter.util';
+import { IncompleteEthscriptionTraitsError, matchEthscriptionTraits } from '@/utils/ethscription-traits.util';
 
 // Validate environment on service load
 EnvironmentConfig.validate();
@@ -502,20 +503,16 @@ export class DataService {
       ? assets.filter(asset => asset.slug === collection) : assets;
     if (traitFilter !== undefined) {
       const filter = normalizeTraitFilter(traitFilter);
-      const matching = scoped.filter(asset => {
-        if (!filter) return true;
-        const values = asset.attributes_new?.values;
-        if (!values || typeof values !== 'object' || Array.isArray(values)) {
-          if (filter.conditions.length > 1) throw new Error('Ethscriptions trait metadata is unavailable.');
-          return false;
-        }
-        const attributes = Object.entries(values).filter(([, value]) => value != null).map(([key, value]) => {
-          if (!['string', 'number', 'boolean'].includes(typeof value)) throw new Error('Ethscriptions trait metadata is unavailable.');
-          return { key, value: String(value) };
-        });
-        return matchesTraits(attributes, { trait_filter: filter });
-      });
-      return [...new Set(matching.map(asset => asset.hashId.toLowerCase()))];
+      const matching = new Set<string>();
+      let unknownItems = 0;
+      for (const asset of scoped) {
+        const match = matchEthscriptionTraits(asset.attributes_new?.values, filter);
+        if (match === true) matching.add(asset.hashId.toLowerCase());
+        else if (match === 'unknown') unknownItems++;
+      }
+      const ids = [...matching];
+      if (unknownItems) throw new IncompleteEthscriptionTraitsError(ids, unknownItems);
+      return ids;
     }
     const matching: EthscriptionAsset[] = this.hasAttributeCriteria(attributeKey, attributeValue)
       ? this.filterByAttributes(scoped, attributeKey || 'ALL', attributeValue) : scoped;

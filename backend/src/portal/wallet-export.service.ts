@@ -434,7 +434,11 @@ export class WalletExportService {
               context,
             )
           : null;
-        if (checked?.results.some((r) => r.status === "unavailable" || r.error))
+        if (
+          checked?.results.some(
+            (r) => r.status === "unavailable" || r.error || r.matchingAssetsIncomplete,
+          )
+        )
           throw new ServiceUnavailableException("Fresh holdings unavailable.");
         const passing =
           checked?.results.filter((r) => r.isValid).map((r) => r.rule) || [];

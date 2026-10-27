@@ -93,6 +93,8 @@ Verification links use a dedicated in-memory cache, separate from autocomplete a
 
 Collection and trait rules share one paginated read of linked wallets' holdings and attributes from the existing market database. This data stays in the verification context in memory and is reused for combined counts and recommendations. A fresh verification reads ownership again; Bouncer does not copy Ethscriptions metadata into its database. Missing attributes do not exclude an asset from collection-wide counts, and failed pages make the check unavailable rather than using a partial count.
 
+Trait values may be strings, numbers, booleans or lists of those values. AND conditions must match the same item; OR matches count that item once. Only queried fields affect the result, so unrelated list or opaque fields cannot abort verification. Missing metadata and unsupported queried values remain unknown. Enough distinct, proven matches can establish eligibility, including combined rules; otherwise uncertainty preserves existing roles. Fresh wallet exports require complete matching evidence. Audit activity reports unsuccessful operations as errors, since Discord and persistence failures also contribute to that count.
+
 Each Discord role is assigned and tracked once per verification, with all matching rules retained in its history and success-message details. Roles the member already holds still have their tracking refreshed. Backend logs report timings for wallet verification, rule loading, each asset type's rule checks, eligibility, role updates, and completion/recommendations. No database migration is required.
 
 ## NFT Trait Rules
