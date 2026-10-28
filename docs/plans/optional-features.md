@@ -39,6 +39,8 @@ The [core plan's scope](halcyon-core-implementation-plan.md#scope) explicitly ex
 
 ## Asset capabilities and optimizations
 
+- [ ] **Native Tezos support.** Consider a Beacon/Taquito wallet proof and FA1.2/FA2 adapter, with precise contract/token or validated creator scopes, edition quantities and fresh indexed ownership. Solana remains in the core network plan. Implementation considerations for both are in the [non-EVM assessment](non-evm-network-assessment.md); this note does not authorize their implementation.
+
 - [ ] **Token-bound NFT account holdings.** Count assets held inside an NFT's ERC-6551 account after validating the account relationship and current control. Ordinary parent-NFT ownership already works; contract-wallet proof support is tracked in the core plan. [Source: NFT plan](../../NFT_IMPLEMENTATION_PLAN.md).
 - [ ] **Staking integrations.** Define supported protocols and how staked positions qualify, alongside the current directly held asset rules. [Source: NFT plan](../../NFT_IMPLEMENTATION_PLAN.md).
 - [ ] **“Any Ordinal” rule.** Allow a minimum inscription count without selecting a collection or specific IDs/numbers, using complete wallet inventories and distinct inscription counting. [Source: original Ordinals plan](../../BTC_ORDINALS_IMPLEMENTATION_PLAN.md).
