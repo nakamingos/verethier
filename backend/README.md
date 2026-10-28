@@ -115,7 +115,7 @@ Base (`8453`) supports the same ERC-20 balances, ERC-721/1155 collections and ID
 
 Set `BASE_RPC_URL` to a production Base mainnet RPC endpoint, for example `https://base-mainnet.g.alchemy.com/v2/YOUR_KEY`. NFT trait discovery and hosted metadata use `base-mainnet.g.alchemy.com/nft/v3`; enable Base for the configured Alchemy key. An absent or wrong-chain Base RPC cannot fall back to another chain's balances or metadata. Other configured networks continue working independently.
 
-Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production. The code and migration are staged for a future release; no production migration is implied by a local commit.
+Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production.
 
 Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. The current purpose-bound EVM proof flow remains unchanged. Base smart-account/contract-wallet proofs, native ETH balance rules and non-EVM wallet families are separate capabilities. Existing wallet signatures do not establish control of a contract account on another chain.
 

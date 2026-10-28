@@ -85,7 +85,7 @@ npx supabase db reset
 
 - Backend runtime config is documented in [backend/env.example](backend/env.example) and [backend/.env.production.example](backend/.env.production.example).
 - Frontend API/RPC settings live in [env.ts](frontend/src/env/env.ts) and [env.dev.ts](frontend/src/env/env.dev.ts).
-- NFT/token checks use the backend's `RPC_URL` for Ethereum, `BASE_RPC_URL` for Base and `ROBINHOOD_RPC_URL` for Robinhood. Each requires a full HTTP(S) URL for its mainnet. Base's pending configuration and migration are documented in [Base mainnet](backend/README.md#base-mainnet).
+- NFT/token checks use the backend's `RPC_URL` for Ethereum, `BASE_RPC_URL` for Base and `ROBINHOOD_RPC_URL` for Robinhood. Each requires a full HTTP(S) URL for its mainnet. Base configuration and migration instructions are documented in [Base mainnet](backend/README.md#base-mainnet).
 
 Create rules with `/setup add-nft-rule`, `/setup add-ordinals-rule`, or `/setup add-ethscription-rule`. The command selects the asset type and shows only its relevant options; existing rules, confirmations and Undo use the same flow. Refresh slash commands after deploying this change.
 
