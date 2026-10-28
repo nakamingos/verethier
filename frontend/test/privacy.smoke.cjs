@@ -39,6 +39,7 @@ const server = "111111111111111111",
         sharing_enabled: true,
         epoch,
         notice,
+        has_saved_choice: false,
         share_since: null,
         export_since: null,
       };
@@ -59,11 +60,18 @@ const server = "111111111111111111",
             body = req.postDataJSON();
           let data = {},
             status = 200;
-          if (req.method() === "POST") {
+          if (req.method() === "POST" && url.pathname.startsWith('/api/portal/')) {
             assert.equal(req.headers()["x-csrf-token"], "test-csrf");
             writes.push({ p, body });
           }
-          if (p === "/session")
+          if (p === "/api/verification-context")
+            data = {
+              walletTypes: ['evm'], expiry: Math.floor(Date.now() / 1000) + 600,
+              data: { userId: user, userTag: 'Member', avatar: '', discordId: server,
+                discordName: community.name, discordIcon: '', nonce: body.nonce },
+              privacy,
+            };
+          else if (p === "/session")
             data = {
               user: { id: user, name: "Member" },
               csrf: "test-csrf",
@@ -107,6 +115,7 @@ const server = "111111111111111111",
             assert.equal(body.notice, notice);
             privacy = {
               ...privacy,
+              has_saved_choice: true,
               share_since: body.share ? new Date().toISOString() : null,
               export_since: body.exports ? new Date().toISOString() : null,
             };
@@ -200,6 +209,39 @@ const server = "111111111111111111",
       await page
         .getByRole("button", { name: "Communities", exact: true })
         .click();
+      const sharing = () => page.getByLabel("Let this community's admins see which wallets belong to me.");
+      const exports = () => page.getByLabel("Include my wallets in this community's downloadable exports.");
+      assert.equal(await sharing().isChecked(), true, 'New member sharing starts checked');
+      assert.equal(await exports().isChecked(), true, 'New member exports start checked');
+      assert.equal(writes.filter(w => w.p === `/member/privacy/${server}`).length, 0,
+        'Rendering checked drafts does not save permissions');
+      await sharing().uncheck();
+      await exports().uncheck();
+      await page.getByRole('button', { name: 'Save privacy choices', exact: true }).click();
+      await page.getByText('Privacy choices saved.', { exact: false }).waitFor();
+      await page.reload();
+      await page.getByRole('button', { name: 'Communities', exact: true }).click();
+      assert.equal(await sharing().isChecked(), false, 'Saved sharing opt-out survives reload');
+      assert.equal(await exports().isChecked(), false, 'Saved export opt-out survives reload');
+      const verification = 'https://bouncer.test/verify/' + 'a'.repeat(64);
+      await page.goto(verification);
+      await sharing().waitFor({ state: 'attached' });
+      assert.equal(await sharing().isChecked(), false, 'Verification preserves saved opt-out');
+      assert.equal(await exports().isChecked(), false);
+      privacy = { ...privacy, has_saved_choice: false };
+      await page.reload();
+      await sharing().waitFor({ state: 'attached' });
+      assert.equal(await sharing().isChecked(), true, 'New verification sharing starts checked');
+      assert.equal(await exports().isChecked(), true, 'New verification exports start checked');
+      privacy = { ...privacy, sharing_enabled: false };
+      await page.reload();
+      await sharing().waitFor({ state: 'attached' });
+      assert.equal(await sharing().isChecked(), false, 'Server-disabled sharing stays off');
+      assert.equal(await sharing().isDisabled(), true);
+      assert.equal(await exports().isChecked(), true);
+      privacy = { ...privacy, sharing_enabled: true };
+      await page.goto('https://bouncer.test/member');
+      await page.getByRole('button', { name: 'Communities', exact: true }).click();
       await page
         .getByLabel(
           "Let this community's admins see which wallets belong to me.",

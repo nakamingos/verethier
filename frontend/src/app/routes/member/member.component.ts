@@ -1,4 +1,5 @@
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
+import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
@@ -198,12 +199,7 @@ export class MemberComponent {
     this.data = data;
     for (const c of data.communities) {
       if (c.privacy)
-        c.privacy_choice = {
-          epoch: c.privacy.epoch,
-          share: !!c.privacy.share_since,
-          exports: !!c.privacy.export_since,
-          notice: c.privacy.notice,
-        };
+        c.privacy_choice = privacyChoiceDraft(c.privacy);
       this.roleViews[c.id] ||= 'available';
       if (!c.channels.some((ch) => ch.id === this.channels[c.id]))
         this.channels[c.id] = c.defaultChannel;

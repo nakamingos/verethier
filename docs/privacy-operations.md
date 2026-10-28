@@ -10,6 +10,8 @@ The operator server menu includes both the normal owner/administrator server lis
 
 Server settings can enable community identity sharing. Members must then grant permission in the relevant community and prove wallets again; old private history does not become visible. Export participation is separate. Member opt-out affects future reads/downloads, not copies already downloaded.
 
+Verification and member-portal privacy forms preselect available sharing/export options only when the member has no saved choice. `has_saved_choice` distinguishes an unanswered form from an explicit opt-out; existing choices and disabled community sharing remain off where applicable. A displayed default is a draft, not a database grant. Saving or a fresh signed verification records the submitted choices through the existing backend flow. Older API responses without the new flag retain their timestamp-derived state. No migration or existing-preference rewrite is required.
+
 ## Migration and cleanup
 
 Rehearse `20261027010000_privacy_controls.sql` against a fresh private roles/schema/data backup:

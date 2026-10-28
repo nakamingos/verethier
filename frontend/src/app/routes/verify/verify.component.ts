@@ -1,4 +1,5 @@
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
+import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { Component } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -84,7 +85,7 @@ export class VerifyComponent {
         nonce: data.nonce,
       }).pipe(map(context => {
         this.privacyPolicy = context.privacy || null;
-        this.privacyChoice = context.privacy ? { epoch: context.privacy.epoch, share: !!context.privacy.share_since, exports: !!context.privacy.export_since, notice: context.privacy.notice } : null;
+        this.privacyChoice = context.privacy ? privacyChoiceDraft(context.privacy) : null;
         if (!context.walletTypes?.length) throw new Error('No supported wallets for this verification channel.');
         const resolvedData = { ...data, ...context.data, expiry: context.expiry };
         if (!resolvedData.userId || !resolvedData.discordId || !resolvedData.nonce
