@@ -48,7 +48,9 @@ async function choose(page, name, value) {
     args: ['--no-sandbox'],
   });
   try {
-    for (const width of [1280, 393, 320]) {
+    for (const [width, network, networkLabel, chainId] of [1280, 393, 320].flatMap(width => [
+      [width, 'ethereum', 'Ethereum', 1], [width, 'base', 'Base', 8453],
+    ])) {
       const context = await browser.newContext({
           viewport: { width, height: 900 },
         }),
@@ -97,13 +99,20 @@ async function choose(page, name, value) {
           else if (p.endsWith('/suggestions')) data = { values: [] };
           else if (p.endsWith('/rules')) {
             requests.push({ p, body });
+            if (body.asset_type === 'erc20') {
+              assert.deepEqual(body, {
+                asset_type: 'erc20', channel_id: channel, request_id: body.request_id,
+                role_id: role, contract_address: contract, network, min_balance: '0.5',
+              });
+              return route.fulfill({ json: { id: String(++sequence) } });
+            }
             assert.deepEqual(body, {
               asset_type: 'nft',
               channel_id: channel,
               request_id: body.request_id,
               role_id: role,
               contract_address: contract,
-              network: 'ethereum',
+              network,
               token_ids: '1,3-5,0003',
               min_items: 3,
               trait_filter: null,
@@ -115,7 +124,7 @@ async function choose(page, name, value) {
               role_id: role,
               role_name: 'Holder',
               asset_type: 'nft',
-              chain_id: 1,
+              chain_id: chainId,
               contract_address: contract,
               collection_name: 'Collection',
               token_standard: 'erc721',
@@ -185,6 +194,7 @@ async function choose(page, name, value) {
         .getByRole('button', { name: '+ Add rule', exact: true })
         .click();
       await choose(page, 'Asset type', 'NFTs');
+      await choose(page, 'Network', networkLabel);
       await choose(page, 'Discord role', 'Holder');
       await page
         .getByLabel('Contract address:', { exact: true })
@@ -223,6 +233,12 @@ async function choose(page, name, value) {
         await page.getByLabel('Minimum items:', { exact: true }).inputValue(),
         '3',
       );
+      const suggestion = page.waitForRequest(request => new URL(request.url()).pathname.endsWith('/suggestions'));
+      await page.getByRole('button', { name: 'Add trait', exact: true }).click();
+      await page.getByLabel('Attribute key:', { exact: true }).fill('Color');
+      assert.equal(new URL((await suggestion).url()).searchParams.get('network'), network,
+        'editing traits retains the rule’s chain');
+      await page.getByRole('button', { name: 'Remove trait 1', exact: true }).click();
       await page
         .getByLabel('Token IDs (blank = any):', { exact: true })
         .fill('3-5,7');
@@ -263,6 +279,18 @@ async function choose(page, name, value) {
           .inputValue(),
         '3-5,7',
       );
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: '+ Add rule', exact: true }).click();
+      await choose(page, 'Asset type', 'Tokens (ERC-20)');
+      await choose(page, 'Network', networkLabel);
+      await choose(page, 'Discord role', 'Holder');
+      await page.getByLabel('Contract address:', { exact: true }).fill(contract);
+      await page.getByLabel('Minimum token balance:', { exact: true }).fill('0.5');
+      await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+      await page.getByRole('button', { name: 'Save rule', exact: true }).click();
+      await page.getByText('Rule created.', { exact: true }).waitFor();
+      assert.equal(requests.at(-1).body.asset_type, 'erc20');
+      assert.equal(requests.at(-1).body.network, network);
       assert.deepEqual(errors, []);
       assert.ok(
         await page.evaluate(
@@ -270,7 +298,7 @@ async function choose(page, name, value) {
         ),
       );
       console.log(
-        `PASS: ERC-721 create, edit, retained selections and Undo/Redo at ${width}px`,
+        `PASS: ${networkLabel} NFT/token create, trait routing, edit, retained selections and Undo/Redo at ${width}px`,
       );
       await context.close();
     }

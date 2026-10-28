@@ -32,7 +32,7 @@ export class PortalRuleDto {
   min_items?: number;
   @IsOptional() @IsString() @MaxLength(360) min_balance?: string;
   @IsOptional() @IsString() @MaxLength(42) contract_address?: string;
-  @IsOptional() @IsIn(['ethereum', 'robinhood']) network?: string;
+  @IsOptional() @IsIn(['ethereum', 'base', 'robinhood']) network?: string;
   @IsOptional() @IsString() @MaxLength(6000) token_ids?: string;
   @IsOptional() @IsString() @MaxLength(100) collection_name?: string;
   @IsOptional() @IsString() @MaxLength(6000) inscription_ids?: string;

@@ -131,6 +131,8 @@ Done when members can manage their saved wallets, understand community requireme
 
 ### 6. EVM coverage, marketplace entry and additional wallet proofs
 
+Base implementation is prepared locally with ERC-20, ERC-721/1155, metadata, rule/editor and export coverage. It remains unreleased pending the requested batch push, production RPC configuration, migration and live acceptance checks; see [Base mainnet](../../backend/README.md#base-mainnet).
+
 - Replace the two-network hardcoding with a registry containing chain identity, supported asset capabilities, backend RPC/metadata configuration and enabled/paused status.
 - Retain Ethereum and Robinhood, then validate the guide's named additions: Base, Arbitrum, Optimism, Polygon and Avalanche. Additional networks require an explicit list and working provider coverage; the guide's invented “about 30” is not an acceptance count.
 - Each network must pass wrong-chain RPC rejection, ERC-20 exact-unit balances, ERC-721/1155 ownership, metadata/trait availability, failure preservation and combined-count tests before appearing as supported.

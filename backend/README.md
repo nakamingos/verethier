@@ -101,13 +101,23 @@ Each Discord role is assigned and tracked once per verification, with all matchi
 
 Use `/setup add-nft-rule` with the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.
 
-Ethereum and Robinhood rules use their existing `RPC_URL` and `ROBINHOOD_RPC_URL`. When these are full Alchemy URLs, the backend reuses their keys for Alchemy's NFT API. Other RPC providers need the optional `ALCHEMY_API_KEY`; enable the required networks for that key. Autocomplete samples the first 100 collection tokens and supports manual entry for other traits. The collection must have readable `attributes` metadata in Alchemy.
+Ethereum, Base and Robinhood rules use `RPC_URL`, `BASE_RPC_URL` and `ROBINHOOD_RPC_URL`, respectively. When these are full Alchemy URLs, the backend reuses their keys for that chain's NFT API. Other RPC providers need the optional `ALCHEMY_API_KEY`; enable the required networks for that key. Autocomplete samples the first 100 collection tokens and supports manual entry for other traits. The collection must have readable `attributes` metadata in Alchemy.
 
 ERC-721 collection trait checks discover token IDs through Alchemy, then confirm every current owner and the complete wallet balance through RPC. A specified ERC-721 ID skips discovery. ERC-1155 rules retain their configured ID scope (0–99 by default) and count matching copies. Quantity-only rules continue using RPC alone.
 
 For each owned token, verification reads ERC-721 `tokenURI` or ERC-1155 `uri` at the ownership block. Embedded JSON attributes are decoded fresh on every run, so evolving NFTs use their current traits. Hosted metadata uses Alchemy with `refreshCache:true` when the local ten-minute cache expires. The bot does not fetch arbitrary token URI URLs itself.
 
 The `nft_token_metadata` table caches hosted attributes for ten minutes by network, contract, and token ID, and records fresh embedded attributes for reference. Use a backend Supabase service-role key for cache access; verification falls back to Alchemy if the cache is unavailable. Ownership is checked fresh on every run. Missing metadata or incomplete ownership results produce an unavailable check and preserve existing roles during re-verification.
+
+### Base mainnet
+
+Base (`8453`) supports the same ERC-20 balances, ERC-721/1155 collections and ID selections, multi-trait rules, combined counts and wallet snapshot exports as the other EVM networks. Select Base in the portal or use `network:base` with the existing NFT/token Discord setup commands. Ethereum remains the default. Rule editing, trait suggestions and member requirements retain the selected chain; exports label Base contributions separately from Ethereum and Robinhood.
+
+Set `BASE_RPC_URL` to a production Base mainnet RPC endpoint, for example `https://base-mainnet.g.alchemy.com/v2/YOUR_KEY`. NFT trait discovery and hosted metadata use `base-mainnet.g.alchemy.com/nft/v3`; enable Base for the configured Alchemy key. An absent or wrong-chain Base RPC cannot fall back to another chain's balances or metadata. Other configured networks continue working independently.
+
+Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production. The code and migration are staged for a future release; no production migration is implied by a local commit.
+
+Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. The current purpose-bound EVM proof flow remains unchanged. Base smart-account/contract-wallet proofs, native ETH balance rules and non-EVM wallet families are separate capabilities. Existing wallet signatures do not establish control of a contract account on another chain.
 
 ## Specific Inscription Rules
 

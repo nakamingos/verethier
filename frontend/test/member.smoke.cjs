@@ -90,7 +90,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
                   earned: false,
                   previouslyEarned: false,
                   asset: 'nft',
-                  network: 1,
+                  network: 8453,
                   collection: 'Combined collection',
                   minimum: 2,
                 },
@@ -386,6 +386,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         2,
         'Available roles are grouped and exclude earned roles',
       );
+      assert.ok((await page.locator('.community-role').filter({ hasText: 'Collector role' }).textContent()).includes('Base'));
       assert.equal(
         await page
           .locator('.community-role')

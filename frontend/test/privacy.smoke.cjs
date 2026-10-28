@@ -146,6 +146,7 @@ const server = "111111111111111111",
             assert.equal(body.exclude_blocked, true);
             assert.equal(body.identities, false);
             assert.equal(body.operator_override, true);
+            assert.equal(body.network, 'base');
             assert.ok(body.reason.trim());
             data = exportJob = {
               id: body.request_id,
@@ -235,6 +236,8 @@ const server = "111111111111111111",
       await page.getByText("pending", { exact: true }).waitFor();
       await page.goto("https://bouncer.test/admin");
       await page.getByRole("button", { name: "Exports", exact: true }).click();
+      await page.getByRole('combobox', { name: 'Blockchain', exact: true }).locator('.pixel-select-arrow').click();
+      await page.getByRole('option', { name: 'Base', exact: true }).click();
       await page.getByLabel("Operator override: include wallets regardless of community sharing/export choices.").check();
       await page
         .getByLabel("Override reason:")

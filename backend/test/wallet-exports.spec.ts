@@ -206,6 +206,16 @@ describe("Fresh wallet exports", () => {
     const t = setup({ network: "robinhood" });
     expect((await t.service.build(t.job)).rows).toEqual([]);
   });
+  it('exports Base contributions with Base labels and excludes them from Ethereum-only snapshots', async () => {
+    const t = setup({ network: 'base' });
+    t.rule.chain_id = 8453;
+    const result = await t.service.build(t.job);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows.every(row => row.network === 'base')).toBe(true);
+    t.job.filters.network = 'ethereum';
+    expect((await t.service.build(t.job)).rows).toEqual([]);
+    await expect(t.service.start(session, server, { family: 'bitcoin', network: 'base' } as any)).rejects.toThrow('compatible');
+  });
   it("rejects rule changes during the scan", async () => {
     const t = setup();
     t.rules.getRoleMappings
