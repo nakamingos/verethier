@@ -19,7 +19,7 @@ describe('Verification page wallet choice', () => {
   let originalUrl: string;
   beforeEach(async () => {
     originalUrl = window.location.href;
-    ethereum = { connectedState$: new BehaviorSubject({ isConnecting: false, isConnected: false }), connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
+    ethereum = { syncConnectedAccount: jasmine.createSpy().and.resolveTo('0x' + '1'.repeat(40)), getSigningChainId: jasmine.createSpy().and.resolveTo(1), connectedState$: new BehaviorSubject({ isConnecting: false, isConnected: false }), connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
     bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
       preferredProvider: jasmine.createSpy().and.returnValue('xverse'), isUniSatAvailable: jasmine.createSpy().and.returnValue(false),
       openUniSatMobile: jasmine.createSpy(),
@@ -217,7 +217,7 @@ describe('Verification page wallet choice', () => {
     bitcoin.isUniSatAvailable.and.returnValue(true);
     const fixture = page(['evm','bitcoin']); const component = fixture.componentInstance;
     expect(fixture.nativeElement.querySelector('.bitcoin-wallet-choice')).toBeNull();
-    expect(Array.from(fixture.nativeElement.querySelectorAll('.wallet-choice button')).map((button: any) => button.textContent.trim())).toEqual(['Ethereum', 'Bitcoin']);
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.wallet-choice button')).map((button: any) => button.textContent.trim())).toEqual(['EVM', 'Bitcoin']);
     fixture.nativeElement.querySelector('[aria-label="Bitcoin"]').click(); fixture.detectChanges();
     const choice = fixture.nativeElement.querySelector('[aria-label="Bitcoin with UniSat"]'); choice.click();
     fixture.detectChanges();
@@ -364,10 +364,10 @@ describe('Verification page wallet choice', () => {
       name: 'Bouncer', version: '1', chainId: 1,
     }, message: {
       UserID: resolvedData.userId, UserTag: resolvedData.userTag, ServerID: resolvedData.discordId,
-      ServerName: resolvedData.discordName, Nonce: resolvedData.nonce, Expiry: resolvedData.expiry,
+      ServerName: resolvedData.discordName, Nonce: resolvedData.nonce, Expiry: resolvedData.expiry, WalletAddress: '0x' + '1'.repeat(40),
     } }));
     const verify = http.expectOne(request => request.url.endsWith('/verify-signature'));
-    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'evm', address: '0x' + '1'.repeat(40) });
+    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'evm', chainId: 1, address: '0x' + '1'.repeat(40) });
     verify.flush({ assignedRoles: ['holder'] });
     await pending;
     expect(component.state$.value.messageVerified).toBeTrue();

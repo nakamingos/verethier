@@ -92,26 +92,10 @@ export class VerificationEngine {
       }
       checkedRule = rule;
 
-      // Get ALL wallet addresses for this user (for wallet stacking)
-      const userAddresses = await this.addressesForRun(userId, run);
-      
-      // Ensure the current address is included in the list (handles race condition)
-      // If the user just verified with this address, it might not be in DB yet
-      const addressesToCheck = userAddresses.includes(address.toLowerCase()) 
-        ? userAddresses 
-        : [...userAddresses, address.toLowerCase()];
+      const addressesToCheck = await this.addressesForRun(userId, run, rule);
       const allowedAddresses = await this.walletBlocks.allowedAddresses(rule.server_id, addressesToCheck, run);
       checkedAddresses = allowedAddresses;
       const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes(address.toLowerCase()));
-      
-      if (addressesToCheck.length !== userAddresses.length) {
-        Logger.warn(`Signed address not found among saved wallets for user ${userId}, adding it manually to prevent race condition`);
-      }
-      
-      Logger.debug(`VerificationEngine: Checking ${addressesToCheck.length} wallet(s) for user ${userId}`);
-
-      // Apply verification logic - now checks across ALL user's wallets
-      Logger.debug(`VerificationEngine: Verifying rule ${ruleId} for user ${userId}`);
       
       const count = allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, run) : 0n;
       const assetCount = rule.asset_type === 'erc20' ? tokenAmount(rule, count) : serializeAssetCount(count);
@@ -265,10 +249,9 @@ export class VerificationEngine {
           continue;
         }
         const owned = new Map<string, bigint>();
-        const addresses = [...await this.addressesForRun(userId, context)];
-        if (!addresses.includes(address.toLowerCase())) addresses.push(address.toLowerCase());
         for (const check of checks) {
           try {
+            const addresses = await this.addressesForRun(userId, context, check.rule);
             const allowed = await this.walletBlocks.allowedAddresses(check.rule.server_id, addresses, context);
             const assets = await this.ownershipSvc.matchingAssets(rules.find(rule => rule.id.toString() === check.ruleId.toString()) || check.rule, allowed, context);
             for (const [id, copies] of assets) {
@@ -298,10 +281,12 @@ export class VerificationEngine {
     }
   }
 
-  private addressesForRun(userId: string, context: NftCheckContext): Promise<string[]> {
+  private addressesForRun(userId: string, context: NftCheckContext, rule?: VerifierRole): Promise<string[]> {
     const reads = context.userAddresses ||= new Map();
-    if (!reads.has(userId)) reads.set(userId, this.userAddressService.getUserAddresses(userId));
-    return reads.get(userId);
+    const chainId = rule ? (rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1) : undefined;
+    const key = chainId === undefined ? userId : `${userId}:${chainId}`;
+    if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
+    return reads.get(key);
   }
 
   /**

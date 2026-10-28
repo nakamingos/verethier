@@ -197,11 +197,12 @@ export class VerifyComponent {
         errorMessage: null,
       });
 
+      const evmAddress = this.state$.value.walletType === 'evm' ? await this.walletSvc.syncConnectedAccount() : undefined;
       // Create message to sign
       const domain = {
         name: 'Bouncer',
         version: '1',
-        chainId: 1,
+        chainId: this.state$.value.walletType === 'evm' ? await this.walletSvc.getSigningChainId() : 1,
       };
 
       const types = {
@@ -224,6 +225,10 @@ export class VerifyComponent {
         Expiry: data.expiry,
       };
 
+      if (evmAddress) {
+        types.Verification.push({ name: 'WalletAddress', type: 'address' });
+        (message as any).WalletAddress = evmAddress;
+      }
       const choice = this.privacyChoice ? { epoch: this.privacyChoice.epoch, share: this.privacyChoice.share, exports: this.privacyChoice.exports, notice: this.privacyChoice.notice } : undefined;
       if (choice) {
         types.Verification.push({ name: 'Privacy', type: 'string' });
@@ -237,7 +242,7 @@ export class VerifyComponent {
       };
 
       let proof: { signature: string; address: string };
-      let verificationData = { ...data, ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
+      let verificationData = { ...data, ...(this.state$.value.walletType === 'evm' ? { chainId: domain.chainId } : {}), ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
       if (verificationData.walletType === 'bitcoin') {
         const address = await this.bitcoinWalletSvc.syncConnectedAccount();
         const challenge = await firstValueFrom(this.http.post<{ address: string; message: string; expiry: number }>(env.apiUrl + '/bitcoin-challenge', {

@@ -21,7 +21,7 @@ for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
   assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
 }
 
-async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -42,7 +42,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
       if (signatureGate) await signatureGate;
       return account.signTypedData(data);
     });
-    await page.addInitScript(({ address }) => {
+    await page.addInitScript(({ address, chainId }) => {
       const listeners = new Map();
       let authorized = localStorage.getItem('test-wallet-authorized') === 'true';
       const provider = {
@@ -51,7 +51,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
         removeListener: (name, fn) => listeners.set(name, (listeners.get(name) || []).filter(item => item !== fn)),
         request: async ({ method, params }) => {
           window.__walletCalls.push(method);
-          if (method === 'eth_chainId') return '0x1';
+          if (method === 'eth_chainId') return '0x' + chainId.toString(16);
           if (method === 'eth_accounts') return authorized ? [address] : [];
           if (method === 'eth_requestAccounts' || method === 'wallet_requestPermissions') {
             authorized = true;
@@ -74,7 +74,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
         info: { uuid: 'b121fd92-aad7-42d3-afbe-88e14ca6b211', name: 'Test Wallet', rdns: 'test.bouncer.wallet', icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' }, provider,
       } }));
       addEventListener('eip6963:requestProvider', announce); announce();
-    }, { address: account.address });
+    }, { address: smart ? '0x' + 'ab'.repeat(20) : account.address, chainId });
   }
   await page.routeWebSocket('**', socket => {
     socket.onMessage(raw => {
@@ -113,7 +113,10 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce) {
     }
     return route.fulfill({ json: {} });
   });
+  const initialized = !injected || entry.startsWith('/wallet-check') ? undefined : page.waitForResponse(response => new URL(response.url()).pathname === '/appkit/v1/project-limits');
   await page.goto(origin + entry);
+  await initialized;
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   if (entry.startsWith('/wallet-check')) await page.getByRole('heading', { name: 'Wallet connection check' }).waitFor();
   else await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
   return { context, page, errors, consoleErrors, socketMethods, apiRequests, holdSignature() { let release; signatureGate = new Promise(resolve => { release = resolve; }); return () => { signatureGate = undefined; release(); }; }, get proof() { return proof; }, get typedData() { return typedData; }, get signatures() { return signatures; } };
@@ -201,6 +204,24 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.deepEqual(test.errors, []);
       await page.screenshot({ path: path.join(artifacts, (mobile ? 'phone' : 'desktop') + '.png'), fullPage: true });
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));
+      await test.context.close();
+    }
+    for (const mobile of [false,true]) {
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} Base smart-wallet proof`;
+      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,smart:true});
+      const {page} = test;
+      await page.locator('.step-1 .actions button').click();
+      await page.getByText('Test Wallet',{exact:true}).last().click();
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.locator('.step-3.active').waitFor();
+      const contract = '0x'+'ab'.repeat(20);
+      assert.equal(test.proof.data.chainId,8453);
+      assert.equal(Number(test.typedData.domain.chainId),8453);
+      assert.equal(test.proof.data.address.toLowerCase(),contract);
+      assert.equal(test.typedData.message.WalletAddress.toLowerCase(),contract);
+      assert.equal((await recoverTypedDataAddress({...test.typedData,signature:test.proof.signature})).toLowerCase(),account.address.toLowerCase());
+      assert.deepEqual(test.errors,[]);
+      console.log(JSON.stringify({scenario:currentScenario,result:'passed; API mocked, owner signature differs from contract address'}));
       await test.context.close();
     }
     currentScenario = 'AppKit signing diagnostics';

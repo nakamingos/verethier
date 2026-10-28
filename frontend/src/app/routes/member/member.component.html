@@ -251,18 +251,21 @@
                   <span class="badge">{{
                     wallet.wallet_type === "bitcoin"
                       ? "Bitcoin · Ordinals"
-                      : "EVM"
+                      : walletScope(wallet)
                   }}</span>
                 </div>
                 <p class="muted">
                   Last proven: {{ wallet.last_verified_at | date: "medium" }}
+                  @if (wallet.evm_chain_ids?.length) {
+                    <br />Proven networks: {{ walletNetworks(wallet) }}
+                  }
                 </p>
                 <div class="actions">
                   <button (click)="copy(wallet.address)" [disabled]="busy">
                     Copy address</button
                   ><a
                     class="button"
-                    [href]="explorer(wallet.address)"
+                    [href]="explorer(wallet.address, wallet.evm_chain_ids?.[0])"
                     target="_blank"
                     rel="noopener noreferrer"
                     >View wallet</a

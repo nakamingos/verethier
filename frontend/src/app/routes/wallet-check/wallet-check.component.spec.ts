@@ -14,6 +14,7 @@ describe('Wallet signing diagnostics', () => {
     const events = { on: (event: string, listener: Function) => listeners.set(event, listener),
       off: (event: string) => listeners.delete(event) };
     wallet = {
+      getSigningChainId: jasmine.createSpy().and.resolveTo(1),
       modal: { ready: async () => {}, getUniversalProvider: async () => ({
         client: { ...events, core: { relayer: { ...events, connected: true } } },
         ...events, removeListener: events.off,
@@ -44,6 +45,14 @@ describe('Wallet signing diagnostics', () => {
     await page.sign();
     expect(wallet.signTypedMessage.calls.mostRecent().args[0].message.Challenge).not.toBe(typedData.message.Challenge);
     for (const secret of [address, signature, typedData.message.Challenge]) expect(page.report).not.toContain(secret);
+  });
+
+  it('tests signing on the connected Base network', async () => {
+    wallet.getSigningChainId.and.resolveTo(8453);
+    const page = TestBed.createComponent(WalletCheckComponent).componentInstance;
+    await page.start();
+    await page.sign();
+    expect(wallet.signTypedMessage.calls.mostRecent().args[0].domain.chainId).toBe(8453);
   });
 
   it('keeps one signing request pending and leaves the report available while waiting', async () => {

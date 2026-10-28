@@ -1,6 +1,6 @@
 import { PrivacyService, privacyProof } from '@/portal/privacy.service';
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { recoverTypedDataAddress } from 'viem';
+import { EvmSignatureService } from './evm-signature.service';
 
 import { DynamicRoleService } from '@/services/dynamic-role.service';
 import { NonceService } from '@/services/nonce.service';
@@ -35,7 +35,8 @@ export class WalletService {
     private dynamicRoleService: DynamicRoleService,
     private readonly walletBlocks: WalletBlockService,
     @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
-    @Optional() private readonly privacy?: PrivacyService
+    @Optional() private readonly privacy?: PrivacyService,
+    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService()
   ) {}
   
   /**
@@ -89,6 +90,10 @@ export class WalletService {
       Expiry: data.expiry,
     };
 
+    if (data.chainId !== undefined) {
+      types.Verification.push({ name: 'WalletAddress', type: 'address' });
+      (message as any).WalletAddress = data.address;
+    }
     if (data.privacy !== undefined) {
       types.Verification.push({ name: 'Privacy', type: 'string' });
       (message as any).Privacy = privacyProof(data.privacy);
@@ -98,38 +103,24 @@ export class WalletService {
       domain: {
         name: 'Bouncer',
         version: '1',
-        chainId: 1,
+        chainId: data.chainId ?? 1,
       },
       message,
     };
 
 
-    let address: string | null = null;
-
-    try {
-      // Allow already-open verification pages to finish signing under the previous name.
-      for (const name of [typedData.domain.name, 'verethier']) {
-        const recoveredAddress = await recoverTypedDataAddress({
-          domain: { ...typedData.domain, name },
-          types: typedData.types,
-          primaryType: 'Verification',
-          message: typedData.message,
-          signature: signature as `0x${string}`
-        });
-
-        if (recoveredAddress === data.address) {
-          address = recoveredAddress;
-          break;
-        }
-      }
-    } catch (error) {
-      const recoveryError = error instanceof Error ? error : new Error('Signature recovery failed');
-      Logger.debug('Signature recovery failed:', recoveryError.message);
-      throw recoveryError;
+    let proof: { chainId?: number } | undefined;
+    let failure: Error | undefined;
+    for (const name of data.chainId === undefined ? ['Bouncer', 'verethier'] : ['Bouncer']) {
+      try {
+        proof = await this.evmSignatures.verify(data.address, {
+          ...typedData, domain: { ...typedData.domain, name }, primaryType: 'Verification',
+        }, signature);
+        break;
+      } catch (error) { failure = error; }
     }
-
-
-    if (!address) throw new Error('Invalid signature.');
+    if (!proof) throw failure || new Error('Invalid wallet signature.');
+    const address = data.address.toLowerCase();
     // Check before saving or transferring the wallet link. Keep this outside
     // the optional address-storage catch so a blocked wallet cannot proceed.
     await this.walletBlocks.assertAllowed(data.discordId, address);
@@ -147,6 +138,7 @@ export class WalletService {
       serverId: data.discordId,
       channelId: context.channelId,
       walletType: 'evm',
+      ...(proof.chainId ? { evmChainId: proof.chainId } : {}),
       provenAt: new Date().toISOString(),
     };
     

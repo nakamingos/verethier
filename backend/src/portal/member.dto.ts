@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,10 +12,11 @@ import {
 export class MemberLinkDto {
   @IsIn(['evm', 'bitcoin']) walletType: 'evm' | 'bitcoin';
   @IsString() @MaxLength(100) address: string;
+  @IsOptional() @IsInt() @IsIn([1, 8453, 4663]) chainId?: number;
 }
 export class MemberProofDto {
   @IsUUID() flow: string;
-  @IsString() @MaxLength(1024) signature: string;
+  @IsString() @MaxLength(32770) signature: string;
   @IsOptional() @IsBoolean() transfer?: boolean;
 }
 export class MemberRemoveDto {

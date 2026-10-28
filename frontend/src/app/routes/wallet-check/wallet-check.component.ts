@@ -170,6 +170,7 @@ export class WalletCheckComponent implements OnDestroy {
       this.status.set('Still waiting for the signature. Return here and copy the details.');
     }, 45000);
     try {
+      typedData.domain.chainId = await this.wallet.getSigningChainId();
       await this.wallet.signTypedMessage(typedData, stage => this.record(stage));
       this.status.set('Signature received successfully');
     } catch (error) {

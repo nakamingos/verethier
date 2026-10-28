@@ -54,6 +54,7 @@ import { OrdinalCollectionCacheService } from './services/ordinal-collection-cac
 import { OrdinalWalletInventoryService } from './services/ordinal-wallet-inventory.service';
 import { RefreshCollectionHandler } from './services/discord-commands/handlers/refresh-collection.handler';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
+import { EvmSignatureService } from './services/evm-signature.service';
 import { VerifyService } from './services/verify.service';
 import { VerificationService } from './services/verification.service';
 import { VerificationEngine } from './services/verification-engine.service';
@@ -175,6 +176,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     VerifyService,              // Request orchestration
 
     // Security and authentication
+    EvmSignatureService,
     WalletService,              // EIP-712 signature verification
 
     // Data access layer

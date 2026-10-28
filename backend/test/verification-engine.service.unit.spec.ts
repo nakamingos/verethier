@@ -87,7 +87,7 @@ describe('VerificationEngine', () => {
     mockDbService = module.get(DbService);
     mockDataService = module.get(DataService);
     mockUserAddressService = module.get(UserAddressService);
-    mockUserAddressService.getUserAddresses.mockResolvedValue([]);
+    mockUserAddressService.getUserAddresses.mockResolvedValue(['address123']);
     
     loggerSpy = jest.spyOn(Logger, 'debug').mockImplementation();
     jest.spyOn(Logger, 'error').mockImplementation();
@@ -438,7 +438,7 @@ describe('VerificationEngine', () => {
       // Should still attempt verification with defaults
     });
 
-    it('should handle empty strings in addresses', async () => {
+    it('uses saved proof addresses even when the display address is empty', async () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
 
@@ -446,7 +446,7 @@ describe('VerificationEngine', () => {
 
       expect(result.address).toBe('');
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        [''],
+        ['address123'],
         'cool-cats',
         'trait_type',
         'Rare',

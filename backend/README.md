@@ -255,3 +255,7 @@ Collection slug input is trimmed, lowercased, and consecutive whitespace becomes
 `/setup add-ordinals-rule` and `/setup add-ethscription-rule` accept an optional `label` after `inscription_ids` / `inscription_numbers`. For example, `inscription_numbers:123,456 label:Pizza Comrades — Gold Crowns`. Labels identify the selection in confirmations, rule lists, removal/restoration, and the editor; they never filter holdings or assert collection membership. Slug and trait criteria remain unavailable on specific selections.
 
 Labels keep capitalization and internal spaces, are trimmed, and support up to 100 characters on one line. `/setup edit-rule` can add, rename, or clear a label with Undo/Redo. Label-only edits perform no ownership lookups or member role checks, and a different label does not permit duplicate eligibility rules. Apply `20261016020000_add_inscription_rule_labels.sql` before deploying this backend; it adds the nullable `verifier_rules.rule_label` column and a selection-only label constraint without changing existing rules or assignments. Restart registers the new slash-command option; reload Discord if it is missing.
+
+## Smart-wallet verification
+
+Deployed ERC-1271 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Apply `20261028010000_smart_wallet_proofs.sql` before deploying this change. See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md). Undeployed/ERC-6492 accounts remain unsupported.

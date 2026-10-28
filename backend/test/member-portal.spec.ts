@@ -59,6 +59,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     );
   });
   async function challenge(walletType = 'evm', address = account.address) {
+    jest.spyOn((service as any).evmSignatures, 'client').mockReturnValue({ getChainId: async () => 1, getCode: async () => '0x' });
     jest
       .spyOn(service as any, 'saveFlow')
       .mockImplementation(async (_: any, flow: any) => ({
@@ -78,6 +79,16 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     });
     return result;
   }
+  it('binds a portal contract proof to the saved challenge network and forwards its trusted scope',async()=>{
+    jest.spyOn(service as any,'saveFlow').mockImplementation(async (_session:any,flow:any)=>({id:'aaaaaaaa-0000-4000-8000-000000000002',...flow}));
+    const flow = await service.linkChallenge(session,{address:account.address,walletType:'evm',chainId:8453});
+    expect(flow.challenge.domain.chainId).toBe(8453);
+    jest.spyOn(service as any,'flow').mockResolvedValue({...flow,purpose:'wallet_link',wallet_type:'evm',expires_at:flow.expiresAt});
+    const verify = jest.spyOn((service as any).evmSignatures,'verify').mockResolvedValue({chainId:8453});
+    await service.link(session,{flow:flow.id,signature:'0x123456'});
+    expect(verify).toHaveBeenCalledWith(flow.address,flow.challenge,'0x123456');
+    expect(db.rpc).toHaveBeenCalledWith('verifier_member_link_wallet',expect.objectContaining({p_chain:8453}));
+  });
   it('rejects malformed EVM addresses before saving a challenge', async () => {
     for (const address of ['invalid', '0x123', ' 0x' + '1'.repeat(40)])
       await expect(
@@ -103,6 +114,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
       p_user: user,
       p_flow: flow.id,
       p_transfer: false,
+      p_chain: null,
     });
     expect(nonces.consumeNonce).toBeUndefined();
   });
@@ -179,6 +191,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
       p_user: user,
       p_flow: flow.id,
       p_transfer: true,
+      p_chain: null,
     });
   });
   it('uses the existing Bitcoin verifier with a distinct account-link message', async () => {
