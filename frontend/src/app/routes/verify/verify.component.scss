@@ -34,6 +34,7 @@
       display: block;
       width: 4rem;
       height: 4rem;
+      flex: 0 0 4rem;
 
       overflow: hidden;
 
@@ -147,10 +148,12 @@
       margin-right: 2rem;
 
       font-size: 3rem;
+      line-height: 1;
       text-align: center;
 
       span {
-        transform: translateY(-.2rem);
+        // Center the pixel font's visible digits, including their right bearing.
+        transform: translate(.05em, .0666666667em);
       }
 
       svg {

@@ -820,7 +820,7 @@ app-root:has(app-admin) .app-footer {
   flex-shrink: 0;
   border-radius: 0;
 }
-.server-avatar {
+.server-list .server-avatar {
   transform: translateY(-0.5px);
   display: grid;
   place-items: center;
