@@ -1,4 +1,5 @@
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
+import { evmNetworkLabel } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
@@ -517,11 +518,7 @@ export class MemberComponent {
   }
   network(rule: Requirement) {
     return rule.asset === 'nft' || rule.asset === 'erc20'
-      ? rule.network === 4663
-        ? 'Robinhood'
-        : !rule.network || rule.network === 1
-          ? 'Ethereum'
-          : `Chain ${rule.network}`
+      ? evmNetworkLabel(rule.network || 1)
       : '';
   }
 }

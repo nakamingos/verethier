@@ -12,8 +12,8 @@ Bouncer is split into two deployable apps:
 
 - Wallet verification with EIP-712 signatures
 - Collection-level, category-level, and trait-level verification rules
-- ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum and Robinhood mainnet
-- ERC-721 and ERC-1155 NFT rules on Ethereum and Robinhood mainnet
+- ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum, Base and Robinhood mainnet
+- ERC-721 and ERC-1155 NFT rules on Ethereum, Base and Robinhood mainnet
 - Bitcoin mainnet Ordinals quantity and trait rules using Xverse or UniSat wallet signatures, persistent collection metadata, and ordered ownership API fallbacks
 - Wallet stacking across multiple verified addresses
 - Scheduled reconciliation of previously earned roles: restore eligible roles, remove ineligible roles, and retry failed Discord changes. New roles still require explicit wallet verification.
@@ -85,7 +85,7 @@ npx supabase db reset
 
 - Backend runtime config is documented in [backend/env.example](backend/env.example) and [backend/.env.production.example](backend/.env.production.example).
 - Frontend API/RPC settings live in [env.ts](frontend/src/env/env.ts) and [env.dev.ts](frontend/src/env/env.dev.ts).
-- NFT checks use the backend's `RPC_URL` for Ethereum and `ROBINHOOD_RPC_URL` for Robinhood. Both require full HTTP(S) URLs for their respective mainnets.
+- NFT/token checks use the backend's `RPC_URL` for Ethereum, `BASE_RPC_URL` for Base and `ROBINHOOD_RPC_URL` for Robinhood. Each requires a full HTTP(S) URL for its mainnet. Base configuration and migration instructions are documented in [Base mainnet](backend/README.md#base-mainnet).
 
 Create rules with `/setup add-nft-rule`, `/setup add-ordinals-rule`, or `/setup add-ethscription-rule`. The command selects the asset type and shows only its relevant options; existing rules, confirmations and Undo use the same flow. Refresh slash commands after deploying this change.
 
@@ -177,7 +177,7 @@ wallet; roles available only through EVM rules remain outside this command.
 
 ## ERC-20 token rules
 
-Use `/setup add-token-rule` with `channel`, `role`, `contract_address`, and a required `min_balance` such as `1000` or `0.5`. Set `network:robinhood` for Robinhood mainnet; otherwise Ethereum is used. Existing backend `RPC_URL` and `ROBINHOOD_RPC_URL` settings apply.
+Use `/setup add-token-rule` with `channel`, `role`, `contract_address`, and a required `min_balance` such as `1000` or `0.5`. Set `network:base` or `network:robinhood` for those mainnets; otherwise Ethereum is used. The matching backend `RPC_URL`, `BASE_RPC_URL` or `ROBINHOOD_RPC_URL` setting applies.
 
 The bot reads token decimals, name, and symbol from the contract. Amounts are compared as exact base-unit integers; excess decimal precision is rejected. Linked EVM wallets are deduplicated and summed at one block per network. These rules check tokens held directly in wallets. Tokens without readable `decimals`, `balanceOf`, and `totalSupply` are rejected. Name and symbol are optional.
 

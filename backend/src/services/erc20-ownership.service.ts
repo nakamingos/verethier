@@ -23,7 +23,7 @@ export class Erc20OwnershipService {
 
   private getClient(chainId: number) {
     const network = getNftNetwork(chainId);
-    const variable = chainId === 1 ? 'RPC_URL' : 'ROBINHOOD_RPC_URL';
+    const variable = network.rpcVariable;
     if (!EnvironmentConfig[variable]) throw new Error(`${network.name} token verification is not configured. Set ${variable} on the backend.`);
     if (!this.clients.has(chainId)) this.clients.set(chainId, createPublicClient({ chain: network.chain,
       transport: http(EnvironmentConfig[variable], { timeout: 10000, retryCount: 1, batch: { batchSize: NFT_BATCH_SIZE, wait: 10 } }) }));

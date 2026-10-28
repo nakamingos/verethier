@@ -18,22 +18,30 @@ const nft: NftRuleFields = { asset_type: 'nft', chain_id: 1, contract_address: c
 describe('NFT network configuration', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('defaults to Ethereum and accepts Robinhood mainnet', () => {
+  it('defaults to Ethereum and accepts Base and Robinhood mainnet', () => {
     expect(getNftNetworkId()).toBe(1);
+    expect(getNftNetworkId('base')).toBe(8453);
     expect(getNftNetworkId('robinhood')).toBe(4663);
   });
 
   it('rejects unsupported networks', () => {
-    expect(() => getNftNetworkId('base')).toThrow('Select Ethereum or Robinhood');
+    expect(() => getNftNetworkId('polygon')).toThrow('Select Ethereum, Base or Robinhood');
     expect(() => getNftNetwork(46630)).toThrow('mainnet only');
   });
 
   it('creates and caches distinct clients with the correct chain and endpoint', () => {
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://eth-mainnet.g.alchemy.com/v2/example-key');
     jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', 'https://robinhood-mainnet.g.alchemy.com/v2/example-key');
+    jest.replaceProperty(EnvironmentConfig, 'BASE_RPC_URL', 'https://base-mainnet.g.alchemy.com/v2/example-key');
     const service = new NftOwnershipService();
     const ethereum = (service as any).getClient(1);
     const robinhood = (service as any).getClient(4663);
+    const base = (service as any).getClient(8453);
+    expect(base.chain.id).toBe(8453);
+    expect(base.transport.url).toBe('https://base-mainnet.g.alchemy.com/v2/example-key');
+    expect((service as any).getClient(8453)).toBe(base);
+    expect(base).not.toBe(ethereum);
+    expect(base).not.toBe(robinhood);
     expect(ethereum.chain.id).toBe(1);
     expect(robinhood.chain.id).toBe(4663);
     expect(robinhood.transport.url).toBe('https://robinhood-mainnet.g.alchemy.com/v2/example-key');
@@ -44,9 +52,11 @@ describe('NFT network configuration', () => {
   it('keeps Ethereum available when Robinhood RPC is not configured', () => {
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://example.org/ethereum');
     jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', undefined);
+    jest.replaceProperty(EnvironmentConfig, 'BASE_RPC_URL', undefined);
     const service = new NftOwnershipService();
     expect((service as any).getClient(1).transport.url).toBe('https://example.org/ethereum');
     expect(() => (service as any).getClient(4663)).toThrow('Set ROBINHOOD_RPC_URL');
+    expect(() => (service as any).getClient(8453)).toThrow('Set BASE_RPC_URL');
   });
 
   it('supports a separate non-Alchemy provider for Robinhood', () => {
@@ -119,6 +129,17 @@ describe('NFT ownership', () => {
     await expect(service.prepareRule(contract, undefined, undefined, 4663)).rejects.toThrow('Robinhood mainnet');
     await expect(service.count({ ...nft, chain_id: 4663 }, [wallet])).rejects.toThrow('Robinhood mainnet');
     expect(rpc.readContract).not.toHaveBeenCalled();
+  });
+  it.each(['erc721', 'erc1155'])('prepares a Base %s rule and rejects an RPC serving another chain', async standard => {
+    await expect(service.prepareRule(contract, undefined, undefined, 8453)).rejects.toThrow('Base mainnet');
+    await expect(service.count({ ...nft, chain_id: 8453 }, [wallet])).rejects.toThrow('Base mainnet');
+    expect(rpc.readContract).not.toHaveBeenCalled();
+    rpc.getChainId.mockResolvedValue(8453);
+    rpc.readContract.mockImplementation(async ({ functionName, args }) => functionName === 'name'
+      ? 'Base collection' : args[0] === (standard === 'erc721' ? '0x80ac58cd' : '0xd9b67a26'));
+    expect(await service.prepareRule(contract, undefined, undefined, 8453)).toMatchObject({
+      chain_id: 8453, token_standard: standard, collection_name: 'Base collection',
+    });
   });
 
   it('stacks ERC-721 balances and deduplicates wallets', async () => {

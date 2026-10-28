@@ -24,11 +24,11 @@ export class NftMetadataService {
 
   private baseUrl(chainId: number): string {
     const network = getNftNetwork(chainId);
-    const host = chainId === 1 ? 'eth-mainnet.g.alchemy.com' : 'robinhood-mainnet.g.alchemy.com';
+    const host = network.alchemyHost;
     let key = EnvironmentConfig.ALCHEMY_API_KEY;
     if (!key) {
       try {
-        const rpc = new URL(chainId === 1 ? EnvironmentConfig.RPC_URL : EnvironmentConfig.ROBINHOOD_RPC_URL);
+        const rpc = new URL(EnvironmentConfig[network.rpcVariable]);
         if (rpc.protocol === 'https:' && rpc.hostname === host && !rpc.username && !rpc.password) {
           key = rpc.pathname.match(/^\/v2\/([^/]+)$/)?.[1];
         }

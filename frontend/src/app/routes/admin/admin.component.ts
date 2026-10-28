@@ -1,4 +1,5 @@
 import { WalletExportsComponent } from '@/components/wallet-exports/wallet-exports.component';
+import { EVM_NETWORKS, evmNetworkValue } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -168,7 +169,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       key: row.key || '',
       contract: rule.contract_address || '',
       network:
-        rule.network || (rule.chain_id === 4663 ? 'robinhood' : 'ethereum'),
+        rule.network || evmNetworkValue(rule.chain_id) || 'ethereum',
     });
     const epoch = ++this.suggestionEpoch;
     try {
@@ -256,10 +257,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'ids', label: 'Inscription IDs / hashes' },
     { value: 'numbers', label: 'Global inscription numbers' },
   ];
-  readonly networkChoices: SelectChoice[] = [
-    { value: 'ethereum', label: 'Ethereum' },
-    { value: 'robinhood', label: 'Robinhood' },
-  ];
+  readonly networkChoices: SelectChoice[] = EVM_NETWORKS;
   readonly messageActionChoices: SelectChoice[] = [
     { value: 'refresh', label: 'Refresh existing' },
     { value: 'new', label: 'Create another message' },

@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { PixelSelectComponent } from '@/components/pixel-select/pixel-select.component';
 import { PortalSessionService } from '@/services/portal-session.service';
+import { EVM_NETWORKS } from '@/utils/evm-network.util';
 @Component({
   selector: 'app-wallet-exports',
   imports: [FormsModule, DatePipe, PixelSelectComponent],
@@ -264,8 +265,7 @@ export class WalletExportsComponent implements OnChanges, OnDestroy {
   ];
   readonly networks = [
     { value: 'all', label: 'All blockchains' },
-    { value: 'ethereum', label: 'Ethereum' },
-    { value: 'robinhood', label: 'Robinhood' },
+    ...EVM_NETWORKS,
     { value: 'bitcoin', label: 'Bitcoin' },
   ];
   readonly matches = [

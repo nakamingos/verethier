@@ -65,7 +65,7 @@ export class NftOwnershipService {
 
   private getClient(chainId: number) {
     const network = getNftNetwork(chainId);
-    const rpcVariable = chainId === 1 ? 'RPC_URL' : 'ROBINHOOD_RPC_URL';
+    const rpcVariable = network.rpcVariable;
     const rpcUrl = EnvironmentConfig[rpcVariable];
     if (!rpcUrl) throw new Error(`${network.name} NFT verification is not configured. Set ${rpcVariable} on the backend.`);
     if (!this.clients.has(chainId)) {

@@ -20,6 +20,7 @@ import { AssetOwnershipService } from "@/services/asset-ownership.service";
 import { NftCheckContext } from "@/services/nft-ownership.service";
 import { ruleEditVersion } from "@/utils/rule-edit.util";
 import { EnvironmentConfig } from "@/config/environment.config";
+import { getNftNetwork } from "@/utils/nft-network.util";
 
 export const csvCell = (v: unknown) =>
   '"' +
@@ -92,7 +93,7 @@ export class WalletExportService {
     await this.authorize(session, server, !!dto.operator_override, dto.reason);
     if (
       (dto.family === "bitcoin" &&
-        ["ethereum", "robinhood"].includes(dto.network)) ||
+        ["ethereum", "base", "robinhood"].includes(dto.network)) ||
       (dto.family === "evm" && dto.network === "bitcoin")
     )
       throw new BadRequestException(
@@ -251,9 +252,7 @@ export class WalletExportService {
   private network(rule: any) {
     return rule.asset_type === "ordinal"
       ? "bitcoin"
-      : rule.chain_id === 4663
-        ? "robinhood"
-        : "ethereum";
+      : getNftNetwork(rule.chain_id || 1).value;
   }
   private hash(rules: any[]) {
     return createHash("sha256")

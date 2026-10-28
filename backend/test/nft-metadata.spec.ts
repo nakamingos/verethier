@@ -18,6 +18,7 @@ describe('Alchemy NFT metadata', () => {
     jest.replaceProperty(EnvironmentConfig, 'ALCHEMY_API_KEY', undefined);
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://eth-mainnet.g.alchemy.com/v2/local-test-key');
     jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', 'https://robinhood-mainnet.g.alchemy.com/v2/rh-test-key');
+    jest.replaceProperty(EnvironmentConfig, 'BASE_RPC_URL', 'https://base-mainnet.g.alchemy.com/v2/base-test-key');
     db = { getCachedNftMetadata: jest.fn().mockResolvedValue([]), cacheNftMetadata: jest.fn().mockResolvedValue(undefined) };
     service = new NftMetadataService(db as unknown as DbService);
     request = jest.spyOn(global, 'fetch') as jest.Mock;
@@ -35,6 +36,10 @@ describe('Alchemy NFT metadata', () => {
     respond([token('1')]);
     await service.attributes({ ...rule, chain_id: 4663 }, ['1']);
     expect(request.mock.calls[1][0]).toContain('https://robinhood-mainnet.g.alchemy.com/nft/v3/rh-test-key/');
+    respond([token('1')]);
+    await service.attributes({ ...rule, chain_id: 8453 }, ['1']);
+    expect(request.mock.calls[2][0]).toContain('https://base-mainnet.g.alchemy.com/nft/v3/base-test-key/');
+    expect(db.cacheNftMetadata).toHaveBeenLastCalledWith([expect.objectContaining({ chain_id: 8453 })]);
   });
   it('refreshes hosted traits for an export rather than substituting cached eligibility metadata', async () => {
     db.getCachedNftMetadata.mockResolvedValue([{chain_id:1,contract_address:contract,token_id:'1',attributes}]);
@@ -54,6 +59,15 @@ describe('Alchemy NFT metadata', () => {
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://other-rpc.example');
     await expect(service.attributes(rule, ['1'])).rejects.toThrow('ALCHEMY_API_KEY');
     expect(request).not.toHaveBeenCalled();
+  });
+  it('routes Base discovery to Base and never borrows another chain’s RPC key', async () => {
+    jest.replaceProperty(EnvironmentConfig, 'BASE_RPC_URL', undefined);
+    await expect(service.ownedIds({ ...rule, chain_id: 8453 }, wallet)).rejects.toThrow('Alchemy');
+    expect(request).not.toHaveBeenCalled();
+    jest.replaceProperty(EnvironmentConfig, 'ALCHEMY_API_KEY', 'separate-base-key');
+    respond({ ownedNfts: [baseToken('1')], totalCount: 1 });
+    expect(await service.ownedIds({ ...rule, chain_id: 8453 }, wallet)).toEqual(['1']);
+    expect(request.mock.calls[0][0]).toContain('https://base-mainnet.g.alchemy.com/nft/v3/separate-base-key/');
   });
   it('fetches all ownership pages using the documented metadata-free response', async () => {
     respond({ ownedNfts: [baseToken('0x01')], totalCount: 2, pageKey: 'next' });

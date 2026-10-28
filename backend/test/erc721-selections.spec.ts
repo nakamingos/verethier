@@ -58,7 +58,7 @@ describe('ERC-721 ID selections', () => {
     };
     jest.spyOn(service as any, 'getClient').mockReturnValue(rpc);
   });
-  it.each([1, 4663])(
+  it.each([1, 4663, 8453])(
     'counts all selected IDs across deduplicated wallets on chain %s',
     async (chain_id) => {
       rpc.getChainId.mockResolvedValue(chain_id);

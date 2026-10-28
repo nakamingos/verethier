@@ -611,19 +611,19 @@ describe('AddRuleHandler', () => {
       expect(mockDuplicateRuleConfirmationHandler.createRuleInfoFields).toHaveBeenCalledWith(expect.objectContaining(fields));
       expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalled();
     });
-    it('stores the selected Robinhood network through the same setup flow', async () => {
-      const robinhood = { ...fields, chain_id: 4663 };
+    it.each([['robinhood', 4663], ['base', 8453]])('stores the selected %s network through the same setup flow', async (network, chain_id) => {
+      const robinhood = { ...fields, chain_id };
       mockNftService.prepareRule.mockResolvedValue(robinhood);
-      const result = await (handler as any).validateInputParams(interactionFor({ network: 'robinhood' }));
-      expect(mockNftService.prepareRule).toHaveBeenCalledWith(fields.contract_address, null, null, 4663);
+      const result = await (handler as any).validateInputParams(interactionFor({ network }));
+      expect(mockNftService.prepareRule).toHaveBeenCalledWith(fields.contract_address, null, null, chain_id);
       expect(result.assetFields).toEqual(robinhood);
     });
     it('rejects unsupported networks before checking a contract', async () => {
-      const interaction = interactionFor({ network: 'base' });
+      const interaction = interactionFor({ network: 'polygon' });
       await handler.handle(interaction);
       expect(mockNftService.prepareRule).not.toHaveBeenCalled();
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
-      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select Ethereum or Robinhood') });
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Select Ethereum, Base or Robinhood') });
     });
     it('rejects network options for Ethscriptions rules', async () => {
       const interaction = interactionFor({ asset_type: 'ethscription', contract_address: null, network: 'robinhood' });

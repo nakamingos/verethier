@@ -101,8 +101,21 @@ describe('ERC-20 contract reads', () => {
     const actual = new Erc20OwnershipService();
     jest.replaceProperty(EnvironmentConfig, 'RPC_URL', 'https://example.org/eth');
     jest.replaceProperty(EnvironmentConfig, 'ROBINHOOD_RPC_URL', 'https://example.org/rh');
+    jest.replaceProperty(EnvironmentConfig, 'BASE_RPC_URL', 'https://example.org/base');
     expect((actual as any).getClient(1).chain.id).toBe(1);
     expect((actual as any).getClient(4663).transport.url).toBe('https://example.org/rh');
+    expect((actual as any).getClient(8453).transport.url).toBe('https://example.org/base');
+    expect((actual as any).getClient(8453).chain.id).toBe(8453);
+  });
+  it('prepares and counts Base tokens at the selected chain block without sharing Ethereum balances', async () => {
+    const context = { checks: new Map() };
+    expect(await service.count(rule, [wallet], context)).toBe(0n);
+    await expect(service.prepareRule(contract, '0.5', 8453)).rejects.toThrow('network');
+    rpc.getChainId.mockResolvedValue(8453);
+    expect(await service.prepareRule(contract, '0.5', 8453)).toMatchObject({ chain_id: 8453, min_balance: rule.min_balance });
+    rpc.readContract.mockResolvedValue(700000000000000000n);
+    expect(await service.count({ ...rule, chain_id: 8453 }, [wallet], context)).toBe(700000000000000000n);
+    expect(rpc.getBlockNumber).toHaveBeenCalledTimes(2);
   });
 });
 
