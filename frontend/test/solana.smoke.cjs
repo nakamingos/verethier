@@ -59,7 +59,10 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
             solana: {
               isPhantom: true,
               publicKey: { toString: () => address },
-              connect: async () => ({ publicKey: { toString: () => address } }),
+              connect: async () => {
+                window.__phantomConnections = (window.__phantomConnections || 0) + 1;
+                return { publicKey: { toString: () => address } };
+              },
               on: () => {},
               removeListener: () => {},
               signMessage: async (bytes) => ({
@@ -121,7 +124,10 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
         return route.fulfill({ json: {} });
       });
       await page.goto(origin + "/verify/" + nonce);
-      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      assert.equal(await page.getByRole("button", { name: "Open in Phantom app", exact: true }).count(), 0);
+      await page.getByRole("button", { name: "Connect Phantom", exact: true }).click();
+      assert.equal(await page.evaluate(() => window.__phantomConnections), 1);
+      assert.equal(new URL(page.url()).origin, origin);
       await page.waitForFunction(
         () =>
           getComputedStyle(document.querySelector(".step-2.active")).opacity ===
@@ -161,6 +167,54 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
       console.log(
         JSON.stringify({ width, result: "passed", signature: "real Ed25519" }),
       );
+      await context.close();
+    }
+    for (const mobile of [false, true]) {
+      const context = await browser.newContext({
+        viewport: { width: mobile ? 393 : 1280, height: 900 },
+        userAgent: mobile
+          ? 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'
+          : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36',
+        hasTouch: mobile,
+      });
+      const page = await context.newPage();
+      let handoff;
+      await page.routeWebSocket('**', (socket) => socket.close());
+      await page.route('**/*', async (route) => {
+        const url = new URL(route.request().url());
+        if (url.origin === 'https://phantom.com') {
+          handoff = url;
+          return route.fulfill({ contentType: 'text/html', body: '<h1>Phantom app handoff</h1>' });
+        }
+        if (url.pathname === '/api/verification-context')
+          return route.fulfill({ json: { walletTypes: ['evm', 'solana'], expiry, data } });
+        if (url.origin === origin) {
+          if (url.pathname.startsWith('/verify/'))
+            return route.fulfill({ path: path.join(root, 'index.html') });
+          const file = path.resolve(root, '.' + url.pathname);
+          if (file.startsWith(root + '/') && fs.existsSync(file) && fs.statSync(file).isFile())
+            return route.fulfill({ path: file });
+        }
+        return route.fulfill({ json: {} });
+      });
+      await page.goto(origin + '/verify/' + nonce + '?wallet=phantom');
+      const connect = page.getByRole('button', { name: 'Connect Phantom', exact: true });
+      await connect.waitFor();
+      const app = page.getByRole('button', { name: 'Open in Phantom app', exact: true });
+      assert.equal(await app.count(), mobile ? 1 : 0);
+      if (mobile) {
+        await app.click();
+        await page.waitForURL('https://phantom.com/**');
+        const target = new URL(decodeURIComponent(handoff.pathname.slice('/ul/browse/'.length)));
+        assert.equal(target.pathname, '/verify/' + nonce);
+        assert.equal(target.searchParams.get('wallet'), 'phantom');
+        assert.equal(handoff.searchParams.get('ref'), origin);
+      } else {
+        await connect.click();
+        await page.getByText('Install or enable the Phantom browser extension, then refresh this page.').waitFor();
+        assert.equal(new URL(page.url()).origin, origin);
+      }
+      console.log(JSON.stringify({ scenario: mobile ? 'mobile app handoff without provider' : 'desktop extension guidance without provider', result: 'passed' }));
       await context.close();
     }
   } finally {

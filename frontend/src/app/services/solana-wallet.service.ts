@@ -27,15 +27,30 @@ export class SolanaWalletService implements OnDestroy {
       new CustomEvent('wallet-standard:app-ready', { detail: this.registry }),
     );
   }
+  private phantomWallet() {
+    return [...this.wallets].find(
+      (wallet) =>
+        wallet.name === 'Phantom' &&
+        wallet.features?.['standard:connect'] &&
+        wallet.features?.['solana:signMessage'],
+    );
+  }
+  private injectedProvider() {
+    const provider = (window as any).phantom?.solana;
+    return provider?.isPhantom ? provider : undefined;
+  }
+  isAvailable(): boolean {
+    return !!(this.phantomWallet() || this.injectedProvider());
+  }
+  canOpenPhantomMobile(): boolean {
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return mobile && !this.isAvailable();
+  }
   async connect(): Promise<string> {
     this.disconnect();
     const generation = this.generation;
-    const wallet = [...this.wallets].find(
-      (w) =>
-        w.name === 'Phantom' &&
-        w.features?.['standard:connect'] &&
-        w.features?.['solana:signMessage'],
-    );
+    const wallet = this.phantomWallet();
     if (wallet) {
       const result = await wallet.features['standard:connect'].connect();
       if (generation !== this.generation)
@@ -59,10 +74,12 @@ export class SolanaWalletService implements OnDestroy {
       this.addressState.next(account.address);
       return account.address;
     }
-    const provider = (window as any).phantom?.solana;
-    if (!provider?.isPhantom)
+    const provider = this.injectedProvider();
+    if (!provider)
       throw new Error(
-        'Open this page in Phantom’s browser or install Phantom to connect Solana.',
+        this.canOpenPhantomMobile()
+          ? 'Open this page in the Phantom app to connect your wallet.'
+          : 'Install or enable the Phantom browser extension, then refresh this page.',
       );
     const result = await provider.connect();
     if (generation !== this.generation)
@@ -133,8 +150,15 @@ export class SolanaWalletService implements OnDestroy {
       ),
     };
   }
+  phantomMobileUrl(page = window.location.href): string {
+    const target = new URL(page);
+    if (target.protocol !== 'https:')
+      throw new Error('Phantom mobile requires an HTTPS page.');
+    target.searchParams.set('wallet', 'phantom');
+    return `https://phantom.com/ul/browse/${encodeURIComponent(target.href)}?ref=${encodeURIComponent(window.location.origin)}`;
+  }
   openPhantomMobile() {
-    window.location.href = `https://phantom.app/ul/browse/${encodeURIComponent(window.location.href)}?ref=${encodeURIComponent(window.location.origin)}`;
+    if (this.canOpenPhantomMobile()) window.location.assign(this.phantomMobileUrl());
   }
   disconnect() {
     this.generation++;

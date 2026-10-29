@@ -213,11 +213,11 @@
                           ? "Connecting…"
                           : address
                             ? "Change wallet"
-                            : "Connect wallet"
+                            : walletKind === 'solana' ? 'Connect Phantom' : 'Connect wallet'
                       }}
                     </button>
-                    @if (walletKind === 'solana') {
-                      <button (click)="solana.openPhantomMobile()" [disabled]="busy || connecting">Open Phantom</button>
+                    @if (walletKind === 'solana' && !address && solana.canOpenPhantomMobile()) {
+                      <button (click)="solana.openPhantomMobile()" [disabled]="busy || connecting">Open in Phantom app</button>
                     }
                     @if (
                       walletKind === "unisat" && !bitcoin.isUniSatAvailable()

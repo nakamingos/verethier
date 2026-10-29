@@ -194,6 +194,11 @@ export class MemberComponent {
     try {
       await this.session.load();
       if (this.user) await this.refresh();
+      if (this.data?.capabilities?.solana && new URL(window.location.href).searchParams.get('wallet') === 'phantom') {
+        this.walletKind = 'solana';
+        this.tab = 'wallets';
+        this.addOpen = true;
+      }
     } catch (error) {
       this.fail(error);
     } finally {

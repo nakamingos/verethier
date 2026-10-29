@@ -95,6 +95,8 @@ export class VerifyComponent {
         this.setState({ walletTypes: context.walletTypes });
         if (context.walletTypes.includes('bitcoin') && new URL(window.location.href).searchParams.get('wallet') === 'unisat') {
           this.setWalletType('bitcoin', 'unisat');
+        } else if (context.walletTypes.includes('solana') && new URL(window.location.href).searchParams.get('wallet') === 'phantom') {
+          this.setWalletType('solana');
         } else this.setWalletType(context.walletTypes[0]);
         return resolvedData as DecodedData;
       }))),

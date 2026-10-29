@@ -105,7 +105,6 @@
           </div>
           @if (state.walletType === 'solana') {
             <p>Connect Phantom on Solana mainnet.</p>
-            <button type="button" (click)="solanaWalletSvc.openPhantomMobile()" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting">Open Phantom</button>
           }
           @if (state.walletType === "bitcoin") {
             <div
@@ -176,16 +175,21 @@
                 <span class="button-label"
                   ><span aria-hidden="true">Connecting...</span
                   ><span aria-hidden="true">Connected</span
-                  ><span aria-hidden="true">Connect</span
+                  ><span aria-hidden="true">{{ state.walletType === 'solana' ? 'Connect Phantom' : 'Connect' }}</span
                   ><span>{{
                     state.walletConnecting
                       ? "Connecting..."
                       : state.walletConnected
                         ? "Connected"
-                        : "Connect"
+                        : state.walletType === 'solana' ? 'Connect Phantom' : 'Connect'
                   }}</span></span
                 >
               </button>
+              @if (state.walletType === 'solana' && !state.walletConnected && solanaWalletSvc.canOpenPhantomMobile()) {
+                <button type="button" (click)="solanaWalletSvc.openPhantomMobile()" [disabled]="state.walletConnecting">
+                  Open in Phantom app
+                </button>
+              }
             }
           </div>
         </div>
