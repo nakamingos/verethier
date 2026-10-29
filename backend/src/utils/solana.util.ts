@@ -2,7 +2,7 @@ import { createPublicKey, verify, createHash } from "crypto";
 import { ed25519 } from "@noble/curves/ed25519";
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-export const SOLANA_MAINNET = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+export const SOLANA_MAINNET = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 export const SPL_TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 export const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 

@@ -51,3 +51,7 @@ The browser smoke signs the built verification UI with a synthetic Phantom walle
 - [ ] Enable only the accepted capabilities after the separate release decision.
 
 Technical references: [Solana messages](https://solana.com/docs/frontend/messages-and-auth), [token account reads](https://solana.com/docs/rpc/http/gettokenaccountsbyowner), [Token-2022 extensions](https://solana.com/docs/tokens/extensions), [DAS owner inventory](https://www.helius.dev/docs/api-reference/das/getassetsbyowner), [Core account layout](https://github.com/metaplex-foundation/mpl-core/blob/main/clients/rust/src/generated/accounts/base_asset_v1.rs), and [Token Metadata layout](https://github.com/metaplex-foundation/mpl-token-metadata/blob/main/programs/token-metadata/program/src/state/metadata.rs).
+
+## Alchemy readiness check (October 29, 2026)
+
+Read-only checks against the configured Alchemy mainnet endpoint confirmed cluster identity and finalized slot access. The check uncovered and corrected an incomplete mainnet genesis hash in the application. Both `getAssetsByOwner` and `getAssetsByOwner_v2` returned HTTP 503 / JSON-RPC code -32001, including with a documented public example wallet. NFT inventory compatibility remains unconfirmed; this response alone does not establish whether the cause is temporary provider availability or account configuration. Production migration and enablement were not performed.

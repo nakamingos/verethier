@@ -1,5 +1,6 @@
 import { generateKeyPairSync, sign } from "crypto";
 import {
+  SOLANA_MAINNET,
   normalizeSolanaAddress,
   solanaMessage,
   solanaPublicKey,
@@ -27,6 +28,9 @@ function encode(bytes: Buffer) {
   return value;
 }
 describe("Solana proof boundary", () => {
+  it("uses the complete mainnet genesis hash", () => {
+    expect(SOLANA_MAINNET).toBe("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d");
+  });
   const keys = generateKeyPairSync("ed25519");
   const raw = keys.publicKey
     .export({ format: "der", type: "spki" })
