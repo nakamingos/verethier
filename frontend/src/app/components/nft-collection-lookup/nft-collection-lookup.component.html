@@ -1,0 +1,138 @@
+@if (applied) {
+  <div class="lookup-applied">
+    <p role="status">
+      {{ result!.name }} · {{ applied }} Review the fields below.
+    </p>
+    <button type="button" (click)="applied = ''" [disabled]="disabled">
+      Change lookup
+    </button>
+  </div>
+} @else {
+  <div class="lookup-heading">
+    <label
+      >OpenSea collection (optional):
+      <input
+        name="openSeaCollection"
+        [(ngModel)]="input"
+        [ngModelOptions]="{ standalone: true }"
+        (ngModelChange)="invalidate()"
+        [disabled]="disabled"
+        maxlength="512"
+        spellcheck="false"
+        placeholder="Collection URL or slug"
+      />
+    </label>
+    <button
+      type="button"
+      (click)="lookup()"
+      [disabled]="disabled || loading || !input.trim()"
+    >
+      {{ loading ? "Looking up…" : "Find collection" }}
+    </button>
+  </div>
+  @if (error) {
+    <p class="lookup-error" role="alert">{{ error }}</p>
+  }
+  @if (result) {
+    <div class="lookup-preview" aria-label="OpenSea collection preview">
+      <p>
+        <strong>{{ result.name }}</strong> ·
+        <a [href]="result.url" target="_blank" rel="noopener noreferrer"
+          >View on OpenSea</a
+        >
+      </p>
+      <p class="muted">
+        Choose one contract for this rule. To combine contracts, add a rule for
+        each using the same role, channel and minimum.
+      </p>
+      <div class="form-grid">
+        <label
+          >Collection contract:
+          <span class="select-control"
+            ><app-pixel-select
+              name="collectionContract"
+              [(ngModel)]="selected"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="choiceChanged()"
+              [options]="contractChoices"
+              label="Collection contract"
+              [disabled]="disabled || loading"
+          /></span>
+        </label>
+        @if (candidate?.supported) {
+          <label
+            >Rule scope:
+            <span class="select-control"
+              ><app-pixel-select
+                name="collectionScope"
+                [(ngModel)]="scope"
+                [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="choiceChanged()"
+                [options]="scopeChoices"
+                label="Collection rule scope"
+                [disabled]="disabled || loading"
+            /></span>
+          </label>
+        }
+      </div>
+      @if (candidate?.supported) {
+        <p class="lookup-address">
+          {{ candidate!.network_name }} · {{ candidate!.contract_address }} ·
+          {{ candidate!.token_standard === "erc1155" ? "ERC-1155" : "ERC-721" }}
+        </p>
+        @if (scope === "contract") {
+          <p>
+            This accepts every NFT from this contract, including future mints
+            and any other collections sharing it.
+          </p>
+          <button
+            type="button"
+            (click)="useSelection()"
+            [disabled]="disabled || loading"
+          >
+            Use entire contract
+          </button>
+        } @else {
+          <p class="muted">
+            Load the collection’s listed token IDs, up to 1,000 IDs per rule.
+            This fixed list will not automatically include new mints or later
+            marketplace changes.
+          </p>
+          @if (tokens) {
+            <p>
+              {{ tokens.token_ids.length }} token IDs found for this contract.
+            </p>
+            <pre class="lookup-ids" aria-label="Collection token IDs">{{
+              tokens.token_ids_input
+            }}</pre>
+            <button
+              type="button"
+              (click)="useSelection()"
+              [disabled]="disabled || loading"
+            >
+              Use these token IDs
+            </button>
+          } @else {
+            <button
+              type="button"
+              (click)="loadTokens()"
+              [disabled]="disabled || loading"
+            >
+              {{ loading ? "Loading token IDs…" : "Load token IDs" }}
+            </button>
+          }
+        }
+      } @else {
+        <p class="muted">
+          Select a supported contract to continue. Unsupported networks and
+          token standards require their own integration.
+        </p>
+      }
+      @if (applied) {
+        <p role="status">
+          {{ applied }} Review the contract and token IDs before saving.
+        </p>
+      }
+    </div>
+  }
+}

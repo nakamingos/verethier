@@ -97,6 +97,10 @@ Trait values may be strings, numbers, booleans or lists of those values. AND con
 
 Each Discord role is assigned and tracked once per verification, with all matching rules retained in its history and success-message details. Roles the member already holds still have their tracking refreshed. Backend logs report timings for wallet verification, rule loading, each asset type's rule checks, eligibility, role updates, and completion/recommendations. No database migration is required.
 
+## NFT collection lookup
+
+The Control Room can resolve OpenSea collection URLs/slugs into reviewed contract and token-ID fields for new NFT rules. Set the optional backend-only `OPENSEA_API_KEY` to enable lookup. Fixed collection IDs are the default; whole-contract ERC-721 scope requires an explicit selection, and ERC-1155 lookup never falls back to IDs 0–99. Saved rules keep their existing on-chain scope without a runtime OpenSea dependency. No database migration is required. See [scope limits, configuration and pending live checks](../docs/nft-collection-lookup.md).
+
 ## NFT Trait Rules
 
 Use `/setup add-nft-rule` with the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.

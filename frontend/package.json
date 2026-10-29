@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:wallet-smoke": "node test/wallet-connection.smoke.cjs",
+    "test:nft-collection-smoke": "node test/nft-collection.smoke.cjs",
     "test:portal-smoke": "node test/portal.smoke.cjs",
     "test:setup-smoke": "node test/setup.smoke.cjs",
     "test:member-smoke": "node test/member.smoke.cjs",

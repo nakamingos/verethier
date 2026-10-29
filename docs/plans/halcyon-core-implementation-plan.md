@@ -27,7 +27,7 @@ Checkpoint: October 18, 2026, through multi-trait rules and ERC-721 ID selection
 | 3. Rule editor and role changes | Validated editor, change reviews, combined groups, Undo/Redo, multi-trait AND/OR conditions, bounded ERC-721 ID lists/ranges with quantity thresholds and reconciliation for rule changes and signed verification. | No unfinished core milestone; legacy trait columns have been retired. |
 | 4. Settings and member troubleshooting | Background-check toggle, member lookup, fresh Check Roles and earned-role repairs. | No separate unfinished milestone identified. |
 | 5. Member portal | Wallet management, fresh proofs/transfers, removal reconciliation, joined-community verification and resumable flows. | Public discovery and signature-free rechecks remain optional. |
-| 6–7. Additional integrations | Base is supported; deployed ERC-1271, undeployed ERC-6492 and Base Account are implemented. Smart-wallet DB migration applied October 28, 2026. | Deferred real-wallet acceptance and production RPC capability checks below; other integrations remain deferred until selected. |
+| 6–7. Additional integrations | Base is supported; deployed ERC-1271, undeployed ERC-6492 and Base Account are implemented. Smart-wallet DB migration applied October 28, 2026. | Deferred real-wallet acceptance and production RPC checks below; OpenSea lookup implemented locally with API-key/live-provider acceptance pending; other integrations remain deferred until selected. |
 | 8. Documentation and release | Documentation, migration rehearsals and regression checks accompany delivered milestones. | Continue with each remaining milestone. |
 
 Portal follow-ups have also shipped: unified wallet activity, Earned/Available community role views, removed-wallet history with last-proof dates and explorer links, server wallet blocks, role-removal actions, shared-wallet-history audits and wallet-address lookup. See [portal behavior and operational notes](../portals.md).
@@ -136,13 +136,17 @@ Base now has ERC-20, ERC-721/1155, metadata, rule/editor and export coverage. Pr
 - Replace the two-network hardcoding with a registry containing chain identity, supported asset capabilities, backend RPC/metadata configuration and enabled/paused status.
 - Retain Ethereum and Robinhood, then validate the guide's named additions: Base, Arbitrum, Optimism, Polygon and Avalanche. Additional networks require an explicit list and working provider coverage; the guide's invented “about 30” is not an acceptance count.
 - Each network must pass wrong-chain RPC rejection, ERC-20 exact-unit balances, ERC-721/1155 ownership, metadata/trait availability, failure preservation and combined-count tests before appearing as supported.
-- Add Ethereum marketplace-slug entry as a resolver into canonical contract rules. Confirm a real marketplace API and access before implementing it. If a collection spans several contracts, show the resolved scope and use separate contributing rules under Bouncer's existing count model. Keep display names separate from collection identity.
-- A marketplace ERC-1155 collection also needs complete token-ID discovery from that provider, or an explicitly bounded custom ID scope. A marketplace slug must not silently turn the existing 0–99 scan into a claim of exhaustive collection coverage.
+- Implemented locally: OpenSea collection URL/slug lookup resolves into canonical contract rules with an explicit contract/scope preview. Fixed token-ID snapshots are the default; entire-contract ERC-721 scope is a separate explicit choice. Multiple contracts use separate contributing rules. No slug is stored as an eligibility requirement. The user will supply the backend API key later; [live provider acceptance remains open](../nft-collection-lookup.md#validation-and-remaining-live-checks).
+- Implemented locally: paginated ERC-1155 collection token discovery, bounded to the existing 1,000-ID/6,000-character rule limits. Incomplete, ambiguous or oversized discovery fails without a partial scope or a fallback to IDs 0–99. Real ERC-1155/provider acceptance remains pending with the API key.
 - Implemented: EVM contract-wallet proof verification using [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) and [ERC-6492](https://eips.ethereum.org/EIPS/eip-6492), including read-only deployment/preparation simulation and Base Account connection. The migration is applied; finish the deferred owner-assisted acceptance and production RPC checks. Contract proofs are chain-scoped; control of an address on one chain does not establish control of a contract at that address on another chain.
 - Deferred by agreement October 28, 2026: broader Bitcoin payment-address support. Retain the current mainnet Taproot Ordinals flow. The immediate compatibility benefit does not justify prioritizing a flow that could encourage holding inscriptions in ordinary payment wallets. Revisit only for a concrete need, with appropriate proof validation and wallet tests; address-format acceptance alone is insufficient.
 - Publish a tested browser/mobile/hardware/QR compatibility matrix. Test back-to-back connections and signatures using actual supported wallet apps.
 
 Done when each newly advertised network and wallet type passes live proof, ownership, transfer, failure and repeat-verification tests. Paused networks return unavailable and retain earned roles.
+
+#### Deferred marketplace acceptance
+
+- [ ] **OpenSea API key and live acceptance.** The user will obtain a key later. Complete the [collection-lookup live checklist](../nft-collection-lookup.md#validation-and-remaining-live-checks) before claiming real marketplace coverage; fixture tests do not establish API access or index completeness.
 
 #### Deferred smart-wallet release tests
 

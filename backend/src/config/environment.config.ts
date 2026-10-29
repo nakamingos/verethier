@@ -22,6 +22,7 @@ export class EnvironmentConfig {
   public static readonly RPC_URL = process.env.RPC_URL;
   public static readonly BASE_RPC_URL = process.env.BASE_RPC_URL;
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
+  public static readonly OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;
   public static readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
   public static readonly XVERSE_API_KEY = process.env.XVERSE_API_KEY;
   public static readonly ORDISCAN_API_KEY = process.env.ORDISCAN_API_KEY;

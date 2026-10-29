@@ -122,6 +122,8 @@ For specific **Ordinals or Ethscriptions**, use `/setup add-ordinals-rule` or `/
 
 Ordinals IDs have the `transactionhashi0` format; Ethscription IDs are `0x` transaction hashes. `min_items:1` accepts any selected asset; three selected IDs with `min_items:3` require all three across linked wallets. These checks also support assets outside collections. Ordinals selections use fresh wallet inventories through the ownership fallback chain; number/range rules skip ID-only providers and use Xverse when necessary. Specific Ethscriptions use the public Ethscriptions API, with marketplace escrow handling. Apply `20261011020000_add_inscription_selection_rules.sql` before deployment. See [selection limits and storage](backend/README.md#specific-inscription-rules).
 
+NFT collection setup in the Control Room also supports OpenSea collection URLs/slugs when the backend has `OPENSEA_API_KEY`. The key is never needed on the frontend. See [collection lookup and scope selection](docs/nft-collection-lookup.md); direct contract entry remains available without this optional key.
+
 ## Testing
 
 ```bash

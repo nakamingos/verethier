@@ -24,6 +24,7 @@ export interface RuleCreateInput {
   min_items?: number;
   contract_address?: string;
   token_ids?: string;
+  expected_token_standard?: 'erc721' | 'erc1155';
   collection_name?: string;
   network?: string;
   inscription_ids?: string;
@@ -82,6 +83,7 @@ export async function prepareRuleCriteria(
       input.collection_name != null ||
       selected ||
       input.min_items != null
+      || input.expected_token_standard !== undefined
       || !!filter
     ) {
       throw new Error(
@@ -105,6 +107,8 @@ export async function prepareRuleCriteria(
       assetFields,
     };
   }
+  if (input.expected_token_standard !== undefined && input.asset_type !== 'nft')
+    throw new Error('Only NFT rules use an expected token standard.');
   if (input.min_balance != null)
     throw new Error('Only token rules use min_balance.');
   if (selected) {
@@ -187,6 +191,8 @@ export async function prepareRuleCriteria(
       input.collection_name ?? null,
       getNftNetworkId(input.network || 'ethereum'),
     );
+    if (input.expected_token_standard !== undefined && assetFields.token_standard !== input.expected_token_standard)
+      throw new Error('The NFT contract standard differs from the collection lookup. Find the collection again or use explicit contract entry.');
     Object.assign(assetFields, traits());
     await services.nfts.validateTraits({
       ...assetFields,

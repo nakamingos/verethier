@@ -44,6 +44,7 @@ import { DbService } from '@/services/db.service';
 import { DataService } from './services/data.service';
 import { AssetOwnershipService } from './services/asset-ownership.service';
 import { NftOwnershipService } from './services/nft-ownership.service';
+import { NftCollectionService } from './services/nft-collection.service';
 import { NftMetadataService } from './services/nft-metadata.service';
 import { OrdinalsOwnershipService } from './services/ordinals-ownership.service';
 import { EthscriptionsOwnershipService } from './services/ethscriptions-ownership.service';
@@ -186,6 +187,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     AssetOwnershipService,
     NftOwnershipService,
     NftMetadataService,
+    NftCollectionService,
     OrdinalsOwnershipService,
     OrdinalCollectionCacheService,
     OrdinalWalletInventoryService,

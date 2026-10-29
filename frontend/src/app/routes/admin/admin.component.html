@@ -580,6 +580,10 @@
                             /></label>
                           }
                         }
+                        @if (draft.asset_type === "nft") {
+                          <app-nft-collection-lookup [server]="selected" [request]="nftCollectionRequest"
+                            [disabled]="busy" (selection)="useNftCollection($event)" />
+                        }
                         @if (
                           draft.asset_type === "nft" ||
                           draft.asset_type === "erc20"
@@ -589,6 +593,7 @@
                               ><app-pixel-select
                                 name="network"
                                 [(ngModel)]="draft.network"
+                                (ngModelChange)="clearNftLookupExpectation()"
                                 [options]="networkChoices"
                                 label="Network" /></span
                           ></label>
@@ -596,6 +601,7 @@
                             >Contract address:<input
                               name="contract"
                               [(ngModel)]="draft.contract_address"
+                              (ngModelChange)="clearNftLookupExpectation()"
                               required
                               maxlength="42"
                               placeholder="0x…"
@@ -605,6 +611,7 @@
                               >Token IDs (optional):<input
                                 name="tokenIds"
                                 [(ngModel)]="draft.token_ids"
+                                maxlength="6000"
                                 placeholder="1,2,10-20" /></label
                             ><label
                               >Collection name (optional):<input

@@ -21,6 +21,7 @@ import { DataService } from '@/services/data.service';
 import { NftOwnershipService } from '@/services/nft-ownership.service';
 import { OrdinalsOwnershipService } from '@/services/ordinals-ownership.service';
 import { EthscriptionsOwnershipService } from '@/services/ethscriptions-ownership.service';
+import { NftCollectionService } from '@/services/nft-collection.service';
 import { NftMetadataService } from '@/services/nft-metadata.service';
 import { getNftNetworkId } from '@/utils/nft-network.util';
 import { normalizeCollectionSlug } from '@/utils/collection-input.util';
@@ -78,6 +79,7 @@ export class PortalService {
     private readonly metadata: NftMetadataService,
     @Optional() private readonly setup?: ServerSetupService,
     @Optional() private readonly privacy?: PrivacyService,
+    @Optional() private readonly nftCollections?: NftCollectionService,
   ) {}
 
   client() {
@@ -285,6 +287,15 @@ export class PortalService {
         field === 'attribute_value' ? key : undefined,
       );
     return { values: values.slice(0, 2000) };
+  }
+  async nftCollection(session: PortalSession, server: string, collection: string, network?: string, contract?: string) {
+    await this.readAccess(session, server, 'nft_collection_lookup');
+    if (!this.nftCollections) throw new ServiceUnavailableException('Collection lookup is unavailable.');
+    const result = network !== undefined || contract !== undefined
+      ? await this.nftCollections.collectionTokens(collection, network, contract)
+      : await this.nftCollections.lookup(collection);
+    await this.readAccess(session, server, 'nft_collection_lookup');
+    return result;
   }
   async settings(server: string) {
     const { data, error } = await this.db

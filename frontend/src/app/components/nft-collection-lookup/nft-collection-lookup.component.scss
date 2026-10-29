@@ -1,0 +1,53 @@
+:host {
+  display: block;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.lookup-heading {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.lookup-heading label {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.lookup-heading button {
+  flex: 0 0 auto;
+}
+.lookup-preview {
+  margin-top: 0.5rem;
+}
+.lookup-preview p {
+  margin: 0.5rem 0;
+}
+.lookup-preview .form-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.lookup-address,
+.lookup-ids,
+.lookup-error {
+  overflow-wrap: anywhere;
+}
+.lookup-ids {
+  font: inherit;
+  white-space: pre-wrap;
+  max-height: 7rem;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+}
+.lookup-error {
+  color: var(--ase-danger);
+}
+
+.lookup-applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.lookup-applied p {
+  flex: 1 1 16rem;
+  margin: 0;
+}

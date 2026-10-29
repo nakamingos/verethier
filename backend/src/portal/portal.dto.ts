@@ -34,6 +34,7 @@ export class PortalRuleDto {
   @IsOptional() @IsString() @MaxLength(42) contract_address?: string;
   @IsOptional() @IsIn(['ethereum', 'base', 'robinhood']) network?: string;
   @IsOptional() @IsString() @MaxLength(6000) token_ids?: string;
+  @IsOptional() @IsIn(['erc721', 'erc1155']) expected_token_standard?: 'erc721' | 'erc1155';
   @IsOptional() @IsString() @MaxLength(100) collection_name?: string;
   @IsOptional() @IsString() @MaxLength(6000) inscription_ids?: string;
   @IsOptional() @IsString() @MaxLength(6000) inscription_numbers?: string;

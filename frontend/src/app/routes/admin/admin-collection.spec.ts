@@ -1,0 +1,81 @@
+import { TestBed } from '@angular/core/testing';
+import { AdminComponent } from './admin.component';
+import { PortalSessionService } from '../../services/portal-session.service';
+
+describe('Canonical NFT rules from a collection lookup', () => {
+  let component: AdminComponent;
+  const selection = {
+    contract_address: '0x' + 'ab'.repeat(20),
+    network: 'base',
+    collection_name: 'Test Art',
+    token_ids: '100-105',
+    expected_token_standard: 'erc1155' as const,
+  };
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [PortalSessionService] });
+    component = TestBed.runInInjectionContext(() => new AdminComponent());
+    component.selected = '111111111111111111';
+    component.editor = { new: true };
+    component.data = { capabilities: { multi_trait: true } };
+    component.draft = {
+      asset_type: 'nft',
+      channel_id: '222222222222222222',
+      role_id: '333333333333333333',
+      min_items: 2,
+      trait_filter: { operator: 'AND', conditions: [] },
+    };
+  });
+  it('saves concrete contract and token fields without a marketplace URL or dynamic slug', () => {
+    component.review = true;
+    component.useNftCollection(selection);
+    expect(component.payload()).toEqual(
+      jasmine.objectContaining({
+        asset_type: 'nft',
+        contract_address: selection.contract_address,
+        network: 'base',
+        token_ids: '100-105',
+        collection_name: 'Test Art',
+        min_items: 2,
+        expected_token_standard: 'erc1155',
+      }),
+    );
+    expect(component.payload().slug).toBeUndefined();
+    expect(component.review).toBeFalse();
+    expect(component.draft.role_id).toBe('333333333333333333');
+  });
+  it('removes a previous fixed list when the admin explicitly chooses an entire ERC-721 contract', () => {
+    component.draft.token_ids = '1-5';
+    component.useNftCollection({
+      ...selection,
+      token_ids: '',
+      expected_token_standard: 'erc721',
+    });
+    expect(component.payload().token_ids).toBeUndefined();
+    expect(component.payload().expected_token_standard).toBe('erc721');
+  });
+  it('preserves a chosen lookup through add-rule collapse and restore', () => {
+    component.useNftCollection(selection);
+    component.create();
+    expect(component.editor).toBeNull();
+    component.create();
+    expect(component.payload().token_ids).toBe('100-105');
+    expect(component.payload().expected_token_standard).toBe('erc1155');
+  });
+  it('does not apply a late result after the editor closes or changes asset type', () => {
+    component.editor = null;
+    component.useNftCollection(selection);
+    expect(component.draft.contract_address).toBeUndefined();
+    component.editor = { new: true };
+    component.draft.asset_type = 'ordinal';
+    component.useNftCollection(selection);
+    expect(component.draft.contract_address).toBeUndefined();
+  });
+  it('allows deliberate manual contract entry to replace the lookup’s standard expectation', () => {
+    component.useNftCollection(selection);
+    component.clearNftLookupExpectation();
+    expect(component.payload().expected_token_standard).toBeUndefined();
+    expect(component.payload().contract_address).toBe(
+      selection.contract_address,
+    );
+  });
+});

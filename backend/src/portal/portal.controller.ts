@@ -146,6 +146,12 @@ export class PortalController {
       network,
     );
   }
+  @Get('servers/:server/nft-collection')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 6, ttl: 10000 }, long: { limit: 20, ttl: 60000 } })
+  async nftCollection(@Req() req: Request, @Param('server') server: string,
+    @Query('collection') collection: string, @Query('network') network?: string, @Query('contract') contract?: string) {
+    return this.portal.nftCollection(await this.auth.session(req), server, collection, network, contract);
+  }
   @Post('servers/:server/rules') async create(
     @Req() req: Request,
     @Param('server') server: string,

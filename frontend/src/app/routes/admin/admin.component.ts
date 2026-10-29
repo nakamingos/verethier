@@ -1,3 +1,4 @@
+import { NftCollectionLookupComponent, NftCollectionSelection } from '@/components/nft-collection-lookup/nft-collection-lookup.component';
 import { WalletExportsComponent } from '@/components/wallet-exports/wallet-exports.component';
 import { EVM_NETWORKS, evmNetworkValue } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
@@ -16,6 +17,7 @@ import {
     CommonModule,
     FormsModule,
     PixelSelectComponent,
+    NftCollectionLookupComponent,
     WalletExportsComponent,
     DeletionRequestsComponent,
   ],
@@ -980,6 +982,17 @@ export class AdminComponent implements OnInit, OnDestroy {
       if (epoch === this.suggestionEpoch) this.suggestions[field] = [];
     }
   }
+  clearNftLookupExpectation() {
+    delete this.draft.expected_token_standard;
+    this.review = false;
+  }
+  readonly nftCollectionRequest = (path: string) => this.api(path);
+  useNftCollection(selection: NftCollectionSelection) {
+    if (this.busy || !this.editor?.new || this.draft.asset_type !== 'nft') return;
+    Object.assign(this.draft, selection);
+    this.review = false;
+    this.suggestions = {};
+  }
   payload() {
     const d = this.draft;
     const result: any = {
@@ -997,6 +1010,7 @@ export class AdminComponent implements OnInit, OnDestroy {
               'contract_address',
               'network',
               'token_ids',
+              'expected_token_standard',
               'collection_name',
               'attribute_key',
               'attribute_value',
