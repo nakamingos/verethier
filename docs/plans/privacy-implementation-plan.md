@@ -8,6 +8,8 @@ Bouncer is operated by Snepsid (alias), an individual in Michigan, USA. Privacy 
 
 All existing and future communities start private. There is no grandfathered server exception. Community sharing starts disabled. An admin can enable sharing; each member separately chooses whether to share wallet/Discord associations and whether to participate in community exports. Verification and previously-earned-role reconciliation continue using private wallets.
 
+October 28 UI preference: for members without a saved choice, available sharing/export checkboxes start checked on both verification and member-portal forms. Saved opt-outs stay off, and server-disabled sharing cannot be selected. These are draft form defaults; only saving or a fresh signed verification records permissions. No existing database preferences are changed.
+
 Changing a server's sharing state creates a new permission epoch. Existing choices do not cross epochs. Withdrawing permission immediately removes ordinary admin access and prevents subsequent downloads; files already downloaded cannot be recalled. A new grant does not reveal prior private history. A wallet needs a successful proof at or after the grant to appear in the ordinary shared current-wallet view/export; the member UI explains re-verification. Removed events and their proof dates are filtered separately.
 
 Notices explain optional server-provided access/rewards, address-only inference risks, downloaded copies and operator authority. EVM typed signatures and Bitcoin challenges bind verification-page choices to the actual signed proof. OAuth member-portal changes use live membership and same-origin CSRF checks.

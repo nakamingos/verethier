@@ -157,6 +157,21 @@ describe("Fresh wallet exports", () => {
     expect(await context.userAddresses.get(user)).toEqual([address, other]);
     expect(t.ownership.count).toHaveBeenCalledWith(t.rule, [address], context);
   });
+  it('keeps Base-only contract wallets out of Ethereum exports and their holdings checks',async()=>{
+    const t=setup({network:'ethereum'});(t.walletRows[0] as any).evm_chain_ids=[8453];
+    const result=await t.service.build(t.job);
+    expect(result.rows.map(r=>r.address)).toEqual([other]);
+    expect(t.ownership.count.mock.calls.some(([,wallets])=>wallets.includes(address))).toBe(false);
+    const context=t.engine.verifyUserBulk.mock.calls[0][4];
+    expect(await context.userAddresses.get(`${user}:1`)).toEqual([other]);
+    expect(await context.userAddresses.get(`${user}:8453`)).toEqual([address,other]);
+  });
+  it('does not count a contract wallet on unproven chains even with the all-networks filter',async()=>{
+    const t=setup();(t.walletRows[0] as any).evm_chain_ids=[8453];
+    const result=await t.service.build(t.job);
+    expect(result.rows.map(r=>r.address)).toEqual([other]);
+    expect(t.ownership.count.mock.calls.some(([,wallets])=>wallets.includes(address))).toBe(false);
+  });
   it("fails the entire snapshot when a required provider is unavailable", async () => {
     const t = setup();
     t.engine.verifyUserBulk.mockResolvedValue({

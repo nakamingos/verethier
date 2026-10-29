@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { createConfig, getAccount, http } from '@wagmi/core';
-import { mainnet } from 'viem/chains';
+import { base, mainnet } from 'viem/chains';
 import { EVM_WALLET_CONNECTION, EvmWalletConnection, WalletService } from './wallet.service';
 
 describe('EVM wallet connection', () => {
@@ -16,7 +16,7 @@ describe('EVM wallet connection', () => {
   const activeAddress = '0x2222222222222222222222222222222222222222';
 
   beforeEach(() => {
-    config = createConfig({ chains: [mainnet], transports: { [1]: http() }, storage: null });
+    config = createConfig({ chains: [mainnet, base], transports: { [1]: http(), [8453]: http() }, storage: null });
     open = false;
     stopEvents = jasmine.createSpy('stopEvents');
     stopState = jasmine.createSpy('stopState');
@@ -139,6 +139,43 @@ describe('EVM wallet connection', () => {
     expect(JSON.parse(signingRequest.params[1])).toEqual(jasmine.objectContaining({
       domain: jasmine.objectContaining({ name: 'Bouncer', version: '1' }), message: { Nonce: 'test-nonce' },
     }));
+  });
+
+  it('signs Base proofs on the connected network and keeps the chain fixed', async () => {
+    const signature = `0x${'11'.repeat(65)}` as const;
+    const request = jasmine.createSpy().and.callFake(async ({ method }: { method: string }) => {
+      if (method === 'eth_accounts') return [firstAddress];
+      if (method === 'eth_chainId') return '0x2105';
+      if (method === 'eth_signTypedData_v4') return signature;
+      throw new Error(method);
+    });
+    connectedWallet(request);
+    spyOn(getAccount(config).connector!, 'getChainId').and.resolveTo(8453);
+    expect(await service.getSigningChainId()).toBe(8453);
+    const typed = {domain:{name:'Bouncer',version:'1',chainId:8453},types:{Verification:[{name:'Nonce',type:'string'}]},primaryType:'Verification',message:{Nonce:'base-proof'}};
+    expect(await service.signTypedMessage(typed)).toEqual({address:firstAddress,signature});
+    const signing = request.calls.allArgs().map(args => args[0]).find(args => args.method === 'eth_signTypedData_v4');
+    expect(Number(JSON.parse(signing.params[1]).domain.chainId)).toBe(8453);
+  });
+
+  it('rejects an account or network change before requesting a signature', async () => {
+    const request = jasmine.createSpy().and.resolveTo([firstAddress]); connectedWallet(request);
+    await expectAsync(service.signTypedMessage({domain:{chainId:8453}})).toBeRejectedWithError(/network changed/);
+    await expectAsync(service.signTypedMessage({domain:{chainId:1},message:{WalletAddress:activeAddress}})).toBeRejectedWithError(/account changed/);
+    expect(request.calls.allArgs().some(args => args[0].method === 'eth_signTypedData_v4')).toBeFalse();
+  });
+
+  it('rejects a network change during signing and unsupported networks', async () => {
+    let chain = 1;
+    const request = jasmine.createSpy().and.callFake(async ({method}: {method:string}) => {
+      if (method === 'eth_accounts') return [firstAddress];
+      if (method === 'eth_chainId') return '0x1';
+      if (method === 'eth_signTypedData_v4') { chain = 8453; return `0x${'11'.repeat(65)}`; }
+      throw new Error(method);
+    });
+    connectedWallet(request); spyOn(getAccount(config).connector!, 'getChainId').and.callFake(async()=>chain);
+    await expectAsync(service.signTypedMessage({domain:{name:'Bouncer',version:'1',chainId:1},types:{Proof:[{name:'Nonce',type:'string'}]},primaryType:'Proof',message:{Nonce:'proof'}})).toBeRejectedWithError(/network changed while signing/);
+    chain = 137; await expectAsync(service.getSigningChainId()).toBeRejectedWithError(/Switch your wallet/);
   });
 
   it('releases its AppKit event subscription on application teardown', () => {

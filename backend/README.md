@@ -117,7 +117,7 @@ Set `BASE_RPC_URL` to a production Base mainnet RPC endpoint, for example `https
 
 Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production.
 
-Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. The current purpose-bound EVM proof flow remains unchanged. Base smart-account/contract-wallet proofs, native ETH balance rules and non-EVM wallet families are separate capabilities. Existing wallet signatures do not establish control of a contract account on another chain.
+Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. Purpose-bound EVM proofs also support deployed ERC-1271 and undeployed ERC-6492 smart accounts, with proof scope limited to their verified networks; see [smart-wallet verification](../docs/smart-wallet-verification.md). Native ETH balance rules and non-EVM wallet families remain separate capabilities. A contract proof on one chain does not establish control of that address on another chain.
 
 ## Specific Inscription Rules
 
@@ -255,3 +255,7 @@ Collection slug input is trimmed, lowercased, and consecutive whitespace becomes
 `/setup add-ordinals-rule` and `/setup add-ethscription-rule` accept an optional `label` after `inscription_ids` / `inscription_numbers`. For example, `inscription_numbers:123,456 label:Pizza Comrades — Gold Crowns`. Labels identify the selection in confirmations, rule lists, removal/restoration, and the editor; they never filter holdings or assert collection membership. Slug and trait criteria remain unavailable on specific selections.
 
 Labels keep capitalization and internal spaces, are trimmed, and support up to 100 characters on one line. `/setup edit-rule` can add, rename, or clear a label with Undo/Redo. Label-only edits perform no ownership lookups or member role checks, and a different label does not permit duplicate eligibility rules. Apply `20261016020000_add_inscription_rule_labels.sql` before deploying this backend; it adds the nullable `verifier_rules.rule_label` column and a selection-only label constraint without changing existing rules or assignments. Restart registers the new slash-command option; reload Discord if it is missing.
+
+## Smart-wallet verification
+
+Deployed ERC-1271 and undeployed ERC-6492 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Wrapped proofs simulate account deployment/preparation in a read-only `eth_call`; no transaction is submitted. The frontend enables Base Account and requests Base first for that connector. The production migration `20261028010000_smart_wallet_proofs.sql` was applied October 28, 2026; apply it before deploying to other environments. This stage needs no additional migration or environment variables. Real-wallet acceptance remains on the [deferred test checklist](../docs/smart-wallet-verification.md#deferred-live-acceptance). See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md).

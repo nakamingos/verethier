@@ -24,7 +24,7 @@ const ABI = parseAbi([
 export interface NftCheckContext {
   /** Export jobs require fresh collection metadata as well as live owners. */
   freshExport?: boolean;
-  /** Addresses proven by a fresh signature in this run, including a link whose DB write is retrying. */
+  /** Freshly proven display address. Eligibility still requires persisted network-scoped links. */
   provenAddresses?: Map<string, string>;
   userAddresses?: Map<string, Promise<string[]>>;
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;

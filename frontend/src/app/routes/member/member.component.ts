@@ -1,4 +1,5 @@
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
+import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
@@ -58,6 +59,7 @@ interface Account {
     address: string;
     wallet_type: 'evm' | 'bitcoin';
     last_verified_at: string;
+    evm_chain_ids?: number[] | null;
   }>;
   communities: Community[];
   counts: { wallets: number; communities: number; roles: number };
@@ -198,12 +200,7 @@ export class MemberComponent {
     this.data = data;
     for (const c of data.communities) {
       if (c.privacy)
-        c.privacy_choice = {
-          epoch: c.privacy.epoch,
-          share: !!c.privacy.share_since,
-          exports: !!c.privacy.export_since,
-          notice: c.privacy.notice,
-        };
+        c.privacy_choice = privacyChoiceDraft(c.privacy);
       this.roleViews[c.id] ||= 'available';
       if (!c.channels.some((ch) => ch.id === this.channels[c.id]))
         this.channels[c.id] = c.defaultChannel;
@@ -311,15 +308,18 @@ export class MemberComponent {
       const address =
         walletType === 'bitcoin'
           ? await this.bitcoin.syncConnectedAccount()
-          : this.address;
+          : await this.evmWallet().syncConnectedAccount();
+      const chainId = walletType === 'evm' ? await this.evmWallet().getSigningChainId() : undefined;
       if (
         !this.linkFlow ||
+        (walletType === 'evm' && this.linkFlow.challenge.domain.chainId !== chainId) ||
         this.linkFlow.address.toLowerCase() !== address.toLowerCase() ||
         new Date(this.linkFlow.expiresAt).getTime() <= Date.now()
       )
         this.linkFlow = await this.api<LinkFlow>('/wallet-challenge', {
           address,
           walletType,
+          ...(chainId ? { chainId } : {}),
         });
       const flow = this.linkFlow!;
       const proof =
@@ -436,7 +436,15 @@ export class MemberComponent {
   short(address: string) {
     return address.slice(0, 6) + '…' + address.slice(-4);
   }
-  explorer(address: string) {
+  walletScope(wallet: Account['wallets'][number]) {
+    return wallet.evm_chain_ids?.length ? 'Smart wallet' : 'EVM';
+  }
+  walletNetworks(wallet: Account['wallets'][number]) {
+    return wallet.evm_chain_ids?.map(id => evmNetworkLabel(id)).join(', ');
+  }
+  explorer(address: string, chainId?: number) {
+    if (chainId === 8453) return 'https://basescan.org/address/' + address;
+    if (chainId === 4663) return 'https://robinhoodchain.blockscout.com/address/' + address;
     return address.startsWith('0x')
       ? 'https://etherscan.io/address/' + address
       : 'https://mempool.space/address/' + address;

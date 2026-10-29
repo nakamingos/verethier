@@ -799,7 +799,7 @@ describe('DiscordVerificationService', () => {
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;
 
-      expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledWith('user-id');
+      expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledWith('user-id', undefined, 1);
       expect(description).toContain('**🚀 Additional Roles Available:**');
       expect(description).toContain('**Test Role 2**:');
       expect(description).toContain(' ↳ Own 1+ Misprint with Head: Crown');

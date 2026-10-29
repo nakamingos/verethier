@@ -1024,17 +1024,14 @@ export class DiscordVerificationService {
 
       const context: NftCheckContext = ownershipContext || { checks: new Map() };
       const addressReads = context.userAddresses ||= new Map();
-      if (!addressReads.has(userId)) addressReads.set(userId, this.userAddressService.getUserAddresses(userId));
-      const userAddresses = await addressReads.get(userId);
-      const normalizedAddress = address.toLowerCase();
-      const addressesToCheck = userAddresses.includes(normalizedAddress)
-        ? userAddresses
-        : [...userAddresses, normalizedAddress];
-
       const remainingRules = [];
-      const allowedAddresses = await this.walletBlocks.allowedAddresses(guildId, addressesToCheck, context);
       for (const rule of unassignedRules) {
         try {
+          const chainId = rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1;
+          const key = `${userId}:${chainId}`;
+          if (!addressReads.has(key)) addressReads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
+          const addressesToCheck = await addressReads.get(key);
+          const allowedAddresses = await this.walletBlocks.allowedAddresses(guildId, addressesToCheck, context);
           const matchingCount = serializeAssetCount(allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, context) : 0n);
 
           remainingRules.push({
@@ -1049,7 +1046,7 @@ export class DiscordVerificationService {
       if (remainingRules.length === 0) {
         Logger.debug(
           `Potential role analysis found no evaluable rules for user ${userId} in guild ${guildId} ` +
-          `after checking ${unassignedRules.length} unassigned rule(s) across ${addressesToCheck.length} wallet(s)`
+          `after checking ${unassignedRules.length} unassigned rule(s)`
         );
         return [];
       }
@@ -1080,7 +1077,7 @@ export class DiscordVerificationService {
       
       Logger.debug(
         `Potential role analysis completed for user ${userId} in guild ${guildId}: ` +
-        `${potentialRoles.length} role recommendation(s) across ${addressesToCheck.length} wallet(s)`
+        `${potentialRoles.length} role recommendation(s)`
       );
       return potentialRoles;
     } catch (error) {

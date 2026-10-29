@@ -13,7 +13,8 @@ import {
 import { SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes, randomUUID } from 'crypto';
 import { PermissionFlagsBits } from 'discord.js';
-import { recoverTypedDataAddress } from 'viem';
+import { EvmSignatureService } from '@/services/evm-signature.service';
+import { getNftNetwork } from '@/utils/nft-network.util';
 import { DiscordService } from '@/services/discord.service';
 import { DbService } from '@/services/db.service';
 import { NonceService } from '@/services/nonce.service';
@@ -33,6 +34,7 @@ export class MemberService {
     private readonly bitcoin: BitcoinSignatureService,
     private readonly auth: PortalAuthService,
     @Optional() private readonly privacy?: PrivacyService,
+    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
   ) {}
 
   private checked<T extends { error: any; data: any }>(result: T): T['data'] {
@@ -168,7 +170,7 @@ export class MemberService {
     const [wallets, assignments, actions] = await Promise.all([
       this.db
         .from('user_wallets')
-        .select('address,wallet_type,last_verified_at')
+        .select('address,wallet_type,last_verified_at,evm_chain_ids')
         .eq('user_id', session.user.id)
         .order('created_at'),
       this.rules.getEarnedRoleAssignments({ userId: session.user.id }),
@@ -335,12 +337,13 @@ export class MemberService {
           'Use an EVM address or Bitcoin mainnet single-key Taproot Ordinals address.',
         );
       }
+      if (dto.walletType === 'evm') getNftNetwork(dto.chainId ?? 1);
       const nonce = randomBytes(32).toString('hex');
       const expiry = Math.floor(Date.now() / 1000) + 600;
       const challenge =
         dto.walletType === 'evm'
           ? {
-              domain: { name: 'Bouncer', version: '1', chainId: 1 },
+              domain: { name: 'Bouncer', version: '1', chainId: dto.chainId ?? 1 },
               primaryType: 'WalletLink',
               types: {
                 WalletLink: [
@@ -404,31 +407,19 @@ export class MemberService {
         throw new BadRequestException(
           'Wallet proof expired. Start a new wallet link.',
         );
-      try {
-        if (flow.wallet_type === 'bitcoin')
-          this.bitcoin.verifyMessage(
-            flow.address,
-            flow.challenge,
-            dto.signature,
-          );
-        else if (
-          (
-            await recoverTypedDataAddress({
-              ...flow.challenge,
-              signature: dto.signature,
-            })
-          ).toLowerCase() !== flow.address
-        )
-          throw new Error();
-      } catch {
-        throw new BadRequestException(
-          'Invalid wallet signature. Please sign again with the selected wallet.',
-        );
+      let proof: { chainId?: number } = {};
+      if (flow.wallet_type === 'bitcoin') {
+        try { this.bitcoin.verifyMessage(flow.address, flow.challenge, dto.signature); }
+        catch { throw new BadRequestException('Invalid wallet signature. Please sign again with the selected wallet.'); }
+      } else {
+        try { proof = await this.evmSignatures.verify(flow.address, flow.challenge, dto.signature); }
+        catch (error) { throw new BadRequestException(error.message); }
       }
       const result = await this.db.rpc('verifier_member_link_wallet', {
         p_user: session.user.id,
         p_flow: flow.id,
         p_transfer: !!dto.transfer,
+        p_chain: proof.chainId ?? null,
       });
       if (result.error)
         throw new ConflictException(
@@ -531,6 +522,7 @@ export class MemberService {
         return this.linkChallenge(session, {
           address: flow.address,
           walletType: flow.wallet_type,
+          ...(flow.wallet_type === 'evm' ? { chainId: flow.challenge.domain.chainId } : {}),
         });
       return this.linkResponse(flow);
     }

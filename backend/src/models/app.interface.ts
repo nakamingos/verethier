@@ -12,6 +12,7 @@
 export interface DecodedData {
   address: string;      // Ethereum wallet address being verified
   walletType?: 'evm' | 'bitcoin';
+  chainId?: number; // EIP-712 domain and smart-wallet authorization network
   privacy?: import('@/portal/privacy.service').PrivacyChoice;
   userId: string;       // Discord user ID
   userTag: string;      // Discord user tag (username#discriminator)

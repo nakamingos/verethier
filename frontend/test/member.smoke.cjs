@@ -565,8 +565,17 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       await page
         .getByRole('link', { name: 'Back to member portal', exact: true })
         .click();
+      wallets.push({
+        address: '0x' + 'cd'.repeat(20),
+        wallet_type: 'evm',
+        last_verified_at: new Date().toISOString(),
+        evm_chain_ids: [1, 8453, 4663],
+      });
+      await page.reload();
       await page.getByRole('button', { name: 'Wallets', exact: true }).click();
-      await page.locator('.saved-wallet').waitFor();
+      const smartCard = page.locator('.saved-wallet').filter({ hasText: 'Smart wallet' });
+      await smartCard.waitFor();
+      assert((await smartCard.innerText()).includes('Proven networks: Ethereum, Base, Robinhood'));
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

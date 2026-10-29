@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsObject, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsObject, IsOptional, IsNumber, MaxLength } from 'class-validator';
 
 /**
  * VerifySignatureDto
@@ -42,6 +42,7 @@ export class VerifySignatureDto {
    */
   @IsString()
   @IsNotEmpty()
+  @MaxLength(32770)
   signature: string;
 
   // Allow additional top-level fields for extensibility

@@ -122,6 +122,7 @@ export class PrivacyService {
     return {
       ...s,
       notice: PRIVACY_NOTICE,
+      has_saved_choice: !!c,
       share_since: current && s.sharing_enabled ? c.share_since : null,
       export_since: current ? c.export_since : null,
     };

@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeWalletAddress, WalletType } from '@/utils/wallet-address.util';
 import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
+import { walletOnChain } from '@/utils/wallet-scope.util';
 import { randomUUID } from 'crypto';
 
 interface UserWallet {
@@ -9,6 +10,7 @@ interface UserWallet {
   user_id: string;
   address: string;
   wallet_type?: WalletType;
+  evm_chain_ids?: number[] | null;
   user_name: string | null;
   created_at: string;
   last_verified_at: string;
@@ -43,7 +45,7 @@ export class UserAddressService {
   /**
    * Get all addresses for a specific user
    */
-  async getUserAddresses(userId: string, walletType?: WalletType): Promise<string[]> {
+  async getUserAddresses(userId: string, walletType?: WalletType, chainId?: number): Promise<string[]> {
     try {
       // Log sensitive operations only in development
       if (process.env.NODE_ENV === 'development') {
@@ -52,7 +54,7 @@ export class UserAddressService {
       
       let query = this.supabase
         .from('user_wallets')
-        .select('address')
+        .select('address,wallet_type,evm_chain_ids')
         .eq('user_id', userId);
       if (walletType) query = query.eq('wallet_type', walletType);
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -62,7 +64,7 @@ export class UserAddressService {
         throw error;
       }
 
-      const addresses = data?.map(row => row.address) || [];
+      const addresses = (data || []).filter(row => chainId === undefined || (chainId === 0 ? row.wallet_type === 'bitcoin' : walletOnChain(row, chainId))).map(row => row.address);
       this.logger.debug(`Found ${addresses.length} addresses for user ${userId}`);
       
       return addresses;
@@ -91,6 +93,7 @@ export class UserAddressService {
           p_source: activity.source,
           p_server: activity.serverId,
           p_channel: activity.channelId || null,
+          p_chain: activity.evmChainId ?? null,
         });
         if (error || !data?.success) return { success: false, error: 'Could not save wallet verification.' };
         return data;

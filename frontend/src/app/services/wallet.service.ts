@@ -1,7 +1,7 @@
 import { Inject, Injectable, InjectionToken, NgZone, OnDestroy } from '@angular/core';
 
-import { Address, PublicClient, createPublicClient, getAddress, http } from 'viem';
-import { mainnet } from 'viem/chains';
+import { Address, PublicClient, createPublicClient, defineChain, getAddress, http } from 'viem';
+import { base, mainnet } from 'viem/chains';
 
 import { createAppKit } from '@reown/appkit';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
@@ -17,6 +17,10 @@ import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
 import { evmWalletMetadata, projectId } from './evm-wallet.config';
+import { bouncerBaseAccountConnector } from './base-account.connector';
+
+const robinhood = defineChain({ id: 4663, name: 'Robinhood', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc.mainnet.chain.robinhood.com'] } } });
+const networks = [mainnet, base, robinhood] as [typeof mainnet, typeof base, typeof robinhood];
 
 const themeVariables = {
   '--apkt-font-family': 'Pizzascript, monospace',
@@ -34,23 +38,27 @@ export interface EvmWalletConnection {
 export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EVM wallet connection', {
   providedIn: 'root',
   factory: () => {
+    const metadata = evmWalletMetadata();
     const adapter = new WagmiAdapter({
-      networks: [mainnet],
+      networks,
       projectId,
+      connectors: [bouncerBaseAccountConnector(metadata)],
       transports: {
         [1]: http(env.rpcHttpProvider),
+        [8453]: http(),
+        [4663]: http(),
       },
     });
     const modal = createAppKit({
       adapters: [adapter],
-      networks: [mainnet],
+      networks,
       projectId,
-      metadata: evmWalletMetadata(),
+      metadata,
       // Reuse an approved session across verification links. Disconnecting it on
       // every page load makes mobile wallets tear down and pair again immediately.
       enableReconnect: true,
       enableCoinbase: true,
-      enableBaseAccount: false,
+      enableBaseAccount: true,
       enableInjected: true,
       enableEIP6963: true,
       features: {
@@ -209,15 +217,37 @@ export class WalletService implements OnDestroy {
     return activeAddress;
   }
 
+  async getSigningChainId(): Promise<number> {
+    await this.modal.ready();
+    const account = getAccount(this.config);
+    if (!account.isConnected || !account.connector) throw new Error('Wallet not connected');
+    const chainId = await account.connector.getChainId();
+    if (!networks.some(network => network.id === chainId))
+      throw new Error('Switch your wallet to Ethereum, Base or Robinhood mainnet before signing.');
+    const uid = this.config.state.current;
+    const connection = uid ? this.config.state.connections.get(uid) : undefined;
+    if (connection && connection.chainId !== chainId) this.config.setState(state => ({ ...state,
+      connections: new Map(state.connections).set(uid!, { ...connection, chainId }),
+    }));
+    return chainId;
+  }
+
   async signTypedMessage(typedData: any, record?: (stage: string) => void): Promise<{
     signature: `0x${string}`;
     address: `0x${string}`;
   }> {
     record?.('Checking connected account');
     const address = await this.syncConnectedAccount();
+    if (typedData.message?.WalletAddress && typedData.message.WalletAddress.toLowerCase() !== address.toLowerCase())
+      throw new Error('Your wallet account changed. Please sign again.');
+    const chainId = await this.getSigningChainId();
+    if (typedData.domain?.chainId !== chainId) throw new Error('Your wallet network changed. Please sign again on the selected network.');
+    const connector = getAccount(this.config).connector;
     record?.('Connected account ready');
     record?.('Requesting typed-data signature');
-    const signature = await signTypedData(this.config, typedData);
+    const signature = await signTypedData(this.config, { ...typedData, account: address, chainId });
+    if (getAccount(this.config).connector?.uid !== connector?.uid || await this.getSigningChainId() !== chainId || (await this.syncConnectedAccount()).toLowerCase() !== address.toLowerCase())
+      throw new Error('Your wallet account or network changed while signing. Please sign again.');
     record?.('Signature received');
 
     return {

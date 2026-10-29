@@ -20,7 +20,8 @@ import { AssetOwnershipService } from "@/services/asset-ownership.service";
 import { NftCheckContext } from "@/services/nft-ownership.service";
 import { ruleEditVersion } from "@/utils/rule-edit.util";
 import { EnvironmentConfig } from "@/config/environment.config";
-import { getNftNetwork } from "@/utils/nft-network.util";
+import { walletOnChain } from '@/utils/wallet-scope.util';
+import { getNftNetwork, getNftNetworkId } from "@/utils/nft-network.util";
 
 export const csvCell = (v: unknown) =>
   '"' +
@@ -229,7 +230,7 @@ export class WalletExportService {
         const batch = this.privacy.checked(
           await this.db
             .from("user_wallets")
-            .select("id,user_id,address,wallet_type,last_verified_at")
+            .select("id,user_id,address,wallet_type,last_verified_at,evm_chain_ids")
             .in("user_id", users.slice(i, i + 100))
             .order("id")
             .range(offset, offset + 999),
@@ -245,6 +246,7 @@ export class WalletExportService {
       (!f.network ||
         f.network === "all" ||
         (f.network === "bitcoin") === (wallet.wallet_type === "bitcoin")) &&
+      (!f.network || f.network === 'all' || f.network === 'bitcoin' || walletOnChain(wallet, getNftNetworkId(f.network))) &&
       (!f.verified_since ||
         Date.parse(wallet.last_verified_at) >= Date.parse(f.verified_since))
     );
@@ -408,6 +410,9 @@ export class WalletExportService {
           m.id,
           Promise.resolve(all.map((w) => w.address)),
         );
+        for (const chainId of [0, 1, 8453, 4663]) context.userAddresses.set(
+          `${m.id}:${chainId}`, Promise.resolve(all.filter(w => chainId === 0 ? w.wallet_type === 'bitcoin' : walletOnChain(w, chainId)).map(w => w.address)),
+        );
         let scope = allRules.filter(
           (r) => !f.channel || r.channel_id === f.channel,
         );
@@ -472,6 +477,7 @@ export class WalletExportService {
               if (
                 (f.network && f.network !== "all" && network !== f.network) ||
                 (network === "bitcoin") !== (w.wallet_type === "bitcoin") ||
+                (network !== 'bitcoin' && !walletOnChain(w, rule.chain_id || 1)) ||
                 (f.rule && String(rule.id) !== f.rule)
               )
                 continue;

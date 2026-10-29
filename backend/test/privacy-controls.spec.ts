@@ -77,6 +77,25 @@ describe("Privacy authority and input boundaries", () => {
     ])
       expect(() => privacyChoice(value)).toThrow();
   });
+  it.each([
+    [null, false],
+    [{ epoch: choice.epoch, share_since: null, export_since: null }, true],
+    [{ epoch: choice.epoch, share_since: '2026-10-27', export_since: '2026-10-27' }, true],
+    [{ epoch: 'old-epoch', share_since: null, export_since: null }, true],
+  ])('distinguishes an unanswered preference from a saved opt-out without granting permission: %j', async (saved, hasSaved) => {
+    const query: any = {
+      select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: saved, error: null }),
+    };
+    const db = { from: jest.fn().mockReturnValue(query), rpc: jest.fn() };
+    const p = new PrivacyService(db as any);
+    jest.spyOn(p, 'server').mockResolvedValue({ server_id: server, epoch: choice.epoch, sharing_enabled: true } as any);
+    const result = await p.policy(server, other);
+    expect(result.has_saved_choice).toBe(hasSaved);
+    expect(result.share_since).toBe(saved?.epoch === choice.epoch ? saved.share_since : null);
+    expect(result.export_since).toBe(saved?.epoch === choice.epoch ? saved.export_since : null);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
   it("checks membership and same-origin CSRF before changing preferences", async () => {
     const session = { user: { id: other } } as any,
       auth = {
