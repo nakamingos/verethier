@@ -26,12 +26,26 @@ Automated coverage includes strict input/URL handling, credentials and error san
 
 Local validation on October 28, 2026 passed: 1,595 backend tests across 77 suites, 17 targeted frontend tests, both production builds, nine NFT collection browser scenarios at 1280/393/320 pixels, and the existing admin browser smoke at five widths. The browser cases include dark and light themes.
 
-Read-only live checks on October 28, 2026 found the backend key configured. The Doodles collection metadata endpoint returned HTTP 200 with its Ethereum contract, but Ethereum/Base contract metadata and collection NFT inventory returned HTTP 401 with `API key has expired`. Full live API compatibility remains unverified until a valid replacement key is supplied. No rules or database records were changed by these checks.
+Read-only live checks on October 28, 2026 initially found an expired key. The replacement temporary key then passed collection, contract and inventory requests through Bouncer's compiled lookup service. The user reports that this key expires after seven days; replace it before relying on continued lookup access. No rules or database records were changed, and these checks required no implementation fixes.
+
+| Live case | Result |
+| --- | --- |
+| Autoglyphs, dedicated Ethereum ERC-721 | All 512 IDs loaded across three pages and compacted to `1-512`. |
+| Ringers, shared Ethereum ERC-721 contract | All 1,000 IDs loaded across five pages, producing `13000000-13000999`. A Fidenza token on the same contract was confirmed outside this selection. |
+| MAX PAIN AND FRENS, shared Ethereum ERC-1155 contract | Its single 77-digit token ID was preserved exactly, without rounding or replacement by IDs 0–99. |
+| Parallel Alpha [Base], ERC-1155 | All 583 IDs loaded across three pages, including ID 10755; network and standard resolved correctly. |
+| ENS, multiple contracts | Both Ethereum contracts resolved with their distinct ERC-721 and ERC-1155 standards. Full inventory was not requested. |
+| Doodles, collection URL input | URL resolved correctly; its 9,998-item inventory was rejected as too large for a fixed snapshot, with no partial IDs returned. |
+| Nonexistent collection | Returned the safe collection-not-found message and HTTP 404. |
 
 - [x] Add `OPENSEA_API_KEY` to the local backend environment.
-- [ ] Replace the expired key and confirm access to contract metadata and collection NFT inventory.
-- [ ] Resolve a real dedicated ERC-721 collection and confirm both fixed-list and entire-contract intent.
-- [ ] Resolve a shared-contract collection and verify that the fixed list excludes unrelated NFTs.
-- [ ] Resolve an ERC-1155 collection with IDs outside 0–99, save its precise selection and check known-positive and negative holdings.
-- [ ] Confirm provider chain names and contract responses for each network advertised as supported.
-- [ ] Exercise a real multi-contract collection, pagination, rate-limit/provider failure, and subsequent fresh ownership checks.
+- [x] Replace the expired key and confirm access to contract metadata and collection NFT inventory.
+- [x] Resolve a real dedicated ERC-721 collection and discover its complete fixed-list selection.
+- [x] Resolve a shared-contract collection and verify that the fixed list excludes an unrelated collection's token.
+- [x] Resolve real Ethereum/Base ERC-1155 collections with IDs outside 0–99, preserving exact integer values.
+- [x] Confirm Ethereum/Base provider chain names, contract responses, multi-contract lookup, pagination and oversized/not-found handling.
+- [ ] Save real fixed-list and entire-contract rules through the admin UI and confirm their intended scopes. Check known-positive and negative holdings, then perform fresh ownership checks. Fixture coverage already exercises the UI/save boundary but does not replace this live acceptance.
+- [ ] Confirm Robinhood provider coverage before claiming OpenSea lookup support for that network.
+- [ ] Exercise bounded multi-contract inventory discovery when a suitable collection is available. ENS proves metadata lookup only.
+- [ ] Confirm recovery from actual provider failures/rate limits if encountered; fixture tests cover these paths without deliberately exhausting API access.
+- [ ] Replace the seven-day temporary key with durable API access.
