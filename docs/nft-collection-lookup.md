@@ -26,9 +26,10 @@ Automated coverage includes strict input/URL handling, credentials and error san
 
 Local validation on October 28, 2026 passed: 1,595 backend tests across 77 suites, 17 targeted frontend tests, both production builds, nine NFT collection browser scenarios at 1280/393/320 pixels, and the existing admin browser smoke at five widths. The browser cases include dark and light themes.
 
-The user chose to supply an OpenSea key later on October 28, 2026. Implementation and tests use fixtures; live API compatibility is not yet claimed.
+Read-only live checks on October 28, 2026 found the backend key configured. The Doodles collection metadata endpoint returned HTTP 200 with its Ethereum contract, but Ethereum/Base contract metadata and collection NFT inventory returned HTTP 401 with `API key has expired`. Full live API compatibility remains unverified until a valid replacement key is supplied. No rules or database records were changed by these checks.
 
-- [ ] Add `OPENSEA_API_KEY` to the backend environment when available.
+- [x] Add `OPENSEA_API_KEY` to the local backend environment.
+- [ ] Replace the expired key and confirm access to contract metadata and collection NFT inventory.
 - [ ] Resolve a real dedicated ERC-721 collection and confirm both fixed-list and entire-contract intent.
 - [ ] Resolve a shared-contract collection and verify that the fixed list excludes unrelated NFTs.
 - [ ] Resolve an ERC-1155 collection with IDs outside 0–99, save its precise selection and check known-positive and negative holdings.
