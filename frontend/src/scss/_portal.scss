@@ -1103,14 +1103,10 @@ app-root:has(app-admin) .app-footer {
   padding: 0.6rem 1rem;
   @include pixel-surface(var(--pixel-inset));
 }
-.rule-card.group-highlight {
+.combined-navigation {
   border-image-source: var(--pixel-card-highlight);
-}
-.rule-card.group-highlight.editing {
-  border-image-source: var(--pixel-card-open-highlight);
-}
-.rule-card.group-highlight .inline-rule-editor {
-  border-image-source: var(--pixel-card-lower-highlight);
+  border-image-slice: 6 fill;
+  border-image-width: 6px;
 }
 .member-search {
   position: relative;

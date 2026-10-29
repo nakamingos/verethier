@@ -900,9 +900,6 @@
                     [id]="'rule-' + rule.id"
                     tabindex="-1"
                     [class.editing]="editor?.id === rule.id"
-                    [class.group-highlight]="
-                      activeGroup?.key === groupKey(rule)
-                    "
                     (keydown.escape)="closeEditor()"
                   >
                     <div class="section-heading">
