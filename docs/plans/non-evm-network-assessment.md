@@ -10,6 +10,8 @@ Use the existing verification/reconciliation policy: complete non-matches can re
 
 ## Solana
 
+Scope planning was authorized October 29, 2026; the [dedicated Solana plan](solana-verification-plan.md) now defines the recommended first release and later stages. This does not authorize implementation or require live testing now.
+
 - **Wallet proof:** start with a Wallet Standard-compatible wallet and Sign-In with Solana where supported. Verify the exact signed message, account, domain, nonce and expiry on the backend using Ed25519. Phantom documents message signing and origin checks; having its Bitcoin connector does not provide a Solana connector. [Phantom signing](https://docs.phantom.com/solana/signing-a-message).
 - **Fungible assets:** identify a token by mint address and token program. Aggregate its owner's token accounts using raw integer amounts and mint decimals. Plan separately for the original Token Program and Token-2022 extensions; define frozen/restricted balance semantics rather than assuming they behave like ERC-20. [Solana tokens](https://solana.com/docs/tokens).
 - **NFTs:** collection identity must come from verified collection/creator/edition relationships, never a display name. Token Metadata, Core and compressed Bubblegum assets need deliberate provider coverage. Metaplex DAS offers one interface for these standards, but provider support, freshness, pagination, limits and cost still need validation. [DAS overview](https://www.metaplex.com/docs/dev-tools/das-api).

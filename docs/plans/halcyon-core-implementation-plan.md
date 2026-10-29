@@ -154,6 +154,8 @@ Done when each newly advertised network and wallet type passes live proof, owner
 
 ### 7. Remaining chain and asset families
 
+Solana scope planning was authorized October 29, 2026. See the [Solana verification plan](solana-verification-plan.md) for proposed wallet, token/NFT, provider, migration and staged delivery boundaries. Implementation and live testing are not authorized by that planning request; earlier acceptance checks remain deferred.
+
 Implement one adapter at a time behind the same proof/ownership/reconciliation interfaces. Each needs a real wallet flow, provider, complete pagination strategy, normalized asset identities, numeric handling, error model and live test assets before release.
 
 | Adapter | Required initial coverage | Integration gate |
