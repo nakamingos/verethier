@@ -1,12 +1,12 @@
 # Solana verification
 
-Initial implementation prepared October 29, 2026. Production enablement and real-wallet/provider acceptance are pending. The migration has only been rehearsed against a disposable local restore; no production data was changed. The user's live testing remains deferred.
+Initial implementation prepared October 29, 2026. Production enablement and real-wallet acceptance are pending. Helius passed read-only provider acceptance checks; see the results below. The migration has only been rehearsed against a disposable local restore; no production data was changed. The user's live testing remains deferred.
 
 ## Initial coverage
 
 - Mainnet Solana wallets, with Phantom Wallet Standard discovery and a Phantom injected-provider fallback. The connector signs an exact, readable Bouncer message; it never signs transactions or pays fees. SIWS/off-chain envelopes, hardware-wallet and multisig/program-account authorization are not enabled in this slice.
 - SPL Token and explicitly allowlisted transparent Token-2022 balances by mint, token program and minimum. Sum all directly owned accounts across saved wallets using raw integer units. Reject unknown balance-affecting extensions, mismatched mint configuration, overlapping accounts and incomplete responses. Frozen ownership can count; spending capability is not the criterion. Confidential, interest/scaled display and protocol-deposit balances are excluded.
-- NFTs using collection, verified creator or explicit asset-ID scopes, minimum counts and existing same-asset AND/OR trait filters. Scope addresses are case-sensitive; multiple addresses in a scope mean OR. Token Metadata/programmatic NFTs and Core assets are the only advertised formats in this slice. Collection relationships are read from Token Metadata PDAs or Core's on-chain update authority, with batched reads. An indexed collection name/group alone is insufficient.
+- NFTs using collection, verified creator or explicit asset-ID scopes, minimum counts and existing same-asset AND/OR trait filters. Scope addresses are case-sensitive; multiple addresses in a scope mean OR. Token Metadata/programmable NFTs and Core assets are the only advertised formats in this slice. Collection relationships are read from Token Metadata PDAs or Core's on-chain update authority, with batched reads. An indexed collection name/group alone is insufficient.
 - Wallet linking/transfers/removal, proof activity/history, privacy and deletion behavior, server wallet blocks/audits, member lookup/explorer links, rule edits/revisions, combined collectible counts, background checks, setup diagnostics and fresh exports use the new family. Solana fungible balances never join collectible item-count groups.
 - The Control Room has Solana NFT/token rule choices when enabled. Discord has `/setup add-solana-nft-rule` and `/setup add-solana-token-rule`, using the same validated creation operations.
 
@@ -30,11 +30,11 @@ The proof binds the Discord member, server/channel context, nonce, account, orig
 
 ## Evidence and provider limits
 
-The adapter validates both endpoints' mainnet genesis identity. Token reads use finalized commitment and mint/account program/decimals checks. NFT inventory needs a usable indexed-slot signal at least as recent as the finalized slot read before scanning. It rejects changed reported totals, duplicate identities, unexpected owners, malformed pages and incomplete inventories. Required missing traits are unavailable. No arbitrary metadata URLs are fetched.
+The adapter validates both endpoints' mainnet genesis identity. Token reads use finalized commitment and mint/account program/decimals checks. NFT inventory needs a usable indexed-slot signal at least as recent as the finalized slot read before scanning. It validates each page's reported count against its items and rejects duplicate identities, unexpected owners, malformed pages and incomplete inventories. Token Metadata holdings are independently checked through finalized SPL and Token-2022 account reads, so stale index rows for closed or transferred NFTs do not count or block unrelated collection checks. The shared binary account prefix avoids RPC JSON-parser failures for accounts whose mint was closed. Required missing traits are unavailable. No arbitrary metadata URLs are fetched.
 
-Each request is bounded to ten seconds and four megabytes. A foreground operation has a thirty-second budget, at most two upstream requests run concurrently, and requests start no faster than twice per second per process. Inventory is capped at 25 pages of 1,000 entries; on-chain NFT account reads are batched in groups of up to 100. Inventories and balances are reused only within the existing check context. Exhausted limits or provider uncertainty never become a definitive zero or a partial export. Setup checks cluster identity/finalized-slot access only, not a member's complete inventory.
+Each request is bounded to ten seconds and four megabytes. A foreground operation has a thirty-second budget, at most two upstream requests run concurrently, and requests start no faster than twice per second per process. Inventory is capped at 50 pages of 500 entries; on-chain NFT account reads are batched in groups of up to 100. Inventories and balances are reused only within the existing check context. Exhausted limits or provider uncertainty never become a definitive zero or a partial export. Setup checks cluster identity/finalized-slot access only, not a member's complete inventory.
 
-Live provider pagination/count semantics and freshness availability must be checked before enabling production. These safeguards are not an atomic snapshot guarantee across changing chain/index pages. Independently deployable instances also need a shared provider quota large enough for their combined traffic; the initial limiter is local to one process.
+Helius pagination/count semantics and freshness availability were checked live. Repeat these checks when changing providers. These safeguards are not an atomic snapshot guarantee across changing chain/index pages. Independently deployable instances also need a shared provider quota large enough for their combined traffic; the initial limiter is local to one process.
 
 ## Validation and deferred acceptance
 
@@ -44,10 +44,10 @@ Validation on October 29, 2026 passed: 1,627 backend tests across 80 suites, 42 
 
 The browser smoke signs the built verification UI with a synthetic Phantom wallet and verifies the exact Ed25519 signature at the mocked API boundary at 1280/393/320 pixels. This is not an actual Phantom app or provider-acceptance test. Run backend and frontend builds before `frontend`'s `test:solana-smoke` command. The local migration rehearsal is `python3 backend/test/check-solana-migration.py BACKUP_DIRECTORY`; it never applies a migration remotely.
 
-- [ ] Configure real RPC/DAS access and confirm token programs, pagination/count semantics and indexed freshness.
+- [x] Configure real RPC/DAS access and confirm token programs, pagination/count semantics and indexed freshness with Helius.
 - [ ] Rehearse against a fresh backup and apply the production migration through the normal release workflow.
 - [ ] Later, test actual Phantom desktop/mobile connection, cancellation, repeat signatures, linking/transfer and Discord verification when the user has time.
-- [ ] Check representative SPL/Token-2022, Token Metadata/programmatic and Core assets: positive/negative holdings, movement/burns, traits, stale providers, role preservation and permission-respecting exports.
+- [ ] Check representative SPL/Token-2022, Token Metadata/programmable and Core assets: positive/negative holdings, movement/burns, traits, stale providers, role preservation and permission-respecting exports.
 - [ ] Enable only the accepted capabilities after the separate release decision.
 
 Technical references: [Solana messages](https://solana.com/docs/frontend/messages-and-auth), [token account reads](https://solana.com/docs/rpc/http/gettokenaccountsbyowner), [Token-2022 extensions](https://solana.com/docs/tokens/extensions), [DAS owner inventory](https://www.helius.dev/docs/api-reference/das/getassetsbyowner), [Core account layout](https://github.com/metaplex-foundation/mpl-core/blob/main/clients/rust/src/generated/accounts/base_asset_v1.rs), and [Token Metadata layout](https://github.com/metaplex-foundation/mpl-token-metadata/blob/main/programs/token-metadata/program/src/state/metadata.rs).
@@ -55,3 +55,17 @@ Technical references: [Solana messages](https://solana.com/docs/frontend/message
 ## Alchemy readiness check (October 29, 2026)
 
 Read-only checks against the configured Alchemy mainnet endpoint confirmed cluster identity and finalized slot access. The check uncovered and corrected an incomplete mainnet genesis hash in the application. Both `getAssetsByOwner` and `getAssetsByOwner_v2` returned HTTP 503 / JSON-RPC code -32001, including with a documented public example wallet. NFT inventory compatibility remains unconfirmed; this response alone does not establish whether the cause is temporary provider availability or account configuration. Production migration and enablement were not performed.
+
+## Helius readiness check (October 29, 2026)
+
+Read-only checks used the same configured Helius mainnet URL for ordinary RPC and DAS. Both cluster identity and finalized-slot access passed. The actual compiled ownership service passed:
+
+- USDC mint validation (six decimals) and positive/zero exact balances on public sample wallets.
+- Two public Token-2022 mints and raw integer balances.
+- A 3,691-entry public wallet inventory across eight 500-item pages with fresh indexed-slot evidence.
+- Token Metadata/programmable collection membership decoded on-chain (73 matches), an explicit NFT ID, a verified creator (64 matches), matching/nonmatching traits and an absent ID.
+- Core collection membership decoded on-chain (one match), an explicit ID and matching/nonmatching traits.
+
+Live testing uncovered two adapter issues: DAS `total` is the page count, and a fresh global index watermark does not guarantee that individual asset ownership/burn rows are current. The adapter now handles page counts correctly and filters Token Metadata assets through finalized token-account ownership before collection, ID, creator or trait checks. Reads use the common SPL/Token-2022 binary prefix, including frozen holdings, rather than relying on mint-dependent JSON parsing. Invalid or unavailable ownership evidence still preserves uncertainty. On the large public sample, indexed records for 39 nonexistent mint/metadata accounts had previously prevented unrelated collection checks; the finalized ownership filter resolved this without treating incomplete reads as zero. A 1,000-item request also repeatedly hit the ten-second timeout; smaller pages completed that large inventory in approximately five seconds while retaining the 25,000-entry cap.
+
+Post-fix Solana regression checks passed 41 tests across three suites; the full backend suite passed 1,636 tests across 80 suites, and the backend build passed. Public sample holdings can change; these counts describe this run, not fixed fixtures. No wallet was connected or signed, no database migration was applied, and no production flag was changed. Actual Phantom/Discord acceptance remains deferred.

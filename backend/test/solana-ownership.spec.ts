@@ -5,6 +5,7 @@ import {
   SPL_TOKEN,
   TOKEN_2022,
   solanaPublicKey,
+  solanaBase58,
   TOKEN_METADATA_PROGRAM,
 } from "../src/utils/solana.util";
 
@@ -36,6 +37,24 @@ const asset = () => ({
   grouping: [],
   creators: [],
 });
+function nftAccounts(items: any[], program: string) {
+  return {
+    context: { slot: 100 },
+    value: program !== SPL_TOKEN ? [] : items
+      .filter((item) => ["V1_NFT", "ProgrammableNFT"].includes(item.interface))
+      .map((item) => {
+        const bytes = Buffer.alloc(109);
+        bytes.set(solanaPublicKey(item.id), 0);
+        bytes.set(solanaPublicKey(owner), 32);
+        bytes.writeBigUInt64LE(1n, 64);
+        bytes[108] = 2; // Frozen ownership still counts.
+        return {
+          pubkey: item.id,
+          account: { owner: program, executable: false, data: [bytes.toString("base64"), "base64"] },
+        };
+      }),
+  };
+}
 describe("Solana ownership adapter", () => {
   let service: SolanaOwnershipService, request: jest.SpyInstance;
   beforeEach(() => {
@@ -45,15 +64,16 @@ describe("Solana ownership adapter", () => {
   });
   afterEach(() => jest.restoreAllMocks());
   function inventory(items: any[] = [], overrides = {}) {
-    request.mockImplementation(async (_url, method) => {
+    request.mockImplementation(async (_url, method, params) => {
       if (method === "getGenesisHash") return SOLANA_MAINNET;
       if (method === "getSlot") return 100;
+      if (method === "getTokenAccountsByOwner") return nftAccounts(items, params[1].programId);
       if (method === "getAssetsByOwner")
         return {
           last_indexed_slot: 100,
           total: items.length,
           page: 1,
-          limit: 1000,
+          limit: 500,
           items,
           ...overrides,
         };
@@ -306,6 +326,84 @@ describe("Solana ownership adapter", () => {
       await expect(service.count(nft, [owner])).rejects.toThrow();
     },
   );
+  it("excludes closed or transferred NFTs even when the index still claims ownership", async () => {
+    inventory([asset()]);
+    const previous = request.getMockImplementation();
+    request.mockImplementation(async (url, method, params, run) =>
+      method === "getTokenAccountsByOwner"
+        ? { context: { slot: 100 }, value: [] }
+        : previous(url, method, params, run),
+    );
+    expect(await service.count(nft, [owner])).toBe(0n);
+    expect(await service.count({
+      ...nft,
+      solana_criteria: { kind: "collection", addresses: [mint], formats: ["metadata"] },
+    } as any, [owner])).toBe(0n);
+    expect(request.mock.calls.some((call) => call[1] === "getMultipleAccounts")).toBe(false);
+  });
+  it.each(["stale", "wrong-owner", "truncated", "unavailable-program"])(
+    "keeps NFT ownership uncertain for %s finalized account evidence",
+    async (failure) => {
+      inventory([asset()]);
+      const previous = request.getMockImplementation();
+      request.mockImplementation(async (url, method, params, run) => {
+        if (method !== "getTokenAccountsByOwner") return previous(url, method, params, run);
+        if (failure === "unavailable-program" && params[1].programId === TOKEN_2022)
+          throw new Error("Unavailable token accounts");
+        const result = nftAccounts([asset()], params[1].programId);
+        if (failure === "stale") result.context.slot = 99;
+        if (result.value.length) {
+          const bytes = Buffer.from(result.value[0].account.data[0], "base64");
+          if (failure === "wrong-owner") bytes.set(solanaPublicKey(mint), 32);
+          result.value[0].account.data[0] = (failure === "truncated" ? bytes.subarray(0, 108) : bytes).toString("base64");
+        }
+        return result;
+      });
+      await expect(service.count(nft, [owner])).rejects.toThrow();
+    },
+  );
+  it.each([2, 0])("reads every DAS page when the last page has %i items", async (lastCount) => {
+    const first = Array.from({ length: 500 }, (_, index) => {
+      const bytes = Buffer.alloc(32);
+      bytes.writeUInt32BE(index + 1, 28);
+      return { ...asset(), id: solanaBase58(new Uint8Array(bytes)) };
+    });
+    const tail = Array.from({ length: lastCount }, (_, index) => {
+      const bytes = Buffer.alloc(32);
+      bytes.writeUInt32BE(index + 501, 28);
+      return { ...asset(), id: solanaBase58(new Uint8Array(bytes)) };
+    });
+    request.mockImplementation(async (_url, method, params) => {
+      if (method === "getGenesisHash") return SOLANA_MAINNET;
+      if (method === "getSlot") return 100;
+      if (method === "getTokenAccountsByOwner") return nftAccounts([...first, ...tail], params[1].programId);
+      if (method === "getAssetsByOwner") {
+        const items = params.page === 1 ? first : tail;
+        return { last_indexed_slot: 100, total: items.length, page: params.page, limit: 500, items };
+      }
+      throw new Error("Unexpected RPC method");
+    });
+    const rule = { ...nft, solana_criteria: { kind: "asset_ids", addresses: [first[0].id, ...(tail.length ? [tail[0].id] : [])], formats: ["metadata"] } } as any;
+    expect(await service.count(rule, [owner])).toBe(lastCount ? 2n : 1n);
+    expect(request.mock.calls.filter((call) => call[1] === "getAssetsByOwner").map((call) => call[2].page)).toEqual([1, 2]);
+  });
+  it("rejects a repeated asset across pages instead of returning a partial count", async () => {
+    const first = Array.from({ length: 500 }, (_, index) => {
+      const bytes = Buffer.alloc(32);
+      bytes.writeUInt32BE(index + 1, 28);
+      return { ...asset(), id: solanaBase58(new Uint8Array(bytes)) };
+    });
+    request.mockImplementation(async (_url, method, params) => {
+      if (method === "getGenesisHash") return SOLANA_MAINNET;
+      if (method === "getSlot") return 100;
+      if (method === "getAssetsByOwner") {
+        const items = params.page === 1 ? first : [first[0]];
+        return { last_indexed_slot: 100, total: items.length, page: params.page, limit: 500, items };
+      }
+      throw new Error("Unexpected RPC method");
+    });
+    await expect(service.count(nft, [owner])).rejects.toThrow("temporarily unavailable");
+  });
   it("reuses one complete inventory within a run and refreshes it in a new run", async () => {
     inventory([asset()]);
     const context = { checks: new Map() };

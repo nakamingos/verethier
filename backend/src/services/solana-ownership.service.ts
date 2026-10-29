@@ -16,6 +16,10 @@ import { matchesTraits, ruleTraits } from "@/utils/trait-filter.util";
 import { parseTokenBalance } from "@/utils/erc20-rule.util";
 import { NftCheckContext } from "./nft-ownership.service";
 
+// Smaller pages avoid slow provider responses while retaining the 25,000-entry cap.
+const INVENTORY_PAGE_LIMIT = 500;
+const MAX_INVENTORY_PAGES = 50;
+
 const UNAVAILABLE =
   "Solana ownership is temporarily unavailable. Existing roles are preserved.";
 const SAFE_EXTENSIONS = new Set([
@@ -301,15 +305,14 @@ export class SolanaOwnershipService {
       run.reads.set(`inventory-slot:${owner}`, Promise.resolve(slot));
       const items: any[] = [],
         seen = new Set<string>();
-      let total: number | undefined;
-      for (let page = 1; page <= 25; page++) {
+      for (let page = 1; page <= MAX_INVENTORY_PAGES; page++) {
         const data = await this.request(
           EnvironmentConfig.SOLANA_DAS_URL,
           "getAssetsByOwner",
           {
             ownerAddress: owner,
             page,
-            limit: 1000,
+            limit: INVENTORY_PAGE_LIMIT,
             sortBy: { sortBy: "created", sortDirection: "asc" },
             displayOptions: {
               showCollectionMetadata: true,
@@ -325,13 +328,13 @@ export class SolanaOwnershipService {
           !Number.isSafeInteger(data.total) ||
           data.total < 0 ||
           !Array.isArray(data.items) ||
-          data.items.length > 1000 ||
+          data.items.length > INVENTORY_PAGE_LIMIT ||
           data.page !== page ||
-          data.limit !== 1000 ||
-          (total !== undefined && total !== data.total)
+          data.limit !== INVENTORY_PAGE_LIMIT ||
+          // DAS reports the number of items on this page, not a grand total.
+          data.total !== data.items.length
         )
           throw new Error(UNAVAILABLE);
-        total = data.total;
         for (const asset of data.items) {
           normalizeSolanaAddress(asset?.id);
           if (
@@ -343,12 +346,64 @@ export class SolanaOwnershipService {
           seen.add(asset.id);
           items.push(asset);
         }
-        if (data.items.length < 1000) {
-          if (items.length !== total) throw new Error(UNAVAILABLE);
-          return items;
-        }
+        if (data.items.length < INVENTORY_PAGE_LIMIT) return items;
       }
       throw new Error("Solana inventory exceeds the complete-check limit.");
+    });
+  }
+  private async ownedNftMints(owner: string, run: Run, minSlot: number) {
+    return this.cache<Set<string>>(run, `nft-mints:${owner}:${minSlot}`, async () => {
+      const mints = new Set<string>();
+      const seen = new Set<string>();
+      for (const program of [SPL_TOKEN, TOKEN_2022]) {
+        const response = await this.request(
+          EnvironmentConfig.SOLANA_RPC_URL,
+          "getTokenAccountsByOwner",
+          [
+            owner,
+            { programId: program },
+            {
+              encoding: "base64",
+              dataSlice: { offset: 0, length: 109 },
+              commitment: "finalized",
+              minContextSlot: minSlot,
+            },
+          ],
+          run,
+        );
+        if (
+          this.slot(response?.context?.slot) < minSlot ||
+          !Array.isArray(response.value)
+        )
+          throw new Error(UNAVAILABLE);
+        for (const entry of response.value) {
+          normalizeSolanaAddress(entry.pubkey);
+          if (seen.has(entry.pubkey)) throw new Error(UNAVAILABLE);
+          seen.add(entry.pubkey);
+          const account = entry.account;
+          if (
+            account?.owner !== program ||
+            account.executable !== false ||
+            !Array.isArray(account.data) ||
+            account.data[1] !== "base64" ||
+            typeof account.data[0] !== "string"
+          )
+            throw new Error(UNAVAILABLE);
+          // The shared SPL/Token-2022 prefix is mint(32), owner(32), amount(8),
+          // delegate(36), state(1). No mint-dependent JSON parser is needed.
+          const bytes = Buffer.from(account.data[0], "base64");
+          if (
+            bytes.length !== 109 ||
+            bytes.toString("base64") !== account.data[0] ||
+            ![1, 2].includes(bytes[108]) ||
+            solanaBase58(new Uint8Array(bytes.subarray(32, 64))) !== owner
+          )
+            throw new Error(UNAVAILABLE);
+          if (bytes.readBigUInt64LE(64) > 0n)
+            mints.add(solanaBase58(new Uint8Array(bytes.subarray(0, 32))));
+        }
+      }
+      return mints;
     });
   }
   private async onchainAssets(
@@ -443,7 +498,20 @@ export class SolanaOwnershipService {
     const run = this.run(context),
       matches = new Map<string, bigint>();
     for (const owner of [...new Set(addresses)]) {
-      const inventory = await this.inventory(owner, run);
+      let inventory = await this.inventory(owner, run);
+      const minSlot = await run.reads.get(`inventory-slot:${owner}`);
+      const metadataAsset = (asset: any) =>
+        !asset.burnt &&
+        asset.compression?.compressed !== true &&
+        ["V1_NFT", "ProgrammableNFT"].includes(asset.interface);
+      if (criteria.formats.includes("metadata") && inventory.some(metadataAsset)) {
+        // A fresh index watermark does not make every individual asset row current.
+        // Confirm actual holdings before trusting indexed ownership or burned flags.
+        const owned = await this.ownedNftMints(owner, run, minSlot);
+        inventory = inventory.filter(
+          (asset) => !metadataAsset(asset) || owned.has(asset.id),
+        );
+      }
       const needs = inventory.filter(
         (a) =>
           !a.burnt &&
@@ -454,11 +522,7 @@ export class SolanaOwnershipService {
               criteria.formats.includes("metadata") &&
               ["V1_NFT", "ProgrammableNFT"].includes(a.interface))),
       );
-      const chain = await this.onchainAssets(
-        needs,
-        run,
-        await run.reads.get(`inventory-slot:${owner}`),
-      );
+      const chain = await this.onchainAssets(needs, run, minSlot);
       for (const asset of inventory) {
         if (asset.burnt) continue;
         const format = ["V1_NFT", "ProgrammableNFT"].includes(asset.interface)
