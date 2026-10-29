@@ -1,5 +1,5 @@
-"""Rehearse deployed smart-wallet support against a private pre-upgrade backup.
-Usage: python3 backend/test/check-smart-wallet-migration.py BACKUP_DIRECTORY
+"""Rehearse the smart-wallet scope migration against a private pre-upgrade backup.
+Usage: python3 backend/test/check-smart-wallet-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
 Only a disposable local database is changed. Errors go to /tmp/bouncer-smart-migration-error.log.
 """
 from pathlib import Path
@@ -40,8 +40,15 @@ try:
     sql('CREATE SCHEMA IF NOT EXISTS extensions; CREATE SCHEMA IF NOT EXISTS vault; CREATE PUBLICATION supabase_realtime;')
     sql(files['roles']+'\n'+files['schema']+'\nSET session_replication_role=replica;\n'+'\n'.join(m[0] for m in copies)+'\n'+'\n'.join(sequences))
     before = fingerprints()
-    sql((root/'backend/supabase/migrations/20261027020000_add_base_network.sql').read_text())
-    sql((root/'backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql').read_text())
+    if len(sys.argv) > 2:
+        # The production history lives outside the public application dump.
+        # Model only this upgrade's prerequisites in the disposable database.
+        sql("CREATE SCHEMA supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]); INSERT INTO supabase_migrations.schema_migrations(version) VALUES('20261027010000'),('20261027020000');")
+        sql(Path(sys.argv[2]).read_text())
+        assert sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='20261028010000';").strip() == '1'
+    else:
+        sql((root/'backend/supabase/migrations/20261027020000_add_base_network.sql').read_text())
+        sql((root/'backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql').read_text())
     assert before == fingerprints(), 'Smart-wallet migration changed existing application values'
     print('PASS: all existing application values preserved; old wallet scopes remain null', flush=True)
     sql('BEGIN;\n'+(root/'backend/test/smart-wallet-migration.sql').read_text()+'\nROLLBACK;')

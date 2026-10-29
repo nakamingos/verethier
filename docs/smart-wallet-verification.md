@@ -22,7 +22,9 @@ Supporting these standards does not imply compatibility with every passkey accou
 
 Use the existing backend `RPC_URL`, `BASE_RPC_URL`, and `ROBINHOOD_RPC_URL` settings. No additional credentials, dependencies or frontend environment variables are needed. Providers must support `eth_chainId`, `eth_getCode`, and `eth_call` on the matching mainnet. Undeployed proofs additionally require contract-creation `eth_call` support with enough simulation gas. Provider URLs do not come from member requests.
 
-Apply `backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql` before deploying the backend. This adds a nullable scope column and replaces the two wallet-link RPCs with backward-compatible default arguments. Existing wallet values remain unchanged. The migration has been rehearsed on a private backup; take a fresh backup before production application. The undeployed-account/Base Account stage requires no further migration beyond that pending smart-wallet migration.
+The production migration `20261028010000_smart_wallet_proofs` was applied on October 28, 2026 after a fresh private roles/schema/data backup and rehearsal of the exact guarded upgrade. All 360 existing wallet records retained their values, with the new scope column null; all 52 rules remained in place. The transaction verified RPC defaults and service-role-only execution, recorded the migration, and notified PostgREST to reload its schema.
+
+For other environments, apply `backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql` before deploying the backend. It adds a nullable scope column and replaces the two wallet-link RPCs with backward-compatible default arguments. Take a fresh backup and rehearse first. The undeployed-account/Base Account stage requires no additional migration.
 
 ## Verification
 
@@ -30,6 +32,7 @@ Run backend regression tests and frontend wallet/verification tests. Rehearse th
 
 ```sh
 python3 backend/test/check-smart-wallet-migration.py /path/to/private/backup
+# Optionally pass the private guarded rollout SQL as a second argument to rehearse it exactly.
 ```
 
 For an actual local EVM test, install isolated tools (no project dependencies change), build the backend, then run:
@@ -45,14 +48,17 @@ The local-only Solidity fixture verifies real owner signatures on chain IDs 1, 8
 
 The frontend connector tests use the actual installed Base Account connector and SDK with a controlled injected provider. They cover Base-first connection, cancellation/retry, disconnect and unchanged wrapped signatures. Browser smoke tests exercise the picker and verification pages on desktop/mobile, including restored sessions. Verification API responses and wallet approval are mocked in these browser tests.
 
-Before advertising a particular wallet as tested, its owner should complete these live acceptance checks after release:
+## Deferred live acceptance
 
-1. Connect a smart wallet through its usual connector on the correct network and approve a portal link. Confirm its address and network label. For Base Account, test a new, still-undeployed account as well as an already-deployed account.
-2. Verify through a Discord link in a community with a qualifying rule. Confirm holdings count for that smart-wallet address and the resulting role.
-3. Repeat verification, restore the session, decline a request, then retry. Neither connecting nor declining should create a proof.
-4. Confirm that proving an address only on Base cannot qualify that address for an Ethereum-only rule.
-5. For a multisig, confirm that its own required approval threshold is satisfied before the wallet returns a valid signature. Check desktop/mobile passkey prompts for Base Account.
+The user deferred these checks on October 28, 2026 because they did not have time to approve real-wallet prompts. Keep them open until completed; automated fixtures do not mark a wallet as live-tested. The production RPC probe also remains open because local RPC settings are placeholders.
+
+- [ ] Confirm the deployed RPC settings match each supported chain and allow contract-creation `eth_call` with the configured simulation gas ceiling.
+- [ ] Connect a smart wallet through its usual connector on the correct network and approve a portal link. Confirm its address and network label. For Base Account, test a new, still-undeployed account as well as an already-deployed account.
+- [ ] Verify through a Discord link in a community with a qualifying rule. Confirm holdings count for that smart-wallet address and the resulting role.
+- [ ] Repeat verification, restore the session, decline a request, then retry. Neither connecting nor declining should create a proof.
+- [ ] Confirm that proving an address only on Base cannot qualify that address for an Ethereum-only rule.
+- [ ] For a multisig, confirm that its own required approval threshold is satisfied before the wallet returns a valid signature. Check desktop/mobile passkey prompts for Base Account.
 
 These acceptance steps require the wallet owner's approval; automated fixtures cannot establish real-wallet/provider compatibility. No live acceptance is claimed by the local contract and mocked-browser tests.
 
-Local validation on October 28, 2026: 1,534 backend tests (75 suites), 45 targeted frontend tests, production builds, deployed/undeployed contract checks on all three local chain IDs, all 11 wallet browser scenarios, and member-portal smoke tests at 1280, 393 and 320 pixels passed. The prior deployed-account stage also passed migration rehearsal and privacy-portal smoke tests. Production RPC capability checks, migration, deployment and real-wallet acceptance remain pending; local RPC settings were placeholders, so the contract-creation capability probe was skipped.
+Local validation on October 28, 2026: 1,534 backend tests (75 suites), 45 targeted frontend tests, production builds, deployed/undeployed contract checks on all three local chain IDs, all 11 wallet browser scenarios, and member-portal smoke tests at 1280, 393 and 320 pixels passed. The prior deployed-account stage also passed migration rehearsal and privacy-portal smoke tests. The production migration is applied and verified. Production RPC capability and real-wallet acceptance checks remain pending in the checklist above; local RPC settings were placeholders, so the contract-creation capability probe was skipped.
