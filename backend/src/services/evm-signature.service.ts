@@ -4,12 +4,19 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   ContractFunctionZeroDataError,
+  ExecutionRevertedError,
+  Hex,
   PublicClient,
   createPublicClient,
+  encodeDeployData,
   hashTypedData,
   http,
+  parseErc6492Signature,
   parseAbi,
   recoverTypedDataAddress,
+  serializeErc6492Signature,
+  universalSignatureValidatorAbi,
+  universalSignatureValidatorByteCode,
 } from "viem";
 import { EnvironmentConfig } from "@/config/environment.config";
 import { getNftNetwork } from "@/utils/nft-network.util";
@@ -24,7 +31,7 @@ const COUNTERFACTUAL_SUFFIX = "6492".repeat(16);
 export class EvmSignatureService {
   private readonly clients = new Map<
     number,
-    Pick<PublicClient, "getChainId" | "getCode" | "readContract">
+    Pick<PublicClient, "getChainId" | "getCode" | "readContract" | "call">
   >();
 
   private client(chainId: number) {
@@ -60,19 +67,37 @@ export class EvmSignatureService {
     if (!Number.isSafeInteger(chainId))
       throw new Error("Invalid wallet network.");
     getNftNetwork(chainId);
-    // Do not accept/deploy an ERC-6492 wrapper as an ordinary contract signature.
-    if (signature.toLowerCase().endsWith(COUNTERFACTUAL_SUFFIX))
-      throw new Error(
-        "Undeployed smart-wallet signatures are not supported yet.",
-      );
-    try {
-      const recovered = await recoverTypedDataAddress({
-        ...typedData,
-        signature,
-      });
-      if (recovered.toLowerCase() === address.toLowerCase()) return {};
-    } catch {
-      /* Contract signatures need not have ECDSA's length or format. */
+    const wrapped = signature.toLowerCase().endsWith(COUNTERFACTUAL_SUFFIX);
+    let innerSignature = signature as Hex;
+    if (wrapped) {
+      // Recognize wrappers before recovery. A factory is never a wallet identity,
+      // and the inner EOA signature cannot establish a global wallet link.
+      try {
+        const parsed = parseErc6492Signature(signature.toLowerCase() as Hex);
+        if (
+          !parsed.address ||
+          serializeErc6492Signature({
+            address: parsed.address,
+            data: parsed.data,
+            signature: parsed.signature,
+          }).toLowerCase() !== signature.toLowerCase()
+        )
+          throw new Error();
+        innerSignature = parsed.signature;
+      } catch {
+        throw new Error("Invalid smart-wallet signature wrapper.");
+      }
+    }
+    if (!wrapped) {
+      try {
+        const recovered = await recoverTypedDataAddress({
+          ...typedData,
+          signature,
+        });
+        if (recovered.toLowerCase() === address.toLowerCase()) return {};
+      } catch {
+        /* Contract signatures need not have ECDSA's length or format. */
+      }
     }
 
     const client = this.client(chainId);
@@ -89,34 +114,68 @@ export class EvmSignatureService {
         "Could not check the smart wallet on its network. Please try again.",
       );
     }
-    if (!code || code === "0x")
+    if ((!code || code === "0x") && !wrapped)
       throw new Error(
         "Invalid wallet signature or smart wallet is not deployed on this network.",
       );
-    try {
-      const result = await client.readContract({
-        address: address as Address,
-        abi: ABI,
-        functionName: "isValidSignature",
-        args: [hashTypedData(typedData), signature as `0x${string}`],
-        blockTag: "latest",
-      });
-      if (result === "0x1626ba7e") return { chainId };
-    } catch (error) {
-      // Reverts/malformed returns reject the proof; provider failures stay retryable.
-      if (
-        !(
-          error instanceof BaseError &&
-          error.walk(
-            (cause) =>
-              cause instanceof ContractFunctionRevertedError ||
-              cause instanceof ContractFunctionZeroDataError,
+    if (code && code !== "0x") {
+      try {
+        const result = await client.readContract({
+          address: address as Address,
+          abi: ABI,
+          functionName: "isValidSignature",
+          args: [hashTypedData(typedData), innerSignature],
+          blockTag: "latest",
+        });
+        if (result === "0x1626ba7e") return { chainId };
+      } catch (error) {
+        // Reverts/malformed returns reject the proof; provider failures stay retryable.
+        if (
+          !(
+            error instanceof BaseError &&
+            error.walk(
+              (cause) =>
+                cause instanceof ContractFunctionRevertedError ||
+                cause instanceof ContractFunctionZeroDataError,
+            )
           )
         )
-      )
-        throw new Error(
-          "Could not check the smart-wallet signature. Please try again.",
-        );
+          throw new Error(
+            "Could not check the smart-wallet signature. Please try again.",
+          );
+      }
+    }
+    if (wrapped) {
+      // The library's validator runs deployment/preparation and ERC-1271 in one
+      // eth_call. No transaction is signed or broadcast; all simulated writes
+      // disappear. Never call the supplied factory directly through a signer.
+      try {
+        const result = await client.call({
+          data: encodeDeployData({
+            abi: universalSignatureValidatorAbi,
+            bytecode: universalSignatureValidatorByteCode,
+            args: [
+              address as Address,
+              hashTypedData(typedData),
+              signature as Hex,
+            ],
+          }),
+          blockTag: "latest",
+          gas: 10_000_000n,
+        });
+        // The validator constructor returns a single byte, not arbitrary truthy data.
+        if (result.data === "0x01") return { chainId };
+      } catch (error) {
+        if (
+          !(
+            error instanceof BaseError &&
+            error.walk((cause) => cause instanceof ExecutionRevertedError)
+          )
+        )
+          throw new Error(
+            "Could not check the smart-wallet signature. Please try again.",
+          );
+      }
     }
     throw new Error("Invalid wallet signature.");
   }

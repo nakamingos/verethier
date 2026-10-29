@@ -17,6 +17,7 @@ import { Observable, Subject } from 'rxjs';
 
 import { env } from '@/../env/env';
 import { evmWalletMetadata, projectId } from './evm-wallet.config';
+import { bouncerBaseAccountConnector } from './base-account.connector';
 
 const robinhood = defineChain({ id: 4663, name: 'Robinhood', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc.mainnet.chain.robinhood.com'] } } });
 const networks = [mainnet, base, robinhood] as [typeof mainnet, typeof base, typeof robinhood];
@@ -37,9 +38,11 @@ export interface EvmWalletConnection {
 export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EVM wallet connection', {
   providedIn: 'root',
   factory: () => {
+    const metadata = evmWalletMetadata();
     const adapter = new WagmiAdapter({
       networks,
       projectId,
+      connectors: [bouncerBaseAccountConnector(metadata)],
       transports: {
         [1]: http(env.rpcHttpProvider),
         [8453]: http(),
@@ -50,12 +53,12 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
       adapters: [adapter],
       networks,
       projectId,
-      metadata: evmWalletMetadata(),
+      metadata,
       // Reuse an approved session across verification links. Disconnecting it on
       // every page load makes mobile wallets tear down and pair again immediately.
       enableReconnect: true,
       enableCoinbase: true,
-      enableBaseAccount: false,
+      enableBaseAccount: true,
       enableInjected: true,
       enableEIP6963: true,
       features: {

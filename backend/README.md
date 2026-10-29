@@ -117,7 +117,7 @@ Set `BASE_RPC_URL` to a production Base mainnet RPC endpoint, for example `https
 
 Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production.
 
-Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. The current purpose-bound EVM proof flow remains unchanged. Base smart-account/contract-wallet proofs, native ETH balance rules and non-EVM wallet families are separate capabilities. Existing wallet signatures do not establish control of a contract account on another chain.
+Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. Purpose-bound EVM proofs also support deployed ERC-1271 and undeployed ERC-6492 smart accounts, with proof scope limited to their verified networks; see [smart-wallet verification](../docs/smart-wallet-verification.md). Native ETH balance rules and non-EVM wallet families remain separate capabilities. A contract proof on one chain does not establish control of that address on another chain.
 
 ## Specific Inscription Rules
 
@@ -258,4 +258,4 @@ Labels keep capitalization and internal spaces, are trimmed, and support up to 1
 
 ## Smart-wallet verification
 
-Deployed ERC-1271 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Apply `20261028010000_smart_wallet_proofs.sql` before deploying this change. See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md). Undeployed/ERC-6492 accounts remain unsupported.
+Deployed ERC-1271 and undeployed ERC-6492 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Wrapped proofs simulate account deployment/preparation in a read-only `eth_call`; no transaction is submitted. The frontend enables Base Account and requests Base first for that connector. Apply `20261028010000_smart_wallet_proofs.sql` before deploying these changes; this stage needs no additional migration or environment variables. See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md).

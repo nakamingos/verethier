@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const artifacts = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'bouncer-wallet-smoke-'));
 const { generatePrivateKey, privateKeyToAccount } = require('viem/accounts');
-const { recoverTypedDataAddress } = require('viem');
+const { recoverTypedDataAddress, parseErc6492Signature, serializeErc6492Signature } = require('viem');
 const account = privateKeyToAccount(generatePrivateKey());
 const dist = root + '/dist/frontend/browser';
 const index = fs.readFileSync(dist + '/index.html', 'utf8');
@@ -13,6 +13,8 @@ const origin = 'https://verify.bouncer.test';
 const nonce = 'a'.repeat(64);
 const expiry = Math.floor(Date.now() / 1000) + 3600;
 const rainbow = { id: 'rainbow-test', name: 'Rainbow', mobile_link: 'rainbow://', chains: ['eip155:1'], supports_wc: true };
+// AppKit lists Base Account from the wallet directory, then matches its SDK connector.
+const baseWallet = { id: 'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa', name: 'Base Account', rdns: 'app.base.account', webapp_link: 'https://keys.coinbase.com', chains: ['eip155:8453'], supports_wc: false };
 let currentScenario = 'startup';
 // AppKit's optional dependency accepts newer connector majors as well. Keep the
 // adapter and application on the same stable connector/core instances.
@@ -21,7 +23,7 @@ for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
   assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
 }
 
-async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false } = {}) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -40,13 +42,16 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
       signatures++;
       typedData = data;
       if (signatureGate) await signatureGate;
-      return account.signTypedData(data);
+      const signature = await account.signTypedData(data);
+      return counterfactual ? serializeErc6492Signature({address:'0x'+'cd'.repeat(20),data:'0x12345678',signature}) : signature;
     });
-    await page.addInitScript(({ address, chainId }) => {
+    await page.addInitScript(({ address, chainId, baseAccount }) => {
       const listeners = new Map();
       let authorized = localStorage.getItem('test-wallet-authorized') === 'true';
       const provider = {
         isMetaMask: false,
+        isCoinbaseBrowser: baseAccount,
+        disconnect: async () => { authorized = false; localStorage.removeItem('test-wallet-authorized'); },
         on: (name, fn) => listeners.set(name, [...(listeners.get(name) || []), fn]),
         removeListener: (name, fn) => listeners.set(name, (listeners.get(name) || []).filter(item => item !== fn)),
         request: async ({ method, params }) => {
@@ -57,6 +62,11 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
             authorized = true;
             localStorage.setItem('test-wallet-authorized', 'true');
             return method === 'eth_requestAccounts' ? [address] : [{ parentCapability: 'eth_accounts' }];
+          }
+          if (method === 'wallet_connect') {
+            window.__baseConnectChains = params[0].chainIds;
+            authorized = true; localStorage.setItem('test-wallet-authorized','true');
+            return {accounts:[{address}],chainIds:['0x'+chainId.toString(16)]};
           }
           if (method === 'wallet_getCapabilities') return {};
           if (method === 'eth_signTypedData_v4') return window.__testSign(JSON.parse(params[1]));
@@ -73,8 +83,8 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
       const announce = () => dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: {
         info: { uuid: 'b121fd92-aad7-42d3-afbe-88e14ca6b211', name: 'Test Wallet', rdns: 'test.bouncer.wallet', icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' }, provider,
       } }));
-      addEventListener('eip6963:requestProvider', announce); announce();
-    }, { address: smart ? '0x' + 'ab'.repeat(20) : account.address, chainId });
+      if (!baseAccount) { addEventListener('eip6963:requestProvider', announce); announce(); }
+    }, { address: smart ? '0x' + 'ab'.repeat(20) : account.address, chainId, baseAccount });
   }
   await page.routeWebSocket('**', socket => {
     socket.onMessage(raw => {
@@ -103,7 +113,10 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
     if (url.pathname === '/api/verify-signature') { proof = request.postDataJSON(); return route.fulfill({ json: { assignedRoles: ['holder'] } }); }
     if (url.pathname === '/appkit/v1/config') return route.fulfill({ json: { features: [] } });
     if (url.pathname === '/appkit/v1/project-limits') return route.fulfill({ json: { planLimits: { tier: 'starter', isAboveMauLimit: false, isAboveRpcLimit: false } } });
-    if (url.pathname === '/getWallets') return route.fulfill({ json: { data: [rainbow], count: 1 } });
+    if (url.pathname === '/getWallets') {
+      const wallets = baseAccount ? [baseWallet, rainbow] : [rainbow];
+      return route.fulfill({ json: { data: wallets, count: wallets.length } });
+    }
     if (url.pathname === '/getWalletRanks') return route.fulfill({ json: { data: [], count: 0 } });
     if (url.pathname === '/getAnalyticsConfig') return route.fulfill({ json: {} });
     if (request.method() === 'POST') {
@@ -222,6 +235,36 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal((await recoverTypedDataAddress({...test.typedData,signature:test.proof.signature})).toLowerCase(),account.address.toLowerCase());
       assert.deepEqual(test.errors,[]);
       console.log(JSON.stringify({scenario:currentScenario,result:'passed; API mocked, owner signature differs from contract address'}));
+      await test.context.close();
+    }
+    for (const mobile of [false,true]) {
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} Base Account connector and ERC-6492 signature`;
+      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,smart:true,counterfactual:true,baseAccount:true});
+      const {page} = test;
+      await page.locator('.step-1 .actions button').click();
+      try { await page.getByText('Base Account',{exact:true}).last().click(); } catch (error) {
+        await page.screenshot({path:path.join(artifacts,'base-account-picker.png'),fullPage:true});
+        console.log(JSON.stringify({modalText:await page.locator('w3m-modal').ariaSnapshot(),errors:test.errors,consoleErrors:test.consoleErrors.slice(-15)}));
+        throw error;
+      }
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.locator('.step-3.active').waitFor();
+      const contract = '0x'+'ab'.repeat(20);
+      assert.equal((await page.evaluate(()=>window.__baseConnectChains))[0],'0x2105','Base Account must start on Base');
+      assert.equal(test.proof.data.chainId,8453);
+      assert.equal(test.proof.data.address.toLowerCase(),contract);
+      assert.equal(test.typedData.message.WalletAddress.toLowerCase(),contract);
+      const wrapped=parseErc6492Signature(test.proof.signature);
+      assert(wrapped.address,'Base Account signature wrapper must reach the backend unchanged');
+      assert.equal((await recoverTypedDataAddress({...test.typedData,signature:wrapped.signature})).toLowerCase(),account.address.toLowerCase());
+      await page.goto(origin+'/verify/'+'c'.repeat(64));
+      await page.getByRole('button',{name:'Sign Message',exact:true}).waitFor();
+      assert.equal(test.signatures,1,'Restoring Base Account must not sign automatically');
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.locator('.step-3.active').waitFor();
+      assert.equal(test.signatures,2);
+      assert.deepEqual(test.errors,[]);
+      console.log(JSON.stringify({scenario:currentScenario,result:'passed; real connector/SDK with injected test provider, verification API mocked'}));
       await test.context.close();
     }
     currentScenario = 'AppKit signing diagnostics';
