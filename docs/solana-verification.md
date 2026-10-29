@@ -1,6 +1,6 @@
 # Solana verification
 
-Initial implementation prepared October 29, 2026. Production enablement and real-wallet acceptance are pending. Helius passed read-only provider acceptance checks; see the results below. The migration has only been rehearsed against a disposable local restore; no production data was changed. The user's live testing remains deferred.
+Initial implementation prepared October 29, 2026. The production migration was applied October 29 after a fresh private backup and rehearsal of the exact guarded upgrade. Helius passed read-only provider acceptance checks. Runtime enablement requires the backend Railway flag; actual Phantom/Discord acceptance remains deferred at the user's request.
 
 ## Initial coverage
 
@@ -42,13 +42,13 @@ Automated coverage uses real synthetic Ed25519 keys/signatures, replay/concurren
 
 Validation on October 29, 2026 passed: 1,627 backend tests across 80 suites, 42 targeted frontend tests, backend/frontend production builds, the local migration rehearsal, Solana verification smoke at three widths, existing member-portal smoke at three widths and Control Room smoke at five widths. The final Solana-specific checks also passed after the freshness-anchor and prefix-collision fixes.
 
-The browser smoke signs the built verification UI with a synthetic Phantom wallet and verifies the exact Ed25519 signature at the mocked API boundary at 1280/393/320 pixels. This is not an actual Phantom app or provider-acceptance test. Run backend and frontend builds before `frontend`'s `test:solana-smoke` command. The local migration rehearsal is `python3 backend/test/check-solana-migration.py BACKUP_DIRECTORY`; it never applies a migration remotely.
+The browser smoke signs the built verification UI with a synthetic Phantom wallet and verifies the exact Ed25519 signature at the mocked API boundary at 1280/393/320 pixels. This is not an actual Phantom app or provider-acceptance test. Run backend and frontend builds before `frontend`'s `test:solana-smoke` command. The local migration rehearsal is `python3 backend/test/check-solana-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`; it never applies a migration remotely. It accepts fresh smart-wallet-enabled backups and older pre-upgrade backups, and can rehearse the exact guarded release transaction.
 
 - [x] Configure real RPC/DAS access and confirm token programs, pagination/count semantics and indexed freshness with Helius.
-- [ ] Rehearse against a fresh backup and apply the production migration through the normal release workflow.
+- [x] Rehearse against a fresh backup and apply the production migration through the normal release workflow (October 29, 2026).
 - [ ] Later, test actual Phantom desktop/mobile connection, cancellation, repeat signatures, linking/transfer and Discord verification when the user has time.
 - [ ] Check representative SPL/Token-2022, Token Metadata/programmable and Core assets: positive/negative holdings, movement/burns, traits, stale providers, role preservation and permission-respecting exports.
-- [ ] Enable only the accepted capabilities after the separate release decision.
+- [ ] Set `SOLANA_ENABLED=1` on the Railway backend after deploying the fixes, with both Solana URLs using the accepted Helius endpoint. No Railway connection is available in this release session; this remains an operator step.
 
 Technical references: [Solana messages](https://solana.com/docs/frontend/messages-and-auth), [token account reads](https://solana.com/docs/rpc/http/gettokenaccountsbyowner), [Token-2022 extensions](https://solana.com/docs/tokens/extensions), [DAS owner inventory](https://www.helius.dev/docs/api-reference/das/getassetsbyowner), [Core account layout](https://github.com/metaplex-foundation/mpl-core/blob/main/clients/rust/src/generated/accounts/base_asset_v1.rs), and [Token Metadata layout](https://github.com/metaplex-foundation/mpl-token-metadata/blob/main/programs/token-metadata/program/src/state/metadata.rs).
 
@@ -69,3 +69,11 @@ Read-only checks used the same configured Helius mainnet URL for ordinary RPC an
 Live testing uncovered two adapter issues: DAS `total` is the page count, and a fresh global index watermark does not guarantee that individual asset ownership/burn rows are current. The adapter now handles page counts correctly and filters Token Metadata assets through finalized token-account ownership before collection, ID, creator or trait checks. Reads use the common SPL/Token-2022 binary prefix, including frozen holdings, rather than relying on mint-dependent JSON parsing. Invalid or unavailable ownership evidence still preserves uncertainty. On the large public sample, indexed records for 39 nonexistent mint/metadata accounts had previously prevented unrelated collection checks; the finalized ownership filter resolved this without treating incomplete reads as zero. A 1,000-item request also repeatedly hit the ten-second timeout; smaller pages completed that large inventory in approximately five seconds while retaining the 25,000-entry cap.
 
 Post-fix Solana regression checks passed 41 tests across three suites; the full backend suite passed 1,636 tests across 80 suites, and the backend build passed. Public sample holdings can change; these counts describe this run, not fixed fixtures. No wallet was connected or signed, no database migration was applied, and no production flag was changed. Actual Phantom/Discord acceptance remains deferred.
+
+## Production migration release (October 29, 2026)
+
+The operator authorized release after Helius acceptance. A fresh private roles/schema/application-data backup was taken before the upgrade. The exact guarded transaction passed on a disposable restore, including synthetic Solana linking, transfer/history, rule edits, criteria validation and permission checks. The production transaction then applied `20261029010000_solana_verification`, recorded the migration and notified PostgREST to reload its schema.
+
+The transaction compared every existing application value before/after under bounded locks. All 23 public application tables, 360 wallets, 52 rules, existing EVM wallet scopes and RPC permissions were preserved. Independent SQL verification confirmed the migration record, new JSONB field, legacy rule scopes, backward-compatible RPC defaults and service-role-only criteria access. A record-free API probe using the current project key returned HTTP 200 for the new field, confirming the PostgREST schema reload. Private backup, rehearsal and application receipts are retained under `backup/solana-release-20261029T205314Z/`, outside version control.
+
+Application activation remains separate: configure the Railway backend's two Solana URLs with Helius and set `SOLANA_ENABLED=1` after deploying the compatibility fixes. No frontend variable is required. Actual Phantom desktop/mobile, linking/transfer and Discord role acceptance remains on the deferred checklist above.

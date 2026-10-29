@@ -1,5 +1,5 @@
 """Rehearse the Solana migration against a private pre-upgrade backup.
-Usage: python3 backend/test/check-solana-migration.py BACKUP_DIRECTORY
+Usage: python3 backend/test/check-solana-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
 Only a disposable local database is changed. Errors go to /tmp/bouncer-solana-migration-error.log.
 """
 from pathlib import Path
@@ -39,10 +39,20 @@ try:
     run('docker', 'exec', container, 'createdb', '-U', 'postgres', 'portal_restore')
     sql('CREATE SCHEMA IF NOT EXISTS extensions; CREATE SCHEMA IF NOT EXISTS vault; CREATE PUBLICATION supabase_realtime;')
     sql(files['roles']+'\n'+files['schema']+'\nSET session_replication_role=replica;\n'+'\n'.join(m[0] for m in copies)+'\n'+'\n'.join(sequences))
-    sql((root/'backend/supabase/migrations/20261027020000_add_base_network.sql').read_text())
-    sql((root/'backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql').read_text())
+    # Older backups need prerequisites; a fresh production backup already has them.
+    has_scope = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_wallets' AND column_name='evm_chain_ids';").strip() == '1'
+    if not has_scope:
+        sql((root/'backend/supabase/migrations/20261027020000_add_base_network.sql').read_text())
+        sql((root/'backend/supabase/migrations/20261028010000_smart_wallet_proofs.sql').read_text())
     before = fingerprints()
-    sql((root/'backend/supabase/migrations/20261029010000_solana_verification.sql').read_text())
+    if len(sys.argv) > 2:
+        # Production migration history is outside the application dump. Model only
+        # this release's prerequisites in the disposable database.
+        sql("CREATE SCHEMA supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]); INSERT INTO supabase_migrations.schema_migrations(version) VALUES('20261027020000'),('20261028010000');")
+        sql(Path(sys.argv[2]).read_text())
+        assert sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='20261029010000';").strip() == '1'
+    else:
+        sql((root/'backend/supabase/migrations/20261029010000_solana_verification.sql').read_text())
     assert before == fingerprints(), 'Solana migration changed existing application values'
     print('PASS: every existing application value preserved', flush=True)
     sql('BEGIN;\n'+(root/'backend/test/solana-migration.sql').read_text()+'\nROLLBACK;')
