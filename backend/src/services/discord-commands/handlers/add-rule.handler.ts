@@ -1,3 +1,4 @@
+import { SolanaOwnershipService } from '../../solana-ownership.service';
 import { singleTrait } from '@/utils/trait-filter.util';
 import { prepareRuleCriteria } from '../../rule-create.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
@@ -58,7 +59,8 @@ export class AddRuleHandler {
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
     @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
-    @Optional() private readonly tokensSvc?: Erc20OwnershipService
+    @Optional() private readonly tokensSvc?: Erc20OwnershipService,
+    @Optional() private readonly solanaSvc?: SolanaOwnershipService
   ) {}
 
   /**
@@ -139,8 +141,10 @@ export class AddRuleHandler {
       const input: any = { asset_type: selectedAssetType || interaction.options.getString('asset_type') || 'ethscription',
         min_items: interaction.options.getInteger('min_items') ?? undefined };
       for (const field of fields) input[field] = interaction.options.getString(field) ?? undefined;
+      if (input.asset_type === 'solana_nft') input.solana_criteria = {kind:interaction.options.getString('scope'),addresses:(interaction.options.getString('addresses') || '').split(/[\s,]+/).filter(Boolean),formats:['metadata','core']};
+      if (input.asset_type === 'solana_token') input.solana_criteria = {kind:'token',mint:interaction.options.getString('mint'),program:interaction.options.getString('program')};
       const criteria = await prepareRuleCriteria(input, { data: this.dataSvc, nfts: this.nftSvc,
-        ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc });
+        ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc, solana: this.solanaSvc });
       return { channel, roleName, ...criteria, slug: input.asset_type === 'nft' ? 'ALL' : criteria.slug, assetFields: input.asset_type === 'ethscription' && !criteria.assetFields.inscription_criteria ? undefined : criteria.assetFields };
     } catch (error) {
       await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not validate this rule. Please try again.', true) });

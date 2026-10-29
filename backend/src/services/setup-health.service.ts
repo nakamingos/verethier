@@ -1,5 +1,6 @@
+import { SolanaOwnershipService } from './solana-ownership.service';
 import { ruleTraits } from '@/utils/trait-filter.util';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria } from '@/utils/inscription-rule.util';
@@ -26,6 +27,7 @@ export class SetupHealthService {
     private readonly metadata: NftMetadataService,
     private readonly ordinals: OrdinalsOwnershipService,
     private readonly ethscriptions: EthscriptionsOwnershipService,
+    @Optional() private readonly solana?: SolanaOwnershipService,
   ) {}
 
   async check(rules: VerifierRole[]): Promise<SetupProviderResult[]> {
@@ -50,7 +52,9 @@ export class SetupHealthService {
     };
     for (const rule of rules) {
       const traits = !!ruleTraits(rule);
-      if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
+      if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') {
+        add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana.checkSetupHealth(),'Checks provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
+      } else if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
         add(
           `rpc:${rule.chain_id}`,
           `${nftNetworkLabel(rule.chain_id)} RPC`,

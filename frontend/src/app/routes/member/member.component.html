@@ -216,6 +216,9 @@
                             : "Connect wallet"
                       }}
                     </button>
+                    @if (walletKind === 'solana') {
+                      <button (click)="solana.openPhantomMobile()" [disabled]="busy || connecting">Open Phantom</button>
+                    }
                     @if (
                       walletKind === "unisat" && !bitcoin.isUniSatAvailable()
                     ) {

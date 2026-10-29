@@ -93,7 +93,7 @@ describe('SimpleRoleMonitorService', () => {
           user_id: 'user1',
           server_id: 'server1',
           role_id: 'role1',
-          address: '0x123',
+          address: '0x1212121212121212121212121212121212121212',
           status: 'active',
         },
       ];
@@ -111,7 +111,7 @@ describe('SimpleRoleMonitorService', () => {
 
       dbService.getUserRoleHistory.mockResolvedValue(mockUserRoles);
       dbService.getRoleMappings.mockResolvedValue(mockRules);
-      userAddressService.getUserAddresses.mockResolvedValue(['0x123']);
+      userAddressService.getUserAddresses.mockResolvedValue(['0x1212121212121212121212121212121212121212']);
       dataService.checkAssetOwnershipWithCriteria.mockResolvedValue(2); // User still qualifies
       discordVerificationService.getGuildMember.mockResolvedValue({
         roles: { cache: new Map([['role1', true]]) },
@@ -124,7 +124,7 @@ describe('SimpleRoleMonitorService', () => {
       expect(result.errors).toHaveLength(0);
       expect(dbService.getUserRoleHistory).toHaveBeenCalledWith('user1', 'server1');
       expect(dataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['0x123'],
+        ['0x1212121212121212121212121212121212121212'],
         'test-collection',
         'trait',
         'rare',
@@ -140,7 +140,7 @@ describe('SimpleRoleMonitorService', () => {
           user_id: 'user1',
           server_id: 'server1',
           role_id: 'role1',
-          address: '0x123',
+          address: '0x1212121212121212121212121212121212121212',
           status: 'active',
         },
       ];
@@ -158,7 +158,7 @@ describe('SimpleRoleMonitorService', () => {
 
       dbService.getUserRoleHistory.mockResolvedValue(mockUserRoles);
       dbService.getRoleMappings.mockResolvedValue(mockRules);
-      userAddressService.getUserAddresses.mockResolvedValue(['0x123']);
+      userAddressService.getUserAddresses.mockResolvedValue(['0x1212121212121212121212121212121212121212']);
       dataService.checkAssetOwnershipWithCriteria.mockResolvedValue(2); // Only 2, needs 5
       discordVerificationService.getGuildMember.mockResolvedValue({
         roles: { cache: new Map([['role1', true]]) },
@@ -201,7 +201,7 @@ describe('SimpleRoleMonitorService', () => {
 
       dbService.getUserRoleHistory.mockResolvedValue(mockUserRoles);
       dbService.getRoleMappings.mockResolvedValue(mockRules);
-      userAddressService.getUserAddresses.mockResolvedValue(['0x123']);
+      userAddressService.getUserAddresses.mockResolvedValue(['0x1212121212121212121212121212121212121212']);
       dataService.checkAssetOwnershipWithCriteria.mockResolvedValue(2); // User qualifies
       const mockRolesCache = new Map();
       discordVerificationService.getGuildMember.mockResolvedValue({

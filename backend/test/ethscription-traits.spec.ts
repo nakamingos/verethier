@@ -147,19 +147,19 @@ describe("Incomplete trait evidence", () => {
   }
   it("can establish eligibility using enough known matching items without counting unknown items", async () => {
     const { service } = setup(["a", "b"]);
-    expect(await service.count(rule, ["wallet"])).toBe(2n);
+    expect(await service.count(rule, ["0x1212121212121212121212121212121212121212"])).toBe(2n);
   });
   it("preserves uncertainty below the minimum and for an incomplete exact asset list", async () => {
     const { service, error } = setup(["a"]);
-    await expect(service.count(rule, ["wallet"])).rejects.toBe(error);
+    await expect(service.count(rule, ["0x1212121212121212121212121212121212121212"])).rejects.toBe(error);
     await expect(
-      service.matchingAssets(rule, ["wallet"], { checks: new Map() }),
+      service.matchingAssets(rule, ["0x1212121212121212121212121212121212121212"], { checks: new Map() }),
     ).rejects.toBe(error);
   });
   it("requires complete metadata for a fresh export snapshot", async () => {
     const { service, error } = setup(["a", "b"]);
     await expect(
-      service.count(rule, ["wallet"], { checks: new Map(), freshExport: true }),
+      service.count(rule, ["0x1212121212121212121212121212121212121212"], { checks: new Map(), freshExport: true }),
     ).rejects.toBe(error);
   });
 });

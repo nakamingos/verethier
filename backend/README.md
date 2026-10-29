@@ -263,3 +263,7 @@ Labels keep capitalization and internal spaces, are trimmed, and support up to 1
 ## Smart-wallet verification
 
 Deployed ERC-1271 and undeployed ERC-6492 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Wrapped proofs simulate account deployment/preparation in a read-only `eth_call`; no transaction is submitted. The frontend enables Base Account and requests Base first for that connector. The production migration `20261028010000_smart_wallet_proofs.sql` was applied October 28, 2026; apply it before deploying to other environments. This stage needs no additional migration or environment variables. Real-wallet acceptance remains on the [deferred test checklist](../docs/smart-wallet-verification.md#deferred-live-acceptance). See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md).
+
+## Solana mainnet
+
+The initial Solana adapter is opt-in. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL`, apply `20261029010000_solana_verification.sql` through the reviewed migration workflow, and set `SOLANA_ENABLED=1` only when ready. No frontend secret is needed. Wallet proofs, SPL/allowlisted Token-2022 minima, and Token Metadata/Core NFT scopes are implemented; compressed NFTs remain separate. Production migration and live provider/wallet acceptance are pending. See [Solana verification](../docs/solana-verification.md).

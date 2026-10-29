@@ -27,7 +27,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   walletExplorer(address: string) {
     return address.startsWith('0x')
       ? 'https://etherscan.io/address/' + address
-      : 'https://mempool.space/address/' + address;
+      : address.length === 62 && /^bc1p/i.test(address) ? 'https://mempool.space/address/' + address : 'https://solscan.io/account/'+address;
   }
   walletAddress(address: string) {
     return address.slice(0, 8) + '…' + address.slice(-6);
@@ -101,10 +101,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   get hasTraitEditor() {
     return this.editor?.new
-      ? this.draft.asset_type !== 'erc20' &&
+      ? !['erc20','solana_token'].includes(this.draft.asset_type) &&
           (this.draft.asset_type === 'nft' || this.mode === 'collection')
       : this.editor &&
-          this.editor.asset_type !== 'erc20' &&
+          !['erc20','solana_token'].includes(this.editor.asset_type) &&
           !this.editor.inscription_criteria;
   }
   traitState(rule: any) {
@@ -246,14 +246,17 @@ export class AdminComponent implements OnInit, OnDestroy {
   setupDraft: any = {};
   undo: any = null;
   undoLabel = 'Undo';
-  readonly assetFilterChoices: SelectChoice[] = [
+  get assetFilterChoices(): SelectChoice[] { return [
     { value: '', label: 'All assets' },
     { value: 'ethscription', label: 'Ethscriptions' },
     { value: 'ordinal', label: 'Ordinals' },
     { value: 'nft', label: 'NFTs' },
     { value: 'erc20', label: 'Tokens (ERC-20)' },
-  ];
-  readonly assetChoices: SelectChoice[] = this.assetFilterChoices.slice(1);
+    ...(this.data?.capabilities?.solana ? [{value:'solana_nft',label:'Solana NFTs'},{value:'solana_token',label:'Solana tokens'}] : []),
+  ]; }
+  get assetChoices(): SelectChoice[] {return this.assetFilterChoices.slice(1);}
+  readonly solanaScopeChoices = [{value:'collection',label:'Verified collection'},{value:'verified_creator',label:'Verified creator'},{value:'asset_ids',label:'Specific asset IDs'}];
+  readonly solanaProgramChoices = [{value:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',label:'SPL Token'},{value:'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',label:'Token-2022'}];
   readonly matchChoices: SelectChoice[] = [
     { value: 'collection', label: 'Collection' },
     { value: 'ids', label: 'Inscription IDs / hashes' },
@@ -797,7 +800,7 @@ export class AdminComponent implements OnInit, OnDestroy {
             .map((p: any) => (p[0] === p[1] ? p[0] : p.join('–')))
             .join(', ')
       : '';
-    return `${r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${picked ? ' · ' + picked : ''}${traits}`;
+    return `${(r.solana_criteria ? ('Solana '+r.solana_criteria.kind+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${picked ? ' · ' + picked : ''}${traits}`;
   }
   channelName(id: string) {
     return (
@@ -806,7 +809,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     );
   }
   minimum(r: any) {
-    if (r.asset_type !== 'erc20')
+    if (!['erc20','solana_token'].includes(r.asset_type))
       return `${r.min_items || 1} item${r.min_items === 1 ? '' : 's'}`;
     return r.fields?.[0]?.value + ' ' + (r.token_symbol || 'tokens');
   }
@@ -816,7 +819,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   rebuildGroups() {
     const groups = new Map<string, any>();
     for (const rule of this.data?.rules || []) {
-      if (rule.asset_type === 'erc20') continue;
+      if (['erc20','solana_token'].includes(rule.asset_type)) continue;
       const key = this.groupKey(rule);
       if (!groups.has(key))
         groups.set(key, {
@@ -842,7 +845,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.groupFilter = '';
   }
   groupFor(rule: any) {
-    return rule.asset_type === 'erc20'
+    return ['erc20','solana_token'].includes(rule.asset_type)
       ? null
       : this.combinedIndex.get(this.groupKey(rule));
   }
@@ -953,6 +956,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       role_name: name,
       min_items: 1,
       network: 'ethereum',
+      solana_kind:'collection', solana_addresses:'', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
       trait_filter: { operator: 'AND', conditions: [] },
     };
     this.mode = 'collection';
@@ -1003,7 +1007,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     if (d.role_id) result.role_id = d.role_id;
     else result.role_name = d.role_name;
     const fields =
-      d.asset_type === 'erc20'
+      d.asset_type === 'solana_token' ? ['min_balance'] : d.asset_type === 'solana_nft' ? ['min_items'] : d.asset_type === 'erc20'
         ? ['contract_address', 'network', 'min_balance']
         : d.asset_type === 'nft'
           ? [
@@ -1026,6 +1030,8 @@ export class AdminComponent implements OnInit, OnDestroy {
     for (const key of fields)
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
+    if (d.asset_type === 'solana_token') result.solana_criteria = {kind:'token',mint:(d.solana_mint || '').trim(),program:d.solana_program};
+    if (d.asset_type === 'solana_nft') result.solana_criteria = {kind:d.solana_kind,addresses:(d.solana_addresses || '').split(/[\s,]+/).filter(Boolean),formats:['metadata','core']};
     if (this.hasTraitEditor) {
       delete result.attribute_key;
       delete result.attribute_value;

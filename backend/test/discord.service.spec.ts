@@ -393,9 +393,9 @@ describe('DiscordService - Enhanced Tests', () => {
       const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
-        'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+        'add-solana-nft-rule', 'add-solana-token-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([5, 9, 9, 9]);
+      expect(rules.map(rule => rule.options.length)).toEqual([7, 5, 5, 9, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -403,10 +403,14 @@ describe('DiscordService - Enhanced Tests', () => {
         ]);
         expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
         for (const name of ['attribute_key', 'attribute_value']) {
-          if (rule.name !== 'add-token-rule') expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+          if (!rule.name.startsWith('add-solana-') && rule.name !== 'add-token-rule') expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
         }
       }
-      const [token, nft, ordinals, ethscriptions] = rules;
+      const [solanaNft,solanaToken,token,nft,ordinals,ethscriptions] = rules;
+      expect(solanaNft.options[2]).toMatchObject({name:'scope',required:true});
+      expect(solanaNft.options[3]).toMatchObject({name:'addresses',required:true});
+      expect(solanaToken.options[2]).toMatchObject({name:'mint',required:true});
+      expect(solanaToken.options[4]).toMatchObject({name:'min_balance',required:true});
       expect(token.options[3]).toEqual(expect.objectContaining({ name: 'min_balance', type: 3, required: true }));
       expect(token.options.some(option => option.name === 'min_items')).toBe(false);
       expect(nft.options[2]).toEqual(expect.objectContaining({ name: 'contract_address', required: true }));

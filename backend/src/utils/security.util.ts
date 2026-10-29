@@ -24,6 +24,8 @@ export class SecurityUtil {
       'This verification link has expired',
       'Invalid signature',
       'Invalid Bitcoin signature',
+      'Invalid Solana signature',
+      'Invalid Solana verification challenge',
       'Invalid Bitcoin verification challenge',
       'Collection verification is temporarily unavailable',
       'Signature verification failed',

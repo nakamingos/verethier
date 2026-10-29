@@ -1,3 +1,5 @@
+import { SolanaOwnershipService } from './solana-ownership.service';
+import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { Erc20OwnershipService } from './erc20-ownership.service';
 import { Injectable, Optional } from '@nestjs/common';
@@ -13,18 +15,23 @@ export class AssetOwnershipService {
   constructor(private readonly dataSvc: DataService, private readonly nftSvc: NftOwnershipService,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
     @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
-    @Optional() private readonly tokensSvc?: Erc20OwnershipService) {}
+    @Optional() private readonly tokensSvc?: Erc20OwnershipService,
+    @Optional() private readonly solanaSvc?: SolanaOwnershipService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
-    if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
+    if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
   }
 
   async matchingAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    if (isSolanaRule(rule)) {
+      if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
+      return this.solanaSvc.matchingAssets(rule, addresses.filter(address => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)), context);
+    }
     if (rule.asset_type === 'ordinal') {
       if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
-      return this.ordinalsSvc.matchingAssets(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
+      return this.ordinalsSvc.matchingAssets(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
     }
-    const evm = addresses.filter(address => !/^bc1p/i.test(address));
+    const evm = addresses.filter(address => /^0x[0-9a-f]{40}$/i.test(address));
     if (!evm.length) return new Map();
     if (rule.asset_type === 'nft') return this.nftSvc.matchingAssets(rule, evm, context);
     const criteria = inscriptionCriteria(rule);
@@ -37,11 +44,15 @@ export class AssetOwnershipService {
   }
 
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
+    if (isSolanaRule(rule)) {
+      if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
+      return this.solanaSvc.count(rule, addresses.filter(address => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)), context);
+    }
     if (rule.asset_type === 'ordinal') {
       if (!this.ordinalsSvc) throw new Error('Ordinals verification is not configured.');
-      return this.ordinalsSvc.count(rule, addresses.filter(address => /^bc1p/i.test(address)), context);
+      return this.ordinalsSvc.count(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
     }
-    const evmAddresses = addresses.filter(address => !/^bc1p/i.test(address));
+    const evmAddresses = addresses.filter(address => /^0x[0-9a-f]{40}$/i.test(address));
     if (!evmAddresses.length) return BigInt(0);
     if (rule.asset_type === 'erc20') {
       if (!this.tokensSvc) throw new Error('Token verification is not configured.');
@@ -79,6 +90,7 @@ export class AssetOwnershipService {
 
 /** Assets from separate protocols/chains/contracts cannot overlap. */
 export function collectibleDomain(rule: VerifierRole): string {
+  if (rule.asset_type === 'solana_nft') return 'solana:mainnet';
   if (rule.asset_type === 'nft') return `nft:${rule.chain_id}:${rule.contract_address?.toLowerCase()}`;
   return rule.asset_type || 'ethscription';
 }

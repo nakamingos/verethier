@@ -1,6 +1,7 @@
+import { normalizeSolanaAddress } from './solana.util';
 import { address as bitcoinAddress } from 'bitcoinjs-lib';
 
-export type WalletType = 'evm' | 'bitcoin';
+export type WalletType = 'evm' | 'bitcoin' | 'solana';
 
 export function normalizeBitcoinAddress(value: string): string {
   if (typeof value !== 'string' || value !== value.trim() || !/^(bc1p|BC1P)/.test(value)) {
@@ -16,5 +17,7 @@ export function normalizeBitcoinAddress(value: string): string {
 }
 
 export function normalizeWalletAddress(value: string, type: WalletType = 'evm'): string {
+  if (type === 'solana') return normalizeSolanaAddress(value);
+  if (type !== 'evm' && type !== 'bitcoin') throw new Error('Invalid wallet type.');
   return type === 'bitcoin' ? normalizeBitcoinAddress(value) : value.toLowerCase();
 }

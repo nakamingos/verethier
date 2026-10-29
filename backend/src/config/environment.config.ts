@@ -20,6 +20,9 @@ export class EnvironmentConfig {
   public static readonly DB_SUPABASE_URL = process.env.DB_SUPABASE_URL;
   public static readonly DB_SUPABASE_KEY = process.env.DB_SUPABASE_KEY || process.env.SUPABASE_KEY;
   public static readonly RPC_URL = process.env.RPC_URL;
+  public static readonly SOLANA_ENABLED = process.env.SOLANA_ENABLED === '1';
+  public static readonly SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
+  public static readonly SOLANA_DAS_URL = process.env.SOLANA_DAS_URL;
   public static readonly BASE_RPC_URL = process.env.BASE_RPC_URL;
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
   public static readonly OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;

@@ -1,3 +1,4 @@
+import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { ruleTraits, singleTrait } from '@/utils/trait-filter.util';
 import { tokenMinimum, tokenAmount, tokenRuleScope } from '@/utils/erc20-rule.util';
@@ -95,14 +96,14 @@ export class VerificationEngine {
       const addressesToCheck = await this.addressesForRun(userId, run, rule);
       const allowedAddresses = await this.walletBlocks.allowedAddresses(rule.server_id, addressesToCheck, run);
       checkedAddresses = allowedAddresses;
-      const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes(address.toLowerCase()));
+      const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes((/^0x/i.test(address) || (address.length === 62 && /^bc1p/i.test(address))) ? address.toLowerCase() : address));
       
       const count = allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, run) : 0n;
-      const assetCount = rule.asset_type === 'erc20' ? tokenAmount(rule, count) : serializeAssetCount(count);
+      const assetCount = ['erc20','solana_token'].includes(rule.asset_type) ? tokenAmount(rule, count) : serializeAssetCount(count);
 
-      const requiredCount = rule.asset_type === 'erc20' ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
+      const requiredCount = ['erc20','solana_token'].includes(rule.asset_type) ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
       const isValid = count >= requiredCount;
-      const requiredDisplay = rule.asset_type === 'erc20' ? tokenAmount(rule, requiredCount) : Number(requiredCount);
+      const requiredDisplay = ['erc20','solana_token'].includes(rule.asset_type) ? tokenAmount(rule, requiredCount) : Number(requiredCount);
       
       Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredDisplay}`);
       
@@ -118,7 +119,7 @@ export class VerificationEngine {
         ownershipDetails: this.ownershipSvc.checkDetails?.(rule, allowedAddresses, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.asset_type === 'erc20' ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: ['erc20','solana_token'].includes(rule.asset_type) ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: singleTrait(rule).key,
           attributeValue: singleTrait(rule).value,
           ...((ruleTraits(rule)?.conditions.length || 0) > 1 ? {traitFilter: ruleTraits(rule)} : {}),
@@ -225,7 +226,7 @@ export class VerificationEngine {
     const groups = new Map<string, VerificationResult[]>();
     for (const result of results) {
       const rule = result.rule;
-      if (!rule || rule.asset_type === 'erc20') continue;
+      if (!rule || ['erc20','solana_token'].includes(rule.asset_type)) continue;
       const key = JSON.stringify([rule.server_id, rule.role_id, rule.min_items || 1]);
       groups.set(key, [...(groups.get(key) || []), result]);
     }
@@ -283,6 +284,11 @@ export class VerificationEngine {
 
   private addressesForRun(userId: string, context: NftCheckContext, rule?: VerifierRole): Promise<string[]> {
     const reads = context.userAddresses ||= new Map();
+    if (rule && isSolanaRule(rule)) {
+      const key = `${userId}:solana`;
+      if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, 'solana'));
+      return reads.get(key);
+    }
     const chainId = rule ? (rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1) : undefined;
     const key = chainId === undefined ? userId : `${userId}:${chainId}`;
     if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
@@ -426,8 +432,8 @@ export class VerificationEngine {
 
   /** Role moves grant through the changed channel/count group, not unrelated paths. */
   async evaluateRuleGroup(userId: string, rule: VerifierRole, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    const rules = rule.asset_type === 'erc20' ? [rule] : (await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
-      candidate.role_id === rule.role_id && candidate.channel_id === rule.channel_id && candidate.asset_type !== 'erc20'
+    const rules = ['erc20','solana_token'].includes(rule.asset_type) ? [rule] : (await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
+      candidate.role_id === rule.role_id && candidate.channel_id === rule.channel_id && !['erc20','solana_token'].includes(candidate.asset_type)
       && (candidate.min_items || 1) === (rule.min_items || 1));
     return this.evaluateRoleRules(userId, rules, context);
   }

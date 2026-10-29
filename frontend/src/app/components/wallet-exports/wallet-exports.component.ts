@@ -258,16 +258,18 @@ export class WalletExportsComponent implements OnChanges, OnDestroy {
   private timer: any;
   private live = true;
   private revision = 0;
-  readonly families = [
+  get families() {return [
     { value: 'all', label: 'All wallet families' },
     { value: 'evm', label: 'EVM' },
     { value: 'bitcoin', label: 'Bitcoin' },
-  ];
-  readonly networks = [
+    ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana'}] : []),
+  ];}
+  get networks() {return [
     { value: 'all', label: 'All blockchains' },
     ...EVM_NETWORKS,
     { value: 'bitcoin', label: 'Bitcoin' },
-  ];
+    ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana'}] : []),
+  ];}
   readonly matches = [
     { value: 'any', label: 'Any included role' },
     { value: 'all', label: 'All included roles' },

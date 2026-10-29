@@ -1,3 +1,4 @@
+import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
 import { PrivacyService } from '@/portal/privacy.service';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
@@ -220,6 +221,7 @@ export class DiscordVerificationService {
       slug?: string | null;
       attribute_key?: string | null;
       attribute_value?: string | null;
+      solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria | null;
     },
     collectionNames: Record<string, CollectionDisplayName> = {}
   ): string {
@@ -309,11 +311,15 @@ export class DiscordVerificationService {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
-    if (rule.asset_type === 'erc20') {
+    if (['erc20','solana_token'].includes(rule.asset_type)) {
       const minimum = tokenAmount(rule, tokenMinimum(rule));
       const scope = tokenRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
         : `Hold ${minimum}+ ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minimum})`}`;
+    }
+    if (rule.asset_type === 'solana_nft') {
+      const scope = solanaRuleLabel(rule);
+      return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}` : `Own ${minItems}+ from ${scope}`;
     }
     if (rule.inscription_criteria || rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
       const scope = rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
@@ -1027,9 +1033,10 @@ export class DiscordVerificationService {
       const remainingRules = [];
       for (const rule of unassignedRules) {
         try {
-          const chainId = rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1;
-          const key = `${userId}:${chainId}`;
-          if (!addressReads.has(key)) addressReads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
+          const solana = isSolanaRule(rule);
+          const chainId = solana ? undefined : rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1;
+          const key = `${userId}:${solana ? 'solana' : chainId}`;
+          if (!addressReads.has(key)) addressReads.set(key, this.userAddressService.getUserAddresses(userId, solana ? 'solana' : undefined, chainId));
           const addressesToCheck = await addressReads.get(key);
           const allowedAddresses = await this.walletBlocks.allowedAddresses(guildId, addressesToCheck, context);
           const matchingCount = serializeAssetCount(allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, context) : 0n);
@@ -1287,7 +1294,7 @@ export class DiscordVerificationService {
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20','solana_nft','solana_token'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }

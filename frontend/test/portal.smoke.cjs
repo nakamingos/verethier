@@ -462,7 +462,7 @@ const base = {
               wallets: [
                 {
                   wallet_type: 'bitcoin',
-                  address: 'bc1p-example',
+                  address: lookupBitcoin,
                   last_verified_at: '2026-10-18T12:00:00Z',
                 },
               ],
@@ -2035,7 +2035,7 @@ const base = {
       );
       assert.equal(
         await savedWallets.getByRole('link').first().getAttribute('href'),
-        'https://mempool.space/address/bc1p-example',
+        'https://mempool.space/address/' + lookupBitcoin,
       );
       assert.equal(await removedWallets.getByRole('row').count(), 3);
       assert.equal(
@@ -2150,14 +2150,14 @@ const base = {
       );
       await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
       await savedWallets
-        .getByRole('button', { name: 'Block wallet bc1p-example', exact: true })
+        .getByRole('button', { name: 'Block wallet ' + lookupBitcoin, exact: true })
         .click();
       await blockReview
         .getByRole('button', { name: 'Confirm block', exact: true })
         .click();
       await savedWallets
         .getByRole('button', {
-          name: 'Unblock wallet bc1p-example',
+          name: 'Unblock wallet ' + lookupBitcoin,
           exact: true,
         })
         .waitFor();

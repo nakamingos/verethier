@@ -1,3 +1,4 @@
+import { SolanaSignatureService } from './services/solana-signature.service';
 import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger, Optional } from '@nestjs/common';
 
 import { AppService } from './app.service';
@@ -25,7 +26,8 @@ export class AppController {
     private readonly appService: AppService,
     private readonly verifySvc: VerifyService,
     @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
-    @Optional() private readonly memberSvc?: MemberService
+    @Optional() private readonly memberSvc?: MemberService,
+    @Optional() private readonly solanaSvc?: SolanaSignatureService
   ) {}
 
   /**
@@ -130,6 +132,8 @@ export class AppController {
         'This verification link has expired',
         'Invalid signature',
         'Invalid Bitcoin signature',
+        'Invalid Solana signature',
+        'Invalid Solana verification challenge',
         'Invalid Bitcoin verification challenge',
         'Collection verification is temporarily unavailable',
         'Signature verification failed',
@@ -165,6 +169,12 @@ export class AppController {
   async verificationContext(@Body() body: VerificationContextDto) {
     try { return await this.bitcoinSvc.getContext(body.userId, body.discordId, body.nonce); }
     catch { throw new HttpException('This verification link is no longer active. Please return to Discord and request a new one.', HttpStatus.BAD_REQUEST); }
+  }
+
+  @Post('solana-challenge')
+  async solanaChallenge(@Body() body: BitcoinChallengeDto) {
+    try { return await this.solanaSvc.createChallenge(body.userId,body.discordId,body.nonce,body.address,body.privacy); }
+    catch { throw new HttpException('Could not create the Solana verification message. Request a new verification link.', HttpStatus.BAD_REQUEST); }
   }
 
   @Post('bitcoin-challenge')

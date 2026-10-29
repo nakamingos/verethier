@@ -65,7 +65,7 @@ const mockDataService = {
 };
 
 const mockUserAddressService = {
-  getUserAddresses: jest.fn().mockResolvedValue(['0xexistingwallet']),
+  getUserAddresses: jest.fn().mockResolvedValue(['0x3434343434343434343434343434343434343434']),
 };
 
 const mockGuildMember = {
@@ -343,13 +343,13 @@ describe('DiscordVerificationService', () => {
       service.tempMessages[nonce] = mockInteraction as any;
 
       await expect(
-        service.addUserRole('user-id', 'role-id', 'invalid-guild', 'wallet-address', nonce)
+        service.addUserRole('user-id', 'role-id', 'invalid-guild', '0x7878787878787878787878787878787878787878', nonce)
       ).rejects.toThrow('Guild not found');
     });
 
     it('should handle error when no stored interaction', async () => {
       await expect(
-        service.addUserRole('user-id', 'role-id', 'guild-id', 'wallet-address', 'invalid-nonce')
+        service.addUserRole('user-id', 'role-id', 'guild-id', '0x7878787878787878787878787878787878787878', 'invalid-nonce')
       ).rejects.toThrow('No stored interaction found for this nonce');
     });
   });
@@ -401,7 +401,7 @@ describe('DiscordVerificationService', () => {
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
       service.tempMessages['scoped'] = mockInteraction as any;
 
-      await service.sendVerificationComplete('guild-id', 'scoped', [], '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', 'scoped', [], '0x5656565656565656565656565656565656565656');
 
       expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('guild-id', 'channel-id');
       expect(mockDbService.getRoleMappings.mock.calls.every(call => call[1] === 'channel-id')).toBe(true);
@@ -414,7 +414,7 @@ describe('DiscordVerificationService', () => {
 
     it('does not perform server-wide recommendation lookups when channel context is missing', async () => {
       service.tempMessages['missing-channel'] = { ...mockInteraction, channelId: undefined } as any;
-      await service.sendVerificationComplete('guild-id', 'missing-channel', [], '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', 'missing-channel', [], '0x5656565656565656565656565656565656565656');
       expect(mockDataService.checkAssetOwnershipWithCriteria).not.toHaveBeenCalled();
       expect(mockInteraction.editReply.mock.calls[0][0].embeds[0].data.description).not.toContain('Additional Roles Available');
     });
@@ -794,7 +794,7 @@ describe('DiscordVerificationService', () => {
         { roleId: 'role-id', roleName: 'Test Role', wasAlreadyAssigned: true, ruleId: '1', matchingCount: 1 }
       ];
 
-      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0x5656565656565656565656565656565656565656');
 
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;
@@ -849,7 +849,7 @@ describe('DiscordVerificationService', () => {
         { roleId: 'role-id', roleName: 'Test Role', wasAlreadyAssigned: true, ruleId: '1', matchingCount: 1 }
       ];
 
-      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0x5656565656565656565656565656565656565656');
 
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;
@@ -896,7 +896,7 @@ describe('DiscordVerificationService', () => {
         'channel-id',
         'user-id',
         ['role-id'],
-        '0xnewwallet'
+        '0x5656565656565656565656565656565656565656'
       );
 
       expect(potentialRoles).toEqual([
@@ -907,7 +907,7 @@ describe('DiscordVerificationService', () => {
         }
       ]);
 
-      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0x5656565656565656565656565656565656565656');
 
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;
@@ -952,7 +952,7 @@ describe('DiscordVerificationService', () => {
         { roleId: 'role-id', roleName: 'Test Role', wasAlreadyAssigned: true, ruleId: '1', matchingCount: 1 }
       ];
 
-      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0x5656565656565656565656565656565656565656');
 
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;
@@ -997,7 +997,7 @@ describe('DiscordVerificationService', () => {
         { roleId: 'role-id', roleName: 'Test Role', wasAlreadyAssigned: true, ruleId: '1', matchingCount: 1 }
       ];
 
-      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0xnewwallet');
+      await service.sendVerificationComplete('guild-id', nonce, roleResults, '0x5656565656565656565656565656565656565656');
 
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
       const description = editReplyCall.embeds[0].data.description;

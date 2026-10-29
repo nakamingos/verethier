@@ -1,3 +1,5 @@
+import { EnvironmentConfig } from '@/config/environment.config';
+import { SolanaOwnershipService } from '@/services/solana-ownership.service';
 import { PrivacyService } from './privacy.service';
 import {
   BadRequestException,
@@ -49,7 +51,7 @@ const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
 export const portalRule = (rule: VerifierRole) => {
   const { ordinal_trait_snapshot, ...safe } = rule;
   const fields = ruleEditFields(rule);
-  if (!rule.inscription_criteria && rule.asset_type !== 'erc20') {
+  if (!rule.inscription_criteria && !['erc20','solana_token'].includes(rule.asset_type)) {
     const first = fields.findIndex(f => ['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     const clean = fields.filter(f => !['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     clean.splice(first, 0, { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 });
@@ -80,6 +82,7 @@ export class PortalService {
     @Optional() private readonly setup?: ServerSetupService,
     @Optional() private readonly privacy?: PrivacyService,
     @Optional() private readonly nftCollections?: NftCollectionService,
+    @Optional() private readonly solana?: SolanaOwnershipService,
   ) {}
 
   client() {
@@ -192,7 +195,7 @@ export class PortalService {
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
       rules: rules.map(portalRule),
-      capabilities: { multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
+      capabilities: { solana: EnvironmentConfig.SOLANA_ENABLED, multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
       privacy: this.privacy ? await this.privacy.server(server) : null,
       settings,
       role_actions: actions.data || [],
@@ -391,6 +394,7 @@ export class PortalService {
       ordinals: this.ordinals,
       ethscriptions: this.ethscriptions,
       tokens: this.tokens,
+      solana: this.solana,
     });
     // Provider preparation can be slow. Recheck the actor before changing Discord or the database.
     guild = await this.access(session, server);
@@ -728,7 +732,11 @@ export class PortalService {
     // Full addresses are longer than Discord usernames/nicknames. Preserve
     // ordinary name lookup for members such as "0xcollector".
     const value = input.trim();
-    return value.length >= 42 && /^(0x|bc1)/i.test(value);
+    if (value.length >= 42 && /^(0x|bc1)/i.test(value)) return true;
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value)) {
+      try { return normalizeBlockedWallet(value) === value; } catch { return false; }
+    }
+    return false;
   }
 
   private async walletMembers(guild: Guild, input: string, session: PortalSession) {

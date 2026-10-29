@@ -1,3 +1,6 @@
+import { solanaCriteria, isSolanaRule } from '@/utils/solana-rule.util';
+import { SolanaOwnershipService } from './solana-ownership.service';
+import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields } from '@/models/verifier-role.interface';
 import {
   normalizeCollectionSlug,
@@ -16,6 +19,7 @@ import { Erc20OwnershipService } from './erc20-ownership.service';
 import { validateEthscriptionCriteria } from './discord-commands/utils/rule-validation.util';
 
 export interface RuleCreateInput {
+  solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria;
   trait_filter?: TraitFilter | null;
   asset_type: string;
   slug?: string;
@@ -33,6 +37,7 @@ export interface RuleCreateInput {
   min_balance?: string;
 }
 export interface RuleProviders {
+  solana?: SolanaOwnershipService;
   data: DataService;
   nfts: NftOwnershipService;
   ordinals?: OrdinalsOwnershipService;
@@ -71,6 +76,20 @@ export async function prepareRuleCriteria(
     input.collection_name != null ||
     input.network != null;
   let assetFields: NftRuleFields;
+  if (isSolanaRule(input)) {
+    if (!EnvironmentConfig.SOLANA_ENABLED || !services.solana) throw new Error('Solana is not enabled.');
+    if (evmOptions || selected || input.slug != null || input.expected_token_standard !== undefined) throw new Error('Solana rules use Solana criteria, not EVM or inscription options.');
+    const criteria=solanaCriteria(input.solana_criteria);
+    if (input.asset_type === 'solana_token') {
+      if (criteria.kind !== 'token' || input.min_items != null || !!filter || attributeKey !== 'ALL' || attributeValue !== 'ALL') throw new Error('Solana token rules use a mint and minimum balance.');
+      const prepared=await services.solana.prepareToken(criteria.mint,input.min_balance);
+      if (prepared.solana_criteria.kind !== 'token' || criteria.program !== prepared.solana_criteria.program) throw new Error('Solana mint program changed.');
+      return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems:null,assetFields:{asset_type:'solana_token' as const,...prepared,chain_id:null}};
+    }
+    if (criteria.kind === 'token' || input.min_balance != null) throw new Error('Solana NFT rules require an NFT scope.');
+    return {slug:null,attributeKey,attributeValue,minItems,assetFields:{asset_type:'solana_nft' as const,chain_id:null,solana_criteria:criteria,...traits()}};
+  }
+  if (input.solana_criteria !== undefined) throw new Error('Only Solana rules use Solana criteria.');
   if (input.asset_type === 'erc20') {
     if (!services.tokens)
       throw new Error('Token verification is not configured.');

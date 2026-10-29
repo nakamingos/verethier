@@ -31,7 +31,7 @@ export class VerifySignatureDto {
     nonce?: string;
     expiry?: number;
     address?: string;
-    walletType?: 'evm' | 'bitcoin';
+    walletType?: 'evm' | 'bitcoin' | 'solana';
     // Allow additional fields for forward compatibility
     [key: string]: any;
   };

@@ -33,6 +33,7 @@ export function tokenRuleLabel(rule: NftRuleFields): string {
 }
 
 export function tokenRuleScope(rule: NftRuleFields): string {
+  if (rule.asset_type === 'solana_token') return `${rule.solana_criteria?.kind === 'token' ? rule.solana_criteria.mint : 'Token'} · Solana`;
   const symbol = rule.token_symbol && rule.token_symbol !== rule.collection_name ? ` (${rule.token_symbol})` : '';
   return `${tokenRuleLabel(rule)}${symbol} · ${nftNetworkLabel(rule.chain_id)} · ERC-20`;
 }

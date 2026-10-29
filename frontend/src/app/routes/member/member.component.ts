@@ -1,3 +1,4 @@
+import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
@@ -49,7 +50,7 @@ interface Pending {
 interface LinkFlow {
   id: string;
   address: string;
-  walletType: 'evm' | 'bitcoin';
+  walletType: 'evm' | 'bitcoin' | 'solana';
   challenge: any;
   expiresAt: string;
 }
@@ -57,10 +58,11 @@ interface Account {
   communitiesUnavailable?: boolean;
   wallets: Array<{
     address: string;
-    wallet_type: 'evm' | 'bitcoin';
+    wallet_type: 'evm' | 'bitcoin' | 'solana';
     last_verified_at: string;
     evm_chain_ids?: number[] | null;
   }>;
+  capabilities?: {solana?: boolean};
   communities: Community[];
   counts: { wallets: number; communities: number; roles: number };
   pending: Pending | null;
@@ -96,6 +98,7 @@ export class MemberComponent {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
+  readonly solana = inject(SolanaWalletService);
   readonly bitcoin = inject(BitcoinWalletService);
   private evm?: WalletService;
   private evmAddress = '';
@@ -126,11 +129,13 @@ export class MemberComponent {
     communities: Array<{ id: string; name: string }>;
     requestId: string;
   } | null = null;
-  readonly walletOptions = [
+  get walletOptions() {return [
     { value: 'evm', label: 'EVM' },
+
     { value: 'xverse', label: 'Bitcoin · Xverse' },
     { value: 'unisat', label: 'Bitcoin · UniSat' },
-  ];
+    ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana · Phantom'}] : []),
+  ];}
   get user() {
     return this.session.user;
   }
@@ -149,8 +154,9 @@ export class MemberComponent {
       this.live = false;
       this.transferProof = null;
     });
+    this.solana.address$.pipe(takeUntilDestroyed()).subscribe(address => {if(this.walletKind === 'solana') this.address = address || '';});
     this.bitcoin.address$.pipe(takeUntilDestroyed()).subscribe((address) => {
-      if (this.walletKind !== 'evm') this.address = address || '';
+      if (this.walletKind === 'xverse' || this.walletKind === 'unisat') this.address = address || '';
     });
     void this.init();
   }
@@ -252,6 +258,7 @@ export class MemberComponent {
     this.transferProof = null;
     this.transferPending = false;
     this.bitcoin.disconnect();
+    this.solana.disconnect();
   }
   private evmWallet() {
     if (!this.evm) {
@@ -278,7 +285,8 @@ export class MemberComponent {
     this.connecting = true;
     this.error = '';
     try {
-      if (this.walletKind === 'evm') await this.evmWallet().connect();
+      if (this.walletKind === 'solana') await this.solana.connect();
+      else if (this.walletKind === 'evm') await this.evmWallet().connect();
       else
         await this.bitcoin.connect(
           this.walletKind === 'unisat' ? 'unisat' : 'xverse',
@@ -304,16 +312,16 @@ export class MemberComponent {
   async link() {
     await this.run(async () => {
       if (!this.address) throw new Error('Connect your wallet first.');
-      const walletType = this.walletKind === 'evm' ? 'evm' : 'bitcoin';
+      const walletType = this.walletKind === 'evm' ? 'evm' : this.walletKind === 'solana' ? 'solana' : 'bitcoin';
       const address =
-        walletType === 'bitcoin'
+        walletType === 'solana' ? await this.solana.syncConnectedAccount() : walletType === 'bitcoin'
           ? await this.bitcoin.syncConnectedAccount()
           : await this.evmWallet().syncConnectedAccount();
       const chainId = walletType === 'evm' ? await this.evmWallet().getSigningChainId() : undefined;
       if (
         !this.linkFlow ||
         (walletType === 'evm' && this.linkFlow.challenge.domain.chainId !== chainId) ||
-        this.linkFlow.address.toLowerCase() !== address.toLowerCase() ||
+        this.linkFlow.walletType !== walletType || this.linkFlow.address !== (walletType === 'solana' ? address : address.toLowerCase()) ||
         new Date(this.linkFlow.expiresAt).getTime() <= Date.now()
       )
         this.linkFlow = await this.api<LinkFlow>('/wallet-challenge', {
@@ -325,8 +333,8 @@ export class MemberComponent {
       const proof =
         walletType === 'evm'
           ? await this.evmWallet().signTypedMessage(flow.challenge)
-          : await this.bitcoin.signMessage(flow.address, flow.challenge);
-      if (proof.address.toLowerCase() !== flow.address.toLowerCase()) {
+          : walletType === 'solana' ? await this.solana.signMessage(flow.address, flow.challenge) : await this.bitcoin.signMessage(flow.address, flow.challenge);
+      if ((walletType === 'solana' ? proof.address : proof.address.toLowerCase()) !== flow.address) {
         this.linkFlow = null;
         throw new Error('Your wallet account changed. Please sign again.');
       }
@@ -409,7 +417,7 @@ export class MemberComponent {
         this.linkFlow = result;
         this.tab = 'wallets';
         this.addOpen = true;
-        this.walletKind = result.walletType === 'evm' ? 'evm' : 'xverse';
+        this.walletKind = result.walletType === 'evm' ? 'evm' : result.walletType === 'solana' ? 'solana' : 'xverse';
         if (this.walletKind === 'evm') this.evmWallet();
       }
     });
@@ -437,6 +445,7 @@ export class MemberComponent {
     return address.slice(0, 6) + '…' + address.slice(-4);
   }
   walletScope(wallet: Account['wallets'][number]) {
+    if (wallet.wallet_type === 'solana') return 'Solana';
     return wallet.evm_chain_ids?.length ? 'Smart wallet' : 'EVM';
   }
   walletNetworks(wallet: Account['wallets'][number]) {
@@ -447,7 +456,7 @@ export class MemberComponent {
     if (chainId === 4663) return 'https://robinhoodchain.blockscout.com/address/' + address;
     return address.startsWith('0x')
       ? 'https://etherscan.io/address/' + address
-      : 'https://mempool.space/address/' + address;
+      : address.length === 62 && /^bc1p/i.test(address) ? 'https://mempool.space/address/' + address : 'https://solscan.io/account/'+address;
   }
   channelOptions(community: Community) {
     return [
@@ -525,6 +534,7 @@ export class MemberComponent {
     return '';
   }
   network(rule: Requirement) {
+    if (rule.asset === 'solana_nft' || rule.asset === 'solana_token') return 'Solana';
     return rule.asset === 'nft' || rule.asset === 'erc20'
       ? evmNetworkLabel(rule.network || 1)
       : '';

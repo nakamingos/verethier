@@ -1,3 +1,6 @@
+import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
+import { solanaMessage, verifySolanaMessage } from '@/utils/solana.util';
+import { EnvironmentConfig } from '@/config/environment.config';
 import { PrivacyService } from './privacy.service';
 import { ruleTraits, traitFilterLabel } from '@/utils/trait-filter.util';
 import {
@@ -121,13 +124,14 @@ export class MemberService {
             asset: rule.asset_type || 'ethscription',
             network: rule.chain_id,
             collection:
+              (isSolanaRule(rule) ? solanaRuleLabel(rule) : null) ||
               rule.rule_label ||
               rule.collection_name ||
               rule.slug ||
               rule.contract_address ||
               'Selected items',
             minimum:
-              rule.asset_type === 'erc20' ? rule.min_balance : rule.min_items,
+              ['erc20','solana_token'].includes(rule.asset_type) ? rule.min_balance : rule.min_items,
             trait:
               ruleTraits(rule)
                 ? traitFilterLabel(rule)
@@ -221,6 +225,7 @@ export class MemberService {
         )
       : [];
     return {
+      capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED},
       wallets: this.checked(wallets),
       communitiesUnavailable,
       communities,
@@ -338,6 +343,8 @@ export class MemberService {
         );
       }
       if (dto.walletType === 'evm') getNftNetwork(dto.chainId ?? 1);
+      if (dto.walletType === 'solana' && !EnvironmentConfig.SOLANA_ENABLED) throw new BadRequestException('Solana is not enabled.');
+      if (dto.walletType !== 'evm' && dto.chainId !== undefined) throw new BadRequestException('Invalid wallet network.');
       const nonce = randomBytes(32).toString('hex');
       const expiry = Math.floor(Date.now() / 1000) + 600;
       const challenge =
@@ -364,7 +371,7 @@ export class MemberService {
                 Expiry: expiry,
               },
             }
-          : [
+          : dto.walletType === 'solana' ? solanaMessage({ origin: this.auth.origin, purpose: 'wallet_link', address, userId: session.user.id, nonce, expiry }) : [
               'Bouncer saved-wallet link',
               '',
               `Domain: ${this.auth.origin}`,
@@ -408,7 +415,11 @@ export class MemberService {
           'Wallet proof expired. Start a new wallet link.',
         );
       let proof: { chainId?: number } = {};
-      if (flow.wallet_type === 'bitcoin') {
+      if (flow.wallet_type === 'solana') {
+        if (!EnvironmentConfig.SOLANA_ENABLED) throw new BadRequestException('Solana is not enabled.');
+        try { verifySolanaMessage(flow.address,flow.challenge,dto.signature); }
+        catch { throw new BadRequestException('Invalid Solana signature. Sign again with the selected wallet.'); }
+      } else if (flow.wallet_type === 'bitcoin') {
         try { this.bitcoin.verifyMessage(flow.address, flow.challenge, dto.signature); }
         catch { throw new BadRequestException('Invalid wallet signature. Please sign again with the selected wallet.'); }
       } else {

@@ -386,7 +386,7 @@ export class RemovalUndoInteractionHandler {
         const minItems = rule.min_items || 1;
         
         const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
-          : rule.asset_type === 'erc20' ? `Token: ${tokenRuleCriteria(rule)}`
+          : ['erc20','solana_token'].includes(rule.asset_type) ? `Token: ${tokenRuleCriteria(rule)}`
           : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
           : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
@@ -437,7 +437,7 @@ export class RemovalUndoInteractionHandler {
    * Creates detailed rule information fields for consistent display
    */
   private createRuleInfoFields(ruleData: any): any[] {
-    if (ruleData.asset_type === 'erc20') return [
+    if (['erc20','solana_token'].includes(ruleData.asset_type)) return [
       { name: '**Token**', value: tokenRuleScope(ruleData), inline: false },
       { name: '**Contract**', value: ruleData.contract_address, inline: false },
       { name: '**Min Balance**', value: tokenAmount(ruleData, tokenMinimum(ruleData)), inline: true },

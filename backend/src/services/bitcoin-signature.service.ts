@@ -20,8 +20,9 @@ export class BitcoinSignatureService {
       : await this.dbSvc.getRoleMappings(context.guildId);
     if (!rules.length) throw new Error('No verification rules found for this channel.');
     const walletTypes: WalletType[] = [];
-    if (rules.some(rule => rule.asset_type !== 'ordinal')) walletTypes.push('evm');
+    if (rules.some(rule => !['ordinal','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
     if (rules.some(rule => rule.asset_type === 'ordinal')) walletTypes.push('bitcoin');
+    if (EnvironmentConfig.SOLANA_ENABLED && rules.some(rule => ['solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('solana');
     return {
       walletTypes,
       ...(this.privacy ? {privacy: await this.privacy.policy(context.guildId,context.userId)} : {}),

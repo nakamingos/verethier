@@ -1,3 +1,4 @@
+import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
@@ -17,9 +18,9 @@ import { env } from 'src/env/env';
 import type { GetAccountReturnType } from '@wagmi/core';
 
 interface State {
-  walletType: 'evm' | 'bitcoin';
+  walletType: 'evm' | 'bitcoin' | 'solana';
   bitcoinProvider: BitcoinWalletProvider;
-  walletTypes: Array<'evm' | 'bitcoin'>;
+  walletTypes: Array<'evm' | 'bitcoin' | 'solana'>;
   walletConnecting: boolean;
   walletConnected: boolean;
   connectedAddress: string | null;
@@ -73,13 +74,14 @@ export class VerifyComponent {
     private route: ActivatedRoute,
     public walletSvc: WalletService,
     private http: HttpClient,
-    public bitcoinWalletSvc: BitcoinWalletService
+    public bitcoinWalletSvc: BitcoinWalletService,
+    public solanaWalletSvc: SolanaWalletService
   ) {
 
     // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
       map((params: any) => this.decodeData(params.data)),
-      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin'>; expiry: number; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
+      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin' | 'solana'>; expiry: number; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
         ...(data.userId !== undefined ? { userId: data.userId } : {}),
         ...(data.discordId !== undefined ? { discordId: data.discordId } : {}),
         nonce: data.nonce,
@@ -132,6 +134,9 @@ export class VerifyComponent {
         && this.errorSource !== 'verification') {
         this.setState({ errorMessage }, 'connection');
       }
+    });
+    this.solanaWalletSvc.address$.pipe(takeUntilDestroyed()).subscribe(address => {
+      if (this.state$.value.walletType === 'solana') this.setState({walletConnected:!!address,connectedAddress:address});
     });
     this.bitcoinWalletSvc.address$.pipe(takeUntilDestroyed()).subscribe(address => {
       if (this.state$.value.walletType === 'bitcoin') {
@@ -243,7 +248,12 @@ export class VerifyComponent {
 
       let proof: { signature: string; address: string };
       let verificationData = { ...data, ...(this.state$.value.walletType === 'evm' ? { chainId: domain.chainId } : {}), ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
-      if (verificationData.walletType === 'bitcoin') {
+      if (verificationData.walletType === 'solana') {
+        const address = await this.solanaWalletSvc.syncConnectedAccount();
+        const challenge = await firstValueFrom(this.http.post<{address:string;message:string;expiry:number}>(env.apiUrl+'/solana-challenge',{userId:data.userId,discordId:data.discordId,nonce:data.nonce,address,...(choice?{privacy:choice}:{})}));
+        proof = await this.solanaWalletSvc.signMessage(challenge.address,challenge.message);
+        verificationData = {...verificationData,expiry:challenge.expiry};
+      } else if (verificationData.walletType === 'bitcoin') {
         const address = await this.bitcoinWalletSvc.syncConnectedAccount();
         const challenge = await firstValueFrom(this.http.post<{ address: string; message: string; expiry: number }>(env.apiUrl + '/bitcoin-challenge', {
           userId: data.userId, discordId: data.discordId, nonce: data.nonce, address, ...(choice ? { privacy: choice } : {}),
@@ -381,16 +391,17 @@ export class VerifyComponent {
     return `Too many requests right now. Please wait ${wait} and try again.`;
   }
 
-  selectWallet(walletType: 'evm' | 'bitcoin', bitcoinProvider?: BitcoinWalletProvider): void {
+  selectWallet(walletType: 'evm' | 'bitcoin' | 'solana', bitcoinProvider?: BitcoinWalletProvider): void {
     const state = this.state$.value;
     if (!state.walletTypes.includes(walletType) || state.walletConnecting || state.messageSigning
       || state.verificationSubmitting || state.messageVerified) return;
     this.setWalletType(walletType, bitcoinProvider);
   }
 
-  private setWalletType(walletType: 'evm' | 'bitcoin', bitcoinProvider?: BitcoinWalletProvider): void {
+  private setWalletType(walletType: 'evm' | 'bitcoin' | 'solana', bitcoinProvider?: BitcoinWalletProvider): void {
     const state = this.state$.value;
     this.bitcoinWalletSvc.disconnect();
+    this.solanaWalletSvc.disconnect();
     const account = walletType === 'evm' ? this.evmAccount : undefined;
     this.setState({ walletType, bitcoinProvider: walletType === 'bitcoin' ? bitcoinProvider || this.bitcoinWalletSvc.preferredProvider() : state.bitcoinProvider,
       walletConnecting: account?.isConnecting || account?.isReconnecting || false,
@@ -405,6 +416,7 @@ export class VerifyComponent {
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
       if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider);
+      else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect();
       else await this.walletSvc.connect();
     } catch (error) {
       this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not connect your wallet.' });

@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 
 export class MemberLinkDto {
-  @IsIn(['evm', 'bitcoin']) walletType: 'evm' | 'bitcoin';
+  @IsIn(['evm', 'bitcoin', 'solana']) walletType: 'evm' | 'bitcoin' | 'solana';
   @IsString() @MaxLength(100) address: string;
   @IsOptional() @IsInt() @IsIn([1, 8453, 4663]) chainId?: number;
 }

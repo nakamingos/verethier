@@ -1,3 +1,4 @@
+import { SolanaSignatureService } from './solana-signature.service';
 import { PrivacyService, privacyProof } from '@/portal/privacy.service';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EvmSignatureService } from './evm-signature.service';
@@ -36,7 +37,8 @@ export class WalletService {
     private readonly walletBlocks: WalletBlockService,
     @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
     @Optional() private readonly privacy?: PrivacyService,
-    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService()
+    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
+    @Optional() private readonly solanaSvc?: SolanaSignatureService
   ) {}
   
   /**
@@ -58,6 +60,7 @@ export class WalletService {
     data: DecodedData,
     signature: string
   ): Promise<{ address: string; walletOwnershipTransferred: boolean; nonceContext?: { channelId?: string; messageId?: string }; activity?: WalletVerificationActivity }> {
+    if (data.walletType === 'solana') return this.verifySolanaSignature(data, signature);
     if (data.walletType === 'bitcoin') return this.verifyBitcoinSignature(data, signature);
     if (data.walletType && data.walletType !== 'evm') throw new Error('Invalid wallet type.');
 
@@ -206,6 +209,39 @@ export class WalletService {
           error
         );
       });
+  }
+
+  private async verifySolanaSignature(data: DecodedData, signature: string) {
+    if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
+    const { address, context } = await this.solanaSvc.verify(data, signature);
+    await this.walletBlocks.assertAllowed(data.discordId, address);
+    await this.privacy?.assertActive(data.userId);
+    if (data.privacy !== undefined) {
+      if (!this.privacy) throw new Error('Privacy controls are unavailable.');
+      await this.privacy.choose(data.discordId,data.userId,data.privacy);
+    }
+    let userName: string | null = null;
+    try {
+      const user = await this.discordService.getUser(data.userId);
+      userName = user?.globalName || user?.username || null;
+    } catch { /* Username is optional display information. */ }
+    const activity: WalletVerificationActivity = {
+      id: randomUUID(),
+      source: context.memberPortal ? 'portal' : 'discord',
+      serverId: data.discordId,
+      channelId: context.channelId,
+      walletType: 'solana',
+      provenAt: new Date().toISOString(),
+    };
+    const result = await this.userAddressService.addUserAddress(data.userId, address, userName, 'solana', activity);
+    if (!result.success) throw new Error('Could not save the Solana wallet verification. Please try again from Discord.');
+    if (result.wasTransferred && result.previousUserId && !result.reconciliationQueued) {
+      this.schedulePreviousOwnerReverification(result.previousUserId, data.userId, address);
+    }
+    return {
+      address, walletOwnershipTransferred: result.wasTransferred === true, activity,
+      nonceContext: { channelId: context.channelId, messageId: context.messageId },
+    };
   }
 
   private async verifyBitcoinSignature(data: DecodedData, signature: string) {

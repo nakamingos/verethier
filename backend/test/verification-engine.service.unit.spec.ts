@@ -87,7 +87,7 @@ describe('VerificationEngine', () => {
     mockDbService = module.get(DbService);
     mockDataService = module.get(DataService);
     mockUserAddressService = module.get(UserAddressService);
-    mockUserAddressService.getUserAddresses.mockResolvedValue(['address123']);
+    mockUserAddressService.getUserAddresses.mockResolvedValue(['0x1212121212121212121212121212121212121212']);
     
     loggerSpy = jest.spyOn(Logger, 'debug').mockImplementation();
     jest.spyOn(Logger, 'error').mockImplementation();
@@ -107,10 +107,10 @@ describe('VerificationEngine', () => {
     it('reuses loaded rules and wallet addresses within a run but reads wallets again on a fresh run', async () => {
       const rules = [mockRule, mockModernRule];
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
-      await service.verifyUserBulk('user123', [1, 2], 'address123', rules);
+      await service.verifyUserBulk('user123', [1, 2], '0x1212121212121212121212121212121212121212', rules);
       expect(mockDbService.getRuleById).not.toHaveBeenCalled();
       expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledTimes(1);
-      await service.verifyUserBulk('user123', [1, 2], 'address123', rules);
+      await service.verifyUserBulk('user123', [1, 2], '0x1212121212121212121212121212121212121212', rules);
       expect(mockUserAddressService.getUserAddresses).toHaveBeenCalledTimes(2);
     });
 
@@ -118,10 +118,10 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
 
-      const result = await service.verifyUser('user123', 'test_rule', 'address123');
+      const result = await service.verifyUser('user123', 'test_rule', '0x1212121212121212121212121212121212121212');
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'test_collection',
         'test_attribute',
         'ALL',
@@ -144,10 +144,10 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'cool-cats',
         'trait_type',
         'Rare',
@@ -170,7 +170,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1); // Less than required 3
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.matchingAssetCount).toBe(1);
@@ -181,20 +181,20 @@ describe('VerificationEngine', () => {
     it('should handle rule not found', async () => {
       mockDbService.getRuleById.mockResolvedValue(null);
 
-      const result = await service.verifyUser('user123', 'nonexistent', 'address123');
+      const result = await service.verifyUser('user123', 'nonexistent', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Rule nonexistent not found');
       expect(result.userId).toBe('user123');
       expect(result.ruleId).toBe('nonexistent');
-      expect(result.address).toBe('address123');
+      expect(result.address).toBe('0x1212121212121212121212121212121212121212');
     });
 
     it('should handle database errors gracefully', async () => {
       const dbError = new Error('Database connection failed');
       mockDbService.getRuleById.mockRejectedValue(dbError);
 
-      const result = await service.verifyUser('user123', 'rule123', 'address123');
+      const result = await service.verifyUser('user123', 'rule123', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Rule rule123 not found');
@@ -204,7 +204,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockRejectedValue(new Error('API error'));
 
-      const result = await service.verifyUser('user123', 'test_rule', 'address123');
+      const result = await service.verifyUser('user123', 'test_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('API error');
@@ -214,7 +214,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockRejectedValue(new Error('Network timeout'));
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Network timeout');
@@ -225,7 +225,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(numericRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
 
-      const result = await service.verifyUser('user123', 42, 'address123');
+      const result = await service.verifyUser('user123', 42, '0x1212121212121212121212121212121212121212');
 
       expect(mockDbService.getRuleById).toHaveBeenCalledWith('42');
       expect(result.ruleId).toBe(42);
@@ -242,10 +242,10 @@ describe('VerificationEngine', () => {
         .mockResolvedValueOnce(2) // First rule passes
         .mockResolvedValueOnce(1); // Second rule fails (needs 3)
 
-      const result = await service.verifyUserBulk('user123', ['test_rule', 'modern_rule'], 'address123');
+      const result = await service.verifyUserBulk('user123', ['test_rule', 'modern_rule'], '0x1212121212121212121212121212121212121212');
 
       expect(result.userId).toBe('user123');
-      expect(result.address).toBe('address123');
+      expect(result.address).toBe('0x1212121212121212121212121212121212121212');
       expect(result.totalRules).toBe(2);
       expect(result.validRules).toHaveLength(1);
       expect(result.invalidRules).toHaveLength(1);
@@ -255,7 +255,7 @@ describe('VerificationEngine', () => {
     });
 
     it('should handle empty rule list', async () => {
-      const result = await service.verifyUserBulk('user123', [], 'address123');
+      const result = await service.verifyUserBulk('user123', [], '0x1212121212121212121212121212121212121212');
 
       expect(result.totalRules).toBe(0);
       expect(result.validRules).toHaveLength(0);
@@ -270,7 +270,7 @@ describe('VerificationEngine', () => {
       
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
 
-      const result = await service.verifyUserBulk('user123', ['good_rule', 'bad_rule'], 'address123');
+      const result = await service.verifyUserBulk('user123', ['good_rule', 'bad_rule'], '0x1212121212121212121212121212121212121212');
 
       expect(result.totalRules).toBe(2);
       expect(result.validRules).toHaveLength(1);
@@ -295,7 +295,7 @@ describe('VerificationEngine', () => {
         .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(3);
 
-      const result = await service.verifyUserForServer('user123', 'server123', 'address123');
+      const result = await service.verifyUserForServer('user123', 'server123', '0x1212121212121212121212121212121212121212');
 
       expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('server123');
       expect(result.totalRules).toBe(2);
@@ -305,7 +305,7 @@ describe('VerificationEngine', () => {
     it('should handle server with no rules', async () => {
       mockDbService.getRoleMappings.mockResolvedValue([]);
 
-      const result = await service.verifyUserForServer('user123', 'server123', 'address123');
+      const result = await service.verifyUserForServer('user123', 'server123', '0x1212121212121212121212121212121212121212');
 
       expect(result.totalRules).toBe(0);
       expect(result.validRules).toHaveLength(0);
@@ -317,10 +317,10 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1);
 
-      const result = await service.verifyUser('user123', 'test_rule', 'address123');
+      const result = await service.verifyUser('user123', 'test_rule', '0x1212121212121212121212121212121212121212');
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'test_collection',
         'test_attribute', 
         'ALL',
@@ -334,7 +334,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(0);
 
-      const result = await service.verifyUser('user123', 'test_rule', 'address123');
+      const result = await service.verifyUser('user123', 'test_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.matchingAssetCount).toBe(0);
@@ -346,10 +346,10 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'cool-cats',
         'trait_type',
         'Rare',
@@ -363,7 +363,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(true);
       expect(result.matchingAssetCount).toBe(5);
@@ -373,7 +373,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(2);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.matchingAssetCount).toBe(2);
@@ -397,10 +397,10 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(ruleWithNulls);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(1);
 
-      const result = await service.verifyUser('user123', 'rule_with_nulls', 'address123');
+      const result = await service.verifyUser('user123', 'rule_with_nulls', '0x1212121212121212121212121212121212121212');
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'some-collection',
         'ALL',
         'ALL',
@@ -418,7 +418,7 @@ describe('VerificationEngine', () => {
         throw new Error('Unexpected error');
       });
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Unexpected error');
@@ -433,7 +433,7 @@ describe('VerificationEngine', () => {
 
       mockDbService.getRuleById.mockResolvedValue(malformedRule);
 
-      const result = await service.verifyUser('user123', 'malformed', 'address123');
+      const result = await service.verifyUser('user123', 'malformed', '0x1212121212121212121212121212121212121212');
 
       // Should still attempt verification with defaults
     });
@@ -446,7 +446,7 @@ describe('VerificationEngine', () => {
 
       expect(result.address).toBe('');
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'cool-cats',
         'trait_type',
         'Rare',
@@ -459,7 +459,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(999999);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(true);
       expect(result.matchingAssetCount).toBe(999999);
@@ -469,7 +469,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(-1);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(result.isValid).toBe(false);
       expect(result.matchingAssetCount).toBe(-1);
@@ -481,7 +481,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      await service.verifyUser('user123', 'modern_rule', 'address123');
+      await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('Starting verification for user user123')
@@ -495,7 +495,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      await service.verifyUserBulk('user123', ['rule1', 'rule2'], 'address123');
+      await service.verifyUserBulk('user123', ['rule1', 'rule2'], '0x1212121212121212121212121212121212121212');
 
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('Starting bulk verification for user user123 with 2 rules')
@@ -508,7 +508,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      const result = await service.verifyUser('user123', 'modern_rule', 'address123');
+      const result = await service.verifyUser('user123', 'modern_rule', '0x1212121212121212121212121212121212121212');
 
       // Check all required fields are present
       expect(result).toHaveProperty('isValid');
@@ -529,7 +529,7 @@ describe('VerificationEngine', () => {
       mockDbService.getRuleById.mockResolvedValue(mockModernRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
 
-      const result = await service.verifyUserBulk('user123', ['rule1'], 'address123');
+      const result = await service.verifyUserBulk('user123', ['rule1'], '0x1212121212121212121212121212121212121212');
 
       // Check all required fields are present
       expect(result).toHaveProperty('userId');

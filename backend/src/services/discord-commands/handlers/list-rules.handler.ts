@@ -12,6 +12,7 @@ import { formatAttribute } from '../utils/rule-validation.util';
 
 type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
 const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
+  solana_nft: 'Solana NFTs', solana_token: 'Solana tokens',
   erc20: 'Tokens (ERC-20)', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
 };
 
@@ -251,14 +252,14 @@ export class ListRulesHandler {
   private withCombinedGroups(rules: any[]): any[] {
     const groups = new Map<string, any[]>();
     for (const rule of rules) {
-      if (rule.asset_type === 'erc20' || !rule.role_id || rule.server_id === '000000000000000000') continue;
+      if (['erc20','solana_token'].includes(rule.asset_type) || !rule.role_id || rule.server_id === '000000000000000000') continue;
       const key = JSON.stringify([rule.server_id, rule.channel_id, rule.role_id, rule.min_items || 1]);
       groups.set(key, [...(groups.get(key) || []), rule]);
     }
     return rules.map(rule => {
       const key = JSON.stringify([rule.server_id, rule.channel_id, rule.role_id, rule.min_items || 1]);
       const group = groups.get(key);
-      if (rule.asset_type === 'erc20' || !group || group.length < 2) return rule;
+      if (['erc20','solana_token'].includes(rule.asset_type) || !group || group.length < 2) return rule;
       return { ...rule, combinedGroup: rule.combinedGroup || { id: Math.min(...group.map(item => item.id)), size: group.length } };
     });
   }
@@ -269,7 +270,7 @@ export class ListRulesHandler {
     }
 
     try {
-      if (rule.asset_type === 'erc20') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
+      if (['erc20','solana_token'].includes(rule.asset_type)) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);

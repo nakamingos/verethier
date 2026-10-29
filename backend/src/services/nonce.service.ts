@@ -34,6 +34,7 @@ export interface NonceData {
     discordName: string;
     discordIcon: string;
   };
+  solanaChallenge?: { address: string; message: string; privacy?: import('@/portal/privacy.service').PrivacyChoice };
   bitcoinChallenge?: { address: string; message: string; privacy?: import('@/portal/privacy.service').PrivacyChoice };
 }
 
@@ -204,6 +205,15 @@ export class NonceService {
       const ttl = (data.expiry || 0) * 1000 - Date.now();
       if (ttl <= 0) throw new Error('Invalid or expired nonce.');
       await this.cache.set(this.getCacheKey(nonce), { ...data, bitcoinChallenge: challenge }, ttl);
+    });
+  }
+
+  async saveSolanaChallenge(userId: string, guildId: string, nonce: string, challenge: NonceData['solanaChallenge']): Promise<void> {
+    await this.withNonceLock(nonce, async () => {
+      const data = await this.getActiveNonce(userId, guildId, nonce);
+      const ttl = (data.expiry || 0) * 1000 - Date.now();
+      if (ttl <= 0) throw new Error('Invalid or expired nonce.');
+      await this.cache.set(this.getCacheKey(nonce), { ...data, solanaChallenge: challenge }, ttl);
     });
   }
 

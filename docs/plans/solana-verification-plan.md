@@ -1,6 +1,6 @@
 # Solana verification scope
 
-Prepared October 29, 2026. The user authorized planning; implementation, production migrations and purchases are not authorized by this document. Existing OpenSea and smart-wallet live acceptance remains deferred at the user's request. No user testing is needed to complete this plan.
+Prepared October 29, 2026. The user subsequently authorized implementation. The initial ordinary-wallet, fungible-token and Token Metadata/Core NFT slice is implemented locally; see [Solana implementation and deployment notes](../solana-verification.md). Production migration/enablement and real-wallet/provider acceptance remain pending. Existing OpenSea and smart-wallet live acceptance stays deferred at the user's request. Compressed NFTs and other later capabilities below remain follow-ups.
 
 ## Recommended product scope
 

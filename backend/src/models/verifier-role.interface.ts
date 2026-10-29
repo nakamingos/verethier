@@ -5,8 +5,9 @@ import { TraitFilter } from '@/utils/trait-filter.util';
 export type AssetCount = number | string;
 
 export interface NftRuleFields {
+  solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria | null;
   trait_filter?: TraitFilter | null;
-  asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20';
+  asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20' | 'solana_nft' | 'solana_token';
   min_balance?: string | null;
   token_decimals?: number | null;
   token_symbol?: string | null;

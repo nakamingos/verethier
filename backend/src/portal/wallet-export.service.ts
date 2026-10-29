@@ -1,3 +1,4 @@
+import { isSolanaRule } from '@/utils/solana-rule.util';
 import {
   BadRequestException,
   ConflictException,
@@ -92,11 +93,8 @@ export class WalletExportService {
   }
   async start(session: PortalSession, server: string, dto: WalletExportDto) {
     await this.authorize(session, server, !!dto.operator_override, dto.reason);
-    if (
-      (dto.family === "bitcoin" &&
-        ["ethereum", "base", "robinhood"].includes(dto.network)) ||
-      (dto.family === "evm" && dto.network === "bitcoin")
-    )
+    if (dto.family && dto.family !== 'all' && dto.network && dto.network !== 'all'
+      && dto.family !== (['bitcoin','solana'].includes(dto.network) ? dto.network : 'evm'))
       throw new BadRequestException(
         "Choose a compatible wallet family and blockchain.",
       );
@@ -243,15 +241,14 @@ export class WalletExportService {
   private family(wallet: any, f: any) {
     return (
       (!f.family || f.family === "all" || f.family === wallet.wallet_type) &&
-      (!f.network ||
-        f.network === "all" ||
-        (f.network === "bitcoin") === (wallet.wallet_type === "bitcoin")) &&
-      (!f.network || f.network === 'all' || f.network === 'bitcoin' || walletOnChain(wallet, getNftNetworkId(f.network))) &&
+      (!f.network || f.network === 'all' || (['bitcoin','solana'].includes(f.network)
+        ? wallet.wallet_type === f.network : walletOnChain(wallet,getNftNetworkId(f.network)))) &&
       (!f.verified_since ||
         Date.parse(wallet.last_verified_at) >= Date.parse(f.verified_since))
     );
   }
   private network(rule: any) {
+    if (isSolanaRule(rule)) return 'solana';
     return rule.asset_type === "ordinal"
       ? "bitcoin"
       : getNftNetwork(rule.chain_id || 1).value;
@@ -410,6 +407,7 @@ export class WalletExportService {
           m.id,
           Promise.resolve(all.map((w) => w.address)),
         );
+        context.userAddresses.set(`${m.id}:solana`,Promise.resolve(all.filter(w=>w.wallet_type==='solana').map(w=>w.address)));
         for (const chainId of [0, 1, 8453, 4663]) context.userAddresses.set(
           `${m.id}:${chainId}`, Promise.resolve(all.filter(w => chainId === 0 ? w.wallet_type === 'bitcoin' : walletOnChain(w, chainId)).map(w => w.address)),
         );
@@ -422,9 +420,9 @@ export class WalletExportService {
             (r) =>
               r.role_id === selected.role_id &&
               r.channel_id === selected.channel_id &&
-              (selected.asset_type === "erc20"
+              (['erc20','solana_token'].includes(selected.asset_type)
                 ? r.id === selected.id
-                : r.asset_type !== "erc20" &&
+                : !['erc20','solana_token'].includes(r.asset_type) &&
                   r.min_items === selected.min_items),
           );
         } else if (f.roles?.length && !f.channel)
@@ -468,7 +466,7 @@ export class WalletExportService {
               networks.add(
                 f.network && f.network !== "all"
                   ? f.network
-                  : w.wallet_type === "bitcoin"
+                  : w.wallet_type === "solana" ? "solana" : w.wallet_type === "bitcoin"
                     ? "bitcoin"
                     : "evm",
               );
@@ -476,8 +474,8 @@ export class WalletExportService {
               const network = this.network(rule);
               if (
                 (f.network && f.network !== "all" && network !== f.network) ||
-                (network === "bitcoin") !== (w.wallet_type === "bitcoin") ||
-                (network !== 'bitcoin' && !walletOnChain(w, rule.chain_id || 1)) ||
+                (['bitcoin','solana'].includes(network) ? network : 'evm') !== w.wallet_type ||
+                (!['bitcoin','solana'].includes(network) && !walletOnChain(w, rule.chain_id || 1)) ||
                 (f.rule && String(rule.id) !== f.rule)
               )
                 continue;

@@ -7,7 +7,7 @@ import { ruleTraits, singleTrait, traitFilterKey, traitFilterLabel } from './tra
 // refresh while an administrator has the editor open.
 export const RULE_EDIT_GUARD_FIELDS = ['server_id', 'channel_id', 'role_id', 'asset_type', 'chain_id', 'contract_address',
   'slug', 'trait_filter', 'min_items', 'token_standard', 'token_ids', 'collection_name',
-  'inscription_criteria', 'rule_label', 'min_balance', 'token_decimals', 'token_symbol'] as const;
+  'solana_criteria', 'inscription_criteria', 'rule_label', 'min_balance', 'token_decimals', 'token_symbol'] as const;
 export const RULE_EDIT_MUTABLE_FIELDS = ['slug', 'trait_filter', 'min_items', 'token_ids',
   'inscription_criteria', 'rule_label', 'ordinal_trait_snapshot', 'min_balance', 'collection_name'] as const;
 
@@ -52,7 +52,7 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
       key: 'selection', label: criteria.kind === 'ids' ? 'Inscription IDs' : 'Inscription numbers / ranges', list: true,
       value: criteria.kind === 'ids' ? criteria.ids.join(',') : criteria.ranges.map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(',')
     }, {key: 'label', label: 'Label (optional)', value: rule.rule_label || '', maxLength: 100}, minimum];
-  if (rule.asset_type === 'erc20') return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
+  if (['erc20','solana_token'].includes(rule.asset_type)) return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
   const traitLimit = ['nft', 'ordinal'].includes(rule.asset_type) ? 100 : 4000;
   const traits: RuleEditField[] = (ruleTraits(rule)?.conditions.length || 0) > 1 ? [
     { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 }, minimum,
@@ -63,6 +63,7 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
     key: 'token_ids', label: rule.token_standard === 'erc1155' ? 'Token IDs (blank = 0-99)' : 'Token IDs (blank = any)',
     value: compactTokenIds(rule.token_ids), list: true
   }, ...traits];
+  if (rule.asset_type === 'solana_nft') return traits;
   return [{
     key: 'slug', label: 'Collection slug', value: rule.slug || 'ALL',
     maxLength: rule.asset_type === 'ordinal' ? 100 : 4000

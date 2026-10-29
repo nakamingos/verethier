@@ -47,7 +47,7 @@
         !state.messageVerified
       "
     >
-      @if (state.walletTypes.includes("bitcoin") && !state.messageVerified) {
+      @if ((state.walletTypes.length > 1 || state.walletTypes.includes("bitcoin")) && !state.messageVerified) {
         <div class="wallet-choice" role="group" aria-label="Wallet">
           @if (state.walletTypes.includes("evm")) {
             <button
@@ -63,6 +63,7 @@
               EVM
             </button>
           }
+          @if (state.walletTypes.includes("bitcoin")) {
           <button
             type="button"
             aria-label="Bitcoin"
@@ -76,6 +77,10 @@
           >
             Bitcoin
           </button>
+          }
+          @if (state.walletTypes.includes("solana")) {
+            <button type="button" [attr.aria-pressed]="state.walletType === 'solana'" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting" (click)="selectWallet('solana')">Solana</button>
+          }
         </div>
       }
 
@@ -98,6 +103,10 @@
                 : "Connect your wallet"
             }}
           </div>
+          @if (state.walletType === 'solana') {
+            <p>Connect Phantom on Solana mainnet.</p>
+            <button type="button" (click)="solanaWalletSvc.openPhantomMobile()" [disabled]="state.walletConnecting || state.messageSigning || state.verificationSubmitting">Open Phantom</button>
+          }
           @if (state.walletType === "bitcoin") {
             <div
               class="bitcoin-wallet-choice"

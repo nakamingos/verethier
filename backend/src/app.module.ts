@@ -1,3 +1,5 @@
+import { SolanaOwnershipService } from './services/solana-ownership.service';
+import { SolanaSignatureService } from './services/solana-signature.service';
 import { PrivacyService } from './portal/privacy.service';
 import { PrivacyController } from './portal/privacy.controller';
 import { WalletExportService } from './portal/wallet-export.service';
@@ -196,6 +198,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
     OrdnetOwnershipService,
     OrdinalsRequestScheduler,
     BitcoinSignatureService,
+    SolanaSignatureService,
+    SolanaOwnershipService,
     UserAddressService,         // Multi-wallet address management
 
     // Role management services

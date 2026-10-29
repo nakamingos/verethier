@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { WalletBlock } from '@/models/wallet-block.interface';
+import { normalizeSolanaAddress } from '@/utils/solana.util';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { NftCheckContext } from './nft-ownership.service';
 
@@ -10,8 +11,9 @@ export const WALLET_BLOCKED = 'This wallet has been blocked from verification in
 export function normalizeBlockedWallet(value: string): string {
   const address = value?.trim();
   if (/^0x[0-9a-fA-F]{40}$/.test(address)) return address.toLowerCase();
-  if (/^bc1p/i.test(address)) return normalizeBitcoinAddress(address);
-  throw new Error('Enter a full EVM wallet address (0x…) or Bitcoin mainnet Ordinals address (bc1p…).');
+  if (address.length === 62 && /^bc1p/i.test(address)) return normalizeBitcoinAddress(address);
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) return normalizeSolanaAddress(address);
+  throw new Error('Enter a full Solana, EVM wallet address (0x…) or Bitcoin mainnet Ordinals address (bc1p…).');
 }
 
 @Injectable()
@@ -23,7 +25,7 @@ export class WalletBlockService {
     reason = reason?.trim() || null;
     if (reason && reason.length > 200) throw new Error('Block reasons must be 200 characters or fewer.');
     const { data, error } = await this.supabase.from('verifier_wallet_blocks').upsert({
-      server_id: serverId, address, wallet_type: address.startsWith('0x') ? 'evm' : 'bitcoin',
+      server_id: serverId, address, wallet_type: address.startsWith('0x') ? 'evm' : (address.length === 62 && /^bc1p/i.test(address)) ? 'bitcoin' : 'solana',
       blocked_by: adminId, blocked_at: new Date().toISOString(), reason,
     }, { onConflict: 'server_id,address' }).select().single();
     if (error || !data) throw new Error('Could not save the wallet block. Please try again.');
@@ -62,7 +64,7 @@ export class WalletBlockService {
   }
 
   async allowedAddresses(serverId: string, addresses: string[], context?: NftCheckContext): Promise<string[]> {
-    const wallets = [...new Set(addresses.map(address => address.toLowerCase()))];
+    const wallets = [...new Set(addresses.map(address => (/^0x/i.test(address) || (address.length === 62 && /^bc1p/i.test(address))) ? address.toLowerCase() : address))];
     if (!wallets.length) return [];
     const key = JSON.stringify([serverId, wallets.slice().sort()]);
     // Share only within the current verification run; a new run always reads

@@ -4,7 +4,7 @@ export function walletOnChain(
   chainId: number,
 ): boolean {
   return (
-    wallet.wallet_type !== "bitcoin" &&
+    (wallet.wallet_type === undefined || wallet.wallet_type === "evm") &&
     (wallet.evm_chain_ids == null || wallet.evm_chain_ids.includes(chainId))
   );
 }

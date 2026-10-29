@@ -161,7 +161,7 @@ export class UserAddressService {
    */
   async removeUserAddress(userId: string, address: string): Promise<boolean> {
     try {
-      const normalizedAddress = address.toLowerCase();
+      const normalizedAddress = (/^0x/i.test(address) || (address.length === 62 && /^bc1p/i.test(address))) ? address.toLowerCase() : address;
       // Log address removal only in development  
       if (process.env.NODE_ENV === 'development') {
         this.logger.debug('Removing a saved wallet link.');
@@ -244,7 +244,7 @@ export class UserAddressService {
    */
   async getUsersWithAddress(address: string): Promise<string[]> {
     try {
-      const normalizedAddress = address.toLowerCase();
+      const normalizedAddress = (/^0x/i.test(address) || (address.length === 62 && /^bc1p/i.test(address))) ? address.toLowerCase() : address;
       this.logger.debug(`Finding users with address: ${normalizedAddress}`);
 
       const { data, error } = await this.supabase

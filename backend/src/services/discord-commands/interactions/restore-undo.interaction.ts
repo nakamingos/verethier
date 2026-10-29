@@ -348,7 +348,7 @@ export class RestoreUndoInteractionHandler {
         const minItems = rule.min_items || 1;
         
         const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
-          : rule.asset_type === 'erc20' ? `Token: ${tokenRuleCriteria(rule)}`
+          : ['erc20','solana_token'].includes(rule.asset_type) ? `Token: ${tokenRuleCriteria(rule)}`
           : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
           : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;

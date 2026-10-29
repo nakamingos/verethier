@@ -10,7 +10,7 @@ Use the existing verification/reconciliation policy: complete non-matches can re
 
 ## Solana
 
-Scope planning was authorized October 29, 2026; the [dedicated Solana plan](solana-verification-plan.md) now defines the recommended first release and later stages. This does not authorize implementation or require live testing now.
+Solana implementation was subsequently authorized October 29, 2026. The initial slice is implemented locally; see [deployment/acceptance notes](../solana-verification.md) and the [dedicated plan](solana-verification-plan.md). Production migration/enablement and user-assisted live tests remain pending.
 
 - **Wallet proof:** start with a Wallet Standard-compatible wallet and Sign-In with Solana where supported. Verify the exact signed message, account, domain, nonce and expiry on the backend using Ed25519. Phantom documents message signing and origin checks; having its Bitcoin connector does not provide a Solana connector. [Phantom signing](https://docs.phantom.com/solana/signing-a-message).
 - **Fungible assets:** identify a token by mint address and token program. Aggregate its owner's token accounts using raw integer amounts and mint decimals. Plan separately for the original Token Program and Token-2022 extensions; define frozen/restricted balance semantics rather than assuming they behave like ERC-20. [Solana tokens](https://solana.com/docs/tokens).

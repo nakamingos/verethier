@@ -226,3 +226,7 @@ Overlapping rules count each asset once. NFT identity includes its network, cont
 Migration `20261027010000_privacy_controls.sql` introduces private-by-default community wallet sharing, member export choices, fresh filtered CSV exports, one-year removed-wallet association cleanup and operator-reviewed account deletion. Apply the rehearsed migration before releasing the portal/backend. The public policy is `/privacy`.
 
 Set backend-only `BOUNCER_OPERATOR_DISCORD_IDS` to comma/whitespace-separated numeric Discord user IDs to appoint operators. Empty or malformed configuration grants no extra access. Operators can inspect private retained data and use a reasoned, audited export override. Existing Discord admin/owner checks remain required for server changes. The owner configures this variable manually in Railway. See [privacy implementation](docs/plans/privacy-implementation-plan.md) and [privacy operations/recovery](docs/privacy-operations.md).
+
+### Solana implementation status
+
+Initial Solana wallet proofs, fungible-token rules and Token Metadata/Core NFT scopes are implemented behind backend configuration. Production migration and live acceptance remain pending; see [Solana verification](docs/solana-verification.md) for configuration, supported scope and deferred checks.

@@ -44,7 +44,7 @@ describe('DynamicRoleService', () => {
     role_id: 'role123',
     role_name: 'Test Role',
     rule_id: 'rule123',
-    address: 'address123',
+    address: '0x1212121212121212121212121212121212121212',
     status: 'active',
     created_at: '2024-01-01T00:00:00Z',
     last_checked: '2024-01-01T00:00:00Z'
@@ -91,7 +91,7 @@ describe('DynamicRoleService', () => {
     };
 
     const mockUserAddressServiceValue = {
-      getUserAddresses: jest.fn().mockResolvedValue(['address123']),
+      getUserAddresses: jest.fn().mockResolvedValue(['0x1212121212121212121212121212121212121212']),
     };
 
     module = await Test.createTestingModule({
@@ -385,7 +385,7 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'cool-cats',
         'trait_type',
         'Rare',
@@ -446,7 +446,7 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'cool-cats',
         'trait_type',
         'Rare',
@@ -548,7 +548,7 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        ['address123'],
+        ['0x1212121212121212121212121212121212121212'],
         'ALL',
         'ALL',
         'ALL',
@@ -570,16 +570,9 @@ describe('DynamicRoleService', () => {
 
       await service.performScheduledReverification();
 
-      expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledWith(
-        [''],
-        'cool-cats',
-        'trait_type',
-        'Rare',
-        1,
-        expect.objectContaining({ checks: expect.any(Map), ordinalMode: 'scheduled' })
-      );
-      
-      mockUserAddressService.getUserAddresses.mockResolvedValue(['address123']);
+      expect(mockDataService.checkAssetOwnershipWithCriteria).not.toHaveBeenCalled();
+
+      mockUserAddressService.getUserAddresses.mockResolvedValue(['0x1212121212121212121212121212121212121212']);
     });
 
     it('should handle very large batch sizes', async () => {

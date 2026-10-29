@@ -580,6 +580,17 @@
                             /></label>
                           }
                         }
+                        @if (draft.asset_type === 'solana_nft' || draft.asset_type === 'solana_token') {
+                          <p>Solana mainnet · directly held assets</p>
+                          @if (draft.asset_type === 'solana_token') {
+                            <label>Mint address:<input name="solanaMint" [(ngModel)]="draft.solana_mint" required maxlength="44" /></label>
+                            <label>Token program:<span class="select-control"><app-pixel-select name="solanaProgram" [(ngModel)]="draft.solana_program" [options]="solanaProgramChoices" label="Token program" /></span></label>
+                          } @else {
+                            <label>Match by:<span class="select-control"><app-pixel-select name="solanaScope" [(ngModel)]="draft.solana_kind" [options]="solanaScopeChoices" label="Solana match scope" /></span></label>
+                            <label>Addresses / asset IDs:<textarea name="solanaAddresses" [(ngModel)]="draft.solana_addresses" required maxlength="46000" placeholder="One address per line"></textarea></label>
+                            <p>Any listed address may match. Token Metadata and Core assets only; compressed NFTs are not included.</p>
+                          }
+                        }
                         @if (draft.asset_type === "nft") {
                           <app-nft-collection-lookup [server]="selected" [request]="nftCollectionRequest"
                             [disabled]="busy" (selection)="useNftCollection($event)" />
@@ -622,12 +633,12 @@
                           }
                         }
                         @if (
-                          draft.asset_type !== "erc20" &&
+                          !(["erc20", "solana_token"].includes(draft.asset_type)) &&
                           (draft.asset_type === "nft" || mode === "collection")
                         ) {
                           <ng-container *ngTemplateOutlet="traitControls" />
                         }
-                        @if (draft.asset_type === "erc20") {
+                        @if (draft.asset_type === "erc20" || draft.asset_type === "solana_token") {
                           <label
                             >Minimum token balance:<input
                               name="balance"

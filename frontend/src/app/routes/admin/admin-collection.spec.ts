@@ -78,4 +78,27 @@ describe('Canonical NFT rules from a collection lookup', () => {
       selection.contract_address,
     );
   });
+  it('keeps Solana token mint/program and minimum separate from EVM defaults',()=>{
+    component.draft.asset_type='solana_token';component.changeAsset();
+    component.draft.solana_mint='So11111111111111111111111111111111111111112';
+    component.draft.min_balance='1.25';
+    const payload=component.payload();
+    expect(payload.solana_criteria).toEqual({kind:'token',mint:component.draft.solana_mint,program:component.draft.solana_program});
+    expect(payload.min_balance).toBe('1.25');
+    for(const key of ['network','chain_id','min_items','trait_filter','contract_address','token_ids','slug'])expect(payload[key]).toBeUndefined();
+  });
+  it('preserves Solana scope address casing and NFT trait rules',()=>{
+    component.draft.asset_type='solana_nft';component.changeAsset();
+    const address='So11111111111111111111111111111111111111112';
+    component.draft.solana_kind='verified_creator';component.draft.solana_addresses=address;
+    component.draft.trait_filter={operator:'AND',conditions:[{key:'Color',value:'Blue'}]};
+    const payload=component.payload();
+    expect(payload.solana_criteria).toEqual({kind:'verified_creator',addresses:[address],formats:['metadata','core']});
+    expect(payload.trait_filter).toEqual(component.draft.trait_filter);
+    expect(payload.min_items).toBe(1);expect(payload.network).toBeUndefined();expect(payload.slug).toBeUndefined();
+  });
+  it('uses the Solana explorer for a Solana address beginning with the Bitcoin prefix',()=>{
+    const address='bc1p111111111111111111111111111111111111111';
+    expect(component.walletExplorer(address)).toBe('https://solscan.io/account/'+address);
+  });
 });

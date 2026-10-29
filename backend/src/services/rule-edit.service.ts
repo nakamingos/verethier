@@ -20,11 +20,12 @@ export class RuleEditService {
 
   async prepare(before: VerifierRole, inputs: Record<string, string>): Promise<VerifierRole> {
     const allowed = new Set(ruleEditFields(before).map(field => field.key));
-    if (!before.inscription_criteria && before.asset_type !== 'erc20') allowed.add('trait_filter');
+    if (!before.inscription_criteria && !['erc20','solana_token'].includes(before.asset_type)) allowed.add('trait_filter');
     if (Object.keys(inputs).some(key => !allowed.has(key))) throw new Error('This field cannot be edited for this rule.');
     const candidate = { ...before };
-    if (before.asset_type === 'erc20') {
+    if (['erc20','solana_token'].includes(before.asset_type)) {
       candidate.min_balance = parseTokenBalance(inputs.min_balance, before.token_decimals);
+      if (before.asset_type === 'solana_token' && BigInt(candidate.min_balance) >= (1n << 64n)) throw new Error('Minimum exceeds Solana token supply limits.');
       return candidate;
     }
     const minimum = inputs.min_items?.trim();
@@ -56,6 +57,7 @@ export class RuleEditService {
       if ((ruleTraits(before)?.conditions.length || 0) > 1) throw new Error('Edit multi-trait conditions in the Control Room; single fields cannot replace them.');
       if (before.trait_filter !== undefined) candidate.trait_filter = ruleTraits({ attribute_key: candidate.attribute_key, attribute_value: candidate.attribute_value });
     }
+    if (before.asset_type === 'solana_nft') return candidate;
     if (before.asset_type === 'nft') {
       const trait = nftTrait(candidate);
       const prepared = await this.nfts.prepareRule(before.contract_address, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id);

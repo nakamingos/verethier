@@ -28,9 +28,9 @@ export class PrivacyReviewDto {
 }
 export class WalletExportDto {
   @IsUUID() request_id: string;
-  @IsOptional() @IsIn(["all", "evm", "bitcoin"]) family?: string;
+  @IsOptional() @IsIn(["all", "evm", "bitcoin", "solana"]) family?: string;
   @IsOptional()
-  @IsIn(["all", "ethereum", "base", "robinhood", "bitcoin"])
+  @IsIn(["all", "ethereum", "base", "robinhood", "bitcoin", "solana"])
   network?: string;
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) channel?: string;
   @IsOptional()
