@@ -1,3 +1,11 @@
+import {
+  bubblegumTreeConfig,
+  compressedCollection,
+  compressedCreators,
+  compressedProof,
+  compressedTree,
+  compressedUnavailable,
+} from "@/utils/solana-compressed.util";
 import { Injectable } from "@nestjs/common";
 import { EnvironmentConfig } from "@/config/environment.config";
 import { VerifierRole } from "@/models/verifier-role.interface";
@@ -34,7 +42,11 @@ const SAFE_EXTENSIONS = new Set([
   "nonTransferableAccount",
   "defaultAccountState",
 ]);
-type Run = { deadline: number; reads: Map<string, Promise<any>> };
+type Run = {
+  deadline: number;
+  reads: Map<string, Promise<any>>;
+  compressedChecks?: number;
+};
 
 @Injectable()
 export class SolanaOwnershipService {
@@ -150,7 +162,9 @@ export class SolanaOwnershipService {
       throw new Error(UNAVAILABLE);
     return value as number;
   }
-  async checkSetupHealth(): Promise<void> {
+  async checkSetupHealth(compressed = false): Promise<void> {
+    if (compressed && !EnvironmentConfig.SOLANA_COMPRESSED_ENABLED)
+      throw new Error("Compressed Solana NFT verification is not enabled.");
     const run = this.run();
     await this.cluster(run);
     await this.cluster(run, true);
@@ -487,6 +501,186 @@ export class SolanaOwnershipService {
     }
     return result;
   }
+  private async primeCompressedAssets(
+    assets: any[],
+    run: Run,
+    minSlot: number,
+  ) {
+    const pending = assets.filter(
+      (asset) => !run.reads.has(`compressed-snapshot:${asset.id}:${minSlot}`),
+    );
+    if (pending.length < 2) return;
+    run.compressedChecks = (run.compressedChecks || 0) + pending.length;
+    if (run.compressedChecks > 1000)
+      throw new Error(
+        "Compressed NFT verification exceeds the complete-check limit.",
+      );
+    for (let offset = 0; offset < pending.length; offset += 100) {
+      const ids = pending.slice(offset, offset + 100).map((asset) => asset.id);
+      const [items, proofs] = await Promise.all([
+        this.request(
+          EnvironmentConfig.SOLANA_DAS_URL,
+          "getAssetBatch",
+          { ids, displayOptions: { showUnverifiedCollections: true } },
+          run,
+        ),
+        this.request(
+          EnvironmentConfig.SOLANA_DAS_URL,
+          "getAssetProofBatch",
+          { ids },
+          run,
+        ),
+      ]);
+      if (
+        !Array.isArray(items) ||
+        items.length !== ids.length ||
+        !proofs ||
+        typeof proofs !== "object" ||
+        Array.isArray(proofs) ||
+        Object.keys(proofs).length !== ids.length
+      )
+        compressedUnavailable();
+      const byId = new Map(items.map((asset) => [asset?.id, asset]));
+      if (
+        byId.size !== ids.length ||
+        ids.some(
+          (id) =>
+            !byId.has(id) ||
+            !Object.prototype.hasOwnProperty.call(proofs, id) ||
+            !proofs[id],
+        )
+      )
+        compressedUnavailable();
+      for (const id of ids)
+        run.reads.set(
+          `compressed-snapshot:${id}:${minSlot}`,
+          Promise.resolve([byId.get(id), proofs[id]]),
+        );
+    }
+  }
+  private async compressedAsset(
+    asset: any,
+    run: Run,
+    minSlot: number,
+  ): Promise<any | null> {
+    return this.cache(run, `compressed:${asset.id}:${minSlot}`, async () => {
+      const [current, proof] = await this.cache(
+        run,
+        `compressed-snapshot:${asset.id}:${minSlot}`,
+        async () => {
+          run.compressedChecks = (run.compressedChecks || 0) + 1;
+          if (run.compressedChecks > 1000)
+            throw new Error(
+              "Compressed NFT verification exceeds the complete-check limit.",
+            );
+          return Promise.all([
+            this.request(
+              EnvironmentConfig.SOLANA_DAS_URL,
+              "getAsset",
+              {
+                id: asset.id,
+                displayOptions: { showUnverifiedCollections: true },
+              },
+              run,
+            ),
+            this.request(
+              EnvironmentConfig.SOLANA_DAS_URL,
+              "getAssetProof",
+              { id: asset.id },
+              run,
+            ),
+          ]);
+        },
+      );
+      if (current?.id !== asset.id) compressedUnavailable();
+      const evidence = compressedProof(current, proof, minSlot);
+      const tree = await this.cache(
+        run,
+        `compressed-tree:${evidence.tree}:${evidence.version}:${minSlot}`,
+        async () => {
+          const config = bubblegumTreeConfig(evidence.tree);
+          const response = await this.request(
+            EnvironmentConfig.SOLANA_RPC_URL,
+            "getMultipleAccounts",
+            [
+              [evidence.tree, config],
+              {
+                encoding: "base64",
+                dataSlice: { offset: 0, length: 96 },
+                commitment: "finalized",
+                minContextSlot: minSlot,
+              },
+            ],
+            run,
+          );
+          if (
+            this.slot(response?.context?.slot) < minSlot ||
+            !Array.isArray(response.value) ||
+            response.value.length !== 2
+          )
+            compressedUnavailable();
+          const header = compressedTree(
+            evidence.tree,
+            evidence.version,
+            response.value[0],
+            response.value[1],
+          );
+          const full = await this.request(
+            EnvironmentConfig.SOLANA_RPC_URL,
+            "getAccountInfo",
+            [
+              evidence.tree,
+              {
+                encoding: "base64",
+                dataSlice: { offset: 0, length: header.length },
+                commitment: "finalized",
+                minContextSlot: response.context.slot,
+              },
+            ],
+            run,
+          );
+          if (this.slot(full?.context?.slot) < response.context.slot)
+            compressedUnavailable();
+          const state = compressedTree(
+            evidence.tree,
+            evidence.version,
+            full.value,
+            response.value[1],
+          );
+          if (
+            !state.root ||
+            state.depth !== header.depth ||
+            state.length !== header.length
+          )
+            compressedUnavailable();
+          return state;
+        },
+      );
+      if (
+        evidence.depth !== tree.depth ||
+        BigInt(evidence.nonce) >= tree.minted ||
+        !evidence.root.equals(new Uint8Array(tree.root))
+      )
+        compressedUnavailable();
+      return evidence.absent ? null : current;
+    });
+  }
+  private compressedSelected(
+    asset: any,
+    criteria: Exclude<SolanaCriteria, { kind: "token" }>,
+  ): boolean {
+    if (criteria.kind === "asset_ids")
+      return criteria.addresses.includes(asset.id);
+    if (criteria.kind === "verified_creator")
+      return compressedCreators(asset).some(
+        (creator) =>
+          creator.verified && criteria.addresses.includes(creator.address),
+      );
+    const collection = compressedCollection(asset);
+    return (
+      !!collection?.verified && criteria.addresses.includes(collection.address)
+    );
+  }
   async matchingAssets(
     rule: VerifierRole,
     addresses: string[],
@@ -495,6 +689,13 @@ export class SolanaOwnershipService {
     const criteria = solanaCriteria(rule.solana_criteria);
     if (rule.asset_type !== "solana_nft" || criteria.kind === "token")
       throw new Error("Invalid Solana NFT rule.");
+    if (
+      criteria.formats.includes("compressed") &&
+      !EnvironmentConfig.SOLANA_COMPRESSED_ENABLED
+    )
+      throw new Error(
+        "Compressed Solana NFT verification is not enabled. Existing roles are preserved.",
+      );
     const run = this.run(context),
       matches = new Map<string, bigint>();
     for (const owner of [...new Set(addresses)]) {
@@ -504,7 +705,10 @@ export class SolanaOwnershipService {
         !asset.burnt &&
         asset.compression?.compressed !== true &&
         ["V1_NFT", "ProgrammableNFT"].includes(asset.interface);
-      if (criteria.formats.includes("metadata") && inventory.some(metadataAsset)) {
+      if (
+        criteria.formats.includes("metadata") &&
+        inventory.some(metadataAsset)
+      ) {
         // A fresh index watermark does not make every individual asset row current.
         // Confirm actual holdings before trusting indexed ownership or burned flags.
         const owned = await this.ownedNftMints(owner, run, minSlot);
@@ -523,19 +727,36 @@ export class SolanaOwnershipService {
               ["V1_NFT", "ProgrammableNFT"].includes(a.interface))),
       );
       const chain = await this.onchainAssets(needs, run, minSlot);
-      for (const asset of inventory) {
+      if (criteria.formats.includes("compressed")) {
+        const candidates = inventory.filter(
+          (asset) =>
+            !asset.burnt &&
+            asset.compression?.compressed === true &&
+            this.compressedSelected(asset, criteria),
+        );
+        await this.primeCompressedAssets(candidates, run, minSlot);
+      }
+      for (let asset of inventory) {
         if (asset.burnt) continue;
-        const format = ["V1_NFT", "ProgrammableNFT"].includes(asset.interface)
-          ? "metadata"
-          : asset.interface === "MplCoreAsset"
-            ? "core"
-            : null;
-        if (
-          !format ||
-          !criteria.formats.includes(format) ||
-          asset.compression?.compressed === true
-        )
-          continue;
+        const compressed = asset.compression?.compressed === true;
+        if (compressed) {
+          if (
+            !criteria.formats.includes("compressed") ||
+            !this.compressedSelected(asset, criteria)
+          )
+            continue;
+          asset = await this.compressedAsset(asset, run, minSlot);
+          if (!asset || asset.ownership?.owner !== owner) continue;
+          if (!this.compressedSelected(asset, criteria)) continue;
+        }
+        const format = compressed
+          ? "compressed"
+          : ["V1_NFT", "ProgrammableNFT"].includes(asset.interface)
+            ? "metadata"
+            : asset.interface === "MplCoreAsset"
+              ? "core"
+              : null;
+        if (!format || !criteria.formats.includes(format)) continue;
         if (
           format === "metadata" &&
           typeof asset.compression?.compressed !== "boolean"
@@ -543,10 +764,10 @@ export class SolanaOwnershipService {
           throw new Error(UNAVAILABLE);
         if (asset.ownership.ownership_model !== "single")
           throw new Error(UNAVAILABLE);
-        let selected = false;
-        if (criteria.kind === "asset_ids")
+        let selected = compressed;
+        if (!compressed && criteria.kind === "asset_ids")
           selected = criteria.addresses.includes(asset.id);
-        if (criteria.kind === "collection") {
+        if (!compressed && criteria.kind === "collection") {
           const relation = chain.get(asset.id)?.collection;
           selected =
             format === "core"
@@ -554,7 +775,7 @@ export class SolanaOwnershipService {
               : !!relation?.verified &&
                 criteria.addresses.includes(relation.address);
         }
-        if (criteria.kind === "verified_creator") {
+        if (!compressed && criteria.kind === "verified_creator") {
           if (!Array.isArray(asset.creators)) throw new Error(UNAVAILABLE);
           selected = asset.creators.some(
             (c) =>

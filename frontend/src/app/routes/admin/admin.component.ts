@@ -254,6 +254,11 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'erc20', label: 'Tokens (ERC-20)' },
     ...(this.data?.capabilities?.solana ? [{value:'solana_nft',label:'Solana NFTs'},{value:'solana_token',label:'Solana tokens'}] : []),
   ]; }
+  readonly solanaFormatChoices: SelectChoice[] = [
+    { value: 'standard', label: 'Token Metadata + Core' },
+    { value: 'compressed', label: 'Compressed NFTs (Bubblegum V1/V2)' },
+    { value: 'all', label: 'All supported formats' },
+  ];
   get assetChoices(): SelectChoice[] {return this.assetFilterChoices.slice(1);}
   readonly solanaScopeChoices = [{value:'collection',label:'Verified collection'},{value:'verified_creator',label:'Verified creator'},{value:'asset_ids',label:'Specific asset IDs'}];
   readonly solanaProgramChoices = [{value:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',label:'SPL Token'},{value:'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',label:'Token-2022'}];
@@ -800,7 +805,8 @@ export class AdminComponent implements OnInit, OnDestroy {
             .map((p: any) => (p[0] === p[1] ? p[0] : p.join('–')))
             .join(', ')
       : '';
-    return `${(r.solana_criteria ? ('Solana '+r.solana_criteria.kind+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${picked ? ' · ' + picked : ''}${traits}`;
+    const format = r.solana_criteria?.formats?.includes('compressed') ? (r.solana_criteria.formats.length === 1 ? ' · compressed NFTs' : ' · includes compressed NFTs') : '';
+    return `${(r.solana_criteria ? ('Solana '+r.solana_criteria.kind+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${picked ? ' · ' + picked : ''}${traits}`;
   }
   channelName(id: string) {
     return (
@@ -956,7 +962,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       role_name: name,
       min_items: 1,
       network: 'ethereum',
-      solana_kind:'collection', solana_addresses:'', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      solana_kind:'collection', solana_addresses:'', solana_formats:'standard', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
       trait_filter: { operator: 'AND', conditions: [] },
     };
     this.mode = 'collection';
@@ -1031,7 +1037,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
     if (d.asset_type === 'solana_token') result.solana_criteria = {kind:'token',mint:(d.solana_mint || '').trim(),program:d.solana_program};
-    if (d.asset_type === 'solana_nft') result.solana_criteria = {kind:d.solana_kind,addresses:(d.solana_addresses || '').split(/[\s,]+/).filter(Boolean),formats:['metadata','core']};
+    if (d.asset_type === 'solana_nft') result.solana_criteria = {kind:d.solana_kind,addresses:(d.solana_addresses || '').split(/[\s,]+/).filter(Boolean),formats:d.solana_formats === 'compressed' ? ['compressed'] : d.solana_formats === 'all' ? ['metadata','core','compressed'] : ['metadata','core']};
     if (this.hasTraitEditor) {
       delete result.attribute_key;
       delete result.attribute_value;

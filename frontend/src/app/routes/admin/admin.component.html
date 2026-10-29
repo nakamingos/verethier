@@ -588,7 +588,12 @@
                           } @else {
                             <label>Match by:<span class="select-control"><app-pixel-select name="solanaScope" [(ngModel)]="draft.solana_kind" [options]="solanaScopeChoices" label="Solana match scope" /></span></label>
                             <label>Addresses / asset IDs:<textarea name="solanaAddresses" [(ngModel)]="draft.solana_addresses" required maxlength="46000" placeholder="One address per line"></textarea></label>
-                            <p>Any listed address may match. Token Metadata and Core assets only; compressed NFTs are not included.</p>
+                            @if (data?.capabilities?.solana_compressed) {
+                              <label>NFT formats:<span class="select-control"><app-pixel-select name="solanaFormats" [(ngModel)]="draft.solana_formats" [options]="solanaFormatChoices" label="Solana NFT formats" /></span></label>
+                              <p>Any listed address may match. Compressed NFTs are included only when selected above.</p>
+                            } @else {
+                              <p>Any listed address may match. Token Metadata and Core assets only; compressed NFTs are not included.</p>
+                            }
                           }
                         }
                         @if (draft.asset_type === "nft") {

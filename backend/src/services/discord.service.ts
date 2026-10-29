@@ -578,6 +578,7 @@ export class DiscordService implements OnModuleInit {
           .addStringOption(o=>o.setName('role').setDescription('Role name').setRequired(true).setAutocomplete(true))
           .addStringOption(o=>o.setName('scope').setDescription('NFT match scope').setRequired(true).addChoices({name:'Verified collection',value:'collection'},{name:'Verified creator',value:'verified_creator'},{name:'Asset IDs',value:'asset_ids'}))
           .addStringOption(o=>o.setName('addresses').setDescription('Comma-separated Solana scope addresses').setRequired(true).setMaxLength(4000))
+          .addStringOption(o=>o.setName('formats').setDescription('NFT formats; defaults to Token Metadata + Core').addChoices({name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}))
           .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum NFTs').setMinValue(1))
           .addStringOption(o=>o.setName('attribute_key').setDescription('Trait name'))
           .addStringOption(o=>o.setName('attribute_value').setDescription('Trait value')))

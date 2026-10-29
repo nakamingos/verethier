@@ -4,7 +4,7 @@ export type SolanaCriteria =
   | {
       kind: "collection" | "verified_creator" | "asset_ids";
       addresses: string[];
-      formats: Array<"metadata" | "core">;
+      formats: Array<"metadata" | "core" | "compressed">;
     };
 
 export function solanaCriteria(input: unknown): SolanaCriteria {
@@ -32,8 +32,8 @@ export function solanaCriteria(input: unknown): SolanaCriteria {
     value.addresses.length > (value.kind === "asset_ids" ? 1000 : 20) ||
     !Array.isArray(value.formats) ||
     !value.formats.length ||
-    value.formats.length > 2 ||
-    value.formats.some((f) => !["metadata", "core"].includes(f))
+    value.formats.length > 3 ||
+    value.formats.some((f) => !["metadata", "core", "compressed"].includes(f))
   )
     throw new Error("Invalid Solana NFT scope.");
   return {
@@ -41,7 +41,9 @@ export function solanaCriteria(input: unknown): SolanaCriteria {
     addresses: [
       ...new Set<string>(value.addresses.map(normalizeSolanaAddress)),
     ].sort(),
-    formats: [...new Set<"metadata" | "core">(value.formats)].sort(),
+    formats: [
+      ...new Set<"metadata" | "core" | "compressed">(value.formats),
+    ].sort(),
   };
 }
 
@@ -60,5 +62,10 @@ export function solanaRuleLabel(rule: {
       : c.kind === "verified_creator"
         ? "verified creator"
         : "asset";
-  return `Solana ${label}${c.addresses.length > 1 ? "s" : ""}: ${c.addresses.length > 2 ? `${c.addresses.length} selected` : c.addresses.join(", ")}`;
+  const formats = c.formats.includes("compressed")
+    ? c.formats.length === 1
+      ? " · compressed NFTs"
+      : " · includes compressed NFTs"
+    : "";
+  return `Solana ${label}${c.addresses.length > 1 ? "s" : ""}: ${c.addresses.length > 2 ? `${c.addresses.length} selected` : c.addresses.join(", ")}${formats}`;
 }

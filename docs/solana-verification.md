@@ -1,6 +1,6 @@
 # Solana verification
 
-Initial implementation prepared October 29, 2026. The production migration was applied October 29 after a fresh private backup and rehearsal of the exact guarded upgrade. Helius passed read-only provider acceptance checks. Runtime enablement requires the backend Railway flag; actual Phantom/Discord acceptance remains deferred at the user's request.
+Initial implementation prepared October 29, 2026. The production migration was applied October 29 after a fresh private backup and rehearsal of the exact guarded upgrade. Helius passed read-only provider acceptance checks. The operator enabled Solana and confirmed that the desktop Phantom connection now works. Full signing, mobile and Discord-role acceptance remain on the deferred checklist.
 
 ## Initial coverage
 
@@ -10,7 +10,7 @@ Initial implementation prepared October 29, 2026. The production migration was a
 - Wallet linking/transfers/removal, proof activity/history, privacy and deletion behavior, server wallet blocks/audits, member lookup/explorer links, rule edits/revisions, combined collectible counts, background checks, setup diagnostics and fresh exports use the new family. Solana fungible balances never join collectible item-count groups.
 - The Control Room has Solana NFT/token rule choices when enabled. Discord has `/setup add-solana-nft-rule` and `/setup add-solana-token-rule`, using the same validated creation operations.
 
-Compressed Bubblegum assets, master-edition ancestry, native SOL minima, staking/escrow, other wallet apps and marketplace slugs remain separate follow-ups. Existing saved EVM/Bitcoin identities and behavior are preserved. In particular, a Solana address can start with `bc1p`; prefix alone must not classify it as Bitcoin or cause lowercasing.
+Compressed Bubblegum V1/V2 support is implemented as the separately gated stage below. Master-edition ancestry, native SOL minima, staking/escrow, other wallet apps and marketplace slugs remain separate follow-ups. Existing saved EVM/Bitcoin identities and behavior are preserved. In particular, a Solana address can start with `bc1p`; prefix alone must not classify it as Bitcoin or cause lowercasing.
 
 ## Backend configuration and migration
 
@@ -20,6 +20,7 @@ Configure these only on the backend:
 | --- | --- |
 | `SOLANA_RPC_URL` | HTTPS Solana mainnet JSON-RPC endpoint with finalized account/mint reads. |
 | `SOLANA_DAS_URL` | HTTPS mainnet RPC/DAS endpoint supporting `getAssetsByOwner` and ordinary cluster-identity RPC. It may equal `SOLANA_RPC_URL`, for example with Helius. |
+| `SOLANA_COMPRESSED_ENABLED=1` | Separate opt-in for explicit compressed NFT rules, only after the compressed-format migration below. Existing NFT rules keep their saved formats. |
 | `SOLANA_ENABLED=1` | Explicit opt-in after migration/provider readiness. Unset or other values leave new Solana proofs/rule creation disabled and existing Solana checks unavailable. |
 
 Existing `BASE_URL` supplies the public verification origin for challenge messages. Endpoint credentials are never exposed to the frontend or returned in provider errors. No frontend secret or Solana environment variable is needed.
@@ -48,7 +49,7 @@ The browser smoke signs the built verification UI with a synthetic Phantom walle
 - [x] Rehearse against a fresh backup and apply the production migration through the normal release workflow (October 29, 2026).
 - [ ] Later, test actual Phantom desktop/mobile connection, cancellation, repeat signatures, linking/transfer and Discord verification when the user has time.
 - [ ] Check representative SPL/Token-2022, Token Metadata/programmable and Core assets: positive/negative holdings, movement/burns, traits, stale providers, role preservation and permission-respecting exports.
-- [ ] Set `SOLANA_ENABLED=1` on the Railway backend after deploying the fixes, with both Solana URLs using the accepted Helius endpoint. No Railway connection is available in this release session; this remains an operator step.
+- [x] Operator enabled Solana with the accepted Helius endpoint; Solana appears in verification and the user confirmed the corrected desktop Phantom connection works.
 
 Technical references: [Solana messages](https://solana.com/docs/frontend/messages-and-auth), [token account reads](https://solana.com/docs/rpc/http/gettokenaccountsbyowner), [Token-2022 extensions](https://solana.com/docs/tokens/extensions), [DAS owner inventory](https://www.helius.dev/docs/api-reference/das/getassetsbyowner), [Core account layout](https://github.com/metaplex-foundation/mpl-core/blob/main/clients/rust/src/generated/accounts/base_asset_v1.rs), and [Token Metadata layout](https://github.com/metaplex-foundation/mpl-token-metadata/blob/main/programs/token-metadata/program/src/state/metadata.rs).
 
@@ -82,4 +83,32 @@ Application activation remains separate: configure the Railway backend's two Sol
 
 A desktop user reported that the always-visible “Open Phantom” action opened the mobile app landing page. The verification and member portals now label the connection action “Connect Phantom” and reserve “Open in Phantom app” for mobile browsers without a detected Phantom provider. Wallet Standard and injected extension connections stay on the current page; missing desktop providers receive extension guidance. Mobile browse links use Phantom's documented `phantom.com` endpoint and preserve the Solana selection when reopening verification or wallet linking.
 
-Validation passed: production frontend build, 43 targeted connector/verification tests, synthetic signed verification at 1280/393/320 pixels, desktop missing-provider guidance, mobile handoff with route/selection preservation, and existing member-portal smoke at 1280/393/320 pixels. These browser checks mock the wallet; actual installed-extension acceptance still requires the user's next attempt. No backend or database change is required.
+Validation passed: production frontend build, 43 targeted connector/verification tests, synthetic signed verification at 1280/393/320 pixels, desktop missing-provider guidance, mobile handoff with route/selection preservation, and existing member-portal smoke at 1280/393/320 pixels. These browser checks mock the wallet; the user subsequently confirmed that the desktop connection works. Full signing/role and mobile acceptance remain deferred. No backend or database change is required.
+
+
+## Compressed NFT stage (October 29, 2026)
+
+Implemented locally; not released or enabled. The new `20261029020000_solana_compressed_nfts.sql` migration expands the service-only criteria validator. It changes no saved rule, wallet, table or column. Rehearse/apply it after the original Solana migration, deploy this code, then explicitly set backend `SOLANA_COMPRESSED_ENABLED=1` when releasing this stage. `SOLANA_ENABLED=1` is also required. Reuse the existing Helius RPC/DAS URLs; no new API key or frontend environment variable is required. This implementation session did not apply a production migration, change a Railway flag or push commits.
+
+The new-rule editor and `/setup add-solana-nft-rule` offer Token Metadata + Core (the existing default), compressed NFTs (Bubblegum V1/V2), or all supported formats. Existing format scopes stay unchanged and cannot be broadened by editing a rule. Collection, verified creator and explicit asset-ID scopes retain their existing OR-address, minimum, trait and combined-count behavior. Compressed assets use their Bubblegum asset PDA as identity and contribute one item each. Inherited collection royalty recipients do not become verified asset creators.
+
+Compressed evidence is checked independently of ordinary token-account ownership:
+
+- Decode the Bubblegum V1/V2 leaf and derive its asset PDA from tree and nonce. Authenticate owner, delegate, data/creator hashes and V2 collection/asset-data hashes and flags. A delegate does not count as owner.
+- Authenticate creator lists against the creator hash. Authenticate collection membership against the serialized metadata hash and, for V2, collection hash. Grouping names and display verification flags alone never establish membership. Required missing, inconsistent or unsupported evidence is unavailable.
+- Verify the full Merkle path against the **current finalized** on-chain tree root, not a retained historical root. Validate the compression program, registered Bubblegum TreeConfig PDA/owner/version, tree authority, capacity, nonce and account layout. Parse the active root from one complete bounded account read to avoid accepting an obsolete root during a read race.
+- Re-read selected assets/proofs, exclude authenticated transfers to another owner and authenticate zero-leaf burn proofs before treating those assets as absent. A provider that cannot supply usable burn evidence produces unavailable rather than a guessed negative. Frozen holdings can count; program-held/staked assets need a separate adapter.
+
+The provider must support `getAsset`, `getAssetProof`, `getAssetBatch` and `getAssetProofBatch`, complete full-depth proofs with usable indexed slots, plus finalized `getMultipleAccounts`/`getAccountInfo` reads. Multiple selected candidates use batches of up to 100, shared tree reads and within-check caches; missing, duplicate or unexpected batch entries fail the check. At most 1,000 selected compressed candidates are proved per evaluation. Existing ten-second/four-megabyte request limits, thirty-second foreground budget, inventory limits and rate limiting still apply. Busy trees or slow index responses can produce unavailable; existing roles are preserved and fresh required exports cannot use a partial result. Setup diagnostics check configuration/cluster access; they do not claim to prove an individual asset.
+
+Discovery and negative results still depend on a complete, fresh indexed owner inventory. Selected positive holdings additionally require cryptographic on-chain proof. Mutable trait attributes remain provider evidence; this does not make their off-chain contents cryptographically authoritative or make paginated reads an atomic snapshot.
+
+Validation passed with independent synthetic vectors generated by the official Metaplex Bubblegum SDK 6.0.0: V1/V2 leaves, PDAs, metadata/creator/collection hashes, inherited royalties, Merkle paths, transfers, burns, forged relationships, stale/historical roots, read races, malformed batches and missing evidence. Coverage includes 104 focused Solana tests, the 1,699-test backend regression set across 82 suites (the slash-command option expectation was updated and its 95 tests rerun), 52 targeted frontend tests, both production builds, Control Room smoke at five widths and signed synthetic Phantom smoke at three widths. Compressed rule gating, format selection, collapse/restore, review and save passed at 1280/393/320 pixels, including light mode.
+
+The migration passed a disposable local restore rehearsal against the private pre-Solana production backup, with the initial Solana migration as a prerequisite. Every existing application value, including saved rule criteria and EVM wallet scopes, was identical before/after the compressed migration. Synthetic SQL checks covered standard/compressed criteria, guarded creation/edits, immutable format scope and service-role-only execution. Run `python3 backend/test/check-solana-compressed-migration.py BACKUP_DIRECTORY` to repeat; it never connects to a remote database. Browser coverage is `frontend`'s `test:solana-compressed-smoke` after building.
+
+Read-only Helius mainnet checks passed actual V1 and V2 leaf/proof/current-finalized-root verification and complete ownership-service positive checks with authenticated collection membership. One larger V2 wallet scan hit the ten-second provider timeout and correctly returned unavailable; a smaller public V2 wallet (15 indexed entries) completed in approximately 3.4 seconds, as did the V1 check. Both batch methods also passed a live response-shape check. These public checks connected no wallet, requested no signature and changed no member or database state. Public holdings can change.
+
+Deferred release acceptance: actual community V1/V2 holdings through Phantom/Discord, movement/burns, role preservation, combined groups and privacy-respecting fresh exports. Existing smart-wallet/OpenSea and mobile acceptance remain deferred at the user's request.
+
+Implementation references: [Bubblegum leaf schemas](https://github.com/metaplex-foundation/mpl-bubblegum/blob/accedabc5f162f456bb3421ade7e49a517ece092/programs/bubblegum/program/src/state/leaf_schema.rs), [official SDK hashing](https://github.com/metaplex-foundation/mpl-bubblegum/blob/accedabc5f162f456bb3421ade7e49a517ece092/clients/js/src/hash.ts), [Helius asset batches](https://www.helius.dev/docs/api-reference/das/getassetbatch), [Helius proof batches](https://www.helius.dev/docs/api-reference/das/getassetproofbatch).

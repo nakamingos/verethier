@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:solana-smoke": "node test/solana.smoke.cjs",
+    "test:solana-compressed-smoke": "node test/solana-compressed.smoke.cjs",
     "test:wallet-smoke": "node test/wallet-connection.smoke.cjs",
     "test:nft-collection-smoke": "node test/nft-collection.smoke.cjs",
     "test:portal-smoke": "node test/portal.smoke.cjs",

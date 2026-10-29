@@ -97,6 +97,16 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expect(payload.trait_filter).toEqual(component.draft.trait_filter);
     expect(payload.min_items).toBe(1);expect(payload.network).toBeUndefined();expect(payload.slug).toBeUndefined();
   });
+  it('keeps compressed NFTs an explicit new-rule selection',()=>{
+    component.draft.asset_type='solana_nft';component.changeAsset();
+    component.draft.solana_addresses='So11111111111111111111111111111111111111112';
+    expect(component.payload().solana_criteria.formats).toEqual(['metadata','core']);
+    component.draft.solana_formats='compressed';
+    expect(component.payload().solana_criteria.formats).toEqual(['compressed']);
+    component.draft.solana_formats='all';
+    expect(component.payload().solana_criteria.formats).toEqual(['metadata','core','compressed']);
+    expect(component.describe({asset_type:'solana_nft',solana_criteria:{kind:'collection',addresses:[component.draft.solana_addresses],formats:['compressed']}})).toContain('compressed NFTs');
+  });
   it('uses the Solana explorer for a Solana address beginning with the Bitcoin prefix',()=>{
     const address='bc1p111111111111111111111111111111111111111';
     expect(component.walletExplorer(address)).toBe('https://solscan.io/account/'+address);

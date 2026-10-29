@@ -53,7 +53,9 @@ export class SetupHealthService {
     for (const rule of rules) {
       const traits = !!ruleTraits(rule);
       if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') {
-        add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana.checkSetupHealth(),'Checks provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
+        const criteria = rule.solana_criteria;
+        const compressed = criteria && criteria.kind !== 'token' && criteria.formats.includes('compressed');
+        add(compressed ? 'solana:compressed' : 'solana:mainnet',compressed ? 'Solana compressed NFT RPC / DAS' : 'Solana mainnet RPC / DAS',rule,()=>this.solana.checkSetupHealth(!!compressed),'Checks capability configuration, provider mainnet identity and a finalized slot; individual ownership proofs are checked separately.');
       } else if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
         add(
           `rpc:${rule.chain_id}`,

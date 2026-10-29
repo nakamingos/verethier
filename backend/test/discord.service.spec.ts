@@ -395,7 +395,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(rules.map(rule => rule.name)).toEqual([
         'add-solana-nft-rule', 'add-solana-token-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([7, 5, 5, 9, 9, 9]);
+      expect(rules.map(rule => rule.options.length)).toEqual([8, 5, 5, 9, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -409,6 +409,9 @@ describe('DiscordService - Enhanced Tests', () => {
       const [solanaNft,solanaToken,token,nft,ordinals,ethscriptions] = rules;
       expect(solanaNft.options[2]).toMatchObject({name:'scope',required:true});
       expect(solanaNft.options[3]).toMatchObject({name:'addresses',required:true});
+      expect(solanaNft.options.find(option => option.name === 'formats')).toMatchObject({
+        choices: [{name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}]
+      });
       expect(solanaToken.options[2]).toMatchObject({name:'mint',required:true});
       expect(solanaToken.options[4]).toMatchObject({name:'min_balance',required:true});
       expect(token.options[3]).toEqual(expect.objectContaining({ name: 'min_balance', type: 3, required: true }));

@@ -141,7 +141,10 @@ export class AddRuleHandler {
       const input: any = { asset_type: selectedAssetType || interaction.options.getString('asset_type') || 'ethscription',
         min_items: interaction.options.getInteger('min_items') ?? undefined };
       for (const field of fields) input[field] = interaction.options.getString(field) ?? undefined;
-      if (input.asset_type === 'solana_nft') input.solana_criteria = {kind:interaction.options.getString('scope'),addresses:(interaction.options.getString('addresses') || '').split(/[\s,]+/).filter(Boolean),formats:['metadata','core']};
+      if (input.asset_type === 'solana_nft') {
+        const format=interaction.options.getString('formats');
+        input.solana_criteria = {kind:interaction.options.getString('scope'),addresses:(interaction.options.getString('addresses') || '').split(/[\s,]+/).filter(Boolean),formats:format === 'compressed' ? ['compressed'] : format === 'all' ? ['compressed','core','metadata'] : ['metadata','core']};
+      }
       if (input.asset_type === 'solana_token') input.solana_criteria = {kind:'token',mint:interaction.options.getString('mint'),program:interaction.options.getString('program')};
       const criteria = await prepareRuleCriteria(input, { data: this.dataSvc, nfts: this.nftSvc,
         ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc, solana: this.solanaSvc });
