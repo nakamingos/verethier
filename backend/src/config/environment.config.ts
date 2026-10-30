@@ -9,6 +9,8 @@ dotenv.config();
  * Validates and caches environment variables to prevent repeated access
  */
 export class EnvironmentConfig {
+  public static readonly STAMPCHAIN_API_URL = process.env.STAMPCHAIN_API_URL || 'https://stampchain.io/api/v2';
+  public static readonly COUNTERPARTY_API_URL = process.env.COUNTERPARTY_API_URL || 'https://api.counterparty.io:4000/v2';
   // Discord Configuration
   public static readonly DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
   public static readonly DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;

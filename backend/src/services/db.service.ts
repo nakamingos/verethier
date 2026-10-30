@@ -239,6 +239,7 @@ export class DbService {
   // New methods for v2:
 
   private filterRuleAsset(query: any, slug: string, assetFields?: NftRuleFields): any {
+    if (assetFields?.asset_type === 'stamp') return query.eq('asset_type','stamp').eq('stamp_criteria',JSON.stringify(assetFields.stamp_criteria));
     if (assetFields?.asset_type === 'solana_nft' || assetFields?.asset_type === 'solana_token') {
       query = query.eq('asset_type',assetFields.asset_type).eq('solana_criteria',JSON.stringify(assetFields.solana_criteria));
       return assetFields.asset_type === 'solana_token' ? query.eq('min_balance',assetFields.min_balance) : query;
@@ -336,7 +337,7 @@ export class DbService {
         server_name: serverName,
         channel_id: channelId,
         channel_name: channelName,
-        slug: ['nft', 'erc20', 'solana_nft', 'solana_token'].includes(assetFields?.asset_type) || assetFields?.inscription_criteria != null ? null : finalSlug,
+        slug: ['nft', 'erc20', 'solana_nft', 'solana_token', 'stamp'].includes(assetFields?.asset_type) || assetFields?.inscription_criteria != null ? null : finalSlug,
         role_id: roleId,
         role_name: roleName,
         trait_filter: ruleTraits({...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal}),
@@ -1147,8 +1148,8 @@ export class DbService {
           min_items: removedRule.min_items,
           created_at: removedRule.created_at,
           ...(removedRule.inscription_criteria != null ? { inscription_criteria: removedRule.inscription_criteria, rule_label: removedRule.rule_label ?? null } : {}),
-          ...(['nft', 'ordinal', 'erc20','solana_nft','solana_token'].includes(removedRule.asset_type) ? {
-            asset_type: removedRule.asset_type, ...(removedRule.solana_criteria ? {solana_criteria:removedRule.solana_criteria} : {}), chain_id: removedRule.chain_id,
+          ...(['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(removedRule.asset_type) ? {
+            asset_type: removedRule.asset_type, ...(removedRule.stamp_criteria ? {stamp_criteria:removedRule.stamp_criteria} : {}), ...(removedRule.solana_criteria ? {solana_criteria:removedRule.solana_criteria} : {}), chain_id: removedRule.chain_id,
             contract_address: removedRule.contract_address, token_standard: removedRule.token_standard,
             token_ids: removedRule.token_ids, collection_name: removedRule.collection_name,
             ...(['erc20','solana_token'].includes(removedRule.asset_type) ? { min_balance: removedRule.min_balance, token_decimals: removedRule.token_decimals, token_symbol: removedRule.token_symbol } : {}),

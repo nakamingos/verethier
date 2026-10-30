@@ -35,7 +35,7 @@ export function planRuleConsolidation(
 ): RuleConsolidation[] {
   const groups = new Map<string, VerifierRole[]>();
   for (const r of rules) {
-    if (r.asset_type === 'erc20' || r.inscription_criteria) continue;
+    if (['erc20','solana_token','stamp'].includes(r.asset_type) || r.inscription_criteria) continue;
     const f = ruleTraits(r);
     if (f?.operator === 'AND' && f.conditions.length > 1) continue;
     const key = JSON.stringify(scopeFields.map((k) => r[k] ?? null));

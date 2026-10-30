@@ -84,6 +84,14 @@ describe('combined collectible role counts', () => {
     ownership.checkDetails = (rule) => rule.id === 2 ? { source: 'collection-upper-bound', provider: 'xverse' } : undefined;
     expect((await engine.evaluateRole('member', 'server', 'role')).status).toBe('unavailable');
   });
+  it('combines Stamps editions while deduplicating overlapping creator/ID rules',async()=>{
+    rules=[rule(1,'stamp',10,{stamp_criteria:{stamp_ids:['1']}}),rule(2,'stamp',10,{stamp_criteria:{creator:'1GotRejB6XsGgMsM79TvcypeanDJRJbMtg'}})];
+    ownership.count.mockResolvedValue(7n);
+    ownership.matchingAssets.mockResolvedValue(new Map([['A1',7n]]));
+    expect((await engine.evaluateRole('member','server','role')).status).toBe('failed');
+    ownership.matchingAssets.mockImplementation(async rule=>new Map(rule.id===1?[['A1',7n]]:[['A1',7n],['A2',3n]]));
+    expect((await engine.evaluateRole('member','server','role')).status).toBe('passed');
+  });
   it('preserves ERC-1155 copy counts without double counting overlapping copies', async () => {
     rules = [rule(1, 'nft', 10, { chain_id: 1, contract_address: '0xabc' }), rule(2, 'nft', 10, { chain_id: 1, contract_address: '0xABC' })];
     ownership.matchingAssets.mockImplementation(async rule => new Map(rule.id === 1 ? [['1', 7n]] : [['1', 7n], ['2', 3n]]));

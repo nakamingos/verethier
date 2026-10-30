@@ -87,6 +87,14 @@ describe('Member lookup by proven wallet address', () => {
     });
     expect(guild.members.search).not.toHaveBeenCalled();
   });
+  it('finds a legacy Stamps wallet without lowercasing its address',async()=>{
+    const {service,currentQuery,guild}=setup();
+    const legacy='1GotRejB6XsGgMsM79TvcypeanDJRJbMtg';
+    const result=await service.memberSuggestions(session,server,legacy);
+    expect(result.members[0].id).toBe(currentId);
+    expect(currentQuery.eq).toHaveBeenCalledWith('address',legacy);
+    expect(guild.members.search).not.toHaveBeenCalled();
+  });
   it('includes removed/transferred history, deduplicates events, and asks for a choice when ambiguous', async () => {
     const { service, guild } = setup(
       [currentId],

@@ -1,6 +1,7 @@
 import {singleTrait,ruleTraits,traitFilterLabel} from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
@@ -349,6 +350,7 @@ export class RestoreUndoInteractionHandler {
         
         const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
           : ['erc20','solana_token'].includes(rule.asset_type) ? `Token: ${tokenRuleCriteria(rule)}`
+          : rule.asset_type === 'stamp' ? `${stampRuleLabel(rule)} | Min: ${minItems}`
           : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
           : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;

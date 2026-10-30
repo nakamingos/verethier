@@ -17,9 +17,10 @@ import {
 } from 'class-validator';
 
 export class PortalRuleDto {
+  @IsOptional() @IsObject() stamp_criteria?: import('@/utils/stamp-rule.util').StampCriteria;
   @IsOptional() @IsObject() solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria;
   @IsOptional() @IsObject() trait_filter?: import('@/utils/trait-filter.util').TraitFilter | null;
-  @IsIn(['ethscription', 'ordinal', 'nft', 'erc20', 'solana_nft', 'solana_token']) asset_type: string;
+  @IsIn(['ethscription', 'ordinal', 'nft', 'erc20', 'solana_nft', 'solana_token', 'stamp']) asset_type: string;
   @IsString() @Matches(/^\d{17,22}$/) channel_id: string;
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) role_id?: string;
   @IsOptional() @IsString() @MaxLength(100) role_name?: string;

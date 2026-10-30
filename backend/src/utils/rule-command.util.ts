@@ -1,4 +1,5 @@
 export const RULE_CREATION_COMMANDS = [
+  { name: 'add-stamps-rule', assetType: 'stamp' },
   { name: 'add-solana-nft-rule', assetType: 'solana_nft' },
   { name: 'add-solana-token-rule', assetType: 'solana_token' },
   { name: 'add-token-rule', assetType: 'erc20' },

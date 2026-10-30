@@ -1,3 +1,4 @@
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
 import { PrivacyService } from '@/portal/privacy.service';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
@@ -316,6 +317,10 @@ export class DiscordVerificationService {
       const scope = tokenRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
         : `Hold ${minimum}+ ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minimum})`}`;
+    }
+    if (rule.asset_type === 'stamp') {
+      const scope = stampRuleLabel(rule);
+      return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}` : `Own ${minItems}+ copies from ${scope}`;
     }
     if (rule.asset_type === 'solana_nft') {
       const scope = solanaRuleLabel(rule);
@@ -1034,7 +1039,7 @@ export class DiscordVerificationService {
       for (const rule of unassignedRules) {
         try {
           const solana = isSolanaRule(rule);
-          const chainId = solana ? undefined : rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1;
+          const chainId = solana ? undefined : ['ordinal','stamp'].includes(rule.asset_type) ? 0 : rule.chain_id || 1;
           const key = `${userId}:${solana ? 'solana' : chainId}`;
           if (!addressReads.has(key)) addressReads.set(key, this.userAddressService.getUserAddresses(userId, solana ? 'solana' : undefined, chainId));
           const addressesToCheck = await addressReads.get(key);
@@ -1294,7 +1299,7 @@ export class DiscordVerificationService {
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20','solana_nft','solana_token'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }

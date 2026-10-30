@@ -1,6 +1,7 @@
 import {singleTrait,ruleTraits,traitFilterLabel} from '@/utils/trait-filter.util';
 import { tokenRuleCriteria, tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope, nftRuleCriteria } from '@/utils/nft-rule.util';
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleCriteria, ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
@@ -387,6 +388,7 @@ export class RemovalUndoInteractionHandler {
         
         const criteria = rule.inscription_criteria ? `Inscriptions: ${inscriptionRuleScope(rule, 'compact')} | Min: ${minItems}`
           : ['erc20','solana_token'].includes(rule.asset_type) ? `Token: ${tokenRuleCriteria(rule)}`
+          : rule.asset_type === 'stamp' ? `${stampRuleLabel(rule)} | Min: ${minItems}`
           : rule.asset_type === 'ordinal' ? `Collection: ${ordinalRuleCriteria(rule)}`
           : rule.asset_type === 'nft' ? `Collection: ${nftRuleCriteria(rule)}` : `Slug: ${slug} | Attr: ${attribute} | Min: ${minItems}`;
         const ruleInfo = `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${criteria}`;
@@ -442,6 +444,7 @@ export class RemovalUndoInteractionHandler {
       { name: '**Contract**', value: ruleData.contract_address, inline: false },
       { name: '**Min Balance**', value: tokenAmount(ruleData, tokenMinimum(ruleData)), inline: true },
     ];
+    if (ruleData.asset_type === 'stamp') return [{name:'**Stamps**',value:stampRuleLabel(ruleData).slice(0,1024),inline:false}];
     if (ruleData.inscription_criteria || ruleData.asset_type === 'ordinal') return [
       { name: ruleData.inscription_criteria ? '**Inscriptions**' : '**Collection**', value: ruleData.inscription_criteria ? inscriptionRuleScope(ruleData) : ordinalRuleScope(ruleData), inline: false },
       { name: '**Min Items**', value: String(ruleData.min_items || 1), inline: true },

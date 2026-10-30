@@ -2,6 +2,7 @@ import { solanaRuleLabel } from '@/utils/solana-rule.util';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
 import { nftRuleScope } from '@/utils/nft-rule.util';
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
@@ -239,6 +240,8 @@ export class DuplicateRuleConfirmationInteractionHandler {
       fields.push({ name: '**Token**', value: tokenRuleScope(rule), inline: false });
       fields.push({ name: rule.asset_type === 'solana_token' ? '**Mint**' : '**Contract**', value: rule.asset_type === 'solana_token' ? rule.solana_criteria.mint : rule.contract_address, inline: false });
       fields.push({ name: '**Min Balance**', value: tokenAmount(rule, tokenMinimum(rule)), inline: true });
+    } else if (rule.asset_type === 'stamp') {
+      fields.push({name:'**Stamps**',value:stampRuleLabel(rule).slice(0,1024),inline:false});
     } else if (rule.asset_type === 'solana_nft') {
       fields.push({name:'**Solana scope**',value:solanaRuleLabel(rule).slice(0,1024),inline:false});
     } else if (rule.inscription_criteria) {
@@ -257,7 +260,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20','solana_nft','solana_token'].includes(rule.asset_type) && singleTrait(rule).key && singleTrait(rule).value) {
+    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(rule.asset_type) && singleTrait(rule).key && singleTrait(rule).value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;

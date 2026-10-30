@@ -1,3 +1,5 @@
+import { StampsOwnershipService } from './stamps-ownership.service';
+import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
@@ -16,13 +18,18 @@ export class AssetOwnershipService {
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
     @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
     @Optional() private readonly tokensSvc?: Erc20OwnershipService,
-    @Optional() private readonly solanaSvc?: SolanaOwnershipService) {}
+    @Optional() private readonly solanaSvc?: SolanaOwnershipService,
+    @Optional() private readonly stampsSvc?: StampsOwnershipService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
   }
 
   async matchingAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    if (rule.asset_type === 'stamp') {
+      if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
+      return this.stampsSvc.matchingAssets(rule, addresses.filter(isBitcoinAddress), context);
+    }
     if (isSolanaRule(rule)) {
       if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
       return this.solanaSvc.matchingAssets(rule, addresses.filter(address => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)), context);
@@ -44,6 +51,10 @@ export class AssetOwnershipService {
   }
 
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
+    if (rule.asset_type === 'stamp') {
+      if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
+      return this.stampsSvc.count(rule, addresses.filter(isBitcoinAddress), context);
+    }
     if (isSolanaRule(rule)) {
       if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
       return this.solanaSvc.count(rule, addresses.filter(address => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)), context);

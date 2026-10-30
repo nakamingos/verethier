@@ -1,3 +1,4 @@
+import { StampsOwnershipService } from './stamps-ownership.service';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { ruleTraits } from '@/utils/trait-filter.util';
 import { Injectable, Optional } from '@nestjs/common';
@@ -28,6 +29,7 @@ export class SetupHealthService {
     private readonly ordinals: OrdinalsOwnershipService,
     private readonly ethscriptions: EthscriptionsOwnershipService,
     @Optional() private readonly solana?: SolanaOwnershipService,
+    @Optional() private readonly stamps?: StampsOwnershipService,
   ) {}
 
   async check(rules: VerifierRole[]): Promise<SetupProviderResult[]> {
@@ -54,6 +56,8 @@ export class SetupHealthService {
       const traits = !!ruleTraits(rule);
       if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') {
         add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana.checkSetupHealth(),'Checks capability configuration, provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
+      } else if (rule.asset_type === 'stamp') {
+        add('bitcoin:stamps','Bitcoin Stamps / Counterparty',rule,()=>this.stamps.checkSetupHealth(),'Checks mainnet Counterparty readiness and Stampchain indexer health. Wallet balances are checked separately.');
       } else if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
         add(
           `rpc:${rule.chain_id}`,

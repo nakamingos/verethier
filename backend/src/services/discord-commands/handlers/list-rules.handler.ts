@@ -1,6 +1,7 @@
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { VerifierRole } from '@/models/verifier-role.interface';
@@ -12,7 +13,7 @@ import { formatAttribute } from '../utils/rule-validation.util';
 
 type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
 const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
-  solana_nft: 'Solana NFTs', solana_token: 'Solana tokens',
+  stamp: 'Bitcoin Stamps', solana_nft: 'Solana NFTs', solana_token: 'Solana tokens',
   erc20: 'Tokens (ERC-20)', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
 };
 
@@ -272,6 +273,7 @@ export class ListRulesHandler {
     try {
       if (['erc20','solana_token'].includes(rule.asset_type)) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
+      if (rule.asset_type === 'stamp') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${stampRuleLabel(rule)}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
       const slug = rule.slug || 'ALL';

@@ -249,7 +249,7 @@ export class WalletExportService {
   }
   private network(rule: any) {
     if (isSolanaRule(rule)) return 'solana';
-    return rule.asset_type === "ordinal"
+    return ["ordinal","stamp"].includes(rule.asset_type)
       ? "bitcoin"
       : getNftNetwork(rule.chain_id || 1).value;
   }

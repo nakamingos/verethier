@@ -1,3 +1,4 @@
+import { StampsOwnershipService } from './services/stamps-ownership.service';
 import { SolanaOwnershipService } from './services/solana-ownership.service';
 import { SolanaSignatureService } from './services/solana-signature.service';
 import { PrivacyService } from './portal/privacy.service';
@@ -200,6 +201,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     BitcoinSignatureService,
     SolanaSignatureService,
     SolanaOwnershipService,
+    StampsOwnershipService,
     UserAddressService,         // Multi-wallet address management
 
     // Role management services

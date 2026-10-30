@@ -267,3 +267,7 @@ Deployed ERC-1271 and undeployed ERC-6492 accounts use the existing RPC settings
 ## Solana mainnet
 
 The initial Solana adapter is opt-in. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL`, apply `20261029010000_solana_verification.sql` through the reviewed migration workflow, and set `SOLANA_ENABLED=1` only when ready. No frontend secret is needed. Wallet proofs, SPL/allowlisted Token-2022 minima, and Token Metadata/Core NFT scopes are implemented; compressed NFTs remain separate. Production migration and live provider/wallet acceptance are pending. See [Solana verification](../docs/solana-verification.md).
+
+## Bitcoin Stamps
+
+Use `/setup add-stamps-rule` or the Control Room for creator addresses, stamp numbers or both, with indivisible-copy minimums. Stamps supports the approved legacy and SegWit proofs; Ordinals-only channels remain Taproot-only. Provider defaults, additive migration, release status and acceptance are documented in [Bitcoin Stamps verification](../docs/bitcoin-stamps.md).

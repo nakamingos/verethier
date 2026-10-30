@@ -1,3 +1,4 @@
+import { StampsOwnershipService } from './stamps-ownership.service';
 import { solanaCriteria, isSolanaRule } from '@/utils/solana-rule.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -19,6 +20,7 @@ import { Erc20OwnershipService } from './erc20-ownership.service';
 import { validateEthscriptionCriteria } from './discord-commands/utils/rule-validation.util';
 
 export interface RuleCreateInput {
+  stamp_criteria?: import('@/utils/stamp-rule.util').StampCriteria;
   solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria;
   trait_filter?: TraitFilter | null;
   asset_type: string;
@@ -37,6 +39,7 @@ export interface RuleCreateInput {
   min_balance?: string;
 }
 export interface RuleProviders {
+  stamps?: StampsOwnershipService;
   solana?: SolanaOwnershipService;
   data: DataService;
   nfts: NftOwnershipService;
@@ -76,6 +79,14 @@ export async function prepareRuleCriteria(
     input.collection_name != null ||
     input.network != null;
   let assetFields: NftRuleFields;
+  if (input.asset_type === 'stamp') {
+    if (!services.stamps) throw new Error('Bitcoin Stamps verification is not configured.');
+    if (evmOptions || selected || input.slug != null || input.solana_criteria != null || input.min_balance != null
+      || input.expected_token_standard !== undefined || !!filter || attributeKey !== 'ALL' || attributeValue !== 'ALL')
+      throw new Error('Stamps rules use creator address, stamp numbers and minimum items.');
+    return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems,assetFields:await services.stamps.prepareRule(input.stamp_criteria)};
+  }
+  if (input.stamp_criteria !== undefined) throw new Error('Only Stamps rules use Stamps criteria.');
   if (isSolanaRule(input)) {
     if (!EnvironmentConfig.SOLANA_ENABLED || !services.solana) throw new Error('Solana is not enabled.');
     if (evmOptions || selected || input.slug != null || input.expected_token_standard !== undefined) throw new Error('Solana rules use Solana criteria, not EVM or inscription options.');

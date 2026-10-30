@@ -1,3 +1,4 @@
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
 import { solanaMessage, verifySolanaMessage } from '@/utils/solana.util';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -124,7 +125,7 @@ export class MemberService {
             asset: rule.asset_type || 'ethscription',
             network: rule.chain_id,
             collection:
-              (isSolanaRule(rule) ? solanaRuleLabel(rule) : null) ||
+              (rule.asset_type === 'stamp' ? stampRuleLabel(rule) : isSolanaRule(rule) ? solanaRuleLabel(rule) : null) ||
               rule.rule_label ||
               rule.collection_name ||
               rule.slug ||

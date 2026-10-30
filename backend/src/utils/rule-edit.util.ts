@@ -7,7 +7,7 @@ import { ruleTraits, singleTrait, traitFilterKey, traitFilterLabel } from './tra
 // refresh while an administrator has the editor open.
 export const RULE_EDIT_GUARD_FIELDS = ['server_id', 'channel_id', 'role_id', 'asset_type', 'chain_id', 'contract_address',
   'slug', 'trait_filter', 'min_items', 'token_standard', 'token_ids', 'collection_name',
-  'solana_criteria', 'inscription_criteria', 'rule_label', 'min_balance', 'token_decimals', 'token_symbol'] as const;
+  'solana_criteria', 'stamp_criteria', 'inscription_criteria', 'rule_label', 'min_balance', 'token_decimals', 'token_symbol'] as const;
 export const RULE_EDIT_MUTABLE_FIELDS = ['slug', 'trait_filter', 'min_items', 'token_ids',
   'inscription_criteria', 'rule_label', 'ordinal_trait_snapshot', 'min_balance', 'collection_name'] as const;
 
@@ -53,6 +53,7 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
       value: criteria.kind === 'ids' ? criteria.ids.join(',') : criteria.ranges.map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(',')
     }, {key: 'label', label: 'Label (optional)', value: rule.rule_label || '', maxLength: 100}, minimum];
   if (['erc20','solana_token'].includes(rule.asset_type)) return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
+  if (rule.asset_type === 'stamp') return [minimum];
   const traitLimit = ['nft', 'ordinal'].includes(rule.asset_type) ? 100 : 4000;
   const traits: RuleEditField[] = (ruleTraits(rule)?.conditions.length || 0) > 1 ? [
     { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 }, minimum,

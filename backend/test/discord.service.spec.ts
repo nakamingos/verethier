@@ -393,9 +393,9 @@ describe('DiscordService - Enhanced Tests', () => {
       const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
-        'add-solana-nft-rule', 'add-solana-token-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+        'add-stamps-rule', 'add-solana-nft-rule', 'add-solana-token-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([8, 5, 5, 9, 9, 9]);
+      expect(rules.map(rule => rule.options.length)).toEqual([5, 8, 5, 5, 9, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -403,10 +403,11 @@ describe('DiscordService - Enhanced Tests', () => {
         ]);
         expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
         for (const name of ['attribute_key', 'attribute_value']) {
-          if (!rule.name.startsWith('add-solana-') && rule.name !== 'add-token-rule') expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+          if (!rule.name.startsWith('add-solana-') && !['add-token-rule','add-stamps-rule'].includes(rule.name)) expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
         }
       }
-      const [solanaNft,solanaToken,token,nft,ordinals,ethscriptions] = rules;
+      const [stamps,solanaNft,solanaToken,token,nft,ordinals,ethscriptions] = rules;
+      expect(stamps.options.map(o=>o.name)).toEqual(['channel','role','creator_address','stamp_ids','min_items']);
       expect(solanaNft.options[2]).toMatchObject({name:'scope',required:true});
       expect(solanaNft.options[3]).toMatchObject({name:'addresses',required:true});
       expect(solanaNft.options.find(option => option.name === 'formats')).toMatchObject({

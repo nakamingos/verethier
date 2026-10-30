@@ -3,7 +3,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { Verifier } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { DecodedData } from '@/models/app.interface';
-import { normalizeBitcoinAddress, WalletType } from '@/utils/wallet-address.util';
+import { normalizeBitcoinAddress, normalizeBitcoinProofAddress, WalletType } from '@/utils/wallet-address.util';
 import { DbService } from './db.service';
 import { NonceData, NonceService } from './nonce.service';
 
@@ -11,7 +11,7 @@ import { NonceData, NonceService } from './nonce.service';
 export class BitcoinSignatureService {
   constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService, @Optional() private readonly privacy?: PrivacyService) {}
 
-  async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; data?: DecodedData; privacy?: any }> {
+  async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }> {
     const context = userId !== undefined || guildId !== undefined
       ? await this.nonceSvc.getActiveNonce(userId, guildId, nonce)
       : await this.nonceSvc.getActiveNonceByToken(nonce);
@@ -20,11 +20,12 @@ export class BitcoinSignatureService {
       : await this.dbSvc.getRoleMappings(context.guildId);
     if (!rules.length) throw new Error('No verification rules found for this channel.');
     const walletTypes: WalletType[] = [];
-    if (rules.some(rule => !['ordinal','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
-    if (rules.some(rule => rule.asset_type === 'ordinal')) walletTypes.push('bitcoin');
+    if (rules.some(rule => !['ordinal','stamp','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
+    if (rules.some(rule => ['ordinal','stamp'].includes(rule.asset_type))) walletTypes.push('bitcoin');
     if (EnvironmentConfig.SOLANA_ENABLED && rules.some(rule => ['solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('solana');
     return {
       walletTypes,
+      bitcoinStamps: rules.some(rule => rule.asset_type === 'stamp'),
       ...(this.privacy ? {privacy: await this.privacy.policy(context.guildId,context.userId)} : {}),
       expiry: context.expiry,
       ...(context.verificationData ? { data: {
@@ -39,10 +40,10 @@ export class BitcoinSignatureService {
   }
 
   async createChallenge(userId: string, guildId: string, nonce: string, address: string, choice?: unknown) {
-    const { walletTypes, expiry } = await this.getContext(userId, guildId, nonce);
-    if (!walletTypes.includes('bitcoin')) throw new Error('This verification channel does not support Ordinals.');
+    const { walletTypes, expiry, bitcoinStamps } = await this.getContext(userId, guildId, nonce);
+    if (!walletTypes.includes('bitcoin')) throw new Error('This verification channel does not support Bitcoin verification.');
     const context = await this.nonceSvc.getActiveNonce(userId, guildId, nonce);
-    const normalizedAddress = normalizeBitcoinAddress(address);
+    const normalizedAddress = bitcoinStamps ? normalizeBitcoinProofAddress(address) : normalizeBitcoinAddress(address);
     let domain: string;
     try {
       const url = new URL(EnvironmentConfig.BASE_URL);
@@ -51,7 +52,7 @@ export class BitcoinSignatureService {
     } catch { throw new Error('Bitcoin verification is not configured. Set BASE_URL on the backend.'); }
     const message = [
       'Bouncer wallet verification', '',
-      `Domain: ${domain}`, 'Wallet: Bitcoin mainnet · Ordinals', `Address: ${normalizedAddress}`,
+      `Domain: ${domain}`, bitcoinStamps ? 'Wallet: Bitcoin mainnet · Stamps / Ordinals' : 'Wallet: Bitcoin mainnet · Ordinals', `Address: ${normalizedAddress}`,
       `Discord user: ${context.userId}`, `Discord server: ${context.guildId}`,
       `Discord channel: ${context.channelId || 'server'}`, `Nonce: ${context.nonce}`,
       `Expires at: ${new Date(expiry * 1000).toISOString()}`, '',
@@ -64,7 +65,7 @@ export class BitcoinSignatureService {
 
   async verify(data: DecodedData, signature: string): Promise<{ address: string; context: NonceData }> {
     const context = await this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce);
-    const address = normalizeBitcoinAddress(data.address);
+    const address = normalizeBitcoinProofAddress(data.address);
     const challenge = context.bitcoinChallenge;
     if (!challenge || challenge.address !== address || context.expiry !== data.expiry) throw new Error('Invalid Bitcoin verification challenge.');
     if (JSON.stringify(challenge.privacy) !== JSON.stringify(data.privacy === undefined ? undefined : privacyChoice(data.privacy))) throw new Error('Invalid Bitcoin verification challenge.');
@@ -79,14 +80,25 @@ export class BitcoinSignatureService {
 
   verifyMessage(address: string, message: string, signature: string): void {
     try {
-      normalizeBitcoinAddress(address);
+      address = normalizeBitcoinProofAddress(address);
       const simple = signature.startsWith('smp') ? signature.slice(3) : signature;
-      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(simple) || simple.length > 100) throw new Error();
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(simple) || simple.length > 200) throw new Error();
       const bytes = Buffer.from(simple, 'base64');
-      // This release accepts a simple, single-key Taproot witness, never legacy or script-path proofs.
-      if (bytes.toString('base64') !== simple || bytes[0] !== 1 || ![64, 65].includes(bytes[1])
-        || bytes.length !== bytes[1] + 2 || (bytes[1] === 65 && bytes[66] !== 1)) throw new Error();
-      if (!Verifier.verifySignature(address.toLowerCase(), message, simple, true)) throw new Error();
-    } catch { throw new Error('Invalid Bitcoin signature. Please sign again with your Bitcoin Ordinals address.'); }
+      if (bytes.toString('base64') !== simple) throw new Error();
+      if (address.startsWith('bc1p')) {
+        // Ordinals remain key-path-only, without script-path or arbitrary witnesses.
+        if (bytes[0] !== 1 || ![64,65].includes(bytes[1]) || bytes.length !== bytes[1]+2
+          || (bytes[1] === 65 && bytes[66] !== 1)) throw new Error();
+      } else if (address.startsWith('1')) {
+        // Legacy Stamps wallets use compact Bitcoin signed-message proofs.
+        if (bytes.length !== 65 || bytes[0] < 27 || bytes[0] > 34) throw new Error();
+      } else {
+        // Restrict BIP-322 witnesses to single-key native/nested P2WPKH.
+        const n = bytes[1];
+        if (bytes[0] !== 2 || n < 8 || n > 73 || bytes[n+2] !== 33
+          || ![2,3].includes(bytes[n+3]) || bytes.length !== n+36) throw new Error();
+      }
+      if (!Verifier.verifySignature(address, message, simple, true)) throw new Error();
+    } catch { throw new Error('Invalid Bitcoin signature. Please sign again with the selected Bitcoin address.'); }
   }
 }

@@ -1,3 +1,4 @@
+import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { ruleTraits, singleTrait } from '@/utils/trait-filter.util';
@@ -119,7 +120,7 @@ export class VerificationEngine {
         ownershipDetails: this.ownershipSvc.checkDetails?.(rule, allowedAddresses, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: ['erc20','solana_token'].includes(rule.asset_type) ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: rule.asset_type === 'stamp' ? stampRuleLabel(rule) : ['erc20','solana_token'].includes(rule.asset_type) ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: singleTrait(rule).key,
           attributeValue: singleTrait(rule).value,
           ...((ruleTraits(rule)?.conditions.length || 0) > 1 ? {traitFilter: ruleTraits(rule)} : {}),
@@ -289,7 +290,7 @@ export class VerificationEngine {
       if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, 'solana'));
       return reads.get(key);
     }
-    const chainId = rule ? (rule.asset_type === 'ordinal' ? 0 : rule.chain_id || 1) : undefined;
+    const chainId = rule ? (['ordinal','stamp'].includes(rule.asset_type) ? 0 : rule.chain_id || 1) : undefined;
     const key = chainId === undefined ? userId : `${userId}:${chainId}`;
     if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
     return reads.get(key);

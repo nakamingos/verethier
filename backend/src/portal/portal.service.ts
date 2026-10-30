@@ -1,4 +1,6 @@
+import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { EnvironmentConfig } from '@/config/environment.config';
+import { StampsOwnershipService } from '@/services/stamps-ownership.service';
 import { SolanaOwnershipService } from '@/services/solana-ownership.service';
 import { PrivacyService } from './privacy.service';
 import {
@@ -51,7 +53,7 @@ const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
 export const portalRule = (rule: VerifierRole) => {
   const { ordinal_trait_snapshot, ...safe } = rule;
   const fields = ruleEditFields(rule);
-  if (!rule.inscription_criteria && !['erc20','solana_token'].includes(rule.asset_type)) {
+  if (!rule.inscription_criteria && !['erc20','solana_token','stamp'].includes(rule.asset_type)) {
     const first = fields.findIndex(f => ['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     const clean = fields.filter(f => !['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     clean.splice(first, 0, { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 });
@@ -83,6 +85,7 @@ export class PortalService {
     @Optional() private readonly privacy?: PrivacyService,
     @Optional() private readonly nftCollections?: NftCollectionService,
     @Optional() private readonly solana?: SolanaOwnershipService,
+    @Optional() private readonly stamps?: StampsOwnershipService,
   ) {}
 
   client() {
@@ -395,6 +398,7 @@ export class PortalService {
       ethscriptions: this.ethscriptions,
       tokens: this.tokens,
       solana: this.solana,
+      stamps: this.stamps,
     });
     // Provider preparation can be slow. Recheck the actor before changing Discord or the database.
     guild = await this.access(session, server);
@@ -732,6 +736,7 @@ export class PortalService {
     // Full addresses are longer than Discord usernames/nicknames. Preserve
     // ordinary name lookup for members such as "0xcollector".
     const value = input.trim();
+    if (isBitcoinAddress(value)) return true;
     if (value.length >= 42 && /^(0x|bc1)/i.test(value)) return true;
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value)) {
       try { return normalizeBlockedWallet(value) === value; } catch { return false; }

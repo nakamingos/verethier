@@ -102,7 +102,7 @@ describe('Bitcoin wallet proof', () => {
     db.getRulesByChannel.mockResolvedValue([{ asset_type: 'ordinal' }, { asset_type: 'nft' }]);
     expect((await signatures.getContext('user', 'guild', nonce)).walletTypes).toEqual(['evm', 'bitcoin']);
     db.getRulesByChannel.mockResolvedValue([{ asset_type: 'ethscription' }]);
-    await expect(signatures.createChallenge('user', 'guild', nonce, vector.address)).rejects.toThrow('does not support Ordinals');
+    await expect(signatures.createChallenge('user', 'guild', nonce, vector.address)).rejects.toThrow('does not support Bitcoin verification');
     expect(db.getRulesByChannel).toHaveBeenCalledWith('guild', 'channel');
   });
 

@@ -22,6 +22,10 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  stampHealth?: Promise<void>;
+  stampBalances?: Map<string, Promise<import('./stamps-ownership.service').StampHoldings>>;
+  stampDetails?: Map<string, Promise<{id:string;asset:string;creator:string;divisible:boolean} | null>>;
+  stampCatalogs?: Map<string, Promise<Array<{id:string;asset:string;creator:string;divisible:boolean}>>>;
   /** Export jobs require fresh collection metadata as well as live owners. */
   freshExport?: boolean;
   /** Freshly proven display address. Eligibility still requires persisted network-scoped links. */

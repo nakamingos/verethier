@@ -573,6 +573,12 @@ export class DiscordService implements OnModuleInit {
         .setName('setup')
         .setDescription('Setup the bot for the first time or manage rules')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // 🔒 ADMIN ONLY
+        .addSubcommand(sc => sc.setName('add-stamps-rule').setDescription('Add a Bitcoin Stamps ownership rule')
+          .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true))
+          .addStringOption(o=>o.setName('role').setDescription('Role name or existing role ID').setRequired(true).setAutocomplete(true))
+          .addStringOption(o=>o.setName('creator_address').setDescription('Original stamp creator Bitcoin address'))
+          .addStringOption(o=>o.setName('stamp_ids').setDescription('Stamp numbers, comma-separated (up to 100)').setMaxLength(1700))
+          .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum owned copies').setMinValue(1)))
         .addSubcommand(sc => sc.setName('add-solana-nft-rule').setDescription('Add a Solana mainnet NFT ownership rule')
           .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true).addChannelTypes(ChannelType.GuildText))
           .addStringOption(o=>o.setName('role').setDescription('Role name').setRequired(true).setAutocomplete(true))

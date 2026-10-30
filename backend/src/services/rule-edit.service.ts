@@ -20,7 +20,7 @@ export class RuleEditService {
 
   async prepare(before: VerifierRole, inputs: Record<string, string>): Promise<VerifierRole> {
     const allowed = new Set(ruleEditFields(before).map(field => field.key));
-    if (!before.inscription_criteria && !['erc20','solana_token'].includes(before.asset_type)) allowed.add('trait_filter');
+    if (!before.inscription_criteria && !['erc20','solana_token','stamp'].includes(before.asset_type)) allowed.add('trait_filter');
     if (Object.keys(inputs).some(key => !allowed.has(key))) throw new Error('This field cannot be edited for this rule.');
     const candidate = { ...before };
     if (['erc20','solana_token'].includes(before.asset_type)) {
@@ -33,6 +33,7 @@ export class RuleEditService {
       throw new Error('Minimum items must be a positive whole number.');
     }
     candidate.min_items = Number(minimum);
+    if (before.asset_type === 'stamp') return candidate;
     const criteria = inscriptionCriteria(before);
     if (criteria) {
       const selection = inputs.selection?.trim();
