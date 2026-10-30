@@ -107,6 +107,16 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expect(component.payload().solana_criteria.formats).toEqual(['metadata','core','compressed']);
     expect(component.describe({asset_type:'solana_nft',solana_criteria:{kind:'collection',addresses:[component.draft.solana_addresses],formats:['compressed']}})).toContain('compressed NFTs');
   });
+  it('gates printed edition choices and saves only Token Metadata formats',()=>{
+    expect(component.solanaScopeChoices.some(choice=>choice.value==='master_edition')).toBeFalse();
+    component.data.capabilities.solana_editions=true;
+    expect(component.solanaScopeChoices.some(choice=>choice.value==='master_edition')).toBeTrue();
+    component.draft.asset_type='solana_nft';component.changeAsset();
+    component.draft.solana_kind='master_edition';component.draft.solana_addresses='So11111111111111111111111111111111111111112';
+    component.draft.solana_formats='all';
+    expect(component.payload().solana_criteria).toEqual({kind:'master_edition',addresses:[component.draft.solana_addresses],formats:['metadata']});
+    expect(component.describe({asset_type:'solana_nft',solana_criteria:component.payload().solana_criteria})).toContain('prints of master edition');
+  });
   it('uses the Solana explorer for a Solana address beginning with the Bitcoin prefix',()=>{
     const address='bc1p111111111111111111111111111111111111111';
     expect(component.walletExplorer(address)).toBe('https://solscan.io/account/'+address);

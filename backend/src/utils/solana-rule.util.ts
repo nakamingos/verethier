@@ -2,7 +2,7 @@ import { normalizeSolanaAddress } from "./solana.util";
 export type SolanaCriteria =
   | { kind: "token"; mint: string; program: string }
   | {
-      kind: "collection" | "verified_creator" | "asset_ids";
+      kind: "collection" | "verified_creator" | "asset_ids" | "master_edition";
       addresses: string[];
       formats: Array<"metadata" | "core" | "compressed">;
     };
@@ -23,7 +23,9 @@ export function solanaCriteria(input: unknown): SolanaCriteria {
     };
   }
   if (
-    !["collection", "verified_creator", "asset_ids"].includes(value.kind) ||
+    !["collection", "verified_creator", "asset_ids", "master_edition"].includes(
+      value.kind,
+    ) ||
     Object.keys(value).some(
       (k) => !["kind", "addresses", "formats"].includes(k),
     ) ||
@@ -36,6 +38,11 @@ export function solanaCriteria(input: unknown): SolanaCriteria {
     value.formats.some((f) => !["metadata", "core", "compressed"].includes(f))
   )
     throw new Error("Invalid Solana NFT scope.");
+  if (
+    value.kind === "master_edition" &&
+    (value.formats.length !== 1 || value.formats[0] !== "metadata")
+  )
+    throw new Error("Printed editions use Token Metadata only.");
   return {
     kind: value.kind,
     addresses: [
@@ -61,7 +68,9 @@ export function solanaRuleLabel(rule: {
       ? "collection"
       : c.kind === "verified_creator"
         ? "verified creator"
-        : "asset";
+        : c.kind === "master_edition"
+          ? "prints of master edition"
+          : "asset";
   const formats = c.formats.includes("compressed")
     ? c.formats.length === 1
       ? " · compressed NFTs"

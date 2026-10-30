@@ -45,7 +45,7 @@ export function solanaBase58(bytes: Uint8Array): string {
 
 export const TOKEN_METADATA_PROGRAM =
   "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
-export function solanaMetadataAddress(mint: string): string {
+function tokenMetadataAddress(mint: string, edition: boolean): string {
   const program = solanaPublicKey(TOKEN_METADATA_PROGRAM);
   for (let bump = 255; bump >= 0; bump--) {
     const hash = createHash("sha256")
@@ -54,6 +54,7 @@ export function solanaMetadataAddress(mint: string): string {
           ...Buffer.from("metadata"),
           ...program,
           ...solanaPublicKey(mint),
+          ...(edition ? Buffer.from("edition") : []),
           bump,
           ...program,
           ...Buffer.from("ProgramDerivedAddress"),
@@ -67,6 +68,20 @@ export function solanaMetadataAddress(mint: string): string {
     }
   }
   throw new Error("Could not derive Solana metadata address.");
+}
+
+export function solanaMetadataAddress(mint: string): string {
+  return tokenMetadataAddress(mint, false);
+}
+export function solanaEditionAddress(mint: string): string {
+  return tokenMetadataAddress(mint, true);
+}
+/** Printed editions contain their master edition account address, not its mint. */
+export function solanaPrintParent(bytes: Buffer): string | null {
+  if ([2, 6].includes(bytes[0]) && bytes.length >= 10) return null;
+  if (bytes[0] !== 1 || bytes.length < 41 || bytes.readBigUInt64LE(33) === 0n)
+    throw new Error("Solana print edition data is unavailable.");
+  return solanaBase58(new Uint8Array(bytes.subarray(1, 33)));
 }
 
 /** Decode the on-chain collection relationship; no off-chain JSON is trusted. */

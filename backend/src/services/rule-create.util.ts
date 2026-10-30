@@ -87,6 +87,7 @@ export async function prepareRuleCriteria(
       return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems:null,assetFields:{asset_type:'solana_token' as const,...prepared,chain_id:null}};
     }
     if (criteria.kind === 'token' || input.min_balance != null) throw new Error('Solana NFT rules require an NFT scope.');
+    if (criteria.kind === 'master_edition' && !EnvironmentConfig.SOLANA_EDITIONS_ENABLED) throw new Error('Solana print edition verification is not enabled.');
     if (criteria.formats.includes('compressed') && !EnvironmentConfig.SOLANA_COMPRESSED_ENABLED) throw new Error('Compressed Solana NFT verification is not enabled.');
     return {slug:null,attributeKey,attributeValue,minItems,assetFields:{asset_type:'solana_nft' as const,chain_id:null,solana_criteria:criteria,...traits()}};
   }

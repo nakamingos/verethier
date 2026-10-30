@@ -576,7 +576,7 @@ export class DiscordService implements OnModuleInit {
         .addSubcommand(sc => sc.setName('add-solana-nft-rule').setDescription('Add a Solana mainnet NFT ownership rule')
           .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true).addChannelTypes(ChannelType.GuildText))
           .addStringOption(o=>o.setName('role').setDescription('Role name').setRequired(true).setAutocomplete(true))
-          .addStringOption(o=>o.setName('scope').setDescription('NFT match scope').setRequired(true).addChoices({name:'Verified collection',value:'collection'},{name:'Verified creator',value:'verified_creator'},{name:'Asset IDs',value:'asset_ids'}))
+          .addStringOption(o=>o.setName('scope').setDescription('NFT match scope').setRequired(true).addChoices({name:'Verified collection',value:'collection'},{name:'Verified creator',value:'verified_creator'},{name:'Asset IDs',value:'asset_ids'},{name:'Printed editions',value:'master_edition'}))
           .addStringOption(o=>o.setName('addresses').setDescription('Comma-separated Solana scope addresses').setRequired(true).setMaxLength(4000))
           .addStringOption(o=>o.setName('formats').setDescription('NFT formats; defaults to Token Metadata + Core').addChoices({name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}))
           .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum NFTs').setMinValue(1))

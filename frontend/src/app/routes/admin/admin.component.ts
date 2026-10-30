@@ -260,7 +260,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'all', label: 'All supported formats' },
   ];
   get assetChoices(): SelectChoice[] {return this.assetFilterChoices.slice(1);}
-  readonly solanaScopeChoices = [{value:'collection',label:'Verified collection'},{value:'verified_creator',label:'Verified creator'},{value:'asset_ids',label:'Specific asset IDs'}];
+  get solanaScopeChoices(): SelectChoice[] { return [{value:'collection',label:'Verified collection'},{value:'verified_creator',label:'Verified creator'},{value:'asset_ids',label:'Specific asset IDs'}, ...(this.data?.capabilities?.solana_editions ? [{value:'master_edition',label:'Printed editions'}] : [])]; }
   readonly solanaProgramChoices = [{value:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',label:'SPL Token'},{value:'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',label:'Token-2022'}];
   readonly matchChoices: SelectChoice[] = [
     { value: 'collection', label: 'Collection' },
@@ -806,7 +806,7 @@ export class AdminComponent implements OnInit, OnDestroy {
             .join(', ')
       : '';
     const format = r.solana_criteria?.formats?.includes('compressed') ? (r.solana_criteria.formats.length === 1 ? ' · compressed NFTs' : ' · includes compressed NFTs') : '';
-    return `${(r.solana_criteria ? ('Solana '+r.solana_criteria.kind+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${picked ? ' · ' + picked : ''}${traits}`;
+    return `${(r.solana_criteria ? ('Solana '+(r.solana_criteria.kind === 'master_edition' ? 'prints of master edition' : r.solana_criteria.kind)+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${picked ? ' · ' + picked : ''}${traits}`;
   }
   channelName(id: string) {
     return (
@@ -1037,7 +1037,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
     if (d.asset_type === 'solana_token') result.solana_criteria = {kind:'token',mint:(d.solana_mint || '').trim(),program:d.solana_program};
-    if (d.asset_type === 'solana_nft') result.solana_criteria = {kind:d.solana_kind,addresses:(d.solana_addresses || '').split(/[\s,]+/).filter(Boolean),formats:d.solana_formats === 'compressed' ? ['compressed'] : d.solana_formats === 'all' ? ['metadata','core','compressed'] : ['metadata','core']};
+    if (d.asset_type === 'solana_nft') result.solana_criteria = {kind:d.solana_kind,addresses:(d.solana_addresses || '').split(/[\s,]+/).filter(Boolean),formats:d.solana_kind === 'master_edition' ? ['metadata'] : d.solana_formats === 'compressed' ? ['compressed'] : d.solana_formats === 'all' ? ['metadata','core','compressed'] : ['metadata','core']};
     if (this.hasTraitEditor) {
       delete result.attribute_key;
       delete result.attribute_value;

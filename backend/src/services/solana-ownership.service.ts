@@ -14,6 +14,8 @@ import {
   SPL_TOKEN,
   TOKEN_2022,
   solanaMetadataAddress,
+  solanaEditionAddress,
+  solanaPrintParent,
   solanaMetadataCollection,
   TOKEN_METADATA_PROGRAM,
 } from "@/utils/solana.util";
@@ -25,6 +27,7 @@ import { NftCheckContext } from "./nft-ownership.service";
 // Smaller pages avoid slow provider responses while retaining the 25,000-entry cap.
 const INVENTORY_PAGE_LIMIT = 500;
 const MAX_INVENTORY_PAGES = 50;
+const METADATA_INTERFACES = ["V1_NFT", "V1_PRINT", "ProgrammableNFT"];
 
 const UNAVAILABLE =
   "Solana ownership is temporarily unavailable. Existing roles are preserved.";
@@ -174,6 +177,11 @@ export class SolanaOwnershipService {
         run,
       ),
     );
+  }
+  async checkEditionSetupHealth(): Promise<void> {
+    if (!EnvironmentConfig.SOLANA_EDITIONS_ENABLED)
+      throw new Error("Solana print edition verification is not enabled.");
+    await this.checkSetupHealth();
   }
   private async mint(mint: string, run: Run) {
     normalizeSolanaAddress(mint);
@@ -422,16 +430,17 @@ export class SolanaOwnershipService {
     assets: any[],
     run: Run,
     minSlot: number,
+    editions = false,
   ): Promise<Map<string, any>> {
     const result = new Map<string, any>();
     for (let offset = 0; offset < assets.length; offset += 100) {
       const chunk = assets.slice(offset, offset + 100);
       const rows = await this.cache(
         run,
-        `onchain:${minSlot}:${chunk.map((a) => a.id + ":" + a.ownership.owner).join(",")}`,
+        `onchain:${editions ? "editions" : "assets"}:${minSlot}:${chunk.map((a) => a.id + ":" + a.ownership.owner).join(",")}`,
         async () => {
           const keys = chunk.map((a) =>
-            a.interface === "MplCoreAsset" ? a.id : solanaMetadataAddress(a.id),
+            editions ? solanaEditionAddress(a.id) : a.interface === "MplCoreAsset" ? a.id : solanaMetadataAddress(a.id),
           );
           const response = await this.request(
             EnvironmentConfig.SOLANA_RPC_URL,
@@ -454,6 +463,7 @@ export class SolanaOwnershipService {
           )
             throw new Error(UNAVAILABLE);
           return response.value.map((account, index) => {
+            if (editions && account === null) return { masterEdition: null };
             if (
               !account ||
               account.executable !== false ||
@@ -466,6 +476,10 @@ export class SolanaOwnershipService {
             if (bytes.toString("base64") !== account.data[0])
               throw new Error(UNAVAILABLE);
             const asset = chunk[index];
+            if (editions) {
+              if (account.owner !== TOKEN_METADATA_PROGRAM) throw new Error(UNAVAILABLE);
+              return { masterEdition: solanaPrintParent(bytes) };
+            }
             if (asset.interface === "MplCoreAsset") {
               if (
                 account.owner !==
@@ -583,15 +597,18 @@ export class SolanaOwnershipService {
       throw new Error(
         "Compressed Solana NFT verification is not enabled. Existing roles are preserved.",
       );
+    if (criteria.kind === "master_edition" && !EnvironmentConfig.SOLANA_EDITIONS_ENABLED)
+      throw new Error("Solana print edition verification is not enabled. Existing roles are preserved.");
     const run = this.run(context),
       matches = new Map<string, bigint>();
+    const masters = criteria.kind === "master_edition" ? new Set(criteria.addresses.map(solanaEditionAddress)) : null;
     for (const owner of [...new Set(addresses)]) {
       let inventory = await this.inventory(owner, run);
       const minSlot = await run.reads.get(`inventory-slot:${owner}`);
       const metadataAsset = (asset: any) =>
         !asset.burnt &&
         asset.compression?.compressed !== true &&
-        ["V1_NFT", "ProgrammableNFT"].includes(asset.interface);
+        METADATA_INTERFACES.includes(asset.interface);
       if (
         criteria.formats.includes("metadata") &&
         inventory.some(metadataAsset)
@@ -609,11 +626,11 @@ export class SolanaOwnershipService {
           a.compression?.compressed !== true &&
           ((a.interface === "MplCoreAsset" &&
             criteria.formats.includes("core")) ||
-            (criteria.kind === "collection" &&
+            (["collection", "master_edition"].includes(criteria.kind) &&
               criteria.formats.includes("metadata") &&
-              ["V1_NFT", "ProgrammableNFT"].includes(a.interface))),
+              METADATA_INTERFACES.includes(a.interface))),
       );
-      const chain = await this.onchainAssets(needs, run, minSlot);
+      const chain = await this.onchainAssets(needs, run, minSlot, !!masters);
       let compressedDetails = new Map<string, any>();
       if (criteria.formats.includes("compressed")) {
         const candidates = inventory.filter(
@@ -640,7 +657,7 @@ export class SolanaOwnershipService {
         }
         const format = compressed
           ? "compressed"
-          : ["V1_NFT", "ProgrammableNFT"].includes(asset.interface)
+          : METADATA_INTERFACES.includes(asset.interface)
             ? "metadata"
             : asset.interface === "MplCoreAsset"
               ? "core"
@@ -654,6 +671,7 @@ export class SolanaOwnershipService {
         if (asset.ownership.ownership_model !== "single")
           throw new Error(UNAVAILABLE);
         let selected = compressed;
+        if (masters) selected = !!chain.get(asset.id)?.masterEdition && masters.has(chain.get(asset.id).masterEdition);
         if (!compressed && criteria.kind === "asset_ids")
           selected = criteria.addresses.includes(asset.id);
         if (!compressed && criteria.kind === "collection") {
