@@ -1,306 +1,354 @@
-import vectorsFile from "./fixtures/solana-compressed-vectors.json";
 import { EnvironmentConfig } from "../src/config/environment.config";
 import { SolanaOwnershipService } from "../src/services/solana-ownership.service";
-import { SOLANA_MAINNET } from "../src/utils/solana.util";
-import { compressedHash } from "../src/utils/solana-compressed.util";
+import { SOLANA_MAINNET, solanaBase58 } from "../src/utils/solana.util";
 import { solanaCriteria, solanaRuleLabel } from "../src/utils/solana-rule.util";
 import { prepareRuleCriteria } from "../src/services/rule-create.util";
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
-const vectors = vectorsFile.vectors;
+const key = (n: number) => {
+  const bytes = Buffer.alloc(32);
+  bytes.writeUInt32LE(n);
+  return solanaBase58(new Uint8Array(bytes));
+};
+const owner = key(1),
+  other = key(2),
+  collection = key(3),
+  creator = key(4),
+  id = key(5);
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const base = {
   id: 1,
-  server_id: "test-server",
-  channel_id: "test-channel",
-  role_id: "test-role",
+  server_id: "server",
+  channel_id: "channel",
+  role_id: "role",
   asset_type: "solana_nft",
   min_items: 1,
 } as any;
-
-describe("Compressed NFTs in Solana ownership and rule creation", () => {
+function asset(version = 1, assetId = id): any {
+  return {
+    id: assetId,
+    interface: version === 1 ? "V1_NFT" : "MplBubblegumV2",
+    burnt: false,
+    ownership: { owner, ownership_model: "single" },
+    compression: { compressed: true },
+    grouping: [
+      { group_key: "collection", group_value: collection, verified: true },
+    ],
+    creators: [{ address: creator, verified: true }],
+    content: {
+      metadata: {
+        attributes: [
+          { trait_type: "Color", value: "Blue" },
+          { trait_type: "Hat", value: "Cap" },
+        ],
+      },
+    },
+  };
+}
+function rule(
+  kind = "collection",
+  addresses = [collection],
+  formats = ["compressed"],
+): any {
+  return { ...base, solana_criteria: { kind, addresses, formats } };
+}
+function traits(scoped = rule(), operator = "AND") {
+  return {
+    ...scoped,
+    trait_filter: {
+      operator,
+      conditions: [
+        { key: "color", value: "blue" },
+        { key: "Hat", value: "Cap" },
+      ],
+    },
+  };
+}
+describe("Provider-backed compressed NFT ownership", () => {
   let service: SolanaOwnershipService,
     request: jest.SpyInstance,
-    current: any,
-    indexed: any[];
-  function rule(
-    kind = "collection",
-    addresses = [current.collection],
-    formats = ["compressed"],
-  ) {
-    return { ...base, solana_criteria: { kind, addresses, formats } };
-  }
+    indexed: any[],
+    current: any[];
   beforeEach(() => {
     jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", true);
     jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", true);
-    current = clone(vectors[0]);
-    indexed = [clone(current.asset)];
+    indexed = [asset()];
+    current = clone(indexed);
     service = new SolanaOwnershipService();
     request = jest
       .spyOn(service as any, "request")
-      .mockImplementation(async (_url, method, params) => {
+      .mockImplementation(async (_url, method, params: any) => {
         if (method === "getGenesisHash") return SOLANA_MAINNET;
         if (method === "getSlot") return 100;
-        if (method === "getAssetsByOwner")
+        if (method === "getAssetsByOwner") {
+          const items = indexed.slice(
+            (params.page - 1) * 500,
+            params.page * 500,
+          );
           return {
             last_indexed_slot: 100,
-            total: indexed.length,
-            page: 1,
+            total: items.length,
+            page: params.page,
             limit: 500,
-            items: indexed,
-          };
-        if (method === "getAsset") return current.asset;
-        if (method === "getAssetProof") return current.proof;
-        if (method === "getMultipleAccounts") {
-          const head = clone(current.treeAccount);
-          head.data[0] = Buffer.from(head.data[0], "base64")
-            .subarray(0, 96)
-            .toString("base64");
-          return {
-            context: { slot: 100 },
-            value: [head, current.configAccount],
+            items,
           };
         }
-        if (method === "getAccountInfo")
-          return { context: { slot: 100 }, value: current.treeAccount };
-        throw new Error("Unexpected RPC method");
+        if (method === "getAsset")
+          return current.find((item) => item.id === params.id);
+        if (method === "getAssetBatch")
+          return current
+            .filter((item) => params.ids.includes(item.id))
+            .reverse();
+        // Proof requests and tree/account reads must never occur for compressed-only rules.
+        throw new Error("Unexpected RPC method: " + method);
       });
   });
   afterEach(() => jest.restoreAllMocks());
-  it.each([0, 2, 3])(
-    "checks V1/V2 collections and explicit IDs (fixture %i)",
-    async (index) => {
-      current = clone(vectors[index]);
-      indexed = [clone(current.asset)];
+  it.each([1, 2])(
+    "checks V%i owner/collection/ID data without requiring proof or tree fields",
+    async (version) => {
+      indexed = [asset(version)];
+      current = clone(indexed);
       const context = { checks: new Map() };
+      expect(await service.count(rule(), [owner], context)).toBe(1n);
       expect(
-        await service.count(rule(), [current.asset.ownership.owner], context),
+        await service.count(rule("asset_ids", [id]), [owner, owner], context),
       ).toBe(1n);
       expect(
-        await service.count(
-          rule("asset_ids", [current.asset.id]),
-          [current.asset.ownership.owner],
-          context,
-        ),
-      ).toBe(1n);
-      expect(
-        request.mock.calls.filter((call) => call[1] === "getAssetProof"),
+        request.mock.calls.filter((call) => call[1] === "getAsset"),
       ).toHaveLength(1);
+      expect(
+        request.mock.calls.every((call) =>
+          [
+            "getGenesisHash",
+            "getSlot",
+            "getAssetsByOwner",
+            "getAsset",
+          ].includes(call[1]),
+        ),
+      ).toBe(true);
     },
   );
-  it("does not count an unverified collection or inherited royalty recipient", async () => {
-    current = clone(vectors[1]);
-    indexed = [clone(current.asset)];
-    expect(await service.count(rule(), [current.asset.ownership.owner])).toBe(
-      0n,
-    );
-    current = clone(vectors[3]);
-    indexed = [clone(current.asset)];
-    expect(
-      await service.count(rule("verified_creator", [current.creator]), [
-        current.asset.ownership.owner,
-      ]),
-    ).toBe(0n);
-    expect(request.mock.calls.some((call) => call[1] === "getAssetProof")).toBe(
-      false,
-    );
-  });
   it("checks verified creators and same-asset AND/OR traits", async () => {
-    const owner = current.asset.ownership.owner;
-    const creator = rule("verified_creator", [current.creator]);
-    expect(await service.count(creator, [owner])).toBe(1n);
-    const scoped = {
-      ...creator,
-      trait_filter: {
-        operator: "AND",
-        conditions: [
-          { key: "color", value: "blue" },
-          { key: "Hat", value: "Cap" },
-        ],
-      },
-    };
+    const creatorRule = rule("verified_creator", [creator]);
+    expect(await service.count(creatorRule, [owner])).toBe(1n);
+    const scoped = traits(creatorRule);
     expect(await service.count(scoped, [owner])).toBe(1n);
     scoped.trait_filter.conditions[1].value = "Missing";
     expect(await service.count(scoped, [owner])).toBe(0n);
     scoped.trait_filter.operator = "OR";
     expect(await service.count(scoped, [owner])).toBe(1n);
-    delete current.asset.content.metadata.attributes;
-    await expect(
-      service.count(creatorWithTraits(creator), [owner]),
-    ).rejects.toThrow("trait metadata");
+    delete current[0].content.metadata.attributes;
+    await expect(service.count(scoped, [owner])).rejects.toThrow(
+      "trait metadata",
+    );
   });
-  function creatorWithTraits(rule: any) {
-    return {
-      ...rule,
-      trait_filter: {
-        operator: "AND",
-        conditions: [{ key: "Color", value: "Blue" }],
-      },
+  it("uses the asset owner rather than its delegate", async () => {
+    current[0].ownership = {
+      owner: other,
+      delegate: owner,
+      delegated: true,
+      ownership_model: "single",
     };
-  }
-  it("excludes a transferred asset using the authenticated current owner", async () => {
-    const previousOwner = current.asset.ownership.owner;
-    current = clone(vectors.find((v) => v.transferred)!);
-    expect(await service.count(rule(), [previousOwner])).toBe(0n);
-  });
-  it("excludes a burned leaf only after its empty proof matches the current tree", async () => {
-    const owner = current.asset.ownership.owner;
-    current = clone(vectors.find((v) => v.burned)!);
     expect(await service.count(rule(), [owner])).toBe(0n);
   });
-  it("does not expand existing metadata/Core rules to compressed NFTs", async () => {
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+  it("excludes an asset whose fresh lookup reports another owner", async () => {
+    current[0].ownership.owner = other;
+    expect(await service.count(rule(), [owner])).toBe(0n);
+  });
+  it("excludes a provider-reported burn without requesting a burn proof", async () => {
+    current[0].burnt = true;
+    delete current[0].ownership;
+    expect(await service.count(rule(), [owner])).toBe(0n);
     expect(
-      await service.count(
-        rule("collection", [current.collection], ["metadata", "core"]),
-        [current.asset.ownership.owner],
-      ),
-    ).toBe(0n);
-    expect(request.mock.calls.some((call) => call[1] === "getAssetProof")).toBe(
+      request.mock.calls.filter((call) => call[1] === "getAsset"),
+    ).toHaveLength(1);
+  });
+  it("does not include burned entries from the indexed inventory", async () => {
+    indexed[0].burnt = true;
+    expect(await service.count(rule(), [owner])).toBe(0n);
+    expect(request.mock.calls.some((call) => call[1] === "getAsset")).toBe(
       false,
     );
   });
-  it("preserves uncertainty when a compressed rule is paused", async () => {
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+  it.each(["unverified", "different", "none"])(
+    "excludes a %s collection in the fresh asset lookup",
+    async (change) => {
+      if (change === "unverified") current[0].grouping[0].verified = false;
+      if (change === "different") current[0].grouping[0].group_value = other;
+      if (change === "none") current[0].grouping = [];
+      expect(await service.count(rule(), [owner])).toBe(0n);
+    },
+  );
+  it("does not count an unverified creator or collection", async () => {
+    current[0].creators[0].verified = false;
+    expect(
+      await service.count(rule("verified_creator", [creator]), [owner]),
+    ).toBe(0n);
+    indexed[0].grouping[0].verified = false;
+    expect(await service.count(rule(), [owner])).toBe(0n);
+  });
+  it.each([false, true])(
+    "does not use V2 inherited royalty recipients as creators (raw=%s)",
+    async (raw) => {
+      indexed = [asset(2)];
+      current = clone(indexed);
+      for (const item of [...indexed, ...current]) {
+        item.royalty = { inherited: true, basis_points_raw: 65535 };
+        if (raw) item.creators_raw = [];
+      }
+      expect(
+        await service.count(rule("verified_creator", [creator]), [owner]),
+      ).toBe(0n);
+      expect(await service.count(rule(), [owner])).toBe(1n);
+      for (const item of [...indexed, ...current])
+        item.creators_raw = [{ address: creator, verified: true }];
+      expect(
+        await service.count(rule("verified_creator", [creator]), [owner]),
+      ).toBe(1n);
+    },
+  );
+  it.each([
+    "missing-asset",
+    "wrong-id",
+    "missing-owner",
+    "missing-burn-state",
+    "unknown-format",
+    "not-compressed",
+    "missing-grouping",
+    "unknown-verification",
+    "duplicate-collection",
+  ])("preserves uncertainty for %s data", async (failure) => {
+    const original = request.getMockImplementation();
+    if (failure === "missing-asset") current = [];
+    if (failure === "missing-owner") delete current[0].ownership.owner;
+    if (failure === "missing-burn-state") delete current[0].burnt;
+    if (failure === "unknown-format") current[0].interface = "Unknown";
+    if (failure === "not-compressed") current[0].compression.compressed = false;
+    if (failure === "missing-grouping") delete current[0].grouping;
+    if (failure === "unknown-verification")
+      delete current[0].grouping[0].verified;
+    if (failure === "duplicate-collection")
+      current[0].grouping.push(current[0].grouping[0]);
+    if (failure === "wrong-id")
+      request.mockImplementation(async (...args) =>
+        args[1] === "getAsset" ? asset(1, other) : original(...args),
+      );
+    await expect(service.count(rule(), [owner])).rejects.toThrow();
+  });
+  it("rejects malformed verified-creator data", async () => {
+    delete current[0].creators[0].verified;
     await expect(
-      service.count(rule(), [current.asset.ownership.owner]),
-    ).rejects.toThrow("not enabled");
+      service.count(rule("verified_creator", [creator]), [owner]),
+    ).rejects.toThrow();
+  });
+  it.each(["provider-error", "stale-inventory"])(
+    "preserves uncertainty for %s",
+    async (failure) => {
+      const original = request.getMockImplementation();
+      request.mockImplementation(async (...args) => {
+        if (failure === "provider-error" && args[1] === "getAsset")
+          throw new Error("Unavailable provider");
+        const result = await original(...args);
+        if (failure === "stale-inventory" && args[1] === "getAssetsByOwner")
+          result.last_indexed_slot = 99;
+        return result;
+      });
+      await expect(service.count(rule(), [owner])).rejects.toThrow();
+    },
+  );
+  it("batches and reuses asset details without proof or tree requests", async () => {
+    indexed = Array.from({ length: 201 }, (_, n) => asset(1, key(100 + n)));
+    current = clone(indexed);
+    const context = { checks: new Map() };
+    expect(await service.count(rule(), [owner], context)).toBe(201n);
+    expect(
+      await service.count(
+        rule("verified_creator", [creator]),
+        [owner],
+        context,
+      ),
+    ).toBe(201n);
+    expect(
+      request.mock.calls
+        .filter((call) => call[1] === "getAssetBatch")
+        .map((call) => call[2].ids.length),
+    ).toEqual([100, 100, 1]);
+    expect(
+      request.mock.calls.every((call) =>
+        [
+          "getGenesisHash",
+          "getSlot",
+          "getAssetsByOwner",
+          "getAssetBatch",
+        ].includes(call[1]),
+      ),
+    ).toBe(true);
+  });
+  it.each(["missing", "duplicate", "unexpected", "extra"])(
+    "rejects %s batch entries",
+    async (failure) => {
+      indexed = [asset(), asset(2, key(6))];
+      current = clone(indexed);
+      if (failure === "missing") current.pop();
+      if (failure === "duplicate") current[1] = current[0];
+      const original = request.getMockImplementation();
+      request.mockImplementation(async (...args) => {
+        if (args[1] === "getAssetBatch" && failure === "unexpected")
+          return [current[0], asset(1, other)];
+        if (args[1] === "getAssetBatch" && failure === "extra")
+          return [...current, asset(1, other)];
+        if (args[1] === "getAssetBatch" && failure === "duplicate")
+          return current;
+        return original(...args);
+      });
+      await expect(service.count(rule(), [owner])).rejects.toThrow();
+    },
+  );
+  it("bounds selected asset lookups without returning partial counts", async () => {
+    indexed = Array.from({ length: 1001 }, (_, n) => asset(1, key(100 + n)));
+    current = clone(indexed);
+    await expect(service.count(rule(), [owner])).rejects.toThrow(
+      "complete-check limit",
+    );
+    expect(request.mock.calls.some((call) => call[1] === "getAssetBatch")).toBe(
+      false,
+    );
+  });
+  it("keeps existing metadata/Core rule scopes unchanged", async () => {
+    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+    expect(
+      await service.count(
+        rule("collection", [collection], ["metadata", "core"]),
+        [owner],
+      ),
+    ).toBe(0n);
+    expect(request.mock.calls.some((call) => call[1] === "getAsset")).toBe(
+      false,
+    );
+  });
+  it("preserves uncertainty when compressed verification is paused", async () => {
+    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+    await expect(service.count(rule(), [owner])).rejects.toThrow("not enabled");
     await expect(service.checkSetupHealth(true)).rejects.toThrow("not enabled");
     expect(request).not.toHaveBeenCalled();
   });
-  it.each([
-    "stale-slot",
-    "historical-root",
-    "root-race",
-    "missing-tree-config",
-    "provider-error",
-    "missing-traits",
-  ])(
-    "rejects incomplete %s evidence instead of returning a partial zero",
-    async (failure) => {
-      const original = request.getMockImplementation();
-      if (failure === "stale-slot") current.proof.last_indexed_slot = 99;
-      if (failure === "historical-root") {
-        const bytes = Buffer.from(current.treeAccount.data[0], "base64");
-        bytes.writeBigUInt64LE(3n, 64);
-        bytes.writeBigUInt64LE(4n, 72);
-        bytes.set(compressedHash(new Uint8Array([7])), 80 + 3 * (40 + 32 * 3));
-        current.treeAccount.data[0] = bytes.toString("base64");
-      }
-      if (failure === "missing-tree-config") current.configAccount = null;
-      if (failure === "missing-traits")
-        delete current.asset.content.metadata.attributes;
-      request.mockImplementation(async (url, method, params, run) => {
-        if (failure === "provider-error" && method === "getAssetProof")
-          throw new Error("Unavailable provider");
-        const result = await original(url, method, params, run);
-        if (failure === "root-race" && method === "getAccountInfo") {
-          const bytes = Buffer.from(result.value.data[0], "base64");
-          bytes.writeBigUInt64LE(3n, 64);
-          bytes.writeBigUInt64LE(4n, 72);
-          bytes.set(
-            compressedHash(new Uint8Array([7])),
-            80 + 3 * (40 + 32 * 3),
-          );
-          result.value.data[0] = bytes.toString("base64");
-        }
-        return result;
-      });
-      await expect(
-        service.count(
-          failure === "missing-traits" ? creatorWithTraits(rule()) : rule(),
-          [indexed[0].ownership.owner],
-        ),
-      ).rejects.toThrow();
-    },
-  );
-  it("batches multiple assets and shares one authenticated current tree", async () => {
-    const batch = clone(vectorsFile.batch);
-    current = batch[0];
-    indexed = batch.map((vector) => vector.asset);
-    const original = request.getMockImplementation();
-    request.mockImplementation(async (url, method, params, run) => {
-      if (method === "getAssetBatch")
-        return batch.map((vector) => vector.asset).reverse();
-      if (method === "getAssetProofBatch")
-        return Object.fromEntries(
-          batch.map((vector) => [vector.asset.id, vector.proof]),
-        );
-      return original(url, method, params, run);
-    });
-    expect(await service.count(rule(), [current.asset.ownership.owner])).toBe(
-      2n,
-    );
-    expect(
-      request.mock.calls.filter((call) => call[1] === "getAssetBatch"),
-    ).toHaveLength(1);
-    expect(
-      request.mock.calls.filter((call) => call[1] === "getMultipleAccounts"),
-    ).toHaveLength(1);
-    expect(
-      request.mock.calls.some(
-        (call) => call[1] === "getAsset" || call[1] === "getAssetProof",
-      ),
-    ).toBe(false);
-  });
-  it.each(["missing-asset", "duplicate-asset", "missing-proof", "extra-proof"])(
-    "rejects incomplete %s batch results",
-    async (failure) => {
-      const batch = clone(vectorsFile.batch);
-      current = batch[0];
-      indexed = batch.map((vector) => vector.asset);
-      const original = request.getMockImplementation();
-      request.mockImplementation(async (url, method, params, run) => {
-        if (method === "getAssetBatch")
-          return failure === "missing-asset"
-            ? [batch[0].asset]
-            : failure === "duplicate-asset"
-              ? [batch[0].asset, batch[0].asset]
-              : batch.map((vector) => vector.asset);
-        if (method === "getAssetProofBatch") {
-          const result = Object.fromEntries(
-            batch.map((vector) => [vector.asset.id, vector.proof]),
-          );
-          if (failure === "missing-proof") delete result[batch[1].asset.id];
-          if (failure === "extra-proof")
-            result[current.creator] = batch[0].proof;
-          return result;
-        }
-        return original(url, method, params, run);
-      });
-      await expect(
-        service.count(rule(), [current.asset.ownership.owner]),
-      ).rejects.toThrow();
-    },
-  );
-  it("normalizes explicit format choices without changing their address case", () => {
+  it("normalizes explicit formats and gates rule creation", async () => {
     const criteria = solanaCriteria({
-      kind: "asset_ids",
-      addresses: [current.asset.id],
+      kind: "collection",
+      addresses: [collection],
       formats: ["metadata", "compressed", "core"],
     });
     expect(criteria).toEqual({
-      kind: "asset_ids",
-      addresses: [current.asset.id],
+      kind: "collection",
+      addresses: [collection],
       formats: ["compressed", "core", "metadata"],
     });
-    expect(() =>
-      solanaCriteria({
-        kind: "asset_ids",
-        addresses: [current.asset.id],
-        formats: ["metadata", "compressed", "core", "core"],
-      }),
-    ).toThrow();
-  });
-  it("requires the capability to create a compressed rule and labels its scope", async () => {
-    const input = {
-      ...rule(),
-      solana_criteria: solanaCriteria(rule().solana_criteria),
-    };
-    const providers = { solana: service } as any;
+    const input = { ...rule(), solana_criteria: criteria },
+      providers = { solana: service } as any;
     expect(
       (await prepareRuleCriteria(input, providers)).assetFields.solana_criteria,
-    ).toEqual(input.solana_criteria);
-    expect(solanaRuleLabel(input)).toContain("compressed NFTs");
+    ).toEqual(criteria);
+    expect(solanaRuleLabel(input)).toContain("includes compressed NFTs");
     jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
     await expect(prepareRuleCriteria(input, providers)).rejects.toThrow(
       "not enabled",

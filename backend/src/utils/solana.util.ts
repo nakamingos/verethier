@@ -45,18 +45,15 @@ export function solanaBase58(bytes: Uint8Array): string {
 
 export const TOKEN_METADATA_PROGRAM =
   "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
-export function solanaProgramAddress(
-  programId: string,
-  seeds: Uint8Array[],
-): string {
-  if (seeds.length > 15 || seeds.some((seed) => seed.length > 32))
-    throw new Error("Invalid Solana program address seeds.");
-  const program = solanaPublicKey(programId);
+export function solanaMetadataAddress(mint: string): string {
+  const program = solanaPublicKey(TOKEN_METADATA_PROGRAM);
   for (let bump = 255; bump >= 0; bump--) {
     const hash = createHash("sha256")
       .update(
         new Uint8Array([
-          ...seeds.flatMap((seed) => [...seed]),
+          ...Buffer.from("metadata"),
+          ...program,
+          ...solanaPublicKey(mint),
           bump,
           ...program,
           ...Buffer.from("ProgramDerivedAddress"),
@@ -69,14 +66,7 @@ export function solanaProgramAddress(
       return solanaBase58(new Uint8Array(hash));
     }
   }
-  throw new Error("Could not derive Solana program address.");
-}
-export function solanaMetadataAddress(mint: string): string {
-  return solanaProgramAddress(TOKEN_METADATA_PROGRAM, [
-    new Uint8Array(Buffer.from("metadata")),
-    new Uint8Array(solanaPublicKey(TOKEN_METADATA_PROGRAM)),
-    new Uint8Array(solanaPublicKey(mint)),
-  ]);
+  throw new Error("Could not derive Solana metadata address.");
 }
 
 /** Decode the on-chain collection relationship; no off-chain JSON is trusted. */

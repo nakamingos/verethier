@@ -1,9 +1,7 @@
 import {
-  bubblegumTreeConfig,
   compressedCollection,
   compressedCreators,
-  compressedProof,
-  compressedTree,
+  validateCompressedAsset,
   compressedUnavailable,
 } from "@/utils/solana-compressed.util";
 import { Injectable } from "@nestjs/common";
@@ -45,7 +43,7 @@ const SAFE_EXTENSIONS = new Set([
 type Run = {
   deadline: number;
   reads: Map<string, Promise<any>>;
-  compressedChecks?: number;
+  compressedReads?: number;
 };
 
 @Injectable()
@@ -501,169 +499,58 @@ export class SolanaOwnershipService {
     }
     return result;
   }
-  private async primeCompressedAssets(
-    assets: any[],
-    run: Run,
-    minSlot: number,
-  ) {
+  private async compressedAssets(assets: any[], run: Run, minSlot: number) {
+    const cacheKey = (id: string) => `compressed:${id}:${minSlot}`;
     const pending = assets.filter(
-      (asset) => !run.reads.has(`compressed-snapshot:${asset.id}:${minSlot}`),
+      (asset) => !run.reads.has(cacheKey(asset.id)),
     );
-    if (pending.length < 2) return;
-    run.compressedChecks = (run.compressedChecks || 0) + pending.length;
-    if (run.compressedChecks > 1000)
+    run.compressedReads = (run.compressedReads || 0) + pending.length;
+    if (run.compressedReads > 1000)
       throw new Error(
-        "Compressed NFT verification exceeds the complete-check limit.",
+        "Compressed NFT lookup exceeds the complete-check limit.",
       );
     for (let offset = 0; offset < pending.length; offset += 100) {
       const ids = pending.slice(offset, offset + 100).map((asset) => asset.id);
-      const [items, proofs] = await Promise.all([
-        this.request(
-          EnvironmentConfig.SOLANA_DAS_URL,
-          "getAssetBatch",
-          { ids, displayOptions: { showUnverifiedCollections: true } },
-          run,
-        ),
-        this.request(
-          EnvironmentConfig.SOLANA_DAS_URL,
-          "getAssetProofBatch",
-          { ids },
-          run,
-        ),
-      ]);
-      if (
-        !Array.isArray(items) ||
-        items.length !== ids.length ||
-        !proofs ||
-        typeof proofs !== "object" ||
-        Array.isArray(proofs) ||
-        Object.keys(proofs).length !== ids.length
-      )
-        compressedUnavailable();
-      const byId = new Map(items.map((asset) => [asset?.id, asset]));
-      if (
-        byId.size !== ids.length ||
-        ids.some(
-          (id) =>
-            !byId.has(id) ||
-            !Object.prototype.hasOwnProperty.call(proofs, id) ||
-            !proofs[id],
-        )
-      )
-        compressedUnavailable();
-      for (const id of ids)
-        run.reads.set(
-          `compressed-snapshot:${id}:${minSlot}`,
-          Promise.resolve([byId.get(id), proofs[id]]),
-        );
-    }
-  }
-  private async compressedAsset(
-    asset: any,
-    run: Run,
-    minSlot: number,
-  ): Promise<any | null> {
-    return this.cache(run, `compressed:${asset.id}:${minSlot}`, async () => {
-      const [current, proof] = await this.cache(
-        run,
-        `compressed-snapshot:${asset.id}:${minSlot}`,
-        async () => {
-          run.compressedChecks = (run.compressedChecks || 0) + 1;
-          if (run.compressedChecks > 1000)
-            throw new Error(
-              "Compressed NFT verification exceeds the complete-check limit.",
-            );
-          return Promise.all([
-            this.request(
+      const items =
+        pending.length === 1
+          ? [
+              await this.request(
+                EnvironmentConfig.SOLANA_DAS_URL,
+                "getAsset",
+                {
+                  id: ids[0],
+                  displayOptions: { showUnverifiedCollections: true },
+                },
+                run,
+              ),
+            ]
+          : await this.request(
               EnvironmentConfig.SOLANA_DAS_URL,
-              "getAsset",
+              "getAssetBatch",
               {
-                id: asset.id,
+                ids,
                 displayOptions: { showUnverifiedCollections: true },
               },
               run,
-            ),
-            this.request(
-              EnvironmentConfig.SOLANA_DAS_URL,
-              "getAssetProof",
-              { id: asset.id },
-              run,
-            ),
-          ]);
-        },
-      );
-      if (current?.id !== asset.id) compressedUnavailable();
-      const evidence = compressedProof(current, proof, minSlot);
-      const tree = await this.cache(
-        run,
-        `compressed-tree:${evidence.tree}:${evidence.version}:${minSlot}`,
-        async () => {
-          const config = bubblegumTreeConfig(evidence.tree);
-          const response = await this.request(
-            EnvironmentConfig.SOLANA_RPC_URL,
-            "getMultipleAccounts",
-            [
-              [evidence.tree, config],
-              {
-                encoding: "base64",
-                dataSlice: { offset: 0, length: 96 },
-                commitment: "finalized",
-                minContextSlot: minSlot,
-              },
-            ],
-            run,
-          );
-          if (
-            this.slot(response?.context?.slot) < minSlot ||
-            !Array.isArray(response.value) ||
-            response.value.length !== 2
-          )
-            compressedUnavailable();
-          const header = compressedTree(
-            evidence.tree,
-            evidence.version,
-            response.value[0],
-            response.value[1],
-          );
-          const full = await this.request(
-            EnvironmentConfig.SOLANA_RPC_URL,
-            "getAccountInfo",
-            [
-              evidence.tree,
-              {
-                encoding: "base64",
-                dataSlice: { offset: 0, length: header.length },
-                commitment: "finalized",
-                minContextSlot: response.context.slot,
-              },
-            ],
-            run,
-          );
-          if (this.slot(full?.context?.slot) < response.context.slot)
-            compressedUnavailable();
-          const state = compressedTree(
-            evidence.tree,
-            evidence.version,
-            full.value,
-            response.value[1],
-          );
-          if (
-            !state.root ||
-            state.depth !== header.depth ||
-            state.length !== header.length
-          )
-            compressedUnavailable();
-          return state;
-        },
-      );
-      if (
-        evidence.depth !== tree.depth ||
-        BigInt(evidence.nonce) >= tree.minted ||
-        !evidence.root.equals(new Uint8Array(tree.root))
-      )
+            );
+      if (!Array.isArray(items) || items.length !== ids.length)
         compressedUnavailable();
-      return evidence.absent ? null : current;
-    });
+      const byId = new Map(items.map((asset) => [asset?.id, asset]));
+      if (byId.size !== ids.length || ids.some((id) => !byId.has(id)))
+        compressedUnavailable();
+      for (const id of ids) {
+        const asset = validateCompressedAsset(byId.get(id));
+        run.reads.set(cacheKey(id), Promise.resolve(asset));
+      }
+    }
+    return new Map(
+      await Promise.all(
+        assets.map(
+          async (asset) =>
+            [asset.id, await run.reads.get(cacheKey(asset.id))] as const,
+        ),
+      ),
+    );
   }
   private compressedSelected(
     asset: any,
@@ -727,6 +614,7 @@ export class SolanaOwnershipService {
               ["V1_NFT", "ProgrammableNFT"].includes(a.interface))),
       );
       const chain = await this.onchainAssets(needs, run, minSlot);
+      let compressedDetails = new Map<string, any>();
       if (criteria.formats.includes("compressed")) {
         const candidates = inventory.filter(
           (asset) =>
@@ -734,7 +622,7 @@ export class SolanaOwnershipService {
             asset.compression?.compressed === true &&
             this.compressedSelected(asset, criteria),
         );
-        await this.primeCompressedAssets(candidates, run, minSlot);
+        compressedDetails = await this.compressedAssets(candidates, run, minSlot);
       }
       for (let asset of inventory) {
         if (asset.burnt) continue;
@@ -745,8 +633,9 @@ export class SolanaOwnershipService {
             !this.compressedSelected(asset, criteria)
           )
             continue;
-          asset = await this.compressedAsset(asset, run, minSlot);
-          if (!asset || asset.ownership?.owner !== owner) continue;
+          asset = compressedDetails.get(asset.id);
+          if (!asset) compressedUnavailable();
+          if (asset.burnt || asset.ownership.owner !== owner) continue;
           if (!this.compressedSelected(asset, criteria)) continue;
         }
         const format = compressed
