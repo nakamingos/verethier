@@ -88,7 +88,7 @@ Validation passed: production frontend build, 43 targeted connector/verification
 
 ## Compressed NFT stage (updated October 30, 2026)
 
-Implemented locally; not released or enabled. The new `20261029020000_solana_compressed_nfts.sql` migration expands the service-only criteria validator. It changes no saved rule, wallet, table or column. Rehearse/apply it after the original Solana migration, deploy this code, then explicitly set backend `SOLANA_COMPRESSED_ENABLED=1` when releasing this stage. `SOLANA_ENABLED=1` is also required. Reuse the existing Helius RPC/DAS URLs; no new API key or frontend environment variable is required. The local simplification does not require an additional migration. No production migration, Railway flag or deployment was changed in this implementation session.
+The `20261029020000_solana_compressed_nfts.sql` production migration was applied October 30, 2026 after a fresh private backup and guarded rehearsal. Backend flag activation remains an operator step. The migration expands the service-only criteria validator. It changes no saved rule, wallet, table or column. After deploying this code, explicitly set backend `SOLANA_COMPRESSED_ENABLED=1` to enable this stage. `SOLANA_ENABLED=1` is also required. Reuse the existing Helius RPC/DAS URLs; no new API key or frontend environment variable is required. The local simplification does not require an additional migration. The application commits are being published with this release; no Railway flag was changed and no deployment was monitored.
 
 The new-rule editor and `/setup add-solana-nft-rule` offer Token Metadata + Core (the existing default), compressed NFTs (Bubblegum V1/V2), or all supported formats. Existing format scopes stay unchanged and cannot be broadened by editing a rule. Collection, verified creator and explicit asset-ID scopes retain their existing OR-address, minimum, trait and combined-count behavior. Canonical asset IDs identify compressed holdings and contribute one item each. Inherited collection royalty recipients do not become verified asset creators.
 
@@ -112,3 +112,10 @@ October 30 validation passed: 1,670 backend tests across 81 suites, including 75
 Deferred release acceptance: actual community V1/V2 holdings through Phantom/Discord, movement/burns, role preservation, combined groups and privacy-respecting fresh exports. Existing smart-wallet/OpenSea and mobile acceptance remain deferred at the user's request.
 
 Provider references: [Helius asset details](https://www.helius.dev/docs/api-reference/das/getasset), [Helius asset batches](https://www.helius.dev/docs/api-reference/das/getassetbatch), [Metaplex compressed-NFT discovery](https://www.metaplex.com/docs/dev-tools/das-api/guides/find-compressed-nfts).
+
+
+## Compressed NFT production migration (October 30, 2026)
+
+The user authorized the compressed-NFT release. Fresh private roles/schema/data backups were saved under `backup/compressed-release-20261030T130732Z/`, outside version control. The exact guarded migration passed against a disposable restore, including canonical criteria, rule creation/edits and service-role-only RPC checks. The production transaction then applied and recorded `20261029020000_solana_compressed_nfts` and notified PostgREST.
+
+Within one repeatable-read transaction, every application value in all 23 public tables was compared before/after. All 361 wallet records, 53 rules and existing function permissions were preserved. Independent SQL checks confirmed the migration record, acceptance of standard and compressed criteria, service-role execution and denial for ordinary clients. Private SQL, hashes and receipts are retained with the backup. Activation remains `SOLANA_COMPRESSED_ENABLED=1` on the Railway backend after deployment; no Railway connection is available here and deployment monitoring was not performed.

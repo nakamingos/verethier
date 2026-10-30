@@ -1,5 +1,5 @@
 """Rehearse the compressed Solana NFT migration against a private pre-upgrade backup.
-Usage: python3 backend/test/check-solana-compressed-migration.py BACKUP_DIRECTORY
+Usage: python3 backend/test/check-solana-compressed-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
 Only a disposable local database is changed. Errors go to /tmp/bouncer-solana-migration-error.log.
 """
 from pathlib import Path
@@ -48,7 +48,12 @@ try:
     if not has_solana:
         sql((root/'backend/supabase/migrations/20261029010000_solana_verification.sql').read_text())
     before = fingerprints()
-    sql((root/'backend/supabase/migrations/20261029020000_solana_compressed_nfts.sql').read_text())
+    if len(sys.argv) > 2:
+        sql("CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]); INSERT INTO supabase_migrations.schema_migrations(version) VALUES('20261029010000');")
+        sql(Path(sys.argv[2]).read_text())
+        assert sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='20261029020000';").strip() == '1'
+    else:
+        sql((root/'backend/supabase/migrations/20261029020000_solana_compressed_nfts.sql').read_text())
     assert before == fingerprints(), 'Compressed NFT migration changed existing application values'
     print('PASS: every existing application value preserved, including rule criteria and wallet scopes', flush=True)
     sql('BEGIN;\n'+(root/'backend/test/solana-compressed-migration.sql').read_text()+'\nROLLBACK;')
