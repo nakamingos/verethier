@@ -195,7 +195,7 @@ export class PortalService {
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
       rules: rules.map(portalRule),
-      capabilities: { solana: EnvironmentConfig.SOLANA_ENABLED, solana_editions: EnvironmentConfig.SOLANA_ENABLED && EnvironmentConfig.SOLANA_EDITIONS_ENABLED, solana_compressed: EnvironmentConfig.SOLANA_ENABLED && EnvironmentConfig.SOLANA_COMPRESSED_ENABLED, multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
+      capabilities: { solana: EnvironmentConfig.SOLANA_ENABLED, solana_editions: EnvironmentConfig.SOLANA_ENABLED, multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
       privacy: this.privacy ? await this.privacy.server(server) : null,
       settings,
       role_actions: actions.data || [],

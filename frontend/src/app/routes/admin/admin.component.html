@@ -590,7 +590,7 @@
                             <label> {{ draft.solana_kind === 'master_edition' ? 'Master NFT mint addresses' : 'Addresses / asset IDs' }}:<textarea name="solanaAddresses" [(ngModel)]="draft.solana_addresses" required maxlength="46000" placeholder="One address per line"></textarea></label>
                             @if (draft.solana_kind === 'master_edition') {
                               <p>Count printed NFTs belonging to any listed master mint. Each owned print counts once; the master NFT itself is excluded. Token Metadata editions only.</p>
-                            } @else if (data?.capabilities?.solana_compressed) {
+                            } @else if (data?.capabilities?.solana) {
                               <label>NFT formats:<span class="select-control"><app-pixel-select name="solanaFormats" [(ngModel)]="draft.solana_formats" [options]="solanaFormatChoices" label="Solana NFT formats" /></span></label>
                               <p>Any listed address may match. Compressed NFTs are included only when selected above.</p>
                             } @else {

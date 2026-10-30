@@ -163,9 +163,7 @@ export class SolanaOwnershipService {
       throw new Error(UNAVAILABLE);
     return value as number;
   }
-  async checkSetupHealth(compressed = false): Promise<void> {
-    if (compressed && !EnvironmentConfig.SOLANA_COMPRESSED_ENABLED)
-      throw new Error("Compressed Solana NFT verification is not enabled.");
+  async checkSetupHealth(): Promise<void> {
     const run = this.run();
     await this.cluster(run);
     await this.cluster(run, true);
@@ -177,11 +175,6 @@ export class SolanaOwnershipService {
         run,
       ),
     );
-  }
-  async checkEditionSetupHealth(): Promise<void> {
-    if (!EnvironmentConfig.SOLANA_EDITIONS_ENABLED)
-      throw new Error("Solana print edition verification is not enabled.");
-    await this.checkSetupHealth();
   }
   private async mint(mint: string, run: Run) {
     normalizeSolanaAddress(mint);
@@ -590,15 +583,6 @@ export class SolanaOwnershipService {
     const criteria = solanaCriteria(rule.solana_criteria);
     if (rule.asset_type !== "solana_nft" || criteria.kind === "token")
       throw new Error("Invalid Solana NFT rule.");
-    if (
-      criteria.formats.includes("compressed") &&
-      !EnvironmentConfig.SOLANA_COMPRESSED_ENABLED
-    )
-      throw new Error(
-        "Compressed Solana NFT verification is not enabled. Existing roles are preserved.",
-      );
-    if (criteria.kind === "master_edition" && !EnvironmentConfig.SOLANA_EDITIONS_ENABLED)
-      throw new Error("Solana print edition verification is not enabled. Existing roles are preserved.");
     const run = this.run(context),
       matches = new Map<string, bigint>();
     const masters = criteria.kind === "master_edition" ? new Set(criteria.addresses.map(solanaEditionAddress)) : null;

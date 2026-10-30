@@ -70,7 +70,6 @@ describe("Provider-backed compressed NFT ownership", () => {
     current: any[];
   beforeEach(() => {
     jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", true);
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", true);
     indexed = [asset()];
     current = clone(indexed);
     service = new SolanaOwnershipService();
@@ -315,7 +314,6 @@ describe("Provider-backed compressed NFT ownership", () => {
     );
   });
   it("keeps existing metadata/Core rule scopes unchanged", async () => {
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
     expect(
       await service.count(
         rule("collection", [collection], ["metadata", "core"]),
@@ -326,10 +324,10 @@ describe("Provider-backed compressed NFT ownership", () => {
       false,
     );
   });
-  it("preserves uncertainty when compressed verification is paused", async () => {
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+  it("preserves uncertainty when Solana is paused", async () => {
+    jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", false);
     await expect(service.count(rule(), [owner])).rejects.toThrow("not enabled");
-    await expect(service.checkSetupHealth(true)).rejects.toThrow("not enabled");
+    await expect(service.checkSetupHealth()).rejects.toThrow("not enabled");
     expect(request).not.toHaveBeenCalled();
   });
   it("normalizes explicit formats and gates rule creation", async () => {
@@ -349,7 +347,7 @@ describe("Provider-backed compressed NFT ownership", () => {
       (await prepareRuleCriteria(input, providers)).assetFields.solana_criteria,
     ).toEqual(criteria);
     expect(solanaRuleLabel(input)).toContain("includes compressed NFTs");
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_COMPRESSED_ENABLED", false);
+    jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", false);
     await expect(prepareRuleCriteria(input, providers)).rejects.toThrow(
       "not enabled",
     );

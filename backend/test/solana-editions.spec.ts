@@ -63,7 +63,6 @@ describe("Solana printed editions", () => {
     records: Map<string, any>;
   beforeEach(() => {
     jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", true);
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_EDITIONS_ENABLED", true);
     service = new SolanaOwnershipService();
     items = [asset()];
     owned = new Set([child]);
@@ -206,13 +205,13 @@ describe("Solana printed editions", () => {
     });
     await expect(service.count(rule(), [owner])).rejects.toThrow();
   });
-  it("requires the edition capability for checking, creation and setup health", async () => {
-    jest.replaceProperty(EnvironmentConfig, "SOLANA_EDITIONS_ENABLED", false);
+  it("uses the overall Solana switch for checking, creation and setup health", async () => {
+    jest.replaceProperty(EnvironmentConfig, "SOLANA_ENABLED", false);
     await expect(service.count(rule(), [owner])).rejects.toThrow("not enabled");
     await expect(
       prepareRuleCriteria(rule() as any, { solana: service } as any),
     ).rejects.toThrow("not enabled");
-    await expect(service.checkEditionSetupHealth()).rejects.toThrow(
+    await expect(service.checkSetupHealth()).rejects.toThrow(
       "not enabled",
     );
     expect(request).not.toHaveBeenCalled();

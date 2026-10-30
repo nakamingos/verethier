@@ -47,7 +47,6 @@ async function choose(page, name, label) {
         (theme) => localStorage.setItem("bouncer-theme", theme),
         theme,
       );
-      let enabled = false;
       await page.routeWebSocket("**", (socket) => socket.close());
       await page.route("**/*", async (route) => {
         const request = route.request(),
@@ -81,7 +80,6 @@ async function choose(page, name, label) {
               capabilities: {
                 multi_trait: true,
                 solana: true,
-                solana_compressed: enabled,
               },
             };
           else if (p === `/servers/${server}/rules`) {
@@ -120,21 +118,6 @@ async function choose(page, name, label) {
         await choose(page, "Asset type", "Solana NFTs");
       }
       await page.goto(origin + "/admin");
-      await openRule();
-      assert.equal(
-        await page
-          .getByRole("combobox", { name: "Solana NFT formats", exact: true })
-          .count(),
-        0,
-      );
-      await page
-        .getByText(
-          "Any listed address may match. Token Metadata and Core assets only; compressed NFTs are not included.",
-          { exact: true },
-        )
-        .waitFor();
-      enabled = true;
-      await page.reload();
       await openRule();
       assert.match(
         await page
@@ -189,7 +172,7 @@ async function choose(page, name, label) {
       });
       assert.deepEqual(errors, []);
       console.log(
-        `PASS: compressed rule gating, explicit formats, collapse/restore, review and save at ${width}px (${theme})`,
+        `PASS: compressed formats available with Solana, explicit selection, collapse/restore, review and save at ${width}px (${theme})`,
       );
       await context.close();
     }

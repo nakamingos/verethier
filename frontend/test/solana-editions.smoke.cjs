@@ -47,7 +47,6 @@ async function choose(page, name, label) {
         (theme) => localStorage.setItem("bouncer-theme", theme),
         theme,
       );
-      let enabled = false;
       await page.routeWebSocket("**", (socket) => socket.close());
       await page.route("**/*", async (route) => {
         const request = route.request(),
@@ -81,8 +80,7 @@ async function choose(page, name, label) {
               capabilities: {
                 multi_trait: true,
                 solana: true,
-                solana_compressed: true,
-                solana_editions: enabled,
+                solana_editions: true,
               },
             };
           else if (p === `/servers/${server}/rules`) {
@@ -121,20 +119,6 @@ async function choose(page, name, label) {
         await choose(page, "Asset type", "Solana NFTs");
       }
       await page.goto(origin + "/admin");
-      await openRule();
-      await page
-        .getByRole("combobox", { name: "Solana match scope", exact: true })
-        .locator(".pixel-select-arrow")
-        .click();
-      assert.equal(
-        await page
-          .getByRole("listbox")
-          .getByRole("option", { name: "Printed editions", exact: true })
-          .count(),
-        0,
-      );
-      enabled = true;
-      await page.reload();
       await openRule();
       await choose(page, "Solana match scope", "Printed editions");
       await page
@@ -191,7 +175,7 @@ async function choose(page, name, label) {
       });
       assert.deepEqual(errors, []);
       console.log(
-        `PASS: print scope gating, Metadata-only requirements, collapse/restore, review and save at ${width}px (${theme})`,
+        `PASS: print scope available with Solana, Metadata-only requirements, collapse/restore, review and save at ${width}px (${theme})`,
       );
       await context.close();
     }

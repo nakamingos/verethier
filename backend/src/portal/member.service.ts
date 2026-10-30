@@ -225,7 +225,7 @@ export class MemberService {
         )
       : [];
     return {
-      capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED, solana_compressed: EnvironmentConfig.SOLANA_ENABLED && EnvironmentConfig.SOLANA_COMPRESSED_ENABLED},
+      capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED},
       wallets: this.checked(wallets),
       communitiesUnavailable,
       communities,
