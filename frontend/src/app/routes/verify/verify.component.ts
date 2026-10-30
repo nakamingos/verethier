@@ -1,3 +1,5 @@
+import { FormsModule } from '@angular/forms';
+import { PixelSelectComponent } from '@/components/pixel-select/pixel-select.component';
 import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
@@ -20,6 +22,7 @@ import type { GetAccountReturnType } from '@wagmi/core';
 interface State {
   walletType: 'evm' | 'bitcoin' | 'solana';
   bitcoinProvider: BitcoinWalletProvider;
+  bitcoinStamps?: boolean;
   walletTypes: Array<'evm' | 'bitcoin' | 'solana'>;
   walletConnecting: boolean;
   walletConnected: boolean;
@@ -35,7 +38,7 @@ interface State {
 @Component({
     selector: 'app-verify',
     imports: [
-        AsyncPipe,
+        AsyncPipe, FormsModule, PixelSelectComponent,
         RouterLink,
         NgTemplateOutlet,
         PrivacyChoicesComponent
@@ -81,7 +84,7 @@ export class VerifyComponent {
     // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
       map((params: any) => this.decodeData(params.data)),
-      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin' | 'solana'>; expiry: number; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
+      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin' | 'solana'>; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
         ...(data.userId !== undefined ? { userId: data.userId } : {}),
         ...(data.discordId !== undefined ? { discordId: data.discordId } : {}),
         nonce: data.nonce,
@@ -92,7 +95,7 @@ export class VerifyComponent {
         const resolvedData = { ...data, ...context.data, expiry: context.expiry };
         if (!resolvedData.userId || !resolvedData.discordId || !resolvedData.nonce
           || !resolvedData.userTag || !resolvedData.discordName) throw new Error('Missing verification context.');
-        this.setState({ walletTypes: context.walletTypes });
+        this.setState({ walletTypes: context.walletTypes, bitcoinStamps: context.bitcoinStamps === true });
         if (context.walletTypes.includes('bitcoin') && new URL(window.location.href).searchParams.get('wallet') === 'unisat') {
           this.setWalletType('bitcoin', 'unisat');
         } else if (context.walletTypes.includes('solana') && new URL(window.location.href).searchParams.get('wallet') === 'phantom') {
@@ -417,7 +420,7 @@ export class VerifyComponent {
     if (this.state$.value.walletConnecting || this.state$.value.messageSigning || this.state$.value.verificationSubmitting) return;
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
-      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider);
+      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider, this.state$.value.bitcoinStamps);
       else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect();
       else await this.walletSvc.connect();
     } catch (error) {

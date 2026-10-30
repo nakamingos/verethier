@@ -4,13 +4,13 @@ import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { AsyncPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortalSessionService } from '@/services/portal-session.service';
 import { WalletService } from '@/services/wallet.service';
-import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
+import { canonicalBitcoinAddress, BitcoinWalletService } from '@/services/bitcoin-wallet.service';
 import { PixelSelectComponent } from '@/components/pixel-select/pixel-select.component';
 
 interface Requirement {
@@ -84,7 +84,7 @@ interface Account {
   imports: [
     FormsModule,
     RouterLink,
-    DatePipe,
+    DatePipe, AsyncPipe,
     PixelSelectComponent,
     PrivacyChoicesComponent,
     DeletionRequestsComponent,
@@ -294,7 +294,7 @@ export class MemberComponent {
       else if (this.walletKind === 'evm') await this.evmWallet().connect();
       else
         await this.bitcoin.connect(
-          this.walletKind === 'unisat' ? 'unisat' : 'xverse',
+          this.walletKind === 'unisat' ? 'unisat' : 'xverse', true,
         );
     } catch (error) {
       this.fail(error);
@@ -326,7 +326,7 @@ export class MemberComponent {
       if (
         !this.linkFlow ||
         (walletType === 'evm' && this.linkFlow.challenge.domain.chainId !== chainId) ||
-        this.linkFlow.walletType !== walletType || this.linkFlow.address !== (walletType === 'solana' ? address : address.toLowerCase()) ||
+        this.linkFlow.walletType !== walletType || this.linkFlow.address !== (walletType === 'evm' ? address.toLowerCase() : walletType === 'bitcoin' ? canonicalBitcoinAddress(address) : address) ||
         new Date(this.linkFlow.expiresAt).getTime() <= Date.now()
       )
         this.linkFlow = await this.api<LinkFlow>('/wallet-challenge', {
@@ -339,7 +339,7 @@ export class MemberComponent {
         walletType === 'evm'
           ? await this.evmWallet().signTypedMessage(flow.challenge)
           : walletType === 'solana' ? await this.solana.signMessage(flow.address, flow.challenge) : await this.bitcoin.signMessage(flow.address, flow.challenge);
-      if ((walletType === 'solana' ? proof.address : proof.address.toLowerCase()) !== flow.address) {
+      if ((walletType === 'evm' ? proof.address.toLowerCase() : walletType === 'bitcoin' ? canonicalBitcoinAddress(proof.address) : proof.address) !== flow.address) {
         this.linkFlow = null;
         throw new Error('Your wallet account changed. Please sign again.');
       }
@@ -461,7 +461,7 @@ export class MemberComponent {
     if (chainId === 4663) return 'https://robinhoodchain.blockscout.com/address/' + address;
     return address.startsWith('0x')
       ? 'https://etherscan.io/address/' + address
-      : address.length === 62 && /^bc1p/i.test(address) ? 'https://mempool.space/address/' + address : 'https://solscan.io/account/'+address;
+      : (/^(bc1p[ac-hj-np-z02-9]{58}|bc1q[ac-hj-np-z02-9]{38}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/i.test(address)) ? 'https://mempool.space/address/' + address : 'https://solscan.io/account/'+address;
   }
   channelOptions(community: Community) {
     return [
@@ -539,6 +539,7 @@ export class MemberComponent {
     return '';
   }
   network(rule: Requirement) {
+    if (rule.asset === 'stamp') return 'Bitcoin Stamps';
     if (rule.asset === 'solana_nft' || rule.asset === 'solana_token') return 'Solana';
     return rule.asset === 'nft' || rule.asset === 'erc20'
       ? evmNetworkLabel(rule.network || 1)

@@ -238,7 +238,7 @@ describe('Verification page wallet choice', () => {
     expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
     fixture.componentInstance.selectWallet('bitcoin');
     await fixture.componentInstance.connect();
-    expect(bitcoin.connect).toHaveBeenCalledWith('xverse');
+    expect(bitcoin.connect).toHaveBeenCalledWith('xverse',false);
     expect(ethereum.connect).not.toHaveBeenCalled();
     expect(fixture.componentInstance.state$.value.connectedAddress).toBe(address);
     fixture.componentInstance.selectWallet('evm');
@@ -255,7 +255,7 @@ describe('Verification page wallet choice', () => {
     fixture.detectChanges();
     expect(component.state$.value.bitcoinProvider).toBe('unisat');
     expect(fixture.nativeElement.textContent).toContain('Connect your UniSat wallet');
-    await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat');
+    await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat',false);
     const pending = component.verify(data); await Promise.resolve();
     http.expectOne(request => request.url.endsWith('/bitcoin-challenge')).flush({ address, message: 'UniSat challenge\nNonce: nonce', expiry });
     await new Promise(resolve => setTimeout(resolve, 0));

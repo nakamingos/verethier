@@ -7,6 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "test:stamps-smoke": "node test/stamps.smoke.cjs && node test/stamps-wallet.smoke.cjs",
     "test:solana-smoke": "node test/solana.smoke.cjs",
     "test:solana-compressed-smoke": "node test/solana-compressed.smoke.cjs",
     "test:solana-editions-smoke": "node test/solana-editions.smoke.cjs",

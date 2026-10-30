@@ -121,4 +121,14 @@ describe('Canonical NFT rules from a collection lookup', () => {
     const address='bc1p111111111111111111111111111111111111111';
     expect(component.walletExplorer(address)).toBe('https://solscan.io/account/'+address);
   });
+  it('creates creator-and-stamp scopes without NFT traits or EVM fields',()=>{
+    component.draft.asset_type='stamp';component.changeAsset();
+    component.draft.stamp_creator='1GotRejB6XsGgMsM79TvcypeanDJRJbMtg';component.draft.stamp_ids='0, 1';
+    expect(component.hasTraitEditor).toBeFalse();
+    expect(component.payload().stamp_criteria).toEqual({creator:component.draft.stamp_creator,stamp_ids:['0','1']});
+    expect(component.payload().network).toBeUndefined();
+    expect(component.payload().trait_filter).toBeUndefined();
+    expect(component.describe({stamp_criteria:component.payload().stamp_criteria})).toContain('#0, #1');
+  });
+
 });

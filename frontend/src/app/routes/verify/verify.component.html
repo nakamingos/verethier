@@ -146,7 +146,12 @@
               </button>
             </div>
             <div class="sub">
-              Use your Bitcoin mainnet Ordinals address (bc1p…).
+              {{ state.bitcoinStamps ? 'Choose the Bitcoin mainnet address holding your Stamps or Ordinals.' : 'Use your Bitcoin mainnet Ordinals address (bc1p…).' }}
+              @if (state.bitcoinStamps && state.walletConnected && (bitcoinWalletSvc.addresses$ | async); as addresses) {
+                @if (addresses.length > 1) {
+                  <label>Bitcoin address:<app-pixel-select name="stampAddress" [ngModel]="state.connectedAddress" (ngModelChange)="bitcoinWalletSvc.selectAddress($event)" [options]="addresses" label="Bitcoin address" [disabled]="state.messageSigning || state.verificationSubmitting" /></label>
+                }
+              }
             </div>
           }
           @if (state.connectedAddress) {

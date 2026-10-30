@@ -580,7 +580,12 @@
                             /></label>
                           }
                         }
-                        @if (draft.asset_type === 'solana_nft' || draft.asset_type === 'solana_token') {
+                        @if (draft.asset_type === 'stamp') {
+                          <label>Creator address (optional):<input name="stampCreator" [(ngModel)]="draft.stamp_creator" maxlength="90" [required]="!draft.stamp_ids?.trim()" /></label>
+                          <label>Stamp numbers (optional):<textarea name="stampIds" [(ngModel)]="draft.stamp_ids" maxlength="1700" rows="2" placeholder="0,1,1234" [required]="!draft.stamp_creator?.trim()"></textarea></label>
+                          <p class="muted wide">Enter a creator address, stamp numbers, or both. When both are set, each selected stamp must match the creator. Counts owned copies of indivisible Stamps; SRC-20 tokens are separate.</p>
+                        }
+                        @if (draft.asset_type === 'solana_nft'  || draft.asset_type === 'solana_token') {
                           <p>Solana mainnet · directly held assets</p>
                           @if (draft.asset_type === 'solana_token') {
                             <label>Mint address:<input name="solanaMint" [(ngModel)]="draft.solana_mint" required maxlength="44" /></label>
@@ -640,7 +645,7 @@
                           }
                         }
                         @if (
-                          !(["erc20", "solana_token"].includes(draft.asset_type)) &&
+                          !(["erc20", "solana_token", "stamp"].includes(draft.asset_type)) &&
                           (draft.asset_type === "nft" || mode === "collection")
                         ) {
                           <ng-container *ngTemplateOutlet="traitControls" />

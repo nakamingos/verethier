@@ -206,6 +206,9 @@
                     </div>
                   </div>
                 } @else {
+                  @if (walletKind === 'xverse' && address) {
+                    <label>Bitcoin address:<app-pixel-select name="stampAddress" [ngModel]="address" (ngModelChange)="bitcoin.selectAddress($event); linkFlow = null" [options]="(bitcoin.addresses$ | async) || []" label="Bitcoin address" [disabled]="busy || connecting" /></label>
+                  }
                   <div class="actions">
                     <button (click)="connect()" [disabled]="busy || connecting">
                       {{
@@ -253,7 +256,7 @@
                   <h2 [title]="wallet.address">{{ short(wallet.address) }}</h2>
                   <span class="badge">{{
                     wallet.wallet_type === "bitcoin"
-                      ? "Bitcoin · Ordinals"
+                      ? "Bitcoin"
                       : walletScope(wallet)
                   }}</span>
                 </div>

@@ -110,6 +110,24 @@ describe('Xverse Ordinals wallet', () => {
     await service.connect();
     await expectAsync(service.signMessage(ordinalAddress, 'message')).toBeRejectedWithError(/account changed/);
   });
+  it('offers explicit Xverse payment selection for Stamps and preserves Base58 case', async () => {
+    const payment='3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy';
+    const addresses={status:'success',result:{addresses:[{purpose:'ordinals',address:ordinalAddress},{purpose:'payment',address:payment}]}};
+    request.and.callFake(async method=>method==='signMessage'?{status:'success',result:{signature:'proof',address:payment,protocol:'BIP322'}}:addresses);
+    await service.connect('xverse',true);
+    expect(request.calls.first().args).toEqual(['wallet_connect',jasmine.objectContaining({addresses:['ordinals','payment']})]);
+    expect(service.address$.value).toBe(ordinalAddress);
+    service.selectAddress(payment);
+    expect(await service.syncConnectedAccount()).toBe(payment);
+    expect(await service.signMessage(payment,'challenge')).toEqual({address:payment,signature:'proof'});
+  });
+  it('does not permit payment selection in the Ordinals-only flow', async () => {
+    request.and.resolveTo(connected());
+    await service.connect();service.selectAddress('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy');
+    expect(service.address$.value).toBe(ordinalAddress);
+    expect(service.addresses$.value).toEqual([]);
+  });
+
 });
 
 describe('Xverse provider selection', () => {
@@ -292,4 +310,5 @@ describe('UniSat Ordinals wallet', () => {
     expect(() => service.uniSatMobileUrl('http://example.test/verify')).toThrowError(/HTTPS/);
     expect(() => service.uniSatMobileUrl('javascript:alert(1)')).toThrowError(/HTTPS/);
   });
+
 });

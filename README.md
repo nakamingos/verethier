@@ -230,3 +230,7 @@ Set backend-only `BOUNCER_OPERATOR_DISCORD_IDS` to comma/whitespace-separated nu
 ### Solana implementation status
 
 Initial Solana wallet proofs, fungible-token rules and Token Metadata/Core NFT scopes are implemented behind backend configuration. Production migration and live acceptance remain pending; see [Solana verification](docs/solana-verification.md) for configuration, supported scope and deferred checks.
+
+## Bitcoin Stamps
+
+Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are implemented locally. See [scope, providers, migration and release status](docs/bitcoin-stamps.md). Ordinals-only channels remain Taproot-only.

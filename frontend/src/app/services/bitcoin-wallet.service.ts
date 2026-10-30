@@ -4,12 +4,13 @@ import { BehaviorSubject } from 'rxjs';
 const XVERSE_PROVIDER = 'XverseProviders.BitcoinProvider';
 
 export type BitcoinWalletProvider = 'xverse' | 'unisat';
+export const canonicalBitcoinAddress = (address: string) => /^bc1/i.test(address) ? address.toLowerCase() : address;
 
 interface UniSatProvider {
   requestAccounts(): Promise<string[]>;
   getAccounts(): Promise<string[]>;
   getChain(): Promise<{ enum: string }>;
-  signMessage(message: string, type: 'bip322-simple'): Promise<string>;
+  signMessage(message: string, type: 'bip322-simple' | 'ecdsa'): Promise<string>;
 }
 
 @Injectable()
@@ -17,6 +18,9 @@ export class BitcoinWalletService {
   readonly address$ = new BehaviorSubject<string | null>(null);
   private connectedProvider: BitcoinWalletProvider | null = null;
   private session = 0;
+  private stamps = false;
+  readonly addresses$ = new BehaviorSubject<Array<{value:string;label:string;purpose:string}>>([]);
+  private selectedPurpose = 'ordinals';
 
   preferredProvider(): BitcoinWalletProvider {
     return this.isUniSatAvailable() && !(window as any).XverseProviders?.BitcoinProvider ? 'unisat' : 'xverse';
@@ -42,8 +46,9 @@ export class BitcoinWalletService {
     window.location.assign(this.uniSatMobileUrl());
   }
 
-  async connect(provider: BitcoinWalletProvider = 'xverse'): Promise<void> {
+  async connect(provider: BitcoinWalletProvider = 'xverse', stamps = false): Promise<void> {
     this.disconnect();
+    this.stamps = stamps;
     const session = this.session;
     let address: string;
     if (provider === 'unisat') {
@@ -52,7 +57,7 @@ export class BitcoinWalletService {
       address = await this.uniSatAddress(wallet, accounts);
     } else {
       const response = await this.callWallet('wallet_connect', {
-        addresses: ['ordinals'], network: 'Mainnet',
+        addresses: this.stamps ? ['ordinals','payment'] : ['ordinals'], network: 'Mainnet',
         message: 'Connect your Ordinals address to verify your collection for Discord roles.',
       });
       address = this.ordinalAddress(response);
@@ -65,6 +70,8 @@ export class BitcoinWalletService {
   disconnect(): void {
     this.session++;
     this.connectedProvider = null;
+    this.addresses$.next([]);
+    this.selectedPurpose = 'ordinals';
     this.address$.next(null);
   }
 
@@ -92,12 +99,12 @@ export class BitcoinWalletService {
     let signature: string;
     if (provider === 'unisat') {
       const wallet = this.uniSat();
-      signature = await this.uniSatCall('Message signing', () => wallet.signMessage(message, 'bip322-simple'));
+      signature = await this.uniSatCall('Message signing', () => wallet.signMessage(message, address.startsWith('1') ? 'ecdsa' : 'bip322-simple'));
       if (typeof signature !== 'string' || !signature) throw new Error('UniSat did not return a message signature. Please sign again.');
     } else {
       const response = await this.callWallet('signMessage', { address, message, protocol: 'BIP322' });
       const result = this.walletResult(response, 'Message signing');
-      if (!result.signature || (result.address && result.address.toLowerCase() !== address)
+      if (!result.signature || (result.address && canonicalBitcoinAddress(result.address) !== address)
         || (result.protocol && result.protocol !== 'BIP322')) throw new Error('Xverse returned a signature for a different address or signing method.');
       signature = result.signature;
     }
@@ -113,7 +120,7 @@ export class BitcoinWalletService {
       return this.uniSatAddress(wallet, await this.uniSatCall('Wallet account lookup', () => wallet.getAccounts()));
     }
     const response = await this.callWallet('getAddresses', {
-      purposes: ['ordinals'], message: 'Connect your Ordinals address to verify your collection for Discord roles.',
+      purposes: this.stamps ? ['ordinals','payment'] : ['ordinals'], message: 'Connect your Ordinals address to verify your collection for Discord roles.',
     });
     return this.ordinalAddress(response);
   }
@@ -132,7 +139,8 @@ export class BitcoinWalletService {
     if (chain?.enum !== 'BITCOIN_MAINNET') throw new Error('Switch UniSat to Bitcoin mainnet before verifying.');
     const address = Array.isArray(accounts) && accounts.length === 1 ? accounts[0] : null;
     if (typeof address !== 'string' || !/^bc1p[ac-hj-np-z02-9]{58}$/i.test(address)) {
-      throw new Error('Select your Bitcoin mainnet Taproot Ordinals address (bc1p…) in UniSat.');
+      if (this.stamps && this.validStampAddress(address)) return canonicalBitcoinAddress(address);
+      throw new Error(this.stamps ? 'Select your Bitcoin mainnet Stamps address in UniSat.' : 'Select your Bitcoin mainnet Taproot Ordinals address (bc1p…) in UniSat.');
     }
     return address.toLowerCase();
   }
@@ -155,6 +163,16 @@ export class BitcoinWalletService {
     const result = this.walletResult(response, 'Wallet connection');
     // wallet_connect returns an account; getAddresses can return the address array directly.
     const addresses = Array.isArray(result) ? result : result?.addresses;
+    if (this.stamps && Array.isArray(addresses)) {
+      const choices = addresses.filter((a:any) => ['ordinals','payment'].includes(a?.purpose) && this.validStampAddress(a.address)
+        && (!a.network || (typeof a.network === 'string' && a.network.toLowerCase() === 'mainnet')));
+      this.addresses$.next(choices.map((a:any) => ({value:canonicalBitcoinAddress(a.address),label:(a.purpose === 'payment' ? 'Payment address: ' : 'Ordinals address: ') + a.address,purpose:a.purpose})));
+      if (!this.connectedProvider && !choices.some((a:any)=>a.purpose === this.selectedPurpose) && choices.length) this.selectedPurpose = choices[0].purpose;
+      const chosen = choices.find((a:any) => a.purpose === this.selectedPurpose);
+      const network = result?.network?.bitcoin?.name;
+      if (!chosen || (network && (typeof network !== 'string' || network.toLowerCase() !== 'mainnet'))) throw new Error('Connect your selected Bitcoin mainnet address in Xverse.');
+      return canonicalBitcoinAddress(chosen.address);
+    }
     const ordinal = Array.isArray(addresses) ? addresses.find((item: any) => item?.purpose === 'ordinals') : undefined;
     const address = ordinal?.address;
     const network = result?.network?.bitcoin?.name || ordinal?.network;
@@ -163,6 +181,19 @@ export class BitcoinWalletService {
       throw new Error('Switch Xverse to Bitcoin mainnet and connect your Ordinals address (bc1p…).');
     }
     return address.toLowerCase();
+  }
+
+  selectAddress(address: string): void {
+    const choice = this.addresses$.value.find(a => a.value === address);
+    if (!this.stamps || this.connectedProvider !== 'xverse' || !choice) return;
+    this.selectedPurpose = choice.purpose;
+    this.session++;
+    this.address$.next(address);
+  }
+
+  private validStampAddress(address: unknown): address is string {
+    return typeof address === 'string' && (/^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address)
+      || /^bc1q[ac-hj-np-z02-9]{38}$/i.test(address) || /^bc1p[ac-hj-np-z02-9]{58}$/i.test(address));
   }
 
   private walletResult(response: any, action: string): any {
