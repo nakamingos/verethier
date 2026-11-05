@@ -233,4 +233,4 @@ Initial Solana wallet proofs, fungible-token rules and Token Metadata/Core NFT s
 
 ## Bitcoin Stamps
 
-Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are implemented locally. See [scope, providers, migration and release status](docs/bitcoin-stamps.md). Ordinals-only channels remain Taproot-only.
+Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are released; the production migration was applied November 5, 2026. See [scope, providers, migration and release status](docs/bitcoin-stamps.md). Ordinals-only channels remain Taproot-only.
