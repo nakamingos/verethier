@@ -246,6 +246,20 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.deepEqual(test.errors,[]);
       await page.screenshot({path:path.join(artifacts,`privacy-error-${width}.png`),fullPage:true});
       console.log(JSON.stringify({scenario:`privacy-error-layout-${width}`,result:'passed'}));
+      // A proxy or unexpected endpoint can reply HTTP 200 with non-JSON text.
+      // HttpClient rejects that response; its OK status label is not an error explanation.
+      await page.route('**/api/verify-signature',route=>route.fulfill({status:200,contentType:'text/plain',body:'OK'}));
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('[role="alert"]')?.textContent!=='Ownership checks are temporarily unavailable. Please try again.');
+      assert.equal(await alert.innerText(),'Bouncer returned an unreadable response. Please reload this page and try again.');
+      assert.equal(await page.locator('.step-3').isVisible(),false,'An unreadable response must not mark the member verified');
+      assert.equal(await page.getByRole('button',{name:'Sign Message',exact:true}).isEnabled(),true);
+      const invalidResponseBox=await alert.boundingBox();
+      const activePanel=await page.locator('.step-2.active').boundingBox();
+      assert.ok(invalidResponseBox.y>=activePanel.y+activePanel.height-1,'Unreadable-response errors must follow the complete panel');
+      assert.equal(test.signatures,2,'An unreadable response must not trigger another signature automatically');
+      await page.screenshot({path:path.join(artifacts,`privacy-invalid-response-${width}.png`),fullPage:true});
+      console.log(JSON.stringify({scenario:`invalid-verification-response-${width}`,result:'passed'}));
       await test.context.close();
     }
     for (const mobile of [false,true]) {

@@ -203,6 +203,39 @@ describe('Verification page wallet choice', () => {
     expect(component.state$.value.messageVerified).toBeFalse();
   });
 
+  for (const status of [400, 503]) {
+    it(`shows the HTTP failure instead of an OK status label for ${status}`, async () => {
+      const fixture = page(['evm']);
+      const component = fixture.componentInstance;
+      ethereum.connectedState$.next({ isConnected: true, isConnecting: false });
+      const pending = component.verify(data);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      http.expectOne(request => request.url.endsWith('/verify-signature')).flush(
+        { statusCode: status }, { status, statusText: 'OK' },
+      );
+      await pending;
+      fixture.detectChanges();
+      expect(component.state$.value.errorMessage).toBe(`Verification failed (HTTP ${status}). Please try again.`);
+      expect(component.state$.value.messageVerified).toBeFalse();
+      expect(component.state$.value.verificationSubmitting).toBeFalse();
+      expect(ethereum.signTypedMessage).toHaveBeenCalledTimes(1);
+      expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).not.toBe('OK');
+    });
+  }
+
+  it('explains a connection failure without showing the raw HTTP client error', async () => {
+    const fixture = page(['evm']);
+    const component = fixture.componentInstance;
+    ethereum.connectedState$.next({ isConnected: true, isConnecting: false });
+    const pending = component.verify(data);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    http.expectOne(request => request.url.endsWith('/verify-signature')).error(new ProgressEvent('error'));
+    await pending;
+    expect(component.state$.value.errorMessage).toBe('Could not reach Bouncer. Check your connection and try again.');
+    expect(component.state$.value.messageVerified).toBeFalse();
+    expect(component.state$.value.verificationSubmitting).toBeFalse();
+  });
+
   it('explains a rate-limited context request without claiming the link has expired', () => {
     const fixture = TestBed.createComponent(VerifyComponent);
     fixture.detectChanges();

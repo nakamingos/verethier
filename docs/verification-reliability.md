@@ -18,6 +18,18 @@ The active step now participates in normal flow at all widths. Inactive steps ar
 
 The repeated desktop verification failure itself is not diagnosed by that screenshot. Await the affected wallet/browser and the actual error once readable. Do not treat the privacy sentence as a backend eligibility or privacy-consent rejection.
 
+## Verification failure displayed as OK
+
+A subsequent screenshot from the affected desktop member shows the error below the complete panel, confirming the overlap is absent in that capture. The member is using Rabby on Chrome; the exact browser/extension versions and whether the notification appeared after signature approval are not yet known.
+
+The verification error handler fell back to the HTTP `statusText` when the response lacked a usable error message. That label can be `OK` even when HttpClient rejects the response. Unit regressions reproduced `OK` for error statuses with missing messages; a real Chromium regression reproduced the exact `OK` notification after a synthetic signature when the mocked endpoint returned HTTP 200 with plain-text `OK` instead of JSON. These are demonstrated ways to trigger the misleading text, not proof of the affected member's actual response.
+
+The error handler now preserves meaningful server messages and rate-limit guidance, explains network failures and unreadable HTTP 2xx responses, and includes the HTTP status for otherwise unexplained failures. Status labels, bare `OK` and HTML error pages are not used as explanations. The same HTTP handling covers Bitcoin/Solana challenge failures. Wallet signing errors retain their existing messages. The change does not retry signatures or change ownership/authentication decisions.
+
+Validation: 46 targeted wallet/verification unit tests, the production frontend build and the complete EVM wallet browser suite passed. The unreadable-response browser case passed at 1280, 768, 393 and 320px, with the alert below the active panel and no automatic signature retry. Desktop/mobile screenshots were inspected. The unit and browser regressions reproduced the old failure before the fix.
+
+The underlying failure for the Rabby user still requires the actual failed request/response or corresponding backend log. Do not attribute it to Rabby or Railway from the screenshot alone. This follow-up fix is local and unpushed until separately released.
+
 ## MetaMask domain warning
 
 The member confirmed the production domain. The operator independently reproduced the warning and reports it during both connecting and signing. The private verification token was not used for reputation checks or included in documentation.

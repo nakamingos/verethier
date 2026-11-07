@@ -318,26 +318,7 @@ export class VerifyComponent {
             return;
           }),
           catchError((error) => {
-            // Handle HTTP errors (like when user doesn't have required assets)
-            let errorMessage = 'Verification failed. Please try again.';
-            
-            // Try different ways to extract the error message
-            if (error.error) {
-              if (typeof error.error === 'string') {
-                errorMessage = error.error;
-              } else if (error.error.message) {
-                errorMessage = error.error.message;
-              }
-            } else if (error.message) {
-              errorMessage = error.message;
-            }
-            
-            // If it's still the generic message, try to extract from statusText
-            if (errorMessage === 'Verification failed. Please try again.' && error.statusText) {
-              errorMessage = error.statusText;
-            }
-
-            errorMessage = this.rateLimitMessage(error) || errorMessage;
+            let errorMessage = this.verificationErrorMessage(error);
 
             if (
               errorMessage.includes('already verified by another user') &&
@@ -358,10 +339,9 @@ export class VerifyComponent {
       );
     } catch (error) {
       // Handle wallet signing errors
-      const responseError = error instanceof HttpErrorResponse ? error.error : null;
-      const errorMessage = this.rateLimitMessage(error)
-        || (typeof responseError === 'string' ? responseError : responseError?.message
-          || (error instanceof Error ? error.message : 'Failed to sign message with wallet'));
+      const errorMessage = error instanceof HttpErrorResponse
+        ? this.verificationErrorMessage(error)
+        : error instanceof Error ? error.message : 'Failed to sign message with wallet';
       this.setState({ 
         messageSigning: false,
         verificationSubmitting: false,
@@ -385,6 +365,31 @@ export class VerifyComponent {
       ...this.state$.value,
       ...state
     });
+  }
+
+  private verificationErrorMessage(error: unknown): string {
+    const rateLimit = this.rateLimitMessage(error);
+    if (rateLimit) return rateLimit;
+    if (!(error instanceof HttpErrorResponse)) {
+      return error instanceof Error && error.message
+        ? error.message : 'Verification failed. Please try again.';
+    }
+
+    // HttpClient also rejects HTTP 2xx responses it cannot decode as JSON.
+    // A status label such as OK is never an explanation of that failure.
+    if (error.status >= 200 && error.status < 300) {
+      return 'Bouncer returned an unreadable response. Please reload this page and try again.';
+    }
+    if (error.status === 0) {
+      return 'Could not reach Bouncer. Check your connection and try again.';
+    }
+    const body = error.error;
+    const message = typeof body === 'string' ? body : body?.message;
+    if (typeof message === 'string' && message.trim()
+      && !/^ok$/i.test(message.trim()) && !message.trim().startsWith('<')) {
+      return message;
+    }
+    return `Verification failed (HTTP ${error.status}). Please try again.`;
   }
 
   private rateLimitMessage(error: unknown): string | null {
