@@ -6,6 +6,7 @@ import { CONSTANTS } from '../src/constants';
 import { VerifyService } from '../src/services/verify.service';
 import { VerifySignatureDto } from '../src/dtos/verify-signature.dto';
 import { DecodedData } from '../src/models/app.interface';
+import { WALLET_BLOCKED } from '../src/services/wallet-block.service';
 
 /**
  * AppController Test Suite
@@ -297,6 +298,31 @@ describe('AppController', () => {
             HttpStatus.BAD_REQUEST
           )
         );
+      });
+
+      it('explains an explicit wallet block with a forbidden response in production', async () => {
+        const previous = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+        try {
+          mockVerifyService.verifySignatureFlow.mockRejectedValue(new Error(WALLET_BLOCKED));
+          await expect(controller.verify(validRequestBody)).rejects.toMatchObject({
+            status: HttpStatus.FORBIDDEN,
+            response: WALLET_BLOCKED,
+          });
+        } finally {
+          if (previous === undefined) delete process.env.NODE_ENV;
+          else process.env.NODE_ENV = previous;
+        }
+      });
+
+      it('keeps unexpected details after a wallet block message private', async () => {
+        mockVerifyService.verifySignatureFlow.mockRejectedValue(
+          new Error(WALLET_BLOCKED + ' Internal database details.'),
+        );
+        await expect(controller.verify(validRequestBody)).rejects.toMatchObject({
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          response: 'Verification failed. Please try again.',
+        });
       });
 
       it('should convert generic errors to 500 status with sanitized message', async () => {

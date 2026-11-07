@@ -10,6 +10,7 @@ import { SecurityUtil } from './utils/security.util';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { BitcoinChallengeDto, VerificationContextDto } from './dtos/wallet-context.dto';
 import { MemberService } from './portal/member.service';
+import { WALLET_BLOCKED } from './services/wallet-block.service';
 
 /**
  * AppController
@@ -117,6 +118,12 @@ export class AppController {
         throw error;
       }
       
+      // An explicit server restriction is an expected refusal. Return only the
+      // fixed public explanation; administrative reasons stay private.
+      if (errorMessage === WALLET_BLOCKED) {
+        throw new HttpException(WALLET_BLOCKED, HttpStatus.FORBIDDEN);
+      }
+
       // Check if this is a user-friendly verification error that should be shown to the user
       if (errorMessage.includes('Invalid or expired nonce.')) {
         throw new HttpException(

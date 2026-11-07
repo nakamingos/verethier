@@ -28,7 +28,15 @@ The error handler now preserves meaningful server messages and rate-limit guidan
 
 Validation: 46 targeted wallet/verification unit tests, the production frontend build and the complete EVM wallet browser suite passed. The unreadable-response browser case passed at 1280, 768, 393 and 320px, with the alert below the active panel and no automatic signature retry. Desktop/mobile screenshots were inspected. The unit and browser regressions reproduced the old failure before the fix.
 
-The underlying failure for the Rabby user still requires the actual failed request/response or corresponding backend log. Do not attribute it to Rabby or Railway from the screenshot alone. This follow-up fix is local and unpushed until separately released.
+The error-message fix was pushed to `main` in `f7073dc`. A subsequent screenshot shows a generic backend failure rather than the HTTP status label. The database investigation below identifies an explicit restriction affecting this wallet.
+
+## Linked database follow-up: explicit wallet restriction
+
+Read-only inspection of the linked production database on November 7 found an existing block for the wallet shown in the affected member's screenshots, in the same community. No recent proof or privacy-choice event was present for that member. The database migrations, wallet-link function signature and grants, and wallet sequence were present; no database changes were made. The address, identity and private administrative reason are intentionally omitted from these repository notes.
+
+`WalletBlockService.assertAllowed` rejects the blocked address before the EVM nonce is consumed, privacy choices are saved or the wallet proof is updated. Its fixed `WALLET_BLOCKED` explanation was not recognized by the API controller and became the generic HTTP 500 message shown in the new screenshot. A production-mode controller regression reproduced that exact conversion. The existing restriction is a definite obstacle to verification; the database inspection does not reconstruct every detail of the member's individual HTTP request.
+
+The controller now returns HTTP 403 with only the existing fixed public explanation: “This wallet has been blocked from verification in this server. Contact a server administrator.” The exact constant must match; unexpected appended details still receive the generic response. Administrative block notes remain private. Restriction checks, stored blocks and verification decisions are unchanged. The backend build and 99 targeted controller, wallet-flow, block and security tests passed, including the new production response/privacy regressions. This response fix is committed locally until separately released.
 
 ## MetaMask domain warning
 
