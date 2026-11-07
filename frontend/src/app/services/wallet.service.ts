@@ -80,6 +80,9 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
 
 function connectionErrorMessage(error: unknown): string {
   const reason = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (/IDBDatabase|indexedDB|database connection is (?:closing|closed)/i.test(reason)) {
+    return 'Your browser interrupted the wallet connection. Reload this page and reconnect your wallet.';
+  }
   if (/already (?:pending|active)|request.*pending|pending.*request|already processing/i.test(reason)) {
     return 'A wallet connection request is already pending. Open your wallet to finish or cancel it, then try again.';
   }

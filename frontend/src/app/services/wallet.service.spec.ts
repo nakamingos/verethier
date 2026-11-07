@@ -110,6 +110,15 @@ describe('EVM wallet connection', () => {
     expect(errors.at(-1)).toBeNull();
   });
 
+  it('explains interrupted browser storage without exposing SDK internals',async()=>{
+    const messages:Array<string|null>=[];
+    service.connectionErrors$.subscribe(message=>messages.push(message));
+    event('CONNECT_ERROR', "Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing.");
+    expect(messages.at(-1)).toBe('Your browser interrupted the wallet connection. Reload this page and reconnect your wallet.');
+    modal.ready.and.rejectWith(new DOMException('The database connection is closing.','InvalidStateError'));
+    await expectAsync(service.connect()).toBeRejectedWithError(/Reload this page and reconnect/);
+    expect(modal.disconnect).not.toHaveBeenCalled();
+  });
   it('resets an existing connection through AppKit before opening a new wallet choice', async () => {
     connectedWallet(jasmine.createSpy().and.resolveTo([firstAddress]));
     const { pending } = await openPicker();
