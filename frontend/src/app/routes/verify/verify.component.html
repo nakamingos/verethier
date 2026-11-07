@@ -303,12 +303,12 @@
     </div>
 
     @if (state.errorMessage; as error) {
-      <div class="error-message" [innerText]="error"></div>
+      <div class="error-message" role="alert" aria-atomic="true" [innerText]="error"></div>
     }
   }
 } @else {
   @if ((state$ | async)?.errorMessage; as error) {
-    <div class="error-message" [innerText]="error"></div>
+    <div class="error-message" role="alert" aria-atomic="true" [innerText]="error"></div>
   }
 }
 

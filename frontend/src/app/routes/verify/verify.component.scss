@@ -70,15 +70,8 @@
 .steps-wrapper {
 
   position: relative;
-  height: 14rem;
-
-  &.bitcoin-wallets { height: 18rem; }
-  &.unisat-launch { height: 23rem; }
-
-  @media (max-width: $mobile) {
-    &,
-    &:is(.bitcoin-wallets, .unisat-launch) { height: auto; }
-  }
+  // The active step sizes this panel, including privacy choices and errors.
+  height: auto;
 
   .bitcoin-wallet-choice {
     display: flex;
@@ -124,15 +117,14 @@
   }
 
   .step {
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
     width: 100%;
 
-    display: flex;
+    display: none;
     padding: 1rem 0;
 
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transform: translateY(3rem);
     transition: opacity .3s, transform .3s;
@@ -191,13 +183,13 @@
     }
 
     &.active {
+      display: flex;
       opacity: 1;
+      visibility: visible;
       pointer-events: auto;
       transform: translateY(0);
 
-      @media (max-width: $mobile) {
-        position: relative;
-      }
+      position: relative;
     }
 
     &.disabled {
@@ -217,6 +209,7 @@
   padding: 1.5rem;
 
   font-size: 1.6rem;
+  overflow-wrap: anywhere;
 
   @media (max-width: $mobile) {
     margin: 1rem 0;

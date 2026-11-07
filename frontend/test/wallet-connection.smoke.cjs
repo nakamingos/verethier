@@ -23,7 +23,7 @@ for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
   assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
 }
 
-async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false } = {}) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false, privacy = false } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -108,6 +108,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
     if (url.pathname.startsWith('/api/')) apiRequests.push(url.pathname);
     if (url.pathname === '/api/verification-context') return route.fulfill({ json: {
       walletTypes: ['evm', 'bitcoin'], expiry,
+      ...(privacy ? {privacy:{epoch:'00000000-0000-4000-8000-000000000001',notice:'2026-10-27',sharing_enabled:true,has_saved_choice:false}} : {}),
       data: { userId: 'test-member', userTag: 'Collector', avatar: '', discordId: 'test-guild', discordName: 'NoMoreLabs', discordIcon: '', nonce: request.postDataJSON().nonce },
     } });
     if (url.pathname === '/api/verify-signature') { proof = request.postDataJSON(); return route.fulfill({ json: { assignedRoles: ['holder'] } }); }
@@ -217,6 +218,34 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.deepEqual(test.errors, []);
       await page.screenshot({ path: path.join(artifacts, (mobile ? 'phone' : 'desktop') + '.png'), fullPage: true });
       console.log(JSON.stringify({ scenario: mobile ? 'mobile-injected-signature' : 'desktop-injected-signature', result: 'passed' }));
+      await test.context.close();
+    }
+    for (const width of [1280,768,393,320]) {
+      currentScenario=`${width}px privacy and verification failure layout`;
+      const test=await setup(browser,width<520,true,'/verify/'+nonce,{privacy:true});
+      const {page}=test;
+      await page.setViewportSize({width,height:900});
+      await page.locator('.step-1 .actions button').click();
+      await page.getByText('Test Wallet',{exact:true}).last().click();
+      await page.getByRole('button',{name:'Sign Message',exact:true}).waitFor();
+      await page.route('**/api/verify-signature',route=>route.fulfill({status:503,json:{message:'Ownership checks are temporarily unavailable. Please try again.'}}));
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      const alert=page.getByRole('alert');
+      await alert.waitFor();
+      assert.equal(await alert.innerText(),'Ownership checks are temporarily unavailable. Please try again.');
+      const panel=await page.locator('.step-2.active').boundingBox();
+      const error=await alert.boundingBox();
+      assert.ok(error.y>=panel.y+panel.height-1,'The error must follow the complete privacy/verification panel');
+      const privacyBox=await page.locator('app-privacy-choices').boundingBox();
+      assert.ok(error.y>=privacyBox.y+privacyBox.height,'The error must never overlay privacy disclosures');
+      assert.equal(await page.locator('.step-1').isVisible(),false,'Inactive wallet step must be hidden');
+      assert.equal(await page.locator('.step-3').isVisible(),false,'Success must not be shown for an unavailable check');
+      assert.equal(await page.getByRole('button',{name:'Sign Message',exact:true}).isEnabled(),true);
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Verification must fit the viewport');
+      assert.equal(test.signatures,1,'Failed checks must not trigger another signature automatically');
+      assert.deepEqual(test.errors,[]);
+      await page.screenshot({path:path.join(artifacts,`privacy-error-${width}.png`),fullPage:true});
+      console.log(JSON.stringify({scenario:`privacy-error-layout-${width}`,result:'passed'}));
       await test.context.close();
     }
     for (const mobile of [false,true]) {
