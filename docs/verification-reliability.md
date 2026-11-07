@@ -24,7 +24,7 @@ The member confirmed the production domain. The operator independently reproduce
 
 MetaMask's public checker said the domain was not blocked; there was no direct domain/parent match in the public static configuration. The public HTML and two entry scripts matched the expected local production artifacts. MetaMask also uses separate live reputation checks, which returned 403 to this investigation. The reason for the member's warning remains unconfirmed; there is no application-side switch that should suppress wallet security warnings.
 
-The exact screenshot text matches MetaMask's current upstream trust-signal modal. The connection gate displays it when the hostname's URL-scan cache recommends blocking. Signature confirmations also read the same origin trust state, so a hostname classification can explain alerts at both stages. This narrows the investigation; it does not identify the classification's underlying reason or rule out another signature-specific alert. Installed client versions remain pending. Source references are preserved in the review draft.
+The exact screenshot text matches MetaMask's current upstream trust-signal modal. The connection gate displays it when the hostname's URL-scan cache recommends blocking. Signature confirmations also read the same origin trust state, so a hostname classification can explain alerts at both stages. This narrows the investigation; it does not identify the classification's underlying reason or rule out another signature-specific alert. The operator reports Chrome 155.0.8059.39 (Official Build), x86_64, and MetaMask 13.55.0. The same source paths were checked against the v13.55.0 tag. The supplied connection and signing text explicitly labels the site malicious; the typed-data schema matches the expected Ethereum `Verification` message. No provider-specific reason was included. Personal identifiers and nonce values were not retained. Source references and sanitized details are preserved in the review draft.
 
 A [support-review draft](metamask-domain-review-draft.md) records the intended signature flow, bounded checks, public evidence and missing client details. It has not been sent. MetaMask's current support guidance is the route for a URL classification review.
 
@@ -34,4 +34,4 @@ The production frontend build, storage recovery regression, 50 targeted Angular 
 
 These fixes are local and unpushed. No backend behavior, database schema, wallet associations, privacy decisions or wallet security protections were changed.
 
-Outstanding: affected desktop wallet/browser and actual error; real iOS follow-up after release; MetaMask classification review/client details. The holder-analysis branch remains separate.
+Outstanding: affected desktop wallet/browser and actual error; real iOS follow-up after release; MetaMask classification review and remaining affected-client details. The holder-analysis branch remains separate.

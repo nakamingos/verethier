@@ -1,10 +1,10 @@
 # MetaMask domain classification review — draft
 
-Prepared November 7, 2026. Not submitted. This draft includes only public application details. Member verification tokens, signatures, wallet addresses and Discord identities are intentionally excluded.
+Prepared November 7, 2026. Not submitted. This draft includes public application details and operator-reported client versions. Member verification tokens, signatures, wallet addresses and Discord identities are intentionally excluded.
 
 Subject: Unexpected phishing/domain warning for https://bouncer.up.railway.app
 
-Bouncer is a Discord asset-ownership verifier hosted at `https://bouncer.up.railway.app`. A member reports, and the Bouncer operator independently reproduced, a MetaMask warning saying the site shows signs of phishing or wallet-draining activity, with a “Connect anyway” button. The operator reports the warning during both connecting and signing. The screenshot wording matches MetaMask's origin trust-signal modal; the exact installed MetaMask versions and platforms are not yet available. Please investigate the classification and identify which signal or provider produced it. If the classification is incorrect, please review its correction through your normal process.
+Bouncer is a Discord asset-ownership verifier hosted at `https://bouncer.up.railway.app`. A member reports, and the Bouncer operator independently reproduced, a MetaMask warning saying the site shows signs of phishing or wallet-draining activity, with a “Connect anyway” button. The operator reports the warning during both connecting and signing. The screenshot wording matches MetaMask's origin trust-signal modal; the operator reports MetaMask 13.55.0 and Google Chrome 155.0.8059.39 (Official Build), x86_64. The other affected member's client details remain unknown. Please investigate the classification and identify which signal or provider produced it. If the classification is incorrect, please review its correction through your normal process.
 
 Public source: https://github.com/nakamingos/verethier
 
@@ -29,14 +29,22 @@ These entry-file comparisons identify the checked artifacts; they do not establi
 
 ## Alert source trace — November 7
 
-The Bouncer operator independently reproduced the warning and reports seeing it both while connecting and while signing. This is now reported by a member and the operator. The operator's browser and MetaMask version are still pending.
+The Bouncer operator independently reproduced the warning and reports seeing it both while connecting and while signing. This is now reported by a member and the operator. The operator reports Google Chrome 155.0.8059.39 (Official Build), x86_64, and MetaMask 13.55.0. The operating system was not supplied.
 
 The screenshot wording matches MetaMask's [trust-signal modal](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/components/app/trust-signal-modal/trust-signal-modal.tsx). Its [connection gate](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/pages/permissions-connect/connection-trust-signal-gate/connection-trust-signal-gate.tsx) displays that modal when the origin trust state is `Malicious`. The [origin hook](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/hooks/useOriginTrustSignals.ts) reads the URL-scan cache by hostname and maps `RecommendedAction.Block` to that state. The [confirmation alert hook](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/pages/confirmations/hooks/alerts/useOriginTrustSignalAlerts.ts) uses the same origin hook for transaction and signature confirmations.
 
-This supports investigating the hostname's live classification as a common explanation for both stages. It does not reveal the underlying provider/signal, establish that the classification is incorrect, or rule out an additional signature-specific warning. These references describe current upstream source; the affected installed version is not yet known.
+This supports investigating the hostname's live classification as a common explanation for both stages. It does not reveal the underlying provider/signal, establish that the classification is incorrect, or rule out an additional signature-specific warning. The same connection gate, hostname-cache mapping and signature-confirmation origin hook were also verified in the reported [v13.55.0 source](https://github.com/MetaMask/metamask-extension/blob/v13.55.0/ui/hooks/useOriginTrustSignals.ts).
+
+## Operator-provided alert and signature details
+
+The connection screen classifies `bouncer.up.railway.app` as “Malicious—flagged as unsafe.” The signature screen also identifies a malicious site. No specific provider or underlying detection reason was shown in the supplied text.
+
+The reported signature request is on Ethereum, with EIP-712 domain `Bouncer`, version `1`, chain ID `1`, and primary type `Verification`. Its field names and types match the intended application schema described above, including the privacy choices. The supplied payload does not contain a token approval, permit or transfer instruction. This observation does not determine why the hostname was classified or substitute for review of the service-side signals. The generic connection permission to send transaction requests does not establish that a transaction was requested in this verification flow.
+
+Only the schema and client versions are retained here. The operator's wallet address, Discord identity/server identifiers, nonce, expiry and privacy epoch values are omitted from this draft.
 
 ## Submission route
 
 MetaMask's current [security-alert documentation](https://support.metamask.io/configure/wallet/security-alerts/#how-to-report-a-false-classification) directs URL/token/address scan classification issues to MetaMask Support (Option 2). The [legacy domain-warning guidance](https://support.metamask.io/stay-safe/safety-in-web3/deceptive-site-ahead-when-trying-to-connect-to-a-site/) also links the public phishing-list tracker when the problem is a list entry. The appropriate first request here is a domain-classification review through support, since the public checker does not flag this domain.
 
-Attach a screenshot cropped to the warning and domain, without the private verification URL/token. Add the affected MetaMask version, browser and platform when available. Do not ask members to bypass the warning or disable security alerts.
+Attach a screenshot cropped to the warning and domain, without the private verification URL/token. The operator client versions are recorded above; add the operating system and other affected client details if available. Do not ask members to bypass the warning or disable security alerts.
