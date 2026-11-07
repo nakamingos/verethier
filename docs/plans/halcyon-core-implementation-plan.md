@@ -18,6 +18,8 @@ Track optional ideas separately in the [optional feature backlog](optional-featu
 
 ## Current implementation status
 
+November 7 verification follow-up: browser-storage recovery and privacy/error layout fixes are implemented locally and awaiting release. The repeated desktop failure still needs wallet/browser details and a readable error; MetaMask domain classification needs a separate review. See [incident notes](../verification-reliability.md) and the [unsubmitted support draft](../metamask-domain-review-draft.md).
+
 Checkpoint: October 18, 2026, through multi-trait rules and ERC-721 ID selections/quantity thresholds. Earlier portal follow-ups include member lookup by wallet address ([PR #100](https://github.com/nakamingos/verethier/pull/100), `f01d904`).
 
 | Phase | Delivered | Remaining |
