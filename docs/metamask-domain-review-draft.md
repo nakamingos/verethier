@@ -43,8 +43,22 @@ The reported signature request is on Ethereum, with EIP-712 domain `Bouncer`, ve
 
 Only the schema and client versions are retained here. The operator's wallet address, Discord identity/server identifiers, nonce, expiry and privacy epoch values are omitted from this draft.
 
+## Potential Railway reputation connection
+
+Railway's [incident QBCLHG1V](https://status.railway.com/incident/QBCLHG1V), first posted November 4 at 18:54 UTC, reports network/security-provider blocks on Railway IP addresses after a third party sent scanning traffic using forged Railway source IP addresses. Railway states that the traffic did not originate from its network and that these reports are not evidence of compromised customer workloads. Its latest posted update, November 5 at 18:51 UTC as checked November 7, says it is working with network operators, security vendors and abuse database providers; some access restrictions remain.
+
+This incident overlaps the timing of our warning reports. It describes IP reputation/access restrictions, whereas MetaMask is flagging our hostname. A causal connection has not been established.
+
+Please check whether `bouncer.up.railway.app` was classified because of Railway IP/infrastructure reputation associated with this incident. If so, please distinguish the application from the spoofed traffic and review the classification using your normal process. If unrelated, please identify the applicable detection reason/provider and any remediation needed.
+
 ## Submission route
 
 MetaMask's current [security-alert documentation](https://support.metamask.io/configure/wallet/security-alerts/#how-to-report-a-false-classification) directs URL/token/address scan classification issues to MetaMask Support (Option 2). The [legacy domain-warning guidance](https://support.metamask.io/stay-safe/safety-in-web3/deceptive-site-ahead-when-trying-to-connect-to-a-site/) also links the public phishing-list tracker when the problem is a list entry. The appropriate first request here is a domain-classification review through support, since the public checker does not flag this domain.
 
 Attach a screenshot cropped to the warning and domain, without the private verification URL/token. The operator client versions are recorded above; add the operating system and other affected client details if available. Do not ask members to bypass the warning or disable security alerts.
+
+## Submission attempt — November 7
+
+The operator authorized proceeding with the review request. Opened MetaMask's official support page, selected Continue without wallet, ended the initial AI-search conversation and selected Contact Support. The Intercom messenger did not load. Its public loader explicitly excludes automated/headless user agents, including the isolated browser available for this attempt. No user-agent disguise or bypass was attempted.
+
+The review message was not sent and no support case number was obtained. The concise message is saved in [metamask-domain-review-message.txt](metamask-domain-review-message.txt). To submit from a normal browser: open [MetaMask Support](https://support.metamask.io/), choose Contact support, then Continue without wallet. If the AI-search screen appears, choose End conversation, then Contact Support to reach the support messenger. Paste the saved message and request a human review of the URL classification. Include a cropped warning screenshot if requested; omit the private verification token and personal identifiers.

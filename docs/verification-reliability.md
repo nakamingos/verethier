@@ -28,10 +28,12 @@ The exact screenshot text matches MetaMask's current upstream trust-signal modal
 
 A [support-review draft](metamask-domain-review-draft.md) records the intended signature flow, bounded checks, public evidence and missing client details. It has not been sent. MetaMask's current support guidance is the route for a URL classification review.
 
+Railway's [November 4–5 incident](https://status.railway.com/incident/QBCLHG1V) reports IP-reputation blocks following traffic with forged Railway source addresses. This is a plausible lead for the MetaMask review, not a confirmed cause of its hostname classification. The report now asks MetaMask to check for that connection. An authorized submission attempt could not reach the support messenger because it excludes automated/headless browsers. No review message was sent or case number received; a concise message and normal-browser submission steps are saved alongside the draft.
+
 ## Validation and release
 
 The production frontend build, storage recovery regression, 50 targeted Angular wallet/verification tests, the EVM wallet browser suite (including privacy/error cases, signing/session reuse and Base accounts), Stamps browser checks and Solana signature browser checks passed. Browser fixtures use synthetic keys and mocked verification APIs; they do not prove compatibility with the affected users' actual wallet apps.
 
-These fixes are local and unpushed. No backend behavior, database schema, wallet associations, privacy decisions or wallet security protections were changed.
+The verification fixes and initial investigation notes were pushed to `main` through `8d2fb3a` on November 7. Subsequent support-request updates are recorded separately. No backend behavior, database schema, wallet associations, privacy decisions or wallet security protections were changed.
 
 Outstanding: affected desktop wallet/browser and actual error; real iOS follow-up after release; MetaMask classification review and remaining affected-client details. The holder-analysis branch remains separate.
