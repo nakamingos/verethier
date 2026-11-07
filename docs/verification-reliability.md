@@ -20,9 +20,11 @@ The repeated desktop verification failure itself is not diagnosed by that screen
 
 ## MetaMask domain warning
 
-The member confirmed the production domain. The private verification token was not used for reputation checks or included in documentation.
+The member confirmed the production domain. The operator independently reproduced the warning and reports it during both connecting and signing. The private verification token was not used for reputation checks or included in documentation.
 
 MetaMask's public checker said the domain was not blocked; there was no direct domain/parent match in the public static configuration. The public HTML and two entry scripts matched the expected local production artifacts. MetaMask also uses separate live reputation checks, which returned 403 to this investigation. The reason for the member's warning remains unconfirmed; there is no application-side switch that should suppress wallet security warnings.
+
+The exact screenshot text matches MetaMask's current upstream trust-signal modal. The connection gate displays it when the hostname's URL-scan cache recommends blocking. Signature confirmations also read the same origin trust state, so a hostname classification can explain alerts at both stages. This narrows the investigation; it does not identify the classification's underlying reason or rule out another signature-specific alert. Installed client versions remain pending. Source references are preserved in the review draft.
 
 A [support-review draft](metamask-domain-review-draft.md) records the intended signature flow, bounded checks, public evidence and missing client details. It has not been sent. MetaMask's current support guidance is the route for a URL classification review.
 

@@ -4,7 +4,7 @@ Prepared November 7, 2026. Not submitted. This draft includes only public applic
 
 Subject: Unexpected phishing/domain warning for https://bouncer.up.railway.app
 
-Bouncer is a Discord asset-ownership verifier hosted at `https://bouncer.up.railway.app`. A member reports a MetaMask warning saying the site shows signs of phishing or wallet-draining activity, with a “Connect anyway” button. The screenshot appears to be a connection/domain warning; the exact MetaMask version and platform are not yet available. Please investigate the classification and identify which signal or provider produced it. If the classification is incorrect, please review its correction through your normal process.
+Bouncer is a Discord asset-ownership verifier hosted at `https://bouncer.up.railway.app`. A member reports, and the Bouncer operator independently reproduced, a MetaMask warning saying the site shows signs of phishing or wallet-draining activity, with a “Connect anyway” button. The operator reports the warning during both connecting and signing. The screenshot wording matches MetaMask's origin trust-signal modal; the exact installed MetaMask versions and platforms are not yet available. Please investigate the classification and identify which signal or provider produced it. If the classification is incorrect, please review its correction through your normal process.
 
 Public source: https://github.com/nakamingos/verethier
 
@@ -26,6 +26,14 @@ AppKit metadata uses the actual frontend origin as its URL, the name `Bouncer`, 
 - `main-MIQHMIKO.js`: SHA-256 `8025e23f6cfd28dc4693fa7d59fcc489a4203331f5dfdf06c3fc5a85f785d7c2`; matched the existing local production artifact before these fixes.
 
 These entry-file comparisons identify the checked artifacts; they do not establish the state of every lazy-loaded chunk or an affected member's extension/browser. Please use your service-side evidence to investigate the warning rather than treating our intended workflow as proof of a false classification.
+
+## Alert source trace — November 7
+
+The Bouncer operator independently reproduced the warning and reports seeing it both while connecting and while signing. This is now reported by a member and the operator. The operator's browser and MetaMask version are still pending.
+
+The screenshot wording matches MetaMask's [trust-signal modal](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/components/app/trust-signal-modal/trust-signal-modal.tsx). Its [connection gate](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/pages/permissions-connect/connection-trust-signal-gate/connection-trust-signal-gate.tsx) displays that modal when the origin trust state is `Malicious`. The [origin hook](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/hooks/useOriginTrustSignals.ts) reads the URL-scan cache by hostname and maps `RecommendedAction.Block` to that state. The [confirmation alert hook](https://github.com/MetaMask/metamask-extension/blob/c3a708b3774a7cb2a539e8e4c44f73ed913eecc1/ui/pages/confirmations/hooks/alerts/useOriginTrustSignalAlerts.ts) uses the same origin hook for transaction and signature confirmations.
+
+This supports investigating the hostname's live classification as a common explanation for both stages. It does not reveal the underlying provider/signal, establish that the classification is incorrect, or rule out an additional signature-specific warning. These references describe current upstream source; the affected installed version is not yet known.
 
 ## Submission route
 
