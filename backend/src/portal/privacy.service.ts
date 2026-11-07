@@ -269,6 +269,10 @@ export class PrivacyService {
           ),
         }),
       );
+      this.checked(
+        await this.db.from('verifier_blocked_verification_attempts')
+          .delete().lt('expires_at', new Date().toISOString()),
+      );
     } catch {
       this.logger.error(
         "Scheduled privacy cleanup failed; retained records will be retried on the next run.",

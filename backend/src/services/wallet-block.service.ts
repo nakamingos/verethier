@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { BlockedVerificationAttempt } from '@/models/wallet-activity.interface';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { WalletBlock } from '@/models/wallet-block.interface';
 import { normalizeSolanaAddress } from '@/utils/solana.util';
@@ -57,6 +58,20 @@ export class WalletBlockService {
       .eq('address', normalizeBlockedWallet(address));
     if (error || !Array.isArray(data)) throw new Error('Could not find the linked member.');
     return [...new Set(data.map(row => row.user_id))];
+  }
+
+  async recordBlockedVerification(attempt: BlockedVerificationAttempt): Promise<void> {
+    const { error } = await this.supabase.from('verifier_blocked_verification_attempts').insert({
+      user_id: attempt.userId,
+      server_id: attempt.serverId,
+      channel_id: attempt.channelId || null,
+      address: normalizeBlockedWallet(attempt.address),
+      wallet_type: attempt.walletType,
+      source: attempt.source,
+      chain_id: attempt.walletType === 'evm' ? attempt.chainId ?? 1 : null,
+      outcome: 'blocked',
+    });
+    if (error) throw new Error('Could not save blocked verification activity.');
   }
 
   async assertAllowed(serverId: string, address: string): Promise<void> {

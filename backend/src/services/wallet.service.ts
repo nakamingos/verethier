@@ -9,7 +9,8 @@ import { UserAddressService } from '@/services/user-address.service';
 import { DiscordService } from '@/services/discord.service';
 import { DecodedData } from '@/models/app.interface';
 import { BitcoinSignatureService } from './bitcoin-signature.service';
-import { WalletBlockService } from './wallet-block.service';
+import { WalletBlockService, WALLET_BLOCKED } from './wallet-block.service';
+import { WalletType } from '@/utils/wallet-address.util';
 import { randomUUID } from 'crypto';
 import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
 
@@ -126,7 +127,8 @@ export class WalletService {
     const address = data.address.toLowerCase();
     // Check before saving or transferring the wallet link. Keep this outside
     // the optional address-storage catch so a blocked wallet cannot proceed.
-    await this.walletBlocks.assertAllowed(data.discordId, address);
+    await this.checkWalletBlock(data, address, 'evm', () =>
+      this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce));
     // Reserve the fresh proof before any link/transfer or ownership work, just
     // as the Bitcoin path does. Concurrent tabs cannot submit the same proof.
     const context = await this.nonceSvc.consumeNonce(data.userId, data.discordId, data.nonce);
@@ -192,6 +194,38 @@ export class WalletService {
     };
   }
 
+  private async checkWalletBlock(
+    data: DecodedData,
+    address: string,
+    walletType: WalletType,
+    context: () => Promise<{ memberPortal?: boolean; channelId?: string }>,
+  ): Promise<void> {
+    try {
+      await this.walletBlocks.assertAllowed(data.discordId, address);
+    } catch (error) {
+      if (error instanceof Error && error.message === WALLET_BLOCKED) {
+        try {
+          // Called only after signature validation. Source/channel come from
+          // server-held context, never client-provided audit fields.
+          const trusted = await context();
+          await this.walletBlocks.recordBlockedVerification({
+            userId: data.userId,
+            serverId: data.discordId,
+            address,
+            walletType,
+            source: trusted.memberPortal ? 'portal' : 'discord',
+            channelId: trusted.channelId,
+            ...(walletType === 'evm' ? { chainId: data.chainId ?? 1 } : {}),
+          });
+        } catch {
+          // Audit-storage outages must never permit a blocked wallet through.
+          Logger.error('Blocked verification activity could not be saved.');
+        }
+      }
+      throw error;
+    }
+  }
+
   private schedulePreviousOwnerReverification(
     previousUserId: string,
     currentUserId: string,
@@ -214,7 +248,7 @@ export class WalletService {
   private async verifySolanaSignature(data: DecodedData, signature: string) {
     if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
     const { address, context } = await this.solanaSvc.verify(data, signature);
-    await this.walletBlocks.assertAllowed(data.discordId, address);
+    await this.checkWalletBlock(data, address, 'solana', async () => context);
     await this.privacy?.assertActive(data.userId);
     if (data.privacy !== undefined) {
       if (!this.privacy) throw new Error('Privacy controls are unavailable.');
@@ -247,7 +281,7 @@ export class WalletService {
   private async verifyBitcoinSignature(data: DecodedData, signature: string) {
     if (!this.bitcoinSvc) throw new Error('Bitcoin verification is not configured.');
     const { address, context } = await this.bitcoinSvc.verify(data, signature);
-    await this.walletBlocks.assertAllowed(data.discordId, address);
+    await this.checkWalletBlock(data, address, 'bitcoin', async () => context);
     await this.privacy?.assertActive(data.userId);
     if (data.privacy !== undefined) {
       if (!this.privacy) throw new Error('Privacy controls are unavailable.');

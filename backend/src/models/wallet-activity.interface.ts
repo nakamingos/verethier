@@ -9,3 +9,14 @@ export interface WalletVerificationActivity {
   provenAt: string;
   evmChainId?: number; // Present only for a chain-scoped contract proof.
 }
+
+/** A valid signature rejected by a server block; never a saved wallet link. */
+export interface BlockedVerificationAttempt {
+  userId: string;
+  serverId: string;
+  address: string;
+  walletType: WalletType;
+  source: 'portal' | 'discord';
+  channelId?: string;
+  chainId?: number;
+}

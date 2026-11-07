@@ -52,3 +52,17 @@ For a restore:
 5. Rehearse and verify the restored data before enabling sign-ins/verification. Recovery does not reconstruct deleted associations for use by admins or operators.
 
 The recovery function removes restored old links and queues the ordinary deletion process. It skips a later re-registered account with a proof newer than the earlier deletion marker. Recovery markers contain no wallet mapping. Restoring a backup is an operator procedure; the public service must not be opened merely because the database restore itself succeeded.
+
+## Signed blocked verification attempts
+
+Migration `20261107010000_blocked_verification_attempts.sql` adds the service-only `verifier_blocked_verification_attempts` table. Apply it before deploying the corresponding backend. It is additive: no saved wallets, blocks, roles or existing consent records are changed.
+
+After a valid EVM, Bitcoin or Solana proof reaches an explicit server block, the backend awaits a minimal audit insert before returning the existing blocked-wallet response. It records Discord ID, server/channel, normalized address/type, trusted Discord/member-portal source, EVM signing chain when applicable, database timestamp and `blocked` outcome. It does not store signatures, nonces, challenges, private administrative block notes, IPs or browser details. An allowed request, invalid signature, expired context or restriction-lookup outage is not recorded as a confirmed blocked proof. Audit-write failures are logged and do not bypass the restriction.
+
+Authorized operators see the latest 25 unexpired attempts and the total in Member Lookup, even when the member has no saved wallet. The read is scoped to the selected server/member and uses the existing audited operator access path. Ordinary server admins cannot query or receive this security table through the UI/API, including when ordinary wallet sharing is enabled. These rows do not enter wallet-link history, wallet-history audits, role eligibility or community exports. Direct SQL access remains restricted to backend/operator database access.
+
+Attempts expire one year after creation. Operator reads exclude expired rows immediately; the hourly privacy cleanup deletes expired rows. During an ordinary deletion review, document any necessary retention of this separate security evidence. Backups retain their independent recovery lifecycle. Historical failed attempts cannot be reconstructed or backfilled from the absence of successful-wallet records.
+
+Rehearse with `python3 backend/test/check-blocked-attempts-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. Backend regressions cover proof-before-write ordering for all three wallet types, trusted source context, no wallet-link/consent side effects, continued denial during audit outages, operator-only reads and expiry cleanup.
+
+The linked application database received migration `20261107010000` on November 7, 2026, verified at 21:06 UTC. Independent checks confirmed its ledger entry, four indexes, enabled RLS, no public policies or client privileges, and only SELECT/INSERT/DELETE for the backend service role. A fresh private backup and disposable restore rehearsal preserved all 23 existing public tables. Backend validation passed all 1,776 tests and the build; the frontend build and privacy/operator browser checks passed at 1280, 393 and 320 pixels. The backend/frontend changes still require a release before new attempts are recorded or displayed.

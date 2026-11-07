@@ -99,6 +99,10 @@ const server = "111111111111111111",
               privacy,
               diagnostics: [],
             };
+          else if (p === `/servers/${server}/members/${user}`) {
+            data = { id:user,name:'Member',username:'member',wallets:[],removed_wallets:[],roles:[],
+              ...(operator ? {blocked_attempts:{items:[{id:'attempt-test',address:'0x'+'a'.repeat(40),wallet_type:'evm',source:'discord',chain_id:1,outcome:'blocked',created_at:'2026-11-07T12:00:00Z'}],total:1}} : {}) };
+          }
           else if (p === `/servers/${server}/privacy`) {
             privacy = { ...privacy, sharing_enabled: body.sharing_enabled };
             data = privacy;
@@ -312,8 +316,22 @@ const server = "111111111111111111",
         .getByRole("button", { name: "Approve deletion", exact: true })
         .click();
       await page.getByText("processing", { exact: true }).waitFor();
+      await page.getByRole('button',{name:'Member Lookup',exact:true}).click();
+      await page.getByLabel('Member or wallet').fill(user);
+      await page.getByLabel('Member or wallet').press('Enter');
+      const blocked=page.getByRole('table',{name:'Blocked verification attempts',exact:true});
+      await blocked.waitFor();
+      assert.equal(await blocked.getByText('Blocked',{exact:true}).count(),1);
+      assert.equal(await page.getByText('No wallets saved.',{exact:true}).isVisible(),true);
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Blocked attempts must fit the viewport');
+      await page.screenshot({path:path.join(artifacts,`blocked-attempts-${width}.png`),fullPage:true});
       operator = false;
       await page.reload();
+      await page.getByRole('button',{name:'Member Lookup',exact:true}).click();
+      await page.getByLabel('Member or wallet').fill(user);
+      await page.getByLabel('Member or wallet').press('Enter');
+      await page.getByText('No wallets saved.',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('table',{name:'Blocked verification attempts',exact:true}).count(),0);
       await page.getByRole("button", { name: "Exports", exact: true }).click();
       assert.equal(
         await page

@@ -986,9 +986,22 @@ export class PortalService {
       wallets_private: !operator && !policy.share_since,
       wallets: (wallets || []).map(withRestriction),
       removed_wallets: removedWallets.map(withRestriction),
+      ...(operator ? { blocked_attempts: await this.blockedAttempts(server, id) } : {}),
       roles,
     };
   }
+  private async blockedAttempts(server: string, user: string) {
+    const { data, error, count } = await this.db
+      .from('verifier_blocked_verification_attempts')
+      .select('id,address,wallet_type,source,chain_id,outcome,created_at', { count: 'exact' })
+      .eq('server_id', server).eq('user_id', user)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .limit(25);
+    this.dbError(error);
+    return { items: data || [], total: count || 0 };
+  }
+
   async walletBlock(
     session: PortalSession,
     server: string,

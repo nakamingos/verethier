@@ -1871,6 +1871,40 @@
                       </tbody>
                     </table>
                   }
+                  @if (member.blocked_attempts; as attempts) {
+                    <h3>Blocked verification attempts:</h3>
+                    <p class="muted">
+                      Signed requests refused by a server block. These attempts do
+                      not save or transfer a wallet. Showing the latest
+                      {{ attempts.items.length }} of {{ attempts.total }} retained attempts.
+                    </p>
+                    <table class="history-table" aria-label="Blocked verification attempts">
+                      <thead>
+                        <tr>
+                          <th scope="col">Wallet</th>
+                          <th scope="col">Source</th>
+                          <th scope="col">Outcome</th>
+                          <th scope="col">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (attempt of attempts.items; track attempt.id) {
+                          <tr>
+                            <td class="address" data-label="Wallet">
+                              <a [href]="walletExplorer(attempt.address)" target="_blank"
+                                rel="noopener noreferrer" [title]="attempt.address">{{ walletAddress(attempt.address) }}</a>
+                              <span class="muted"> · {{ attempt.wallet_type }}</span>
+                            </td>
+                            <td data-label="Source">{{ attempt.source === 'portal' ? 'Member portal' : 'Discord' }}</td>
+                            <td data-label="Outcome"><span class="badge">Blocked</span></td>
+                            <td data-label="Date"><time [attr.datetime]="attempt.created_at">{{ attempt.created_at | date: 'short' }}</time></td>
+                          </tr>
+                        } @empty {
+                          <tr><td colspan="4">No retained blocked attempts.</td></tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
                   @if (walletRestriction; as restriction) {
                     <section
                       class="panel wallet-block-review"
