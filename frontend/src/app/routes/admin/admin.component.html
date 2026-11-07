@@ -1080,6 +1080,31 @@
                 </form>
               </section>
               <section class="panel">
+                <h2>Bouncer activity log</h2>
+                <p>Post member activity in a Discord channel. Mentions show members and roles without sending notification pings.</p>
+                <p class="muted">Wallet changes require the member’s current community sharing permission. Messages never include wallet addresses, signatures or private block notes. Choose a channel with the appropriate audience; posted messages remain in Discord.</p>
+                <form (ngSubmit)="settings()">
+                  <div class="toolbar settings-actions">
+                    <label>Log channel:<span class="select-control"><app-pixel-select
+                      name="logChannel" [(ngModel)]="data.settings.log_channel_id"
+                      [options]="logChannelChoices" label="Log channel" /></span></label>
+                    <button type="submit" [disabled]="busy">
+                      <ng-container [ngTemplateOutlet]="settingsActionLabel"
+                        [ngTemplateOutletContext]="{ $implicit: 'Save settings' }" />
+                    </button>
+                  </div>
+                  <div role="group" aria-label="Activity events">
+                    <h3>Events:</h3>
+                    @for (event of logEventChoices; track event.value) {
+                      <label class="checkbox"><input type="checkbox" [name]="'log-' + event.value"
+                        [ngModel]="logEventEnabled(event.value)"
+                        (ngModelChange)="toggleLogEvent(event.value, $event)" /> {{ event.label }}</label>
+                    }
+                  </div>
+                  <p class="muted">New events only. Delivery retries for up to 24 hours when Discord is unavailable. Changing the channel or event choices discards messages queued under the previous configuration.</p>
+                </form>
+              </section>
+              <section class="panel">
                 <h2>Verification message</h2>
                 <p>
                   Every verification message in a channel uses that channel’s

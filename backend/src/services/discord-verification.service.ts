@@ -1,3 +1,4 @@
+import { BouncerLogService } from './bouncer-log.service';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
 import { PrivacyService } from '@/portal/privacy.service';
@@ -120,6 +121,7 @@ export class DiscordVerificationService {
     private readonly walletBlocks: WalletBlockService,
     @Optional() private readonly roleActions?: RoleActionService,
     @Optional() private readonly privacy?: PrivacyService,
+    @Optional() private readonly activityLog?: BouncerLogService,
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {
@@ -610,6 +612,7 @@ export class DiscordVerificationService {
       if (!wasAlreadyAssigned) await this.undoDeletionGrant(member, role, guildId, userId);
       throw error;
     }
+    if (!wasAlreadyAssigned) await this.activityLog?.record(guildId, userId, 'role_added', nonce === 'reverification' ? 'background' : 'discord', roleId);
     return {
       roleId,
       roleName: role.name,
@@ -801,6 +804,7 @@ export class DiscordVerificationService {
 
       const updated = await member.roles.remove(role, 'Dynamic role verification: holdings no longer meet criteria');
       context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
+      await this.activityLog?.record(serverId, userId, 'role_removed', 'background', roleId);
       Logger.log(`✅ Removed role "${role.name}" from user ${userId} in ${guild.name}`);
       return true;
 
@@ -843,6 +847,7 @@ export class DiscordVerificationService {
         if (member.roles.cache.has(roleId)) {
           const updated = await member.roles.remove(role, 'Bouncer role action: excluded by another role');
           context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
+          await this.activityLog?.record(serverId, userId, 'role_removed', 'background', roleId);
         }
         return 'suppressed';
       }
@@ -861,6 +866,7 @@ export class DiscordVerificationService {
         await this.undoDeletionGrant(member, role, serverId, userId);
         throw error;
       }
+      await this.activityLog?.record(serverId, userId, 'role_added', 'background', roleId);
       Logger.log(`✅ Added role "${role.name}" to user ${userId} in ${guild.name}`);
       return true;
 

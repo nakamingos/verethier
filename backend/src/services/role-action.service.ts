@@ -1,10 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BouncerLogService } from './bouncer-log.service';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Guild, GuildMember } from 'discord.js';
 
 @Injectable()
 export class RoleActionService {
-  constructor(@Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient) {}
+  constructor(@Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
+    @Optional() private readonly activityLog?: BouncerLogService) {}
 
   async blockedBy(member: GuildMember, role: string): Promise<boolean> {
     const { data, error } = await this.db
@@ -67,6 +69,7 @@ export class RoleActionService {
             `Bouncer role action: gained ${trigger}`,
           );
           result.removed++;
+          await this.activityLog?.record(guild.id, user, 'role_removed', 'background', id);
         }
         const saved = await this.db
           .from('verifier_user_roles')

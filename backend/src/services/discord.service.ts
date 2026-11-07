@@ -1,3 +1,4 @@
+import { BouncerLogService } from './bouncer-log.service';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { resolveEthscriptionSlug } from './discord-commands/utils/rule-validation.util';
 import { Inject, Injectable, Logger, forwardRef, OnModuleInit, Optional } from '@nestjs/common';
@@ -86,6 +87,7 @@ export class DiscordService implements OnModuleInit {
     @Optional() private readonly nftMetadataSvc?: NftMetadataService,
     @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
     @Optional() private readonly setupSvc?: ServerSetupService,
+    @Optional() private readonly activityLog?: BouncerLogService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -185,6 +187,7 @@ export class DiscordService implements OnModuleInit {
           // Initialize the services before accepting verification requests.
           this.discordMessageSvc.initialize(client);
           this.discordVerificationSvc.initialize(client);
+          this.activityLog?.initialize(client);
           this.discordCommandsSvc.initialize(client);
           settled = true;
           clearTimeout(timeout);

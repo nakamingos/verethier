@@ -1,3 +1,4 @@
+import { BOUNCER_LOG_EVENTS, BouncerLogKind } from '@/models/bouncer-log.interface';
 import {
   IsBoolean,
   IsIn,
@@ -85,6 +86,8 @@ export class PortalWalletAuditDto {
 }
 
 export class PortalSettingsDto {
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) log_channel_id?: string | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(7) @IsIn(BOUNCER_LOG_EVENTS, { each: true }) log_events?: BouncerLogKind[];
   @IsBoolean() background_checks_enabled: boolean;
   // Older clients echo the settings read model. Changes to this field still
   // require reviewed channel setup, so saveSettings deliberately ignores it.

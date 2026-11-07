@@ -299,6 +299,26 @@ export class AdminComponent implements OnInit, OnDestroy {
       label: '#' + channel.name,
     }));
   }
+  readonly logEventChoices = [
+    {value:'verification_success',label:'Successful verification'},
+    {value:'verification_failed',label:'Failed verification'},
+    {value:'verification_blocked',label:'Blocked verification attempts'},
+    {value:'wallet_added',label:'Wallets added'},
+    {value:'wallet_removed',label:'Wallets removed'},
+    {value:'role_added',label:'Roles granted'},
+    {value:'role_removed',label:'Roles removed'},
+  ];
+  get logChannelChoices(): SelectChoice[] {
+    return [{value:null,label:'Disabled'}, ...this.channelChoices];
+  }
+  logEventEnabled(event: string) {
+    return (this.data?.settings.log_events || this.logEventChoices.map(e => e.value)).includes(event);
+  }
+  toggleLogEvent(event: string, enabled: boolean) {
+    const events = new Set<string>(this.data.settings.log_events || this.logEventChoices.map(e => e.value));
+    if (enabled) events.add(event); else events.delete(event);
+    this.data.settings.log_events = [...events];
+  }
   get defaultChannelChoices(): SelectChoice[] {
     return [{ value: null, label: 'No default' }, ...this.channelChoices];
   }
@@ -1125,6 +1145,8 @@ export class AdminComponent implements OnInit, OnDestroy {
       await this.api(`/servers/${this.selected}/settings`, {
         background_checks_enabled: this.data.settings.background_checks_enabled,
         verification_channel_id: this.data.settings.verification_channel_id,
+        log_channel_id: this.data.settings.log_channel_id ?? null,
+        log_events: this.data.settings.log_events || this.logEventChoices.map(e => e.value),
       });
       this.notice = 'Settings saved.';
     });

@@ -191,6 +191,10 @@ The bot reads token decimals, name, and symbol from the contract. Amounts are co
 
 The log uses the latest saved record for each user/role pair, rather than an immutable event history. Larger result sets and wallet lookups are paginated in Supabase.
 
+## Discord activity feed
+
+Control Room → Bot Settings → Bouncer activity log selects an optional Discord text channel and event types for verification outcomes, wallet additions/removals and actual Bouncer role changes. It starts disabled, suppresses mention pings and never posts wallet addresses or private block notes. Wallet changes require current community sharing permission. Migration `20261107020000_bouncer_log.sql` is required before deployment; no new environment variables are needed. See [configuration, privacy and delivery](docs/bouncer-activity-log.md).
+
 ## Wallet blocks
 
 Server administrators can manage wallet restrictions:

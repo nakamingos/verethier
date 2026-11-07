@@ -996,7 +996,7 @@ const base = {
         .getByRole('navigation', { name: 'Server settings' })
         .getByRole('button', { name: 'Bot Settings', exact: true })
         .click();
-      const checkIcon = page.getByRole('checkbox');
+      const checkIcon = page.getByRole('checkbox', {name:'Check previously earned roles every six hours',exact:true});
       assert.equal(
         await checkIcon.evaluate((el) => getComputedStyle(el).filter),
         'invert(1)',
@@ -1025,7 +1025,7 @@ const base = {
       const settingsWidths = await settingsButtons.evaluateAll((buttons) =>
         buttons.map((el) => el.getBoundingClientRect().width),
       );
-      assert.equal(settingsWidths.length, 3);
+      assert.equal(settingsWidths.length, 4);
       assert.ok(
         Math.max(...settingsWidths) - Math.min(...settingsWidths) < 1,
         'settings actions reserve the widest label',
@@ -1052,6 +1052,18 @@ const base = {
         path: `${artifacts}/settings-${width}.png`,
         fullPage: true,
       });
+      const logPanel = page.locator('section.panel').filter({has: page.getByRole('heading',{name:'Bouncer activity log',exact:true})});
+      const logChannel = logPanel.getByRole('combobox',{name:'Log channel',exact:true});
+      assert.equal(await logPanel.getByRole('checkbox').count(),7);
+      await chooseOption(page,logChannel,'#verify-collections');
+      await logPanel.getByRole('checkbox',{name:'Wallets added',exact:true}).uncheck();
+      await logPanel.getByRole('button',{name:'Save settings',exact:true}).click();
+      await page.getByText('Settings saved.',{exact:true}).waitFor();
+      assert.ok(requests.some(r=>r.path.endsWith('/settings') && r.body?.log_channel_id===channel && !r.body.log_events.includes('wallet_added') && r.body.log_events.includes('verification_blocked')),'Channel and event choices are saved');
+      await chooseOption(page,logChannel,'Disabled');
+      await logPanel.getByRole('button',{name:'Save settings',exact:true}).click();
+      await page.getByText('Settings saved.',{exact:true}).waitFor();
+      assert.ok(requests.some(r=>r.path.endsWith('/settings') && r.body?.log_channel_id===null),'Logging can be disabled');
       const defaultChannel = page.getByRole('combobox', {
         name: 'Default verification channel',
         exact: true,
@@ -1059,7 +1071,7 @@ const base = {
       await chooseOption(page, defaultChannel, '#verify-collections');
       await chooseOption(page, defaultChannel, 'No default');
       await page
-        .getByRole('button', { name: 'Save settings', exact: true })
+        .getByRole('button', { name: 'Save settings', exact: true }).first()
         .click();
       await page.getByText('Settings saved.', { exact: true }).waitFor();
       assert.ok(
@@ -1612,7 +1624,7 @@ const base = {
         (
           await page.getByRole('listbox').getByRole('option').allTextContents()
         ).map((label) => label.trim()),
-        ['Ethscriptions', 'Ordinals', 'NFTs', 'Tokens (ERC-20)'],
+        ['Ethscriptions', 'Ordinals', 'Bitcoin Stamps', 'NFTs', 'Tokens (ERC-20)'],
       );
       await newAsset.press('Escape');
       await page

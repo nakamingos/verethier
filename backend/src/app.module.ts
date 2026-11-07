@@ -1,3 +1,4 @@
+import { BouncerLogService } from './services/bouncer-log.service';
 import { StampsOwnershipService } from './services/stamps-ownership.service';
 import { SolanaOwnershipService } from './services/solana-ownership.service';
 import { SolanaSignatureService } from './services/solana-signature.service';
@@ -163,6 +164,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     AuditLogHandler,             // Paginated assignment activity
     WalletBlockHandler,
     WalletBlockService,
+    BouncerLogService,
     RoleActionService,
     EditRuleHandler,
     RuleEditService,

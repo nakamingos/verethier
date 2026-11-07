@@ -306,7 +306,7 @@ export class PortalService {
   async settings(server: string) {
     const { data, error } = await this.db
       .from('verifier_server_settings')
-      .select('admin_channel_id,verification_channel_id,background_checks_enabled')
+      .select('admin_channel_id,verification_channel_id,background_checks_enabled,log_channel_id,log_events')
       .eq('server_id', server)
       .maybeSingle();
     this.dbError(error);
@@ -332,8 +332,16 @@ export class PortalService {
     const guild = await this.access(session, server);
     if (input.verification_channel_id)
       await this.channel(guild, input.verification_channel_id);
+    if (input.log_channel_id) {
+      const channel = await this.channel(guild, input.log_channel_id);
+      const bot = await guild.members.fetchMe();
+      if (!channel.permissionsFor(bot)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]))
+        throw new BadRequestException('Bouncer needs View Channel and Send Messages in the log channel.');
+    }
     const { error } = await this.db.from('verifier_server_settings').upsert({
       server_id: server,
+      ...(input.log_channel_id !== undefined ? { log_channel_id: input.log_channel_id } : {}),
+      ...(input.log_events !== undefined ? { log_events: input.log_events } : {}),
       background_checks_enabled: input.background_checks_enabled,
       verification_channel_id: input.verification_channel_id ?? null,
       updated_by: session.user.id,

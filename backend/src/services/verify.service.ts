@@ -1,3 +1,4 @@
+import { BouncerLogService } from './bouncer-log.service';
 import { DynamicRoleService } from './dynamic-role.service';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleLabel } from '@/utils/nft-rule.util';
@@ -37,6 +38,7 @@ export class VerifyService {
     private readonly verificationSvc: VerificationService,
     @Optional() private readonly ordinalRequests?: OrdinalsRequestScheduler,
     @Optional() private readonly earnedRoles?: DynamicRoleService,
+    @Optional() private readonly activityLog?: BouncerLogService,
   ) {}
 
   /**
@@ -62,6 +64,17 @@ export class VerifyService {
         catch { Logger.warn('Successful verification activity could not be saved.'); }
       }
       return result;
+    } catch (error) {
+      // Only a validated wallet proof reaches this stage. Never forward raw
+      // provider/wallet errors, addresses, tokens or private restriction notes.
+      const message = error instanceof Error ? error.message : '';
+      const reason = /temporarily unavailable/.test(message) ? 'provider_unavailable'
+        : /No verification rules/.test(message) ? 'requirements_changed'
+        : /does not own|does not meet|balance does not meet/.test(message) ? 'no_assets'
+        : 'verification_failed';
+      await this.activityLog?.record(payload.discordId, payload.userId, 'verification_failed',
+        walletVerification.activity?.source || 'discord', undefined, reason);
+      throw error;
     } finally {
       finish?.();
       Logger.log(`Verification total: user=${payload.userId}; ${Date.now() - startedAt}ms`);
