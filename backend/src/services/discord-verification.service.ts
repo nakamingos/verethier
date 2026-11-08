@@ -818,7 +818,7 @@ export class DiscordVerificationService {
    * Add a Discord role to a user (dynamic version)
    * Used for dynamic role assignment - different signature from the verification flow method
    */
-  async addUserRoleDynamic(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean | 'suppressed'> {
+  async addUserRoleDynamic(userId: string, serverId: string, roleId: string, context?: RoleSyncContext, grantsOnly = false): Promise<boolean | 'suppressed'> {
     if (!this.client) {
       Logger.error('Discord client not initialized');
       return false;
@@ -844,7 +844,7 @@ export class DiscordVerificationService {
       }
 
       if (await this.roleActions?.blockedBy(member, roleId)) {
-        if (member.roles.cache.has(roleId)) {
+        if (!grantsOnly && member.roles.cache.has(roleId)) {
           const updated = await member.roles.remove(role, 'Bouncer role action: excluded by another role');
           context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
           await this.activityLog?.record(serverId, userId, 'role_removed', 'background', roleId);

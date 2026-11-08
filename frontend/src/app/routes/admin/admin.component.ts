@@ -1,3 +1,4 @@
+import { BulkRoleChecksComponent } from '@/components/bulk-role-checks/bulk-role-checks.component';
 import { NftCollectionLookupComponent, NftCollectionSelection } from '@/components/nft-collection-lookup/nft-collection-lookup.component';
 import { WalletExportsComponent } from '@/components/wallet-exports/wallet-exports.component';
 import { EVM_NETWORKS, evmNetworkValue } from '@/utils/evm-network.util';
@@ -19,6 +20,7 @@ import {
     PixelSelectComponent,
     NftCollectionLookupComponent,
     WalletExportsComponent,
+    BulkRoleChecksComponent,
     DeletionRequestsComponent,
   ],
   templateUrl: './admin.component.html',
@@ -38,6 +40,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       ['rules', 'Rules'],
       ['settings', 'Bot Settings'],
       ['members', 'Member Lookup'],
+      ['bulk', 'Bulk role check'],
       ['audit', 'Audit Log'],
       ['exports', 'Exports'],
       ...(this.isOperator ? [['operator', 'Operator']] : []),

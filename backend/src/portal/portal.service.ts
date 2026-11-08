@@ -205,6 +205,7 @@ export class PortalService {
       channels: [...channels.values()]
         .filter((c) => c?.type === ChannelType.GuildText)
         .map((c) => ({ id: c.id, name: c.name })),
+      audience_roles: [...roles.values()].filter(r=>r.id!==guild.id).sort((a,b)=>b.position-a.position).map(r=>({id:r.id,name:r.name})),
       roles: [...roles.values()]
         .filter((r) => r.id !== guild.id && !r.managed)
         .sort((a, b) => b.position - a.position)

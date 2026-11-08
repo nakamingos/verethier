@@ -1,3 +1,5 @@
+import { BulkRoleController } from './portal/bulk-role.controller';
+import { BulkRoleService } from './portal/bulk-role.service';
 import { BouncerLogService } from './services/bouncer-log.service';
 import { StampsOwnershipService } from './services/stamps-ownership.service';
 import { SolanaOwnershipService } from './services/solana-ownership.service';
@@ -114,7 +116,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
       limit: CONSTANTS.RATE_LIMIT.LONG.LIMIT,   // 100 requests max
     }]),
   ],
-  controllers: [AppController, PortalController, MemberController, PrivacyController],
+  controllers: [AppController, PortalController, MemberController, PrivacyController, BulkRoleController],
   providers: [
     // Supabase client provider with optimized configuration
     {
@@ -150,7 +152,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     // Core application services
     AppService,
     PortalAuthService, PortalService, PortalJobsService, ServerSetupService, SetupHealthService,
-    MemberService, PrivacyService, WalletExportService,
+    MemberService, PrivacyService, WalletExportService, BulkRoleService,
     Erc20OwnershipService,
 
     // Discord integration services

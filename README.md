@@ -195,6 +195,10 @@ The log uses the latest saved record for each user/role pair, rather than an imm
 
 Control Room → Bot Settings → Bouncer activity log selects an optional Discord text channel and event types for verification outcomes, wallet additions/removals and actual Bouncer role changes. It starts disabled, suppresses mention pings and never posts wallet addresses or private block notes. Wallet changes require current community sharing permission. Migration `20261107020000_bouncer_log.sql` is required before deployment; no new environment variables are needed. See [configuration, privacy and delivery](docs/bouncer-activity-log.md).
 
+## Bulk role checks
+
+Control Room → Bulk role check previews current role holders or verified server members, then checks saved proven wallets against one rule or all server rules. It can grant new roles without another signature. Grants-only is the default; optional reconciliation requires separate confirmation and preserves roles during provider uncertainty. Durable progress, per-member results, retries and cancellation are included. Apply migration `20261107030000_bulk_role_checks.sql` before deployment. See [bulk role checks](docs/bulk-role-checks.md).
+
 ## Wallet blocks
 
 Server administrators can manage wallet restrictions:

@@ -999,6 +999,9 @@
                 }
               </div>
             }
+            @if (tab === "bulk") {
+              <app-bulk-role-checks [server]="selected" [rules]="data.rules" [roles]="data.audience_roles || data.roles" />
+            }
             @if (tab === "exports") {
               <app-wallet-exports [server]="selected" [data]="data" />
             }
