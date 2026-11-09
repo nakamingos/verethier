@@ -1,3 +1,4 @@
+import { CHECK_NETWORKS, checkNetworkIds, ruleCheckNetwork } from '../../utils/check-network.util';
 import { Component, Input, OnChanges, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,17 +13,20 @@ import { PortalSessionService } from '../../services/portal-session.service';
       <div class="toolbar">
         <label>Audience:<app-pixel-select name="audience" label="Bulk audience" [options]="audiences" [(ngModel)]="filters.audience" (ngModelChange)="changed()" [disabled]="busy" /></label>
         @if(filters.audience==='role') { <label>Current role:<app-pixel-select name="source" label="Audience role" [options]="roleChoices" [(ngModel)]="filters.source_role_id" (ngModelChange)="changed()" [disabled]="busy" /></label> }
+        <label>Networks:<app-pixel-select name="networks" label="Bulk networks" [options]="networkChoices" [multiple]="true" [maxSelections]="7" [selectedSummary]="allNetworks?'All networks':''" placeholder="Choose networks" [(ngModel)]="filters.networks" (ngModelChange)="networksChanged()" [disabled]="busy" /></label>
         <label>Check against:<app-pixel-select name="rule" label="Bulk rule" [options]="ruleChoices" [(ngModel)]="filters.rule_id" (ngModelChange)="changed()" [disabled]="busy" /></label>
         <label>Action:<app-pixel-select name="mode" label="Bulk action" [options]="modes" [(ngModel)]="filters.mode" (ngModelChange)="changed()" [disabled]="busy" /></label>
-        <button type="submit" [disabled]="busy || (filters.audience==='role' && !filters.source_role_id)">Preview audience</button>
+        <button type="submit" [disabled]="busy || !filters.networks.length || (filters.audience==='role' && !filters.source_role_id)">Preview audience</button>
       </div>
     </form>
     <p class="muted">Verified members means current server members with a saved wallet and verification or earned-role history in this server. A role audience includes current holders; members without saved wallets are reported and skipped. One rule checks that rule’s requirements. All server rules includes combined groups and alternative ways to earn roles.</p>
+    @if(!allNetworks) { <p class="muted">Selected-network checks grant roles only. Skipped networks cannot cause removals or mark wallets empty. Network filters apply to new previews.</p> }
     @if(error) { <p class="error" role="alert">{{error}}</p> }
   </section>
   @if(view; as v) {
     <section class="panel" aria-label="Bulk check results">
       <div class="section-heading"><h2>{{v.job.labels.audience}} → {{v.job.labels.target}}</h2><span class="badge">{{v.job.status}}</span></div>
+      <p class="muted">Networks: {{scopeLabel(v.job)}}</p>
       <p>{{v.job.mode==='grant'?'Grant eligible roles only':'Grant eligible roles and remove proven failures'}} · {{v.summary.total}} members</p>
       @if(v.job.status==='preview') {
         <p>Audience preview only; holdings have not been checked yet. Run checks fresh ownership before granting roles. This preview expires {{v.job.preview_expires_at | date:'short'}}.</p>
@@ -61,7 +65,7 @@ import { PortalSessionService } from '../../services/portal-session.service';
     <p class="muted">Delete removes a saved check and its member results. Granted roles stay in place. Cancel active checks before deleting them.</p>
     @for(job of jobs;track job.id) {
       <div class="actions" role="group" [attr.aria-label]="'Recent bulk check: '+job.labels.audience+' → '+job.labels.target">
-        <button (click)="open(job.id)" [disabled]="busy">{{job.labels.audience}} → {{job.labels.target}} · {{job.status}}</button>
+        <button (click)="open(job.id)" [disabled]="busy">{{job.labels.audience}} → {{job.labels.target}}@if(job.labels.networks?.length) { · {{scopeLabel(job)}} } · {{job.status}}</button>
         <time>{{job.created_at | date:'short'}}</time>
         <button (click)="remove(job)" [disabled]="busy || !canDelete(job)" [title]="canDelete(job)?'Delete this saved check':'Cancel this check before deleting it'">Delete</button>
       </div>
@@ -75,15 +79,23 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   private actionRequest?:{job:string;action:string;id:string};
   private generation=0; private historyEpoch=0; private timer?:ReturnType<typeof setTimeout>;
   busy=false;error='';view:any=null;jobs:any[]=[];
-  filters:any={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};
+  filters:any={audience:'verified',source_role_id:null,rule_id:null,mode:'grant',networks:checkNetworkIds()};
   audiences=[{value:'verified',label:'All verified members'},{value:'role',label:'Current role holders'}];
-  modes=[{value:'grant',label:'Grant eligible roles only'},{value:'reconcile',label:'Grant and remove proven failures'}];
+  networkChoices=CHECK_NETWORKS;
+  get allNetworks(){return this.filters.networks.length===CHECK_NETWORKS.length;}
+  get modes(){return [{value:'grant',label:'Grant eligible roles only'},{value:'reconcile',label:'Grant and remove proven failures',disabled:!this.allNetworks}];}
   get roleChoices(){return [{value:null,label:'Choose a role'},...this.roles.map(r=>({value:r.id,label:r.name}))];}
-  get ruleChoices(){return [{value:null,label:'All server rules'},...this.rules.map(r=>({value:r.id,label:`Rule ${r.id} · ${r.role_name}`}))];}
+  get ruleChoices(){return [{value:null,label:this.allNetworks?'All server rules':'All rules in selected networks'},...this.rules.filter(r=>this.filters.networks.includes(ruleCheckNetwork(r))).map(r=>({value:r.id,label:`Rule ${r.id} · ${r.role_name}`}))];}
   get pages(){return Math.max(1,Math.ceil((this.view?.summary.total || 0)/20));}
-  ngOnChanges(){this.actionRequest=undefined;this.generation++;clearTimeout(this.timer);this.view=null;this.jobs=[];this.error='';this.busy=false;this.filters={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};void this.history();}
+  ngOnChanges(){this.actionRequest=undefined;this.generation++;clearTimeout(this.timer);this.view=null;this.jobs=[];this.error='';this.busy=false;this.filters={audience:'verified',source_role_id:null,rule_id:null,mode:'grant',networks:checkNetworkIds()};void this.history();}
   ngOnDestroy(){this.generation++;clearTimeout(this.timer);}
   changed(){if(this.view?.job.status==='preview') this.view=null;}
+  networksChanged(){
+    if(!this.allNetworks)this.filters.mode='grant';
+    if(this.filters.rule_id && !this.rules.some(rule=>rule.id===Number(this.filters.rule_id) && this.filters.networks.includes(ruleCheckNetwork(rule))))this.filters.rule_id=null;
+    this.changed();
+  }
+  scopeLabel(job:any){return job.labels?.networks?.length ? CHECK_NETWORKS.filter(network=>job.labels.networks.includes(network.value)).map(network=>network.label).join(', ') : 'All networks';}
   private async request(path='',body?:any){
     const response=await fetch(`/api/portal/servers/${this.server}/bulk-role-checks${path}`,{credentials:'same-origin',cache:'no-store',...(body?{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':this.session.csrf},body:JSON.stringify(body)}:{})});
     const data=await response.json();if(!response.ok) {if(response.status===401)this.session.clear();throw new Error(typeof data.message==='string'?data.message:'Could not load this bulk check.');}return data;
@@ -102,7 +114,20 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
       await this.history();
     });
   }
-  async preview(){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/preview',{audience:this.filters.audience,...(this.filters.audience==='role'?{source_role_id:this.filters.source_role_id}:{}),...(this.filters.rule_id?{rule_id:Number(this.filters.rule_id)}:{}),mode:this.filters.mode,request_id:crypto.randomUUID()});if(generation===this.generation){this.view=view;await this.history();}});}
+  async preview(){
+    if(!this.filters.networks.length){this.error='Choose at least one network.';return;}
+    await this.perform(async()=>{
+      const generation=this.generation,networks=this.allNetworks?[]:[...this.filters.networks];
+      const view=await this.request('/preview',{audience:this.filters.audience,
+        ...(this.filters.audience==='role'?{source_role_id:this.filters.source_role_id}:{}),
+        ...(this.filters.rule_id?{rule_id:Number(this.filters.rule_id)}:{}),mode:this.filters.mode,
+        ...(networks.length?{networks}:{}),request_id:crypto.randomUUID()});
+      const saved=view.job?.labels?.networks ?? [];
+      if(!Array.isArray(saved) || saved.length!==networks.length || networks.some(network=>!saved.includes(network)))
+        throw new Error('The server did not preserve the selected networks. Refresh after the backend update; no check was started.');
+      if(generation===this.generation){this.view=view;await this.history();}
+    });
+  }
   async open(id:string){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/'+id);if(generation===this.generation){this.view=view;this.poll();}});}
   async refresh(page=this.view?.page || 1){if(!this.view)return;const id=this.view.job.id,generation=this.generation;try{const view=await this.request(`/${id}?page=${page}`);if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();}}catch(e){if(generation===this.generation && this.view?.job.id===id)this.error=(e as Error).message;}}
   async act(action:string) {

@@ -6,10 +6,10 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
  const browser=await chromium.launch({executablePath:process.env.CHROME_BIN || '/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',headless:true,args:['--no-sandbox']});
  try{for(const width of [1280,768,393,320]){
   const context=await browser.newContext({viewport:{width,height:1000},hasTouch:width<800}),page=await context.newPage(),errors=[],writes=[];
-  let deleted=false,denyDeleteOnce=false,operator=true;
+  let deleted=false,denyDeleteOnce=false,operator=true,selectedNetworks,dropScopeOnce=false;
   let state='preview',mode='grant',started=false,processed=0,failed=0,granted=0,failResume=false,resumeReceipt;
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
-  const info=()=>({job:{id,status:state,mode,started_by:started?user:null,labels:{audience:'Pizza Comrade',target:'Rule 204 · Comrade',roles:{[role]:'Comrade',rank1:'Gold Bearer',rank2:'Korporal',rank3:'Leutnant',unknown1:'Lord',unknown2:'McSkullx'}},created_at:new Date().toISOString(),preview_expires_at:new Date(Date.now()+1800000).toISOString()},summary:{total:2,processed,granted,removed:0,already_held:1,no_wallet:0,ineligible:0,unavailable:failed,excluded:0,left_audience:0,errors:failed},members:[{user_id:user,member_name:'Pizza member',status:started?'completed':'pending',result:started?{granted:[role],ineligible:['rank1','rank2','rank3'],unavailable:['unknown1','unknown2']}:{},updated_at:new Date().toISOString()}],page:1});
+  const info=()=>({job:{id,status:state,mode,started_by:started?user:null,labels:{audience:'Pizza Comrade',target:'Rule 204 · Comrade',...(selectedNetworks?{networks:selectedNetworks}:{}),roles:{[role]:'Comrade',rank1:'Gold Bearer',rank2:'Korporal',rank3:'Leutnant',unknown1:'Lord',unknown2:'McSkullx'}},created_at:new Date().toISOString(),preview_expires_at:new Date(Date.now()+1800000).toISOString()},summary:{total:2,processed,granted,removed:0,already_held:1,no_wallet:0,ineligible:0,unavailable:failed,excluded:0,left_audience:0,errors:failed},members:[{user_id:user,member_name:'Pizza member',status:started?'completed':'pending',result:started?{granted:[role],ineligible:['rank1','rank2','rank3'],unavailable:['unknown1','unknown2']}:{},updated_at:new Date().toISOString()}],page:1});
   await page.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();
    if(url.pathname.startsWith('/api/portal')){
@@ -20,7 +20,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
     else if(p.includes('/bulk-role-checks')){
      if(req.method()==='POST'){
       assert.equal(req.headers()['x-csrf-token'],'csrf');const body=req.postDataJSON();writes.push(body);
-      if(p.endsWith('/preview')){assert.equal(body.source_role_id,source);assert.equal(body.rule_id,204);mode=body.mode;state='preview';started=false;processed=failed=granted=0;}
+      if(p.endsWith('/preview')){assert.equal(body.source_role_id,source);assert.equal(body.rule_id,204);mode=body.mode;selectedNetworks=dropScopeOnce?undefined:body.networks;dropScopeOnce=false;deleted=false;state='preview';started=false;processed=failed=granted=0;}
       else if(body.action==='start'){state='completed';started=true;processed=2;granted=1;}
       else if(body.action==='cancel')state='cancelled';
       else if(body.action==='delete'){
@@ -30,7 +30,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
       else if(body.action==='resume'){
        state='pending';
        if(failResume){failResume=false;resumeReceipt=body.request_id;return route.fulfill({status:503,json:{message:'Resume response was lost. Retry the same action.'}});}
-       if(resumeReceipt)assert.equal(body.request_id,resumeReceipt,'Resume retry reuses the accepted receipt');
+       if(resumeReceipt){assert.equal(body.request_id,resumeReceipt,'Resume retry reuses the accepted receipt');resumeReceipt=undefined;}
       }else if(body.action==='retry'){state=state==='running'?'running':'pending';processed-=failed;failed=0;}
       data=info();
      }else data=p.endsWith('/bulk-role-checks')?(deleted?[]:[info().job]):info();
@@ -96,6 +96,33 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
   await page.getByText('No recent bulk checks.',{exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'Bulk check results'}).count(),0);assert.equal(granted,grantsBeforeDelete,'Deleting a report does not undo grants');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');assert.deepEqual(errors,[]);
+  // Scope a new check to Ordinals, including clearing all selections safely.
+  const networks=page.getByRole('combobox',{name:'Bulk networks',exact:true});
+  await networks.locator('.pixel-select-arrow').click();
+  for(const label of ['Ethereum','Robinhood','Base','Solana','Ethscriptions','Bitcoin Stamps'])await page.getByRole('option',{name:label,exact:true}).click();
+  await page.getByRole('option',{name:'Ordinals',exact:true}).click();await networks.press('Escape');
+  assert.equal(await page.getByRole('button',{name:'Preview audience',exact:true}).isDisabled(),true,'No selection cannot become an all-network run');
+  await networks.locator('.pixel-select-arrow').click();await page.getByRole('option',{name:'Ordinals',exact:true}).click();await networks.press('Escape');
+  assert.match(await networks.innerText(),/Ordinals/);
+  await choose(page,'Bulk rule','Rule 204 · Comrade');
+  const action=page.getByRole('combobox',{name:'Bulk action',exact:true});
+  assert.match(await action.innerText(),/Grant eligible roles only/);await action.locator('.pixel-select-arrow').click();
+  assert.equal(await page.getByRole('option',{name:'Grant and remove proven failures',exact:true}).getAttribute('aria-disabled'),'true');await action.press('Escape');
+  dropScopeOnce=true;
+  await page.getByRole('button',{name:'Preview audience',exact:true}).click();
+  await page.getByRole('alert').getByText('The server did not preserve the selected networks. Refresh after the backend update; no check was started.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Run bulk check',exact:true}).count(),0,'An older backend cannot silently expand the requested scope');
+  await page.getByRole('button',{name:'Preview audience',exact:true}).click();await page.getByRole('button',{name:'Run bulk check',exact:true}).waitFor();
+  assert.deepEqual(writes.at(-1).networks,['ordinals']);assert.equal(writes.at(-1).mode,'grant');
+  const scope=page.getByRole('region',{name:'Bulk check results'});assert.ok((await scope.innerText()).includes('Networks: Ordinals'));
+  await page.getByRole('button',{name:'Run bulk check',exact:true}).click();await page.getByText('completed',{exact:true}).first().waitFor();
+  state='cancelled';processed=1;await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('button',{name:'Resume check',exact:true}).waitFor();
+  // Changing the next preview's form does not change this saved job's scope.
+  await networks.locator('.pixel-select-arrow').click();await page.getByRole('option',{name:'Ethereum',exact:true}).click();await page.getByRole('option',{name:'Ordinals',exact:true}).click();await networks.press('Escape');
+  await page.getByRole('button',{name:'Resume check',exact:true}).click();await page.getByText('pending',{exact:true}).first().waitFor();
+  assert.ok((await scope.innerText()).includes('Networks: Ordinals'));assert.equal(writes.at(-1).action,'resume');assert.equal(writes.at(-1).networks,undefined);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Network selector and scoped results fit the viewport');
+  await page.screenshot({path:path.join(artifacts,`network-scope-${width}.png`),fullPage:true});
   operator=false;await page.goto(origin+'/admin?server='+server+'&tab=bulk');
   await page.getByRole('button',{name:'Rules',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Bulk role check',exact:true}).count(),0,'Ordinary admins have no bulk tab');

@@ -8,3 +8,7 @@ export function checkPriority(rule: Partial<VerifierRole>): number {
   if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') return 3;
   return rule.chain_id === 4663 ? 1 : rule.chain_id === 8453 ? 2 : 0;
 }
+
+export function checkFamily(rule: Partial<VerifierRole>): string {
+  return CHECK_PRIORITY[checkPriority(rule)];
+}

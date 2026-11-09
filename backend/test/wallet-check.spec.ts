@@ -61,6 +61,21 @@ describe('Wallet dormancy completeness and retained proof',()=>{
  it('rechecks a changed rule rather than trusting its old zero',async()=>{
   const f=fixture();await f.read();f.mappings.getRoleMappings.mockResolvedValue([{...rule,token_ids:['12']}]);f.counter.mockResolvedValue(1n);await f.service.finish(f.context);expect(f.counter).toHaveBeenCalled();expect(f.db.rpc).not.toHaveBeenCalled();
  });
+ it('does not query excluded Ethereum protocols to finish a dormancy audit',async()=>{
+  const f=fixture([rule,{...rule,id:2,asset_type:'ethscription'}]);f.context.bulkCheckFamilies=new Set(['ethereum']);
+  await f.read();await f.service.finish(f.context);expect(f.counter).not.toHaveBeenCalled();expect(f.db.rpc).not.toHaveBeenCalled();
+ });
+ it('does not launch Ordinals from a Stamps-only dormancy audit',async()=>{
+  const btc='bc1pss0zhytly75awhm6x2hhvd5lnzv3vssgrf9axfheq8ldyzn88ges79fler',stamp={...rule,asset_type:'stamp'},ord={...rule,id:2,asset_type:'ordinal'};
+  const f=fixture([stamp,ord]);(f.rows.user_wallets as any)=[{address:btc,user_id:'member',wallet_type:'bitcoin',last_verified_at:'2026-11-09T10:00:00Z',evm_chain_ids:null}];
+  f.context.bulkCheckFamilies=new Set(['stamps']);await f.read(stamp,[btc]);await f.service.finish(f.context);expect(f.counter).not.toHaveBeenCalled();expect(f.db.rpc).not.toHaveBeenCalled();
+ });
+ it('blocks a provider outside the selected families even if a caller passes its rule directly',async()=>{
+  const f=fixture(),nft:any={count:jest.fn(),matchingAssets:jest.fn()};f.context.bulkCheckFamilies=new Set(['ordinals']);
+  const ownership=new AssetOwnershipService({} as any,nft);
+  await expect(ownership.count(rule,[address],f.context)).rejects.toThrow('outside the selected');
+  await expect(ownership.matchingAssets(rule,[address],f.context)).rejects.toThrow('outside the selected');expect(nft.count).not.toHaveBeenCalled();expect(nft.matchingAssets).not.toHaveBeenCalled();
+ });
  it('requires successful coverage of all Ethereum protocols but not another chain',async()=>{
   const ethscript={...rule,id:2,asset_type:'ethscription',slug:'nakamingos'},base={...rule,id:3,chain_id:8453};
   const f=fixture([rule,ethscript,base]);await f.read();await f.service.finish(f.context);expect(f.counter).toHaveBeenCalledWith(ethscript,address);expect(f.counter).not.toHaveBeenCalledWith(base,address);

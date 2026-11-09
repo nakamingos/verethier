@@ -18,7 +18,7 @@ assert.equal(await page.getByRole('option',{name:'Pizza Comrade',exact:true}).ge
 await page.screenshot({path:path.join(artifacts,`dropdown-${width}.png`),fullPage:true});
 // Full-page captures can reposition the anchor and dismiss its popup.
 if (await picker.getAttribute('aria-expanded') === 'true') await picker.press('Escape');
-await page.getByRole('button',{name:'Review changes',exact:true}).click();await page.screenshot({path:path.join(artifacts,`edit-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule saved. Previously earned roles are queued for a fresh check.',{exact:true}).waitFor();assert.deepEqual(writes[0].body.additional_roles,[{id:extra}]);assert.equal(writes[0].body.inputs.selection,'1-10,20');assert.equal(writes[0].body.inputs.collection_slug,'pizza-comrades');
+await page.getByRole('button',{name:'Review changes',exact:true}).click();await page.screenshot({path:path.join(artifacts,`edit-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.',{exact:true}).waitFor();assert.deepEqual(writes[0].body.additional_roles,[{id:extra}]);assert.equal(writes[0].body.inputs.selection,'1-10,20');assert.equal(writes[0].body.inputs.collection_slug,'pizza-comrades');
 await page.getByRole('button',{name:'Duplicate',exact:true}).click();await page.getByRole('heading',{name:'Duplicate rule 204',exact:true}).waitFor();assert.equal(await page.getByLabel('Inscription numbers / ranges:',{exact:true}).inputValue(),'1-10,20');assert.equal(await page.getByRole('button',{name:'Review changes',exact:true}).isDisabled(),true,'Duplicate requires a role');
 await choose(page,'Discord roles','Another role');
 await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Tab');
@@ -38,7 +38,7 @@ await roles.press('End');await roles.press('Tab');
 assert.equal(await roles.getAttribute('aria-expanded'),'false');
 await page.getByRole('button',{name:'Review changes',exact:true}).click();
 await page.getByRole('button',{name:'Save rule',exact:true}).click();
-await page.getByText('Rule saved. Previously earned roles are queued for a fresh check.',{exact:true}).waitFor();
+await page.getByText('Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.',{exact:true}).waitFor();
 assert.equal(writes[2].body.role_name,'Fresh role');assert.deepEqual(writes[2].body.additional_roles,[]);
 await page.getByRole('button',{name:'Edit',exact:true}).click();
 await page.getByLabel('Inscription numbers / ranges:',{exact:true}).fill('10-1');

@@ -37,6 +37,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   @Input() options: SelectChoice[] = [];
   @Input() label = '';
   @Input() placeholder = '';
+  @Input() selectedSummary = '';
   @Input({ transform: booleanAttribute }) multiple = false;
   @Input() maxSelections = 20;
   @Output() optionAction = new EventEmitter<string | null>();
@@ -57,6 +58,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   constructor(private readonly view: ChangeDetectorRef) {}
 
   get selectedLabel() {
+    if (this.multiple && this.selectedSummary) return this.selectedSummary;
     if (this.multiple) return this.options.filter(option => this.selected(option)).map(option => option.label).join(', ') || this.placeholder;
     return this.options.find((option) => option.value === this.value)?.label || this.placeholder;
   }

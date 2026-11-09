@@ -1,4 +1,4 @@
-import { BulkRoleService, bulkRulesVersion } from '../src/portal/bulk-role.service';
+import { BulkRoleService, bulkRulesVersion, bulkNetworks, bulkJobRulesVersion } from '../src/portal/bulk-role.service';
 import { BulkRoleController } from '../src/portal/bulk-role.controller';
 const server='111111111111111111', user='222222222222222222', role='333333333333333333', source='444444444444444444';
 const job={id:'00000000-0000-4000-8000-000000000001',server_id:server,rule_id:204,audience:'role',source_role_id:source,mode:'grant'};
@@ -144,6 +144,61 @@ describe('Bulk previews and worker guards',()=>{
  });
 });
 
+
+describe('Selected-network bulk checks',()=>{
+ it.each([[],['bogus'],['ethereum','ethereum'],{},'ordinals'])('rejects invalid network scopes before any audience reads: %j',async networks=>{
+  const f=fixture();await expect(f.service.preview(f.guild,user,{networks,mode:'grant'})).rejects.toThrow('valid network');expect(f.rules.getRoleMappings).not.toHaveBeenCalled();
+ });
+ it('normalizes network order while preserving all-network legacy behavior',()=>{
+  expect(bulkNetworks(undefined)).toBeUndefined();expect(bulkNetworks(['ordinals','ethereum','stamps'])).toEqual(['ethereum','stamps','ordinals']);
+  expect(bulkNetworks(['ordinals','ethereum','stamps','robinhood','base','solana','ethscriptions'])).toBeUndefined();
+ });
+ it('binds the network scope to the worker rule-version guard',()=>{
+  const f=fixture();expect(bulkJobRulesVersion([f.rule])).toBe(bulkRulesVersion([f.rule]));
+  expect(bulkJobRulesVersion([f.rule],['ordinals'])).not.toBe(bulkRulesVersion([f.rule]));
+  expect(bulkJobRulesVersion([f.rule],['ordinals'])).not.toBe(bulkJobRulesVersion([f.rule],['ethereum']));
+ });
+ it('refuses removal mode for network-filtered previews',async()=>{
+  const f=fixture();await expect(f.service.preview(f.guild,user,{networks:['ethereum'],mode:'reconcile'})).rejects.toThrow('only grant');expect(f.rules.getRoleMappings).not.toHaveBeenCalled();
+ });
+ it('rejects a selected rule outside the chosen networks',async()=>{
+  const f=fixture();await expect(f.service.preview(f.guild,user,{networks:['ethereum'],rule_id:204,mode:'grant'})).rejects.toThrow('No rules match');
+ });
+ it('persists canonical networks with the preview and rejects mismatched request replays',async()=>{
+  const f=fixture();f.guild.members.fetchMe=jest.fn();f.guild.roles={fetch:jest.fn(),cache:new Map([[source,{id:source,name:'Source'}],[role,{id:role,name:'Target',editable:true}]])};
+  f.guild.members.list=jest.fn().mockResolvedValue(new Map([[user,f.member]]));f.db.rpc=jest.fn().mockResolvedValue({data:job.id,error:null});
+  const stored={job:{labels:{networks:['stamps','ordinals']}}};jest.spyOn(f.service,'info').mockResolvedValue(stored);
+  const input={audience:'role',source_role_id:source,networks:['ordinals','stamps'],mode:'grant',request_id:job.id};
+  expect(await f.service.preview(f.guild,user,input)).toBe(stored);
+  expect(f.db.rpc).toHaveBeenCalledWith('verifier_bulk_role_preview',expect.objectContaining({p_job:expect.objectContaining({labels:expect.objectContaining({networks:['stamps','ordinals']})})}));
+  f.service.info.mockResolvedValue({job:{labels:{networks:['ethereum']}}});await expect(f.service.preview(f.guild,user,input)).rejects.toThrow('different networks');
+ });
+ it('checks only selected networks even when the same role has Ordinals alternatives',async()=>{
+  const f=fixture();const eth={...f.rule,id:205,asset_type:'nft',chain_id:1},base={...eth,id:206,chain_id:8453,role_id:role+'base'};
+  f.rule.inscription_criteria={kind:'numbers',ranges:[[1,2]]};f.service.guard.mockResolvedValue([f.rule,eth,base]);
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,_role,context,loaded)=>{
+   expect(loaded).toEqual([eth]);expect([...context.bulkCheckFamilies]).toEqual(['ethereum']);expect(context.ordinalNeedsNumbers).toBe(false);
+   return {status:'passed',results:[{isValid:true,ruleId:eth.id,rule:eth}]};
+  });
+  const result=await f.service.checkMember({...job,rule_id:null,labels:{networks:['ethereum']}},{user_id:user,result:{}});
+  expect(result.granted).toEqual([role]);expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.roles.addUserRoleDynamic).toHaveBeenCalledTimes(1);expect(f.roles.removeUserRole).not.toHaveBeenCalled();
+ });
+ it('rejects an unbound or changed saved scope before any provider reads',async()=>{
+  const f=fixture(),stored={...job,rule_id:null,status:'running',started_by:user,labels:{networks:['ordinals']},rules_version:bulkRulesVersion([f.rule])};
+  f.service.guard.mockRestore();f.query.maybeSingle.mockResolvedValue({data:{user_id:user},error:null});jest.spyOn(f.service,'job').mockResolvedValue(stored);jest.spyOn(f.service,'stop').mockResolvedValue(undefined);
+  await expect(f.service.checkMember(stored,{user_id:user,result:{}})).rejects.toThrow('Rules changed');expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.engine.evaluateRole).not.toHaveBeenCalled();
+ });
+ it('refuses an unsafe filtered removal job before ownership checks',async()=>{
+  const f=fixture();f.service.guard.mockRestore();jest.spyOn(f.service,'job').mockResolvedValue({...job,status:'running',started_by:user,mode:'reconcile',labels:{networks:['ordinals']}});jest.spyOn(f.service,'stop').mockResolvedValue(undefined);
+  await expect(f.service.checkMember(job,{user_id:user,result:{}})).rejects.toThrow('Invalid network scope');expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.roles.removeUserRole).not.toHaveBeenCalled();
+ });
+ it('blocks starting unsafe filtered jobs but still allows cancellation',async()=>{
+  const f=fixture();const stored={...job,status:'preview',mode:'reconcile',labels:{networks:['ordinals']}};
+  jest.spyOn(f.service,'job').mockResolvedValue(stored);f.db.rpc=jest.fn().mockResolvedValue({data:null,error:null});jest.spyOn(f.service,'info').mockResolvedValue({job:stored});
+  await expect(f.service.action(server,job.id,user,'start',job.id)).rejects.toThrow('only grant');expect(f.db.rpc).not.toHaveBeenCalled();
+  await f.service.action(server,job.id,user,'cancel',job.id);expect(f.db.rpc).toHaveBeenCalledWith('verifier_bulk_role_transition',expect.objectContaining({p_action:'cancel'}));
+ });
+});
 
 describe('Bulk grant recovery',()=>{
  it('retries assignment bookkeeping after an earlier successful Discord grant',async()=>{

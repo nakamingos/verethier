@@ -1,3 +1,4 @@
+import { CHECK_PRIORITY, checkFamily } from '@/utils/check-priority.util';
 import { AsyncSemaphore } from '@/utils/async-semaphore.util';
 import { BulkRoleReadCache, bulkRoleChecks } from './bulk-role-read-cache';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
@@ -27,6 +28,24 @@ export function bulkRunKey(job: any): string {
 const uuid = (id: string) => /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(id);
 export function bulkRulesVersion(rules: any[]) {
   return createHash('sha256').update(JSON.stringify([...rules].sort((a,b)=>a.id-b.id).map(r=>[r.id,ruleEditVersion(r)]))).digest('hex');
+}
+export function bulkNetworks(value: unknown): string[] | undefined {
+  if (value == null) return undefined; // Existing reports mean all networks.
+  if (!Array.isArray(value) || !value.length || value.length > CHECK_PRIORITY.length
+    || new Set(value).size !== value.length || value.some(network => !CHECK_PRIORITY.includes(network as any))) {
+    throw new BadRequestException('Choose at least one valid network.');
+  }
+  return value.length === CHECK_PRIORITY.length ? undefined : CHECK_PRIORITY.filter(network => value.includes(network));
+}
+export function bulkJobRulesVersion(rules: any[], networks?: string[]): string {
+  const version = bulkRulesVersion(rules);
+  // Older workers must stop these jobs rather than silently check every network.
+  return networks ? `${version}:networks=${networks.join(',')}` : version;
+}
+function jobNetworks(job: any): string[] | undefined {
+  const networks = bulkNetworks(job.labels?.networks);
+  if (networks && job.mode !== 'grant') throw new BadRequestException('Selected-network checks can only grant roles.');
+  return networks;
 }
 @Injectable()
 export class BulkRoleService {
@@ -65,10 +84,13 @@ export class BulkRoleService {
   }
   async preview(guild: Guild, actor: string, input: BulkRolePreviewDto) {
     this.requireOperator(actor);
+    const networks=bulkNetworks(input.networks);
+    if(networks && input.mode!=='grant')throw new BadRequestException('Selected-network checks can only grant roles.');
     if(input.audience==='role' && !input.source_role_id) throw new BadRequestException('Choose an audience role.');
     const rules=await this.rules.getRoleMappings(guild.id);
-    const selected=expandRuleRoles(input.rule_id ? rules.filter(r=>r.id===input.rule_id) : rules);
-    if(!selected.length) throw new BadRequestException('Choose an existing rule in this server.');
+    const scoped=networks ? rules.filter(rule=>networks.includes(checkFamily(rule))) : rules;
+    const selected=expandRuleRoles(input.rule_id ? scoped.filter(r=>r.id===input.rule_id) : scoped);
+    if(!selected.length) throw new BadRequestException(networks?'No rules match the selected networks.':'Choose an existing rule in this server.');
     await guild.members.fetchMe();
     await guild.roles.fetch();
     const source=input.audience==='role' ? guild.roles.cache.get(input.source_role_id) : null;
@@ -100,11 +122,14 @@ export class BulkRoleService {
     }
     this.checked(await this.db.rpc('verifier_bulk_role_preview',{
       p_job:{id:input.request_id,server_id:guild.id,created_by:actor,audience:input.audience,source_role_id:source?.id || null,
-        rule_id:input.rule_id || null,mode:input.mode,rules_version:bulkRulesVersion(rules),
-        labels:{server:guild.name,audience:source?.name || 'Verified members in this server',target:input.rule_id?`Rule ${input.rule_id} · ${selected[0].role_name}`:'All server rules',roles:Object.fromEntries(expandRuleRoles(rules).map(r=>[r.role_id,r.role_name || r.role_id]))}},
+        rule_id:input.rule_id || null,mode:input.mode,rules_version:bulkJobRulesVersion(rules,networks),
+        labels:{...(networks?{networks}:{}),server:guild.name,audience:source?.name || 'Verified members in this server',target:input.rule_id?`Rule ${input.rule_id} · ${selected[0].role_name}`:networks?'Rules in selected networks':'All server rules',roles:Object.fromEntries(expandRuleRoles(rules).map(r=>[r.role_id,r.role_name || r.role_id]))}},
       p_members:members,
     }));
-    return this.info(guild.id,input.request_id);
+    const view=await this.info(guild.id,input.request_id);
+    if(JSON.stringify(bulkNetworks(view?.job?.labels?.networks))!==JSON.stringify(networks))
+      throw new ConflictException('This preview request was already used with different networks. Create a new preview.');
+    return view;
   }
   async list(server: string) {
     return this.checked(await this.db.from('verifier_bulk_role_jobs').select('id,status,labels,mode,created_at,updated_at')
@@ -135,7 +160,8 @@ export class BulkRoleService {
       return {deleted:true};
     }
     const job=await this.job(server,id);
-    if(action!=='cancel' && bulkRulesVersion(await this.rules.getRoleMappings(server))!==job.rules_version)
+    const networks=action!=='cancel'?jobNetworks(job):undefined;
+    if(action!=='cancel' && bulkJobRulesVersion(await this.rules.getRoleMappings(server),networks)!==job.rules_version)
       throw new ConflictException('Rules changed. Create a new preview.');
     const result=await this.db.rpc('verifier_bulk_role_transition',{p_job:id,p_server:server,p_actor:actor,p_action:action,p_request:request});
     if(result.error) throw new ConflictException('The check changed, expired, or has no work for this action. Refresh and try again.');
@@ -208,8 +234,13 @@ export class BulkRoleService {
     ]);
     if(!['pending','running'].includes(current.status) || bulkRunKey(current)!==bulkRunKey(job)) throw new BulkStopped('Check stopped or resumed');
     await this.operatorJob(current);
+    let networks:string[]|undefined;
+    try {networks=jobNetworks(current);} catch {
+      await this.stop(current,'failed','Invalid network scope. Create a new grants-only preview.',current.started_by);
+      throw new BulkStopped('Invalid network scope');
+    }
     if(!this.checked(leaseResult)) throw new Error('Check lease lost');
-    if(bulkRulesVersion(rules)!==job.rules_version) {
+    if(bulkJobRulesVersion(rules,networks)!==job.rules_version) {
       await this.stop(job,'stale','Rules changed. Create a new preview for the remaining members.'); throw new BulkStopped('Rules changed');
     }
     let actor;
@@ -242,9 +273,11 @@ export class BulkRoleService {
     const addresses=wallets.rows.map(w=>w.address);
     const allowed=await this.blocks.allowedAddresses(job.server_id,addresses);
     const result:any={granted:[...(item.result?.granted || [])],removed:[...(item.result?.removed || [])],already_held:[],ineligible:[],unavailable:[],excluded:[],errors:[]};
-    const targets=expandRuleRoles(job.rule_id ? rules.filter(r=>r.id===Number(job.rule_id)) : rules);
+    const networks=jobNetworks(job);
+    const checkRules=()=>networks ? rules.filter(rule=>networks.includes(checkFamily(rule))) : rules;
+    const targets=expandRuleRoles(job.rule_id ? checkRules().filter(r=>r.id===Number(job.rule_id)) : checkRules());
     const targetRoles=[...new Set(targets.map(r=>r.role_id))];
-    const expanded=expandRuleRoles(rules);
+    const expanded=expandRuleRoles(checkRules());
     const roleCollections=new Map(targetRoles.map(roleId=>[roleId,new Set(expanded
       .filter(rule=>rule.role_id===roleId && rule.asset_type==='ordinal')
       .map(rule=>rule.inscription_criteria?.kind==='numbers' ? rule.inscription_criteria.collection_slug : rule.slug)
@@ -262,6 +295,7 @@ export class BulkRoleService {
       evidence.context.dormancyJobId=job.id;
       evidence.context.dormancyWorker=item.locked_by;
       evidence.context.bulkGrantOnly=job.mode==='grant';
+      if(networks)evidence.context.bulkCheckFamilies=new Set(networks);
       evidence.context.ordinalNeedsNumbers=needsNumbers;
       return evidence;
     };
@@ -274,9 +308,9 @@ export class BulkRoleService {
         const selected=targets.find(r=>r.role_id===roleId);
         const single=job.rule_id ? await this.engine.verifyUser(item.user_id,selected.id,addresses[0],context,selected) : null;
         let checked=single ? {status:single.status || (single.isValid?'passed':single.error?'unavailable':'failed'),results:[single]}
-          : await this.engine.evaluateRole(item.user_id,job.server_id,roleId,context,rules);
+          : await this.engine.evaluateRole(item.user_id,job.server_id,roleId,context,checkRules());
         if(checked.status==='failed' && job.mode==='reconcile' && job.rule_id)
-          checked=await this.engine.evaluateRole(item.user_id,job.server_id,roleId,context,rules);
+          checked=await this.engine.evaluateRole(item.user_id,job.server_id,roleId,context,checkRules());
         return checked;
       } finally {timing.eligibility_work_ms+=Date.now()-started;}
     };

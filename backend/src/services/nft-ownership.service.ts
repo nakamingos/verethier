@@ -24,6 +24,8 @@ const ABI = parseAbi([
 
 export interface NftCheckContext {
   walletCheck?: WalletCheckRun;
+  /** Provider families explicitly selected for a grants-only bulk run. */
+  bulkCheckFamilies?: ReadonlySet<string>;
   ethscriptionNumberOwners?: Map<number, Promise<{id: string; record: EthscriptionOwnership} | null>>;
   dormancyJobId?: string;
   dormancyWorker?: string;

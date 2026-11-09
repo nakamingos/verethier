@@ -69,3 +69,16 @@ Member timing/log records add `mutation_queue_ms` to distinguish role-write cont
 ## Network priority and saved empty wallets
 
 Grant-only qualification now follows Ethereum → Robinhood → Base → Solana → Ethscriptions → Stamps → Ordinals, stopping later alternatives once the role is earned while preserving combined counts. Saved wallets can become dormant after one complete successful zero-holdings check for the community/network. They remain saved, skip routine checks and need a fresh member signature to reactivate. See [wallet checking and dormancy](wallet-checking.md) for coverage safeguards, privacy and deployment requirements.
+
+
+## Select networks for a bulk run
+
+The Networks checkbox dropdown defaults to all networks and supports Ethereum NFTs/tokens, Robinhood NFTs/tokens, Base NFTs/tokens, Solana, Ethscriptions, Bitcoin Stamps and Ordinals. Choosing none is invalid. Only rules in the selected families become targets, and combined thresholds use only contributions from those selected rules. Ethereum and Ethscriptions are separate options; Stamps and Ordinals are separate options.
+
+A subset is grants-only. Both the UI and backend reject removal-enabled filtered runs, since excluded requirements could still qualify a member. Unselected providers are excluded from eligibility, asset matching and follow-up dormancy audits. If completing dormancy coverage would require an excluded protocol on the same blockchain, the wallet stays active rather than causing extra provider calls or a false empty result.
+
+The canonical selection is saved in the existing job labels and bound to its rule-version guard. Preview, history and results identify the scope. Start, resume and retry use that stored scope regardless of later form edits. Older reports without a selection retain all-network behavior. No database migration or new environment variable is required.
+
+The preview response must confirm the requested selection before the UI offers Run. Older backends that ignore the new field therefore cannot silently expand a run. Filtered jobs also have a scoped rule-version marker, so an older worker stops them before checking providers rather than treating them as all-network jobs. The existing operator, server-administrator, CSRF, cancellation and mutation-freshness checks remain in force.
+
+Local validation passed all 2,020 backend tests across 96 suites, backend/frontend production builds, and bulk-check browser flows at 1280, 768, 393 and 320 pixels. Coverage includes empty/invalid scopes, rejected scoped removals, selected-provider enforcement, cross-protocol dormancy guards, immutable scope on resume, direct-URL operator restrictions and rejection of a preview response that drops the selection. Existing multi-role checkbox flows also passed at those four widths.
