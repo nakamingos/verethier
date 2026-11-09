@@ -126,6 +126,15 @@ export class DynamicRoleService {
     return this.reverifyAssignments(assignments, undefined, context);
   }
 
+  /** Role-action edits affect only the prior/new removal targets, never every earned role. */
+  async reverifyUserRolesInServer(userId: string, serverId: string, roleIds: string[]): Promise<{ verified: number; revoked: number; errors: number }> {
+    const roles = new Set(roleIds);
+    if (!roles.size) return { verified: 0, revoked: 0, errors: 0 };
+    const assignments = (await this.dbSvc.getEarnedRoleAssignments({ userId, serverId }))
+      .filter(assignment => roles.has(assignment.role_id));
+    return this.reverifyAssignments(assignments, 'scheduled');
+  }
+
   async reverifyRoleInServer(serverId: string, roleId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number; skipped?: string }> {
     if (!await this.automaticRoleAllowed(serverId, roleId, context))
       return { verified: 0, revoked: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };

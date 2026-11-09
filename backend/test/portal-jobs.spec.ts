@@ -7,7 +7,7 @@ describe('Durable portal reconciliation worker', () => {
     flag = jest.replaceProperty(EnvironmentConfig, 'IS_TEST', false);
   });
   afterEach(() => flag.restore());
-  function setup(job: any, result: any) {
+  function setup(job: any, result: any, action: any = {kind:'edit'}) {
     const writes: any[] = [];
     const query: any = {
       eq: jest.fn().mockReturnThis(),
@@ -16,7 +16,7 @@ describe('Durable portal reconciliation worker', () => {
     const db: any = {
       rpc: jest.fn().mockResolvedValue({ data: [job], error: null }),
       from: jest.fn(() => ({
-        select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnThis(), maybeSingle: jest.fn().mockResolvedValue({data:{kind:'edit'},error:null}) }),
+        select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnThis(), maybeSingle: jest.fn().mockResolvedValue({data:action,error:null}) }),
         update: (value: any) => {
           writes.push(value);
           return query;
@@ -27,6 +27,7 @@ describe('Durable portal reconciliation worker', () => {
       reverifyRoleChangeInServer: jest.fn().mockResolvedValue(result),
       reverifyRoleInServer: jest.fn().mockResolvedValue(result),
       reverifyUserInServer: jest.fn().mockResolvedValue(result),
+      reverifyUserRolesInServer: jest.fn().mockResolvedValue(result),
     };
     const service = new PortalJobsService(db, roles, {
       getBotClient: () => ({}),
@@ -106,6 +107,30 @@ describe('Durable portal reconciliation worker', () => {
     expect(enforce).toHaveBeenCalledWith(guild, 'user', 'trigger');
     expect(roles.reverifyUserInServer).not.toHaveBeenCalled();
     expect(writes[0].status).toBe('completed');
+  });
+  it.each(['role_action_set','role_action_delete'])('narrows already queued %s member jobs to the prior/new targets', async kind => {
+    const old='111111111111111111', added='222222222222222222';
+    const {service,roles,writes}=setup({id:'job',server_id:'server',user_id:'member',action_id:'receipt',attempts:1},
+      {verified:1,revoked:0,errors:0},{kind,before_rule:{remove_role_ids:[old]},after_rule:kind==='role_action_set'?{remove_role_ids:[old,added]}:null});
+    await service.run();
+    expect(roles.reverifyUserRolesInServer).toHaveBeenCalledWith('member','server',kind==='role_action_set'?[old,added]:[old]);
+    expect(roles.reverifyUserInServer).not.toHaveBeenCalled();
+    expect(writes[0].status).toBe('completed');
+  });
+  it('never broadens a malformed or missing role-action receipt into an all-role recheck', async () => {
+    for (const action of [null,{kind:'role_action_set',after_rule:{remove_role_ids:'bad'}}]) {
+      const {service,roles,writes}=setup({id:'job',server_id:'server',user_id:'member',action_id:'receipt',attempts:1},{errors:0},action);
+      await service.run();
+      expect(roles.reverifyUserInServer).not.toHaveBeenCalled();
+      expect(roles.reverifyUserRolesInServer).not.toHaveBeenCalled();
+      expect(writes[0].status).toBe('pending');
+    }
+  });
+  it('preserves full member reconciliation for a wallet restriction change', async () => {
+    const {service,roles}=setup({id:'job',server_id:'server',user_id:'member',action_id:'receipt',attempts:1},{errors:0},{kind:'wallet_block'});
+    await service.run();
+    expect(roles.reverifyUserInServer).toHaveBeenCalledWith('member','server');
+    expect(roles.reverifyUserRolesInServer).not.toHaveBeenCalled();
   });
   it('queues a retry for uncertain checks and leaves removals to the existing safe engine', async () => {
     const { service, roles, writes } = setup(

@@ -49,6 +49,20 @@ export class PortalJobsService {
             if (result.error) Logger.warn('Portal job lease renewal failed.');
           });
       }, 30000);
+      let roleActionTargets: string[] | undefined;
+      // Old role-action receipts queued broad member rechecks. Derive the
+      // affected targets at dispatch time so already queued jobs are narrowed too.
+      if (job.action_id && job.user_id && !job.role_action_role_id) {
+        const action = await this.db.from('verifier_portal_actions')
+          .select('kind, before_rule, after_rule').eq('id', job.action_id).eq('server_id', job.server_id).maybeSingle();
+        if (action.error || !action.data) throw new Error('action');
+        if (['role_action_set', 'role_action_delete'].includes(action.data.kind)) {
+          const snapshots = [action.data.before_rule, action.data.after_rule].filter(Boolean);
+          if (!snapshots.length || snapshots.some(snapshot => !Array.isArray(snapshot.remove_role_ids)
+            || snapshot.remove_role_ids.some(id => typeof id !== 'string' || !/^\d{17,22}$/.test(id)))) throw new Error('role action scope');
+          roleActionTargets = [...new Set<string>(snapshots.flatMap(snapshot => snapshot.remove_role_ids))];
+        }
+      }
       let ruleSave = job.ordinal_provider_policy === 'ordnet-only';
       // Existing rule-save jobs also receive the policy without rewriting their rows.
       if (!ruleSave && job.action_id && job.role_id && !job.user_id && !job.role_action_role_id) {
@@ -73,7 +87,9 @@ export class PortalJobsService {
               ...(context ? [context] : []),
             )
           : job.user_id
-            ? await this.roles.reverifyUserInServer(job.user_id, job.server_id)
+            ? roleActionTargets !== undefined
+              ? await this.roles.reverifyUserRolesInServer(job.user_id, job.server_id, roleActionTargets)
+              : await this.roles.reverifyUserInServer(job.user_id, job.server_id)
             : await this.roles.reverifyRoleInServer(job.server_id, job.role_id, ...(context ? [context] : []));
       const status = result.errors
         ? job.attempts < 3
