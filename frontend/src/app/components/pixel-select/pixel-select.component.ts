@@ -3,6 +3,8 @@ import {
   ChangeDetectorRef,
   Component,
   ElementRef,
+  EventEmitter,
+  Output,
   forwardRef,
   HostListener,
   Input,
@@ -15,6 +17,7 @@ export interface SelectChoice {
   value: string | null;
   label: string;
   disabled?: boolean;
+  action?: boolean;
 }
 
 let nextId = 0;
@@ -33,31 +36,42 @@ let nextId = 0;
 export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   @Input() options: SelectChoice[] = [];
   @Input() label = '';
+  @Input() placeholder = '';
+  @Input({ transform: booleanAttribute }) multiple = false;
+  @Input() maxSelections = 20;
+  @Output() optionAction = new EventEmitter<string | null>();
   @Input({ transform: booleanAttribute }) disabled = false;
   @Input({ transform: booleanAttribute }) required = false;
   @ViewChild('trigger', { static: true })
   trigger!: ElementRef<HTMLButtonElement>;
   @ViewChild('menu', { static: true }) menu!: ElementRef<HTMLDivElement>;
   readonly id = `pixel-select-${++nextId}`;
-  value: string | null = null;
+  value: string | string[] | null = null;
   isOpen = false;
   active = -1;
   private search = '';
   private searchTime = 0;
-  private change: (value: string | null) => void = () => {};
+  private change: (value: string | string[] | null) => void = () => {};
   touched: () => void = () => {};
 
   constructor(private readonly view: ChangeDetectorRef) {}
 
   get selectedLabel() {
-    return (
-      this.options.find((option) => option.value === this.value)?.label || ''
-    );
+    if (this.multiple) return this.options.filter(option => this.selected(option)).map(option => option.label).join(', ') || this.placeholder;
+    return this.options.find((option) => option.value === this.value)?.label || this.placeholder;
   }
-  writeValue(value: string | null | undefined) {
-    this.value = value ?? null;
+  selected(option: SelectChoice) {
+    return this.multiple ? Array.isArray(this.value) && this.value.includes(option.value as string) : option.value === this.value;
   }
-  registerOnChange(change: (value: string | null) => void) {
+  optionDisabled(option: SelectChoice) {
+    if (!this.multiple) return !!option.disabled;
+    if (this.selected(option)) return false; // Removed/unmanageable saved roles can still be deselected.
+    return !!option.disabled || (Array.isArray(this.value) && this.value.length >= this.maxSelections);
+  }
+  writeValue(value: string | string[] | null | undefined) {
+    this.value = Array.isArray(value) ? [...value] : value ?? null;
+  }
+  registerOnChange(change: (value: string | string[] | null) => void) {
     this.change = change;
   }
   registerOnTouched(touched: () => void) {
@@ -69,8 +83,8 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   }
   ngOnChanges() {
     if (this.disabled) this.close(false);
-    if (!this.options[this.active] || this.options[this.active]?.disabled)
-      this.active = this.options.findIndex((option) => !option.disabled);
+    if (!this.options[this.active] || this.optionDisabled(this.options[this.active]))
+      this.active = this.options.findIndex((option) => !this.optionDisabled(option));
   }
   toggle(event: MouseEvent) {
     // Keep keyboard/assistive activation; pointer clicks open only on the arrow.
@@ -88,13 +102,13 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     else this.open();
   }
   open() {
-    if (this.disabled || !this.options.some((option) => !option.disabled))
+    if (this.disabled || !this.options.some((option) => !this.optionDisabled(option)))
       return;
     this.active = this.options.findIndex(
-      (option) => option.value === this.value && !option.disabled,
+      (option) => this.selected(option) && !this.optionDisabled(option),
     );
     if (this.active < 0)
-      this.active = this.options.findIndex((option) => !option.disabled);
+      this.active = this.options.findIndex((option) => !this.optionDisabled(option));
     this.isOpen = true;
     this.view.detectChanges();
     this.menu.nativeElement.showPopover();
@@ -116,7 +130,16 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   }
   choose(index: number, focus = true) {
     const option = this.options[index];
-    if (!option || option.disabled) return;
+    if (!option || this.optionDisabled(option)) return;
+    if (option.action) { this.close(focus); this.optionAction.emit(option.value); this.touched(); return; }
+    if (this.multiple) {
+      const values = Array.isArray(this.value) ? this.value : [];
+      this.value = values.includes(option.value as string) ? values.filter(v => v !== option.value) : [...values, option.value as string];
+      this.change([...this.value]); this.touched();
+      this.active = index;
+      if (focus) this.trigger.nativeElement.focus({ preventScroll: true });
+      return;
+    }
     this.close(focus);
     if (this.value !== option.value) {
       this.value = option.value;
@@ -125,7 +148,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     this.touched();
   }
   hover(index: number) {
-    if (!this.options[index]?.disabled) this.active = index;
+    if (this.options[index] && !this.optionDisabled(this.options[index])) this.active = index;
   }
   private reveal() {
     const menu = this.menu.nativeElement;
@@ -140,7 +163,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   }
   private move(direction: number, edge = false) {
     const enabled = this.options
-      .map((option, index) => (option.disabled ? -1 : index))
+      .map((option, index) => (this.optionDisabled(option) ? -1 : index))
       .filter((index) => index >= 0);
     const position = enabled.indexOf(this.active);
     this.active = edge
@@ -154,7 +177,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     if (this.disabled) return;
     const key = event.key;
     if (key === 'Tab') {
-      if (this.isOpen) this.choose(this.active, false);
+      if (this.isOpen) { if (this.multiple) this.close(false); else this.choose(this.active, false); }
       return;
     }
     if (key === 'Escape') {
@@ -180,7 +203,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
       const wasOpen = this.isOpen;
       this.openIfClosed();
       if (!this.isOpen) return;
-      if (event.altKey && key === 'ArrowUp') this.choose(this.active);
+      if (event.altKey && key === 'ArrowUp') { if (this.multiple) this.close(); else this.choose(this.active); }
       else if (key === 'Home' || key === 'End')
         this.move(key === 'End' ? 1 : -1, true);
       else if (wasOpen)
@@ -210,7 +233,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
           (start + offset + this.options.length) % this.options.length;
         const option = this.options[index];
         if (
-          !option.disabled &&
+          !this.optionDisabled(option) &&
           option.label.toLocaleLowerCase().startsWith(prefix)
         ) {
           this.active = index;

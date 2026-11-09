@@ -29,6 +29,7 @@
   role="listbox"
   [id]="id"
   [attr.aria-label]="label"
+  [attr.aria-multiselectable]="multiple || null"
   (toggle)="onToggle($event)"
   (mousedown)="$event.preventDefault()"
   (click)="$event.preventDefault()"
@@ -37,12 +38,13 @@
     <div
       role="option"
       [id]="id + '-' + index"
-      [attr.aria-selected]="option.value === value"
-      [attr.aria-disabled]="option.disabled || null"
+      [attr.aria-selected]="selected(option)"
+      [attr.aria-disabled]="optionDisabled(option) || null"
       [class.active]="active === index"
       (pointermove)="hover(index)"
       (click)="choose(index)"
     >
+      @if (multiple && !option.action) { <span class="pixel-select-check" [class.checked]="selected(option)" aria-hidden="true"></span> }
       {{ option.label }}
     </div>
   }

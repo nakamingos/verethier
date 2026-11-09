@@ -420,6 +420,17 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   background: var(--ase-selected);
   color: var(--ase-selection-text);
 }
+.pixel-select-check {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-right: 0.6rem;
+  image-rendering: pixelated;
+  background: url('/assets/check_deselect.png') 0 0 / 18px 18px no-repeat;
+  filter: invert(1);
+}
+.pixel-select-check.checked { background-image: url('/assets/check_select.png'); }
+:root[data-theme='light'] .pixel-select-check { filter: none; }
 .pixel-select-menu [aria-disabled='true'] {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1022,17 +1033,22 @@ app-root:has(app-admin) .app-footer {
 }
 .rule-card-footer {
   display: flex;
+  flex-wrap: wrap-reverse;
   align-items: center;
   gap: 0.8rem;
   margin-top: auto;
   padding-top: 1rem;
 }
 .rule-card-footer .actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   margin: 0;
 }
 .rule-card-group {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  max-width: 100%;
   align-items: flex-end;
   margin-left: auto;
   flex-shrink: 0;

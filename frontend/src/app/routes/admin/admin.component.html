@@ -480,7 +480,7 @@
                           <button
                             class="primary"
                             type="submit"
-                            [disabled]="busy || !ruleForm.valid"
+                            [disabled]="busy || !ruleForm.valid || !rolesValid"
                           >
                             Review changes
                           </button>
@@ -507,24 +507,7 @@
                               [options]="channelChoices"
                               label="Verification channel" /></span
                         ></label>
-                        <label
-                          >Discord role:<span class="select-control"
-                            ><app-pixel-select
-                              name="role"
-                              [(ngModel)]="draft.role_id"
-                              [options]="roleChoices"
-                              label="Discord role" /></span
-                        ></label>
-                        @if (!draft.role_id) {
-                          <label
-                            >New role name:<input
-                              name="roleName"
-                              [(ngModel)]="draft.role_name"
-                              required
-                              maxlength="100"
-                              placeholder="Collectors"
-                          /></label>
-                        }
+                        <ng-container [ngTemplateOutlet]="roleControl" />
                         @if (
                           draft.asset_type === "ordinal" ||
                           draft.asset_type === "ethscription"
@@ -687,24 +670,7 @@
                       }
                     } @else {
                       <div class="form-grid">
-                        <label
-                          >Discord role:<span class="select-control"
-                            ><app-pixel-select
-                              name="editRole"
-                              [(ngModel)]="editRoleId"
-                              [options]="roleChoices"
-                              label="Discord role" /></span
-                        ></label>
-                        @if (!editRoleId) {
-                          <label
-                            >New role name:<input
-                              name="editRoleName"
-                              [(ngModel)]="editRoleName"
-                              required
-                              maxlength="100"
-                              placeholder="Collectors"
-                          /></label>
-                        }
+                        <ng-container [ngTemplateOutlet]="roleControl" />
                         @for (field of editor.fields; track field.key) {
                           @if (
                             !hasTraitEditor ||
@@ -740,18 +706,16 @@
                         }
                       </div>
                     }
-                    <div class="wide">
-                      <div class="actions"><span>Additional roles:</span><button type="button" (click)="addRole()" [disabled]="busy || additionalRoles.length >= 19">Add role</button></div>
-                      @for (role of additionalRoles; track $index; let i = $index) {
-                        <div class="form-grid">
-                          <label>Discord role:<span class="select-control"><app-pixel-select [name]="'additionalRole'+i" [(ngModel)]="role.id" [options]="roleChoices" label="Additional Discord role" /></span></label>
-                          @if (!role.id) { <label>New role name:<input [name]="'additionalRoleName'+i" [(ngModel)]="role.name" required maxlength="100" /></label> }
-                          <button type="button" (click)="removeRole(i)" [disabled]="busy">Remove role</button>
-                        </div>
+                    @if (editor.duplicate) { <p class="muted">This creates an independent rule. Changes here will not change the original.</p> }
+                    <ng-template #roleControl>
+                      <label>Discord roles:<span class="select-control"><app-pixel-select
+                        name="roles" [(ngModel)]="selectedRoleIds" [options]="multiRoleChoices" multiple required
+                        placeholder="Select roles" label="Discord roles" (optionAction)="addNewRole()" [disabled]="busy" /></span></label>
+                      @for (role of pendingRoleNames; track role.value) {
+                        <label>New role name:<input [id]="'role-name-'+role.value" [name]="'roleName-'+role.value"
+                          [(ngModel)]="role.name" (ngModelChange)="review = false" required maxlength="100" placeholder="Collectors" /></label>
                       }
-                      @if (additionalRoles.length) { <p class="muted">These roles share this rule’s requirements. Each role is checked against its other qualifying rules before removal.</p> }
-                      @if (editor.duplicate) { <p class="muted">This creates an independent rule. Changes here will not change the original.</p> }
-                    </div>
+                    </ng-template>
                     <ng-template #traitControls>
                       @if (traitModel; as traits) {
                         <div class="wide">
@@ -870,7 +834,7 @@
                         <button
                           class="primary"
                           (click)="save()"
-                          [disabled]="busy || !ruleForm.valid"
+                          [disabled]="busy || !ruleForm.valid || !rolesValid"
                         >
                           <span class="button-label"
                             ><span aria-hidden="true"

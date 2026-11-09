@@ -245,4 +245,4 @@ Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are release
 
 ### Duplicate rules and multiple roles
 
-Rules → Duplicate copies the complete requirements into an independent draft with a new role selection. Add role in a rule editor grants multiple Discord roles from one set of requirements; rechecks and role removals still respect alternative qualifying rules. Apply migration `20261108010000_multi_role_rules.sql` before deployment. No new environment variables are needed. See [behavior and validation](docs/multi-role-rules.md).
+Rules → Duplicate copies the complete requirements into an independent draft with a new role selection. Checkboxes in the Discord roles dropdown select multiple role outputs from one set of requirements; rechecks and role removals still respect alternative qualifying rules. Apply migration `20261108010000_multi_role_rules.sql` before deployment. No new environment variables are needed. See [behavior and validation](docs/multi-role-rules.md).

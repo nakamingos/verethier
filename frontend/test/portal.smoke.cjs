@@ -8,6 +8,7 @@ async function chooseOption(page, control, name) {
     .getByRole('listbox')
     .getByRole('option', { name, exact: true })
     .click();
+  if (await control.getAttribute('aria-expanded') === 'true') await control.press('Escape');
 }
 async function openHelp(page) {
   await page.getByRole('link', { name: 'Help', exact: true }).click();
@@ -53,7 +54,9 @@ const base = {
     args: ['--no-sandbox'],
   });
   try {
-    for (const width of [1280, 768, 600, 393, 320]) {
+    const widths = process.env.PORTAL_SMOKE_WIDTHS ? process.env.PORTAL_SMOKE_WIDTHS.split(',').map(Number) : [1280, 768, 600, 393, 320];
+    assert.ok(widths.length && widths.every(width => [1280,768,600,393,320].includes(width)), 'Supported viewport widths');
+    for (const width of widths) {
       let holdEdit = false,
         releaseEdit,
         editEntered;
@@ -1520,7 +1523,7 @@ const base = {
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
       const rolePicker = page.getByRole('combobox', {
-        name: 'Discord role',
+        name: 'Discord roles',
         exact: true,
       });
       await rolePicker.locator('.pixel-select-arrow').click();
@@ -1559,6 +1562,7 @@ const base = {
       );
       await rolePicker.press('Home');
       await rolePicker.press('Escape');
+      await chooseOption(page, rolePicker, 'Comrade');
       await chooseOption(
         page,
         page.getByRole('combobox', { name: /^Discord role/ }),
@@ -1582,10 +1586,11 @@ const base = {
         .locator('#rule-1')
         .getByRole('button', { name: 'Edit', exact: true })
         .click();
+      await chooseOption(page, rolePicker, 'Comrade');
       await chooseOption(
         page,
         page.getByRole('combobox', { name: /^Discord role/ }),
-        'Create a new role',
+        'Create a new role…',
       );
       await page
         .getByLabel('New role name:', { exact: true })
@@ -1627,6 +1632,7 @@ const base = {
         ['Ethscriptions', 'Ordinals', 'Bitcoin Stamps', 'NFTs', 'Tokens (ERC-20)'],
       );
       await newAsset.press('Escape');
+      await chooseOption(page, newRule.getByRole('combobox',{name:'Discord roles',exact:true}), 'Create a new role…');
       await page
         .getByLabel('New role name:', { exact: true })
         .fill('Saved draft');
@@ -1672,8 +1678,8 @@ const base = {
         .waitFor();
       await addRule.click();
       assert.equal(
-        await page.getByLabel('New role name:', { exact: true }).inputValue(),
-        '',
+        await page.getByLabel('New role name:', { exact: true }).count(),
+        0,
         'drafts are scoped to their server',
       );
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -1714,8 +1720,8 @@ const base = {
       await addRule.click();
       assert.equal((await newAsset.textContent()).trim(), 'Ethscriptions');
       assert.equal(
-        await page.getByLabel('New role name:', { exact: true }).inputValue(),
-        '',
+        await page.getByLabel('New role name:', { exact: true }).count(),
+        0,
         'Cancel clears the new-rule draft',
       );
       assert.equal(
@@ -1723,6 +1729,13 @@ const base = {
         0,
       );
       await chooseOption(page, newAsset, 'Ordinals');
+      const createRolePicker = newRule.getByRole('combobox',{name:'Discord roles',exact:true});
+      await createRolePicker.locator('.pixel-select-arrow').click();
+      for (const selected of await page.getByRole('listbox').getByRole('option',{selected:true}).allTextContents()) {
+        await page.getByRole('option',{name:selected.trim(),exact:true}).click();
+      }
+      await createRolePicker.press('Escape');
+      await chooseOption(page, newRule.getByRole('combobox',{name:'Discord roles',exact:true}), 'Create a new role…');
       await page.getByLabel('New role name').fill('Yonderling');
       await page.getByLabel('Collection slug:', { exact: true }).fill('yonder');
       await page.getByLabel('Minimum items:', { exact: true }).fill('1');

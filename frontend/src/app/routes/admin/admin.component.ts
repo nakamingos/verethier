@@ -223,9 +223,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   combinedGroups: any[] = [];
   private combinedIndex = new Map<string, any>();
   groupFilter = '';
-  editRoleId = '';
-  extraRoles: { id: string; name: string }[] = [];
-  editRoleName = '';
+  editRoles: {value:string; id?:string; name?:string}[] = [];
   member: any = null;
   roleActionsOpen = false;
   roleActionEditor: any = null;
@@ -948,6 +946,7 @@ export class AdminComponent implements OnInit, OnDestroy {
           min_items: this.activeGroup?.minimum || 1,
           network: 'ethereum',
         };
+    this.draft.role_selections ||= this.draft.role_id ? [{value:this.draft.role_id,id:this.draft.role_id}] : [];
     this.draft.trait_filter ||= this.traitState(this.draft);
   }
   edit(rule: any) {
@@ -958,9 +957,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     }
     this.rememberNewRule();
     this.editor = rule;
-    this.editRoleId = rule.role_id;
-    this.extraRoles = (rule.additional_roles || []).map((r: any) => ({...r}));
-    this.editRoleName = '';
+    this.editRoles = [{value:rule.role_id,id:rule.role_id}, ...(rule.additional_roles || []).map((role:any) => ({value:role.id,id:role.id,name:role.name}))];
     this.review = false;
     this.inputs = Object.fromEntries(
       rule.fields.map((f: any) => [f.key, f.value]),
@@ -978,24 +975,46 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.rememberNewRule(); this.editor = null;
     this.edit(rule);
     this.editor = {...rule, duplicate: true};
-    this.editRoleId = ''; this.editRoleName = ''; this.extraRoles = [];
+    this.editRoles = [];
   }
-  get additionalRoles() { return this.editor?.new ? (this.draft.additional_roles ||= []) : this.extraRoles; }
-  addRole() { if (!this.busy && this.additionalRoles.length < 19) this.additionalRoles.push({id:'',name:''}); this.review = false; }
-  removeRole(index: number) { if (!this.busy) this.additionalRoles.splice(index, 1); this.review = false; }
-  rolePayload() { return this.additionalRoles.map((r: any) => r.id ? {id:r.id} : {name:r.name}); }
+  get chosenRoles(): {value:string;id?:string;name?:string}[] {
+    return this.editor?.new ? (this.draft.role_selections ||= []) : this.editRoles;
+  }
+  private roleIdsValue: string[] = [];
+  get selectedRoleIds() {
+    const values = this.chosenRoles.map(role => role.value);
+    if (JSON.stringify(values) !== JSON.stringify(this.roleIdsValue)) this.roleIdsValue = values;
+    return this.roleIdsValue;
+  }
+  set selectedRoleIds(values: string[]) {
+    const roles = values.map(value => this.chosenRoles.find(role => role.value === value) || {value,id:value});
+    if (this.editor?.new) this.draft.role_selections = roles; else this.editRoles = roles;
+    this.review = false;
+  }
+  get multiRoleChoices(): SelectChoice[] {
+    const options = (this.data?.roles || []).map((role:any) => ({value:role.id,label:role.name,disabled:!role.manageable}));
+    for (const role of this.chosenRoles) if (!options.some((option:any) => option.value === role.value))
+      options.push({value:role.value,label:role.id ? role.name || role.id : role.name?.trim() || 'New role (enter name)',disabled:!!role.id});
+    return [...options,{value:'create-role',label:'Create a new role…',action:true}];
+  }
+  get pendingRoleNames() { return this.chosenRoles.filter(role => !role.id); }
+  addNewRole() {
+    if (this.busy || this.chosenRoles.length >= 20) return;
+    const value = 'new-' + crypto.randomUUID();
+    this.chosenRoles.push({value,name:''}); this.review = false;
+    requestAnimationFrame(() => document.getElementById('role-name-'+value)?.focus());
+  }
+  get rolesValid() { return this.chosenRoles.length > 0 && this.chosenRoles.length <= 20 && this.chosenRoles.every(role => role.id || role.name?.trim()); }
+  roleRequest() {
+    const [primary,...additional] = this.chosenRoles.map(role => role.id ? {id:role.id} : {name:role.name?.trim()});
+    return {...(primary?.id ? {role_id:primary.id} : {role_name:primary?.name}),additional_roles:additional};
+  }
   changeAsset() {
-    const asset = this.draft.asset_type,
-      channel = this.draft.channel_id,
-      role = this.draft.role_id,
-      name = this.draft.role_name;
-    const additional = this.draft.additional_roles;
+    const asset = this.draft.asset_type, channel = this.draft.channel_id, roles = this.draft.role_selections;
     this.draft = {
       asset_type: asset,
       channel_id: channel,
-      role_id: role,
-      role_name: name,
-      additional_roles: additional,
+      role_selections: roles,
       min_items: 1,
       network: 'ethereum',
       solana_kind:'collection', solana_addresses:'', solana_formats:'standard', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -1045,10 +1064,8 @@ export class AdminComponent implements OnInit, OnDestroy {
       asset_type: d.asset_type,
       channel_id: d.channel_id,
       request_id: crypto.randomUUID(),
-      additional_roles: this.rolePayload(),
+      ...this.roleRequest(),
     };
-    if (d.role_id) result.role_id = d.role_id;
-    else result.role_name = d.role_name;
     const fields =
       d.asset_type === 'stamp' ? ['min_items'] : d.asset_type === 'solana_token' ? ['min_balance'] : d.asset_type === 'solana_nft' ? ['min_items'] : d.asset_type === 'erc20'
         ? ['contract_address', 'network', 'min_balance']
@@ -1091,13 +1108,15 @@ export class AdminComponent implements OnInit, OnDestroy {
     return result;
   }
   get changedRole() {
-    return !this.editor?.new && !this.editor?.duplicate && (this.editRoleId !== this.editor?.role_id || JSON.stringify(this.extraRoles.map(r=>r.id)) !== JSON.stringify((this.editor.additional_roles || []).map((r:any)=>r.id)));
+    if (!this.editor || this.editor.new || this.editor.duplicate) return false;
+    const before = [this.editor.role_id,...(this.editor.additional_roles || []).map((role:any) => role.id)].sort();
+    return JSON.stringify(before) !== JSON.stringify(this.chosenRoles.map(role => role.id || role.value).sort());
   }
   get targetRoleName() {
-    return [{id:this.editRoleId,name:this.editRoleName},...this.extraRoles].map(role => role.id
-      ? this.data.roles.find((r: any) => r.id === role.id)?.name || role.id : role.name).join(', ');
+    return this.chosenRoles.map(role => role.id ? this.data.roles.find((r:any) => r.id === role.id)?.name || role.name || role.id : role.name).join(', ');
   }
   async save() {
+    if (!this.rolesValid) return;
     await this.run(async () => {
       const creating = this.editor.new || this.editor.duplicate;
       const action = this.editor.new
@@ -1106,10 +1125,7 @@ export class AdminComponent implements OnInit, OnDestroy {
             `/servers/${this.selected}/rules/${this.editor.id}/${this.editor.duplicate ? 'duplicate' : 'edit'}`,
             {
               version: this.editor.version,
-              ...(this.editRoleId
-                ? { role_id: this.editRoleId }
-                : { role_name: this.editRoleName }),
-              additional_roles: this.rolePayload(),
+              ...this.roleRequest(),
               inputs: this.inputs,
               request_id: crypto.randomUUID(),
             },
