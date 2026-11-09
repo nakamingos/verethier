@@ -43,7 +43,7 @@ import { PortalSessionService } from '../../services/portal-session.service';
         <thead><tr><th scope="col">Member</th><th scope="col">Result</th><th scope="col">Updated</th></tr></thead>
         <tbody>@for(member of v.members; track member.user_id) {
           <tr><td data-label="Member">{{member.member_name}}<p class="history-note">{{member.user_id}}</p></td>
-          <td data-label="Result"><span class="badge">{{member.status}}</span><p class="history-note">{{describe(member.result,v.job.labels.roles)}}</p></td>
+          <td data-label="Result"><span class="badge">{{member.status}}</span>@for(line of describe(member.result,v.job.labels.roles); track $index) { <p class="history-note">{{line}}</p> }</td>
           <td data-label="Updated">{{member.updated_at | date:'short'}}</td></tr>
         }</tbody>
       </table>
@@ -83,5 +83,12 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   async refresh(page=this.view?.page || 1){if(!this.view)return;const id=this.view.job.id,generation=this.generation;try{const view=await this.request(`/${id}?page=${page}`);if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();}}catch(e){if(generation===this.generation)this.error=(e as Error).message;}}
   async act(action:string){if(!this.view)return;if(action==='start' && this.view.job.mode==='reconcile' && !confirm('Run with role removals enabled? Only proven failures are removed; provider uncertainty retains roles.'))return;await this.perform(async()=>{const id=this.view.job.id,generation=this.generation;const view=await this.request('/'+id,{action,request_id:crypto.randomUUID()});if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();await this.history();}});}
   private poll(){clearTimeout(this.timer);if(['pending','running'].includes(this.view?.job.status))this.timer=setTimeout(()=>void this.refresh(),3000);}
-  describe(result:any,roles:any){if(result.skip)return result.skip==='no_wallet'?'No saved wallet':'No longer in this audience';return ['granted','removed','already_held','ineligible','unavailable','excluded'].flatMap(key=>(result[key] || []).map((id:string)=>`${key.replace('_',' ')}: ${roles?.[id] || id}`)).concat(result.errors?.length?['Check unavailable; retry needed']:[]).join(' · ') || 'Waiting for check';}
+  describe(result:any,roles:any):string[]{
+    if(result?.skip)return [result.skip==='no_wallet'?'No saved wallet':'No longer in this audience'];
+    const labels:Record<string,string>={granted:'Granted',removed:'Removed',already_held:'Already held',ineligible:'Ineligible',unavailable:'Unavailable',excluded:'Excluded by role actions'};
+    const lines=Object.entries(labels).flatMap(([key,label])=>result?.[key]?.length
+      ? [`${label}: ${result[key].map((id:string)=>roles?.[id] || id).join(', ')}`] : []);
+    if(result?.errors?.length)lines.push('Check unavailable; retry needed');
+    return lines.length?lines:['Waiting for check'];
+  }
 }
