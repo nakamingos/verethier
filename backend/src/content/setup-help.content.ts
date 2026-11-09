@@ -77,11 +77,12 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🔎 Specific Ethscriptions or Ordinals',
-      value: 'Use `/setup add-ethscription-rule` or `/setup add-ordinals-rule`, leaving slug/attributes empty.\n' +
-             '• **inscription_ids**: One full ID or comma-separated IDs (Ethscriptions use `0x…`; Ordinals use `…i0`)\n' +
-             '• **inscription_numbers**: Global numbers or inclusive ranges, such as `12345,100000-100999`\n' +
-             '• Use one input. **min_items: 1** means any match; a list of 3 IDs with **min_items: 3** requires all 3.\n' +
-             'Ownership is checked fresh across linked wallets. Specific Ethscriptions use the public Ethscriptions API.',
+      value: 'Use `/setup add-ethscription-rule` or `/setup add-ordinals-rule`; leave attributes empty.\n' +
+             '• **inscription_ids**: Comma-separated full IDs (`0x…` for Ethscriptions; `…i0` for Ordinals)\n' +
+             '• **inscription_numbers**: Numbers/ranges, e.g. `12345,100000-100999`\n' +
+             '• **slug**: Optional with Ordinals numbers; restricts matches to this ord.net collection\n' +
+             '• Use IDs or numbers. **min_items** is the qualifying count; selections can contribute to a combined minimum.\n' +
+             'Ownership is checked fresh across linked wallets.',
       inline: false
     },
     {

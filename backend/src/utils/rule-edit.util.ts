@@ -51,7 +51,7 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
     {
       key: 'selection', label: criteria.kind === 'ids' ? 'Inscription IDs' : 'Inscription numbers / ranges', list: true,
       value: criteria.kind === 'ids' ? criteria.ids.join(',') : criteria.ranges.map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(',')
-    }, {key: 'label', label: 'Label (optional)', value: rule.rule_label || '', maxLength: 100}, minimum];
+    }, ...(rule.asset_type === 'ordinal' && criteria.kind === 'numbers' ? [{ key: 'collection_slug', label: 'ord.net collection slug (optional)', value: criteria.collection_slug || '', maxLength: 100 }] : []), {key: 'label', label: 'Label (optional)', value: rule.rule_label || '', maxLength: 100}, minimum];
   if (['erc20','solana_token'].includes(rule.asset_type)) return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
   if (rule.asset_type === 'stamp') return [minimum];
   const traitLimit = ['nft', 'ordinal'].includes(rule.asset_type) ? 100 : 4000;

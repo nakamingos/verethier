@@ -41,9 +41,16 @@ export class RuleEditService {
       const selection = inputs.selection?.trim();
       candidate.rule_label = normalizeRuleLabel(inputs.label ?? before.rule_label);
       const parsed = parseInscriptionCriteria(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, before.asset_type === 'ordinal' ? 'ordinal' : 'ethscription');
+      const collectionSlug = before.asset_type === 'ordinal' && criteria.kind === 'numbers'
+        ? (inputs.collection_slug === undefined ? criteria.collection_slug : inputs.collection_slug.trim()) : undefined;
+      if (parsed?.kind === 'numbers' && collectionSlug) {
+        try { parsed.collection_slug = ordinalCollectionId(collectionSlug); }
+        catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
+      }
       if (candidate.min_items === before.min_items && JSON.stringify(parsed) === JSON.stringify(criteria)) return candidate;
       const prepared = before.asset_type === 'ordinal'
-        ? await this.ordinals.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items)
+        ? collectionSlug ? await this.ordinals.prepareInscriptionRule(null, selection, candidate.min_items, collectionSlug)
+          : await this.ordinals.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items)
         : await this.ethscriptions.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items);
       candidate.inscription_criteria = prepared.inscription_criteria;
       return candidate;

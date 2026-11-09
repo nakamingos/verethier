@@ -181,7 +181,7 @@ export class VerificationEngine {
     // Scheduled contexts span many members. A numeric role for one member must
     // not force every later member onto a numbered (potentially paid) lookup.
     if (context.ordinalMode !== 'scheduled'
-      && rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
+      && rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers' && !rule.inscription_criteria.collection_slug)) context.ordinalNeedsNumbers = true;
     const timings = new Map<string, { startedAt: number; endedAt: number; rules: number }>();
     const ownershipChecks = new Map<string, Promise<VerificationResult>>();
     const verificationPromises = entries.map(([ruleId, rule]) => {

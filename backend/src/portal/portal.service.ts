@@ -995,7 +995,7 @@ export class PortalService {
       ordinalNeedsNumbers: serverRules.some(
         (rule) =>
           rule.asset_type === 'ordinal' &&
-          rule.inscription_criteria?.kind === 'numbers',
+          rule.inscription_criteria?.kind === 'numbers' && !rule.inscription_criteria.collection_slug,
       ),
     };
     for (const roleId of [...new Set(assignments.map((a) => a.role_id))]) {

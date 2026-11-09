@@ -566,7 +566,15 @@ describe('AddRuleHandler', () => {
       await handler.handle(interaction);
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(mockOrdinalsService.prepareInscriptionRule).not.toHaveBeenCalled();
-      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Leave slug, attributes, and NFT options empty') });
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Only Ordinals number/range rules may also specify an ord.net collection slug') });
+    });
+    it('passes a collection slug with Ordinals numbers through the shared command validator', async () => {
+      const fields={asset_type:'ordinal',slug:null,inscription_criteria:{kind:'numbers',ranges:[[100,105]],collection_slug:'pizza-comrades'}};
+      mockOrdinalsService.prepareInscriptionRule.mockResolvedValue(fields);
+      const result=await (handler as any).validateInputParams(interactionFor({inscription_ids:null,inscription_numbers:'100-105',slug:'pizza-comrades'}),'ordinal');
+      expect(mockOrdinalsService.prepareInscriptionRule).toHaveBeenCalledWith(null,'100-105',1,'pizza-comrades');
+      expect(result.assetFields.inscription_criteria).toEqual(fields.inscription_criteria);
+      expect(result.slug).toBeNull();
     });
     it('rejects inscription options on NFT rules', async () => {
       const interaction = interactionFor({ asset_type: 'nft' });

@@ -136,7 +136,7 @@ export class DynamicRoleService {
     if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, errors: 0 };
     const rules = await this.dbSvc.getRoleMappings(serverId);
     const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled',
-      ordinalNeedsNumbers: rules.some(candidate => candidate.asset_type === 'ordinal' && candidate.inscription_criteria?.kind === 'numbers') };
+      ordinalNeedsNumbers: rules.some(candidate => candidate.asset_type === 'ordinal' && candidate.inscription_criteria?.kind === 'numbers' && !candidate.inscription_criteria.collection_slug) };
     const existing = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
     const result = await this.reverifyAssignments(existing, 'scheduled', context);
     const alreadyChecked = new Set(existing.map(assignment => assignment.user_id));

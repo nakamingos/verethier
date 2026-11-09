@@ -1,4 +1,5 @@
 export interface OrdinalCollectionItem {
+  number?: number;
   owner: string | null;
   traits: Array<{ type: string; value: string }> | null;
 }

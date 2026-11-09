@@ -888,7 +888,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       : '';
     if (r.stamp_criteria) return `Bitcoin Stamps${r.stamp_criteria.stamp_ids ? ': ' + r.stamp_criteria.stamp_ids.map((id:string)=>'#'+id).join(', ') : ''}${r.stamp_criteria.creator ? ' · creator: '+r.stamp_criteria.creator : ''}`;
     const format = r.solana_criteria?.formats?.includes('compressed') ? (r.solana_criteria.formats.length === 1 ? ' · compressed NFTs' : ' · includes compressed NFTs') : '';
-    return `${(r.solana_criteria ? ('Solana '+(r.solana_criteria.kind === 'master_edition' ? 'prints of master edition' : r.solana_criteria.kind)+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${picked ? ' · ' + picked : ''}${traits}`;
+    return `${(r.solana_criteria ? ('Solana '+(r.solana_criteria.kind === 'master_edition' ? 'prints of master edition' : r.solana_criteria.kind)+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${selection?.collection_slug ? ' · collection: ' + selection.collection_slug : ''}${picked ? ' · ' + picked : ''}${traits}`;
   }
   channelName(id: string) {
     return (
@@ -1156,6 +1156,7 @@ export class AdminComponent implements OnInit, OnDestroy {
                 'label',
                 'min_items',
               ];
+    if (d.asset_type === 'ordinal' && this.mode === 'numbers') fields.push('slug');
     for (const key of fields)
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];

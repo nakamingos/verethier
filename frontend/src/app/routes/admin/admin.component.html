@@ -562,6 +562,10 @@
                                 maxlength="100"
                                 placeholder="A name to recognize this selection"
                             /></label>
+                            @if (draft.asset_type === 'ordinal' && mode === 'numbers') {
+                              <label>ord.net collection slug (optional):<input name="numberCollection" [(ngModel)]="draft.slug" maxlength="100" placeholder="pizza-comrades" /></label>
+                              <p class="muted wide">When set, only selected numbers in this ord.net collection count. Ownership is checked through ord.net. Leave blank for numbers across any collection.</p>
+                            }
                           }
                         }
                         @if (draft.asset_type === 'stamp') {
@@ -701,6 +705,9 @@
                               }
                             </label>
                           }
+                        }
+                        @if (editor.asset_type === 'ordinal' && editor.inscription_criteria?.kind === 'numbers') {
+                          <p class="muted wide">An ord.net collection slug restricts this selection to that collection and checks ownership through ord.net. Leave blank for numbers across any collection.</p>
                         }
                         @if (hasTraitEditor) {
                           <ng-container *ngTemplateOutlet="traitControls" />

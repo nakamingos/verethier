@@ -37,8 +37,9 @@ export class OrdinalsOwnershipService {
   }
 
   async checkSetupHealth(rule: VerifierRole): Promise<void> {
-    if (!inscriptionCriteria(rule) && this.provider(rule) === 'ordnet') {
-      await this.ordnet.prepareRule(rule.slug);
+    const criteria = inscriptionCriteria(rule);
+    if (this.provider(rule) === 'ordnet') {
+      await this.ordnet.prepareRule(criteria?.kind === 'numbers' ? criteria.collection_slug : rule.slug);
     } else if (rule.slug) {
       await this.loadCollection(ordinalCollectionId(rule.slug), { priority: 'interactive' });
     } else {
@@ -58,9 +59,13 @@ export class OrdinalsOwnershipService {
   private provider(rule?: Partial<VerifierRole>): 'xverse' | 'ordnet' {
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
     if (provider !== 'xverse' && provider !== 'ordnet') throw new Error('ORDINALS_PROVIDER must be xverse or ordnet.');
-    // ord.net's documented ownership API is collection-scoped. Route these
-    // unsupported lookups through the same provider layer to Xverse.
-    if (rule && inscriptionCriteria(rule)) return 'xverse';
+    const criteria = rule && inscriptionCriteria(rule);
+    if (criteria?.kind === 'numbers' && criteria.collection_slug) {
+      if (!this.ordnet) throw new Error('ord.net verification is not configured.');
+      return 'ordnet';
+    }
+    // Unscoped selections still need a complete wallet inventory.
+    if (criteria) return 'xverse';
     if (provider === 'ordnet' && !this.ordnet) throw new Error('ord.net verification is not configured.');
     return provider;
   }
@@ -74,7 +79,7 @@ export class OrdinalsOwnershipService {
     };
   }
 
-  async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number): Promise<NftRuleFields & { slug: null }> {
+  async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number, collectionSlug?: string): Promise<NftRuleFields & { slug: null }> {
     const criteria = parseInscriptionCriteria(ids, numbers);
     if (!criteria) throw new RuleInputError('Enter at least one inscription ID, number, or range.');
     if (!Number.isSafeInteger(minItems) || minItems < 1) {
@@ -84,6 +89,14 @@ export class OrdinalsOwnershipService {
       asset_type: 'ordinal', slug: null, chain_id: null, collection_name: null,
       contract_address: null, token_standard: null, token_ids: null, inscription_criteria: criteria,
     };
+    if (collectionSlug?.trim()) {
+      if (criteria.kind !== 'numbers') throw new RuleInputError('An ord.net collection slug can only be combined with inscription numbers or ranges.');
+      try { criteria.collection_slug = ordinalCollectionId(collectionSlug); }
+      catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
+      this.provider(fields);
+      await this.ordnet.prepareRule(criteria.collection_slug);
+      return fields;
+    }
     this.provider(fields);
     if (!EnvironmentConfig.XVERSE_API_KEY) throw new Error('Specific inscription rules require XVERSE_API_KEY on the backend for lookup validation and fallback.');
     // Validate exact IDs before creating a Discord role. Number selections are
@@ -127,6 +140,10 @@ export class OrdinalsOwnershipService {
     const run = context || { checks: new Map() };
     const provider = this.provider(rule);
     const key = this.checkKey(rule, addresses);
+    if (criteria?.kind === 'numbers' && criteria.collection_slug) {
+      if (!run.checks.has(key)) run.checks.set(key, this.collectionNumberAssets(rule, addresses, run).then(items => BigInt(items.size)));
+      return run.checks.get(key);
+    }
     if (!run.checks.has(key)) run.checks.set(key, this.inventories && (criteria || provider === 'ordnet')
       ? this.readCachedRule(rule, addresses, run, key)
       : criteria ? this.readSelection(criteria, addresses, run, key)
@@ -137,8 +154,9 @@ export class OrdinalsOwnershipService {
   async matchingAssets(rule: VerifierRole, wallets: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return new Map();
-    if (!this.inventories) throw new Error(UNAVAILABLE);
     const criteria = inscriptionCriteria(rule);
+    if (criteria?.kind === 'numbers' && criteria.collection_slug) return this.collectionNumberAssets(rule, addresses, context);
+    if (!this.inventories) throw new Error(UNAVAILABLE);
     let catalog: Awaited<ReturnType<OrdinalCollectionCacheService['snapshot']>> | null = null;
     const trait = ordinalTrait(rule);
     if (!criteria) {
@@ -167,6 +185,27 @@ export class OrdinalsOwnershipService {
         if (matches) matching.set(id, 1n);
       }
     }
+    return matching;
+  }
+
+  private async collectionNumberAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    const criteria = inscriptionCriteria(rule);
+    if (criteria?.kind !== 'numbers' || !criteria.collection_slug || !this.ordnet) throw new Error(UNAVAILABLE);
+    // Use the live, per-run collection scan. The persistent metadata catalog has
+    // deliberately discarded owners and must never establish current ownership.
+    const collection = await this.ordnet.snapshot(criteria.collection_slug, context);
+    if (collection.slug !== criteria.collection_slug) throw new Error(UNAVAILABLE);
+    const wallets = new Set(addresses);
+    const matching = new Map<string, bigint>();
+    const numbers = new Set<number>();
+    for (const [id, item] of collection.items) {
+      if (!Number.isSafeInteger(item.number) || numbers.has(item.number)) throw new Error(UNAVAILABLE);
+      numbers.add(item.number);
+      if (!criteria.ranges.some(([start, end]) => item.number >= start && item.number <= end)) continue;
+      if (item.owner === null) throw new Error(UNAVAILABLE);
+      if (wallets.has(item.owner)) matching.set(id, 1n);
+    }
+    this.detail(context, this.checkKey(rule, addresses), { provider: 'ordnet', source: 'live', snapshot_fetched_at: collection.fetched_at });
     return matching;
   }
 

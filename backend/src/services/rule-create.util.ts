@@ -148,14 +148,14 @@ export async function prepareRuleCriteria(
         'Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.',
       );
     if (
-      input.slug != null ||
+      (input.slug != null && !(input.asset_type === 'ordinal' && input.inscription_numbers != null && input.inscription_ids == null)) ||
       attributeKey !== 'ALL' ||
       attributeValue !== 'ALL' ||
       evmOptions
       || !!filter
     ) {
       throw new Error(
-        'Specific inscription rules use IDs or numbers with min_items. Leave slug, attributes, and NFT options empty.',
+        'Specific inscription rules use IDs or numbers with min_items. Only Ordinals number/range rules may also specify an ord.net collection slug. Leave attributes and NFT options empty.',
       );
     }
     const provider =
@@ -164,11 +164,9 @@ export async function prepareRuleCriteria(
         : services.ethscriptions;
     if (!provider)
       throw new Error('Specific inscription verification is not configured.');
-    assetFields = await provider.prepareInscriptionRule(
-      input.inscription_ids ?? null,
-      input.inscription_numbers ?? null,
-      minItems,
-    );
+    assetFields = input.asset_type === 'ordinal' && input.slug?.trim()
+      ? await services.ordinals.prepareInscriptionRule(input.inscription_ids ?? null, input.inscription_numbers ?? null, minItems, input.slug)
+      : await provider.prepareInscriptionRule(input.inscription_ids ?? null, input.inscription_numbers ?? null, minItems);
     assetFields.rule_label = normalizeRuleLabel(input.label);
     return {
       slug: null,

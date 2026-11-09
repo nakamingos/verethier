@@ -151,6 +151,7 @@ export class OrdnetOwnershipService {
     const fetchedAt = new Date().toISOString();
     const items = scan.items;
     const cursors = new Set<string>();
+    const numbers = new Set<number>();
     let cursor: string | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
       const params = new URLSearchParams({ limit: String(PAGE_LIMIT), sort: 'oldest', ...(cursor ? { cursor } : {}) });
@@ -179,7 +180,11 @@ export class OrdnetOwnershipService {
         const traits = Array.isArray(item.traits) && item.traits.every(trait => trait && typeof trait.type === 'string'
           && trait.type.trim() && typeof trait.value === 'string' && trait.value.trim())
           ? item.traits.map(trait => ({ type: trait.type, value: trait.value })) : null;
-        items.set(item.inscriptionId, { owner, traits });
+        if (item.inscription !== undefined) {
+          if (!Number.isSafeInteger(item.inscription) || numbers.has(item.inscription)) throw new OrdnetUnavailableError(`collection ${id}: invalid or duplicate inscription number`);
+          numbers.add(item.inscription);
+        }
+        items.set(item.inscriptionId, { owner, traits, ...(item.inscription !== undefined ? { number: item.inscription } : {}) });
       }
       if (!pagination.hasNext) {
         if (pagination.nextCursor !== null) throw new OrdnetUnavailableError(`collection ${id}: final page has an unexpected cursor`);

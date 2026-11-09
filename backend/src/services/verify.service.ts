@@ -117,7 +117,7 @@ export class VerifyService {
       
       // Use the unified verification engine to verify the user against all rules
       const ruleIds = rules.map(rule => rule.id);
-      ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers');
+      ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers' && !rule.inscription_criteria.collection_slug);
       const verificationResult = await this.timed(payload.userId, 'eligibility', () =>
         this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext, rules));
       const { validRules } = verificationResult;
@@ -184,7 +184,7 @@ export class VerifyService {
     
     // Use unified verification engine to check all rules
     const ruleIds = rules.map(rule => rule.id);
-    ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers');
+    ownershipContext.ordinalNeedsNumbers = rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers' && !rule.inscription_criteria.collection_slug);
     const verificationResult = await this.timed(payload.userId, 'eligibility', () =>
       this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext, rules));
     const { validRules } = verificationResult;
