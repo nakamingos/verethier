@@ -791,17 +791,17 @@ export class DiscordVerificationService {
         return false;
       }
 
-      const role = await guild.roles.fetch(roleId);
-      if (!role) {
-        Logger.error(`Role ${roleId} not found in guild ${serverId}`);
-        return false;
-      }
+      // Revoked history can outlive a deleted Discord role. A fresh member
+      // without it already satisfies removal; keep the history without retrying.
+      if (!member.roles.cache.has(roleId)) return true;
 
-      // Check if user actually has the role
-      if (!member.roles.cache.has(roleId)) {
-        Logger.debug(`User ${userId} doesn't have role ${roleId} in guild ${serverId}`);
-        return true; // Consider this success since the desired state is achieved
+      let role;
+      try { role = await guild.roles.fetch(roleId); }
+      catch (error) {
+        if (error?.code === 10011) return true; // Discord confirms Unknown Role.
+        throw error;
       }
+      if (!role) return true;
 
       const updated = await member.roles.remove(role, 'Dynamic role verification: holdings no longer meet criteria');
       context?.set(`${serverId}:${userId}`, Promise.resolve(updated));

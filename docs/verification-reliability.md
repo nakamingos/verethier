@@ -57,3 +57,9 @@ The production frontend build, storage recovery regression, 50 targeted Angular 
 The verification fixes and initial investigation notes were pushed to `main` through `8d2fb3a` on November 7. Subsequent support-request updates are recorded separately. No backend behavior, database schema, wallet associations, privacy decisions or wallet security protections were changed.
 
 Outstanding: affected desktop wallet/browser and actual error; real iOS follow-up after release; MetaMask classification review and remaining affected-client details. The holder-analysis branch remains separate.
+
+## Deleted Discord roles
+
+Previously earned-role history can remain after a Discord role is deleted. Removal is idempotent: a fresh member without the role, a missing role result, or Discord's explicit Unknown Role response already satisfies removal. These cases retain the history without a Discord write or a fabricated removal event. Permission and transport failures still retain assignments for retry. Add/grant handling continues to require an existing role.
+
+Validation covers absent roles on fresh members, deletion races, explicit Unknown Role responses and transient lookup/removal failures. These corrections are local until published; no historical assignments are deleted.

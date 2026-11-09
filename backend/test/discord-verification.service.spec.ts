@@ -1154,6 +1154,28 @@ describe('DiscordVerificationService', () => {
       expect(mockFetchedGuild.members.fetch).toHaveBeenCalledTimes(2);
     });
 
+    it('treats an absent role on a fresh member as an already-complete removal', async () => {
+      const member=memberWithRoles([]);mockFetchedGuild.members.fetch.mockResolvedValue(member);
+      mockFetchedGuild.roles.fetch.mockClear();
+      expect(await service.removeUserRole('user-id','guild-id','deleted-role')).toBe(true);
+      expect(mockFetchedGuild.roles.fetch).not.toHaveBeenCalled();expect(member.roles.remove).not.toHaveBeenCalled();
+    });
+
+    it.each(['missing','unknown'])('treats a %s deleted role as a successful removal without a Discord write',async mode=>{
+      const member=memberWithRoles(['role-id']);mockFetchedGuild.members.fetch.mockResolvedValue(member);
+      if(mode==='missing')mockFetchedGuild.roles.fetch.mockResolvedValueOnce(null);
+      else mockFetchedGuild.roles.fetch.mockRejectedValueOnce(Object.assign(new Error('Unknown Role'),{code:10011}));
+      expect(await service.removeUserRole('user-id','guild-id','role-id')).toBe(true);
+      expect(member.roles.remove).not.toHaveBeenCalled();
+    });
+
+    it('retains a removal retry for transient role lookup failures',async()=>{
+      const member=memberWithRoles(['role-id']);mockFetchedGuild.members.fetch.mockResolvedValue(member);
+      mockFetchedGuild.roles.fetch.mockRejectedValueOnce(new Error('Network unavailable'));
+      expect(await service.removeUserRole('user-id','guild-id','role-id')).toBe(false);
+      expect(member.roles.remove).not.toHaveBeenCalled();
+    });
+
     it('returns failure when Discord rejects removal or restoration', async () => {
       const liveMember = memberWithRoles(['role-id']);
       liveMember.roles.remove.mockRejectedValueOnce(new Error('Missing Permissions'));
