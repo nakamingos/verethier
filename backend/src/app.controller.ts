@@ -124,6 +124,10 @@ export class AppController {
         throw new HttpException(WALLET_BLOCKED, HttpStatus.FORBIDDEN);
       }
 
+      if (errorMessage === CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED) {
+        throw new HttpException(CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED, HttpStatus.SERVICE_UNAVAILABLE);
+      }
+
       // Check if this is a user-friendly verification error that should be shown to the user
       if (errorMessage.includes('Invalid or expired nonce.')) {
         throw new HttpException(

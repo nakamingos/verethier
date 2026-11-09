@@ -285,6 +285,50 @@ describe('DiscordVerificationService', () => {
       }
     });
 
+    it('keeps an in-flight verification reply when another link is requested, then cleans up only the old request', async () => {
+      const old = {...mockInteraction,editReply:jest.fn(),deleteReply:jest.fn()};
+      service.tempMessages['old']=old as any;
+      (service as any).nonceScopes.old='user-id:guild-id:channel-id';
+      (service as any).latestRequestNonces['user-id:guild-id:channel-id']='old';
+      const release=service.retainVerificationRequest('old','user-id','guild-id');
+      mockDbService.getRulesByChannel.mockResolvedValueOnce([{role_id:'role-id'}]);
+      mockNonceService.createNonce.mockResolvedValueOnce('new');
+      await service.requestVerification(mockInteraction as any);
+      expect(old.editReply).not.toHaveBeenCalled();
+      expect(old.deleteReply).not.toHaveBeenCalled();
+      expect(service.tempMessages.old).toBe(old);
+      await expect(service.addUserRole('user-id','role-id','guild-id','old')).resolves.toEqual(expect.objectContaining({roleId:'role-id'}));
+      await service.sendVerificationComplete('guild-id','old',[]);
+      expect(old.editReply).toHaveBeenCalled();
+      expect(service.tempMessages.new).toBe(mockInteraction);
+      expect((service as any).latestRequestNonces['user-id:guild-id:channel-id']).toBe('new');
+      release();release();
+      expect((service as any).activeVerificationRequests.size).toBe(0);
+      expect(service.tempMessages.old).toBeUndefined();
+      expect(service.tempMessages.new).toBe(mockInteraction);
+    });
+    it('preserves retryable current links and releases superseded requests only after their last caller', async () => {
+      service.tempMessages.old=mockInteraction as any;
+      (service as any).nonceScopes.old='user-id:guild-id:channel-id';
+      (service as any).latestRequestNonces['user-id:guild-id:channel-id']='old';
+      const first=service.retainVerificationRequest('old','user-id','guild-id');
+      first();
+      expect(service.tempMessages.old).toBe(mockInteraction);
+      const releaseA=service.retainVerificationRequest('old','user-id','guild-id');
+      const releaseB=service.retainVerificationRequest('old','user-id','guild-id');
+      (service as any).latestRequestNonces['user-id:guild-id:channel-id']='new';
+      releaseA(); releaseA();
+      expect(service.tempMessages.old).toBe(mockInteraction);
+      releaseB();
+      expect(service.tempMessages.old).toBeUndefined();
+      expect((service as any).latestRequestNonces['user-id:guild-id:channel-id']).toBe('new');
+    });
+    it('does not retain a reply belonging to another member or guild', () => {
+      service.tempMessages.old=mockInteraction as any;
+      expect(()=>service.retainVerificationRequest('old','another-user','guild-id')).toThrow('does not match');
+      expect(()=>service.retainVerificationRequest('old','user-id','another-guild')).toThrow('does not match');
+      expect((service as any).activeVerificationRequests.size).toBe(0);
+    });
     it('should handle error when no rules found', async () => {
       mockDbService.getRulesByChannel.mockResolvedValue([]);
 
@@ -347,6 +391,18 @@ describe('DiscordVerificationService', () => {
       ).rejects.toThrow('Guild not found');
     });
 
+    it('accepts an internally proven portal request without a Discord reply, tied to its exact member, guild and nonce', async () => {
+      const context = Object.assign(new Map(), {portalVerification:{userId:'user-id',guildId:'guild-id',nonce:'portal-nonce'}});
+      await expect(service.addUserRole('user-id','role-id','guild-id','portal-nonce','1',undefined,context)).resolves.toEqual(expect.objectContaining({roleId:'role-id'}));
+      for (const invalid of [
+        {userId:'other',guildId:'guild-id',nonce:'portal-nonce'},
+        {userId:'user-id',guildId:'other',nonce:'portal-nonce'},
+        {userId:'user-id',guildId:'guild-id',nonce:'other'},
+      ]) {
+        const wrong = Object.assign(new Map(),{portalVerification:invalid});
+        await expect(service.addUserRole('user-id','role-id','guild-id','portal-nonce','1',undefined,wrong)).rejects.toThrow('No stored interaction');
+      }
+    });
     it('should handle error when no stored interaction', async () => {
       await expect(
         service.addUserRole('user-id', 'role-id', 'guild-id', '0x7878787878787878787878787878787878787878', 'invalid-nonce')
@@ -393,6 +449,9 @@ describe('DiscordVerificationService', () => {
   });
 
   describe('sendVerificationComplete', () => {
+    it('treats a missing completion reply as an unavailable notification without raising another grant error', async () => {
+      await expect(service.sendVerificationComplete('guild-id','missing',[])).resolves.toBeUndefined();
+    });
     it('only recommends rules from the verification channel, including when a role has rules in both channels', async () => {
       const local = { id: 20, role_id: 'role-id-2', channel_id: 'channel-id', slug: 'local-collection', min_items: 2 };
       const other = { id: 21, role_id: 'role-id-2', channel_id: 'other-channel', slug: 'other-collection', min_items: 1 };

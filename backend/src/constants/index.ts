@@ -11,6 +11,7 @@
  */
 export const CONSTANTS = {
   ERRORS: {
+    ROLE_ASSIGNMENT_FAILED: 'Your wallet was verified, but Discord roles could not be assigned. Please return to Discord and request a new verification link.',
     WALLET_ADDRESS_ALREADY_VERIFIED: 'This wallet address is already verified by another user.',
   },
 

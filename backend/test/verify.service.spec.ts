@@ -1,3 +1,5 @@
+import { RoleExcludedError } from '../src/utils/role-excluded-error.util';
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { VerifyService } from '../src/services/verify.service';
 import { WalletService } from '../src/services/wallet.service';
@@ -24,7 +26,9 @@ const mockDiscordService = {
   getGuild: jest.fn().mockResolvedValue({ name: 'Test Guild' }),
   getRole: jest.fn().mockResolvedValue({ name: 'Test Role' })
 };
+const releaseReply = jest.fn();
 const mockDiscordVerificationService = {
+  retainVerificationRequest: jest.fn().mockReturnValue(releaseReply),
   addUserRole: jest.fn().mockResolvedValue({
     roleId: 'test-role-id',
     roleName: 'Test Role',
@@ -116,6 +120,58 @@ describe('VerifyService', () => {
 
 
 
+  it('retains the original Discord reply before async signature work and releases it on completion', async () => {
+    let finish: (value:any)=>void;
+    const pending = new Promise(resolve=>{finish=resolve;});
+    mockWalletService.verifySignature.mockReturnValueOnce(pending);
+    const complete = jest.spyOn(service as any,'completeVerification').mockResolvedValue({assignedRoles:['holder']});
+    const request = service.verifySignatureFlow({userId:'u',discordId:'g',nonce:'n'} as any,'sig');
+    expect(mockDiscordVerificationService.retainVerificationRequest).toHaveBeenCalledWith('n','u','g');
+    expect(releaseReply).not.toHaveBeenCalled();
+    finish({address:'wallet',walletOwnershipTransferred:false});
+    await request;
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(releaseReply).toHaveBeenCalledTimes(1);
+    complete.mockRestore();
+  });
+  it('releases the retained reply on rejected signatures without starting eligibility checks', async () => {
+    mockWalletService.verifySignature.mockRejectedValueOnce(new Error('bad signature'));
+    await expect(service.verifySignatureFlow({userId:'u',discordId:'g',nonce:'n'} as any,'sig')).rejects.toThrow('bad signature');
+    expect(releaseReply).toHaveBeenCalledTimes(1);
+    expect(mockVerificationService.verifyUserBulk).not.toHaveBeenCalled();
+    expect(mockOrdinalRequests.beginVerification).not.toHaveBeenCalled();
+  });
+  it('reports policy exclusions as skips while granting the remaining eligible role', async () => {
+    mockWalletService.verifySignature.mockResolvedValueOnce({address:'wallet',walletOwnershipTransferred:false,nonceContext:{channelId:'channel'}});
+    const rules=[{id:1,role_id:'lower'},{id:2,role_id:'higher'}];
+    mockVerificationService.getRulesForChannel.mockResolvedValueOnce(rules);
+    mockVerificationService.verifyUserBulk.mockResolvedValueOnce({validRules:rules,invalidRules:[],matchingAssetCounts:new Map()});
+    mockDiscordVerificationService.addUserRole.mockRejectedValueOnce(new RoleExcludedError()).mockResolvedValueOnce({roleId:'higher',roleName:'Higher',wasAlreadyAssigned:false});
+    const error = jest.spyOn(Logger,'error').mockImplementation(()=>{});
+    const result=await service.verifySignatureFlow({userId:'u',discordId:'g',nonce:'n'} as any,'sig');
+    expect(result.assignedRoles).toEqual(['higher']);
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+  it('can verify a proven wallet when every eligible role is intentionally excluded', async () => {
+    mockWalletService.verifySignature.mockResolvedValueOnce({address:'wallet',walletOwnershipTransferred:false,nonceContext:{channelId:'channel'}});
+    mockVerificationService.getRulesForChannel.mockResolvedValueOnce([{id:1,role_id:'lower'}]);
+    mockVerificationService.verifyUserBulk.mockResolvedValueOnce({validRules:[{id:1,role_id:'lower'}],invalidRules:[],matchingAssetCounts:new Map()});
+    mockDiscordVerificationService.addUserRole.mockRejectedValueOnce(new RoleExcludedError());
+    const result=await service.verifySignatureFlow({userId:'u',discordId:'g',nonce:'n'} as any,'sig');
+    expect(result.assignedRoles).toEqual([]);
+    expect(mockDiscordVerificationService.throwError).not.toHaveBeenCalled();
+  });
+  it('uses a validated member-portal proof for grants without expecting a Discord reply', async () => {
+    mockWalletService.verifySignature.mockResolvedValueOnce({address:'wallet',walletOwnershipTransferred:false,nonceContext:{channelId:'channel'},activity:{source:'portal'}});
+    mockVerificationService.getRulesForChannel.mockResolvedValueOnce([{id:1,role_id:'holder'}]);
+    mockVerificationService.verifyUserBulk.mockResolvedValueOnce({validRules:[{id:1,role_id:'holder'}],invalidRules:[],matchingAssetCounts:new Map()});
+    mockDiscordVerificationService.addUserRole.mockResolvedValueOnce({roleId:'holder',roleName:'Holder',wasAlreadyAssigned:false});
+    const result=await service.verifySignatureFlow({userId:'u',discordId:'g',nonce:'n'} as any,'sig');
+    expect(result.assignedRoles).toEqual(['holder']);
+    expect(mockDiscordVerificationService.addUserRole.mock.calls[0][6].portalVerification).toEqual({userId:'u',guildId:'g',nonce:'n'});
+    expect(mockDiscordVerificationService.sendVerificationComplete).not.toHaveBeenCalled();
+  });
   it('handles multi-rule path', async () => {
     // Mock empty nonce data to trigger multi-rule path
     mockNonceService.getNonceData.mockResolvedValue({ messageId: null, channelId: null });
@@ -415,10 +471,9 @@ describe('VerifyService', () => {
       nonce: 'nonce123' 
     };
     
-    // Should still complete and return success even if one role assignment fails
-    const result = await service.verifySignatureFlow(payload as any, 'sig');
-    expect(result.message).toContain('message-based');
-    expect(result.assignedRoles).toEqual([]);
+    await expect(service.verifySignatureFlow(payload as any, 'sig')).rejects.toThrow('Discord roles could not be assigned');
+    expect(mockDiscordVerificationService.sendVerificationComplete).not.toHaveBeenCalled();
+    expect(mockDiscordVerificationService.throwError).toHaveBeenCalledWith('nonce123',expect.stringContaining('request a new verification link'));
   });
 
   it('handles message-based verification with null role_id', async () => {

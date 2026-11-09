@@ -1,3 +1,5 @@
+import { CONSTANTS } from '@/constants';
+import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { BouncerLogService } from './bouncer-log.service';
 import { DynamicRoleService } from './dynamic-role.service';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
@@ -55,9 +57,12 @@ export class VerifyService {
   ) {
     // Verify the wallet signature and extract the signing address
     const startedAt = Date.now();
-    const walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
-    const finish = this.ordinalRequests?.beginVerification();
+    const releaseReply = this.discordVerificationSvc.retainVerificationRequest(payload.nonce, payload.userId, payload.discordId);
+    let walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>;
+    let finish: (() => void) | undefined;
     try {
+      walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
+      finish = this.ordinalRequests?.beginVerification();
       const result = await this.completeVerification(payload, walletVerification);
       if (walletVerification.activity) {
         try { await this.dbSvc.recordWalletVerification(payload.userId, walletVerification.address, walletVerification.activity); }
@@ -65,6 +70,7 @@ export class VerifyService {
       }
       return result;
     } catch (error) {
+      if (!walletVerification) throw error;
       // Only a validated wallet proof reaches this stage. Never forward raw
       // provider/wallet errors, addresses, tokens or private restriction notes.
       const message = error instanceof Error ? error.message : '';
@@ -77,6 +83,7 @@ export class VerifyService {
       throw error;
     } finally {
       finish?.();
+      releaseReply();
       Logger.log(`Verification total: user=${payload.userId}; ${Date.now() - startedAt}ms`);
     }
   }
@@ -135,7 +142,7 @@ export class VerifyService {
         this.verificationSvc.verifyUserBulk(payload.userId, ruleIds, address, ownershipContext, rules));
       const { validRules } = verificationResult;
       
-      const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
+      const roleResults = await this.assignVerifiedRoles(payload, verificationResult, walletVerification.activity?.source === 'portal');
       await this.reconcileEarned(payload, ownershipContext);
       const hasMatchingAssets = validRules.length > 0;
 
@@ -158,7 +165,7 @@ export class VerifyService {
       
       // Send verification complete message with role assignment details
       try {
-        await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
+        if (walletVerification.activity?.source !== 'portal') await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
           payload.discordId,
           payload.nonce,
           roleResults,
@@ -211,12 +218,12 @@ export class VerifyService {
       throw new Error(errorMsg);
     }
 
-    const roleResults = await this.assignVerifiedRoles(payload, verificationResult);
+    const roleResults = await this.assignVerifiedRoles(payload, verificationResult, walletVerification.activity?.source === 'portal');
     await this.reconcileEarned(payload, ownershipContext);
 
     // Send verification complete message with role assignment details
     try {
-      await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
+      if (walletVerification.activity?.source !== 'portal') await this.timed(payload.userId, 'completion and recommendations', () => this.discordVerificationSvc.sendVerificationComplete(
         payload.discordId,
         payload.nonce,
         roleResults,
@@ -247,7 +254,7 @@ export class VerifyService {
     catch { Logger.warn('Earned-role reconciliation unavailable; existing roles retained for retry.'); }
   }
 
-  private async assignVerifiedRoles(payload: DecodedData, result: BulkVerificationResult) {
+  private async assignVerifiedRoles(payload: DecodedData, result: BulkVerificationResult, provenPortalRequest = false) {
     return this.timed(payload.userId, 'role assignment and tracking', async () => {
       const groups = new Map<string, VerifierRole[]>();
       for (const rule of result.validRules) {
@@ -256,7 +263,10 @@ export class VerifyService {
         groups.get(rule.role_id).push(rule);
       }
       const roleResults = [];
+      let excluded = 0;
+      let failures = 0;
       const members: RoleSyncContext = new Map();
+      if (provenPortalRequest) members.portalVerification = { userId: payload.userId, guildId: payload.discordId, nonce: payload.nonce };
       for (const [roleId, matches] of groups) {
         try {
           const roleResult = await this.discordVerificationSvc.addUserRole(
@@ -279,8 +289,16 @@ export class VerifyService {
             })(),
           });
         } catch (error) {
+          if (error instanceof RoleExcludedError) { excluded++; continue; }
+          failures++;
           Logger.error(`Failed to assign role ${roleId}:`, error.message);
         }
+      }
+      if (excluded) Logger.log(`Verification skipped ${excluded} role(s) excluded by server role policies.`);
+      if (failures && !roleResults.length) {
+        const message = CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED;
+        await this.discordVerificationSvc.throwError(payload.nonce, message);
+        throw new Error(message);
       }
       return roleResults;
     });

@@ -99,6 +99,7 @@ describe('Bouncer event integration',()=>{
   ])('logs a signed failure with a fixed reason for %s',async(error,reason)=>{
     const {VerifyService}=require('../src/services/verify.service');
     const service:any=Object.create(VerifyService.prototype);
+    service.discordVerificationSvc={retainVerificationRequest:jest.fn().mockReturnValue(()=>{})};
     service.walletSvc={verifySignature:jest.fn().mockResolvedValue({address:'0x-private-wallet',activity:{source:'portal'}})};
     service.activityLog={record:jest.fn().mockResolvedValue(undefined)};
     service.completeVerification=jest.fn().mockRejectedValue(new Error(error));
@@ -109,6 +110,7 @@ describe('Bouncer event integration',()=>{
   it('does not attribute an unproven request to a Discord member',async()=>{
     const {VerifyService}=require('../src/services/verify.service');
     const service:any=Object.create(VerifyService.prototype);
+    service.discordVerificationSvc={retainVerificationRequest:jest.fn().mockReturnValue(()=>{})};
     service.walletSvc={verifySignature:jest.fn().mockRejectedValue(new Error('Invalid signature'))};
     service.activityLog={record:jest.fn()};
     await expect(service.verifySignatureFlow({userId:user,discordId:server},'bad-signature')).rejects.toThrow('Invalid signature');

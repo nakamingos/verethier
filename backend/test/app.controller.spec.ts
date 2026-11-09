@@ -315,6 +315,19 @@ describe('AppController', () => {
         }
       });
 
+      it('explains failed Discord grants with the fixed recovery message in production', async () => {
+        const previous=process.env.NODE_ENV;
+        process.env.NODE_ENV='production';
+        try {
+          mockVerifyService.verifySignatureFlow.mockRejectedValue(new Error(CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED));
+          await expect(controller.verify(validRequestBody)).rejects.toMatchObject({status:HttpStatus.SERVICE_UNAVAILABLE,response:CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED});
+          mockVerifyService.verifySignatureFlow.mockRejectedValue(new Error(CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED+' Private upstream detail.'));
+          await expect(controller.verify(validRequestBody)).rejects.toMatchObject({status:HttpStatus.INTERNAL_SERVER_ERROR,response:'Verification failed. Please try again.'});
+        } finally {
+          if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;
+        }
+      });
+
       it('keeps unexpected details after a wallet block message private', async () => {
         mockVerifyService.verifySignatureFlow.mockRejectedValue(
           new Error(WALLET_BLOCKED + ' Internal database details.'),

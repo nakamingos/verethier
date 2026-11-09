@@ -1,3 +1,4 @@
+import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { BouncerLogService } from './bouncer-log.service';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
@@ -30,7 +31,10 @@ const EXPIRY = EnvironmentConfig.NONCE_EXPIRY;
 const REPLACED_LINK_NOTICE_TTL_MS = 10_000;
 
 /** Fresh member state shared only within one reconciliation run. */
-export type RoleSyncContext = Map<string, Promise<GuildMember>>;
+export type RoleSyncContext = Map<string, Promise<GuildMember>> & {
+  /** Set only after WalletService accepts a member-portal signature. Never client-supplied. */
+  portalVerification?: Readonly<{ userId: string; guildId: string; nonce: string }>;
+};
 
 type VerificationRoleResult = {
   roleId: string;
@@ -95,6 +99,8 @@ export class DiscordVerificationService {
     [nonce: string]: ButtonInteraction<CacheType>;
   } = {};
 
+  private readonly activeVerificationRequests = new Map<string, number>();
+
   private latestRequestNonces: {
     [scopeKey: string]: string;
   } = {};
@@ -142,9 +148,42 @@ export class DiscordVerificationService {
     timeout.unref?.();
   }
 
+  /**
+   * Keep the reply for a submitted proof until its full verification finishes.
+   * This retains notification state only; wallet signatures, expiry and nonce
+   * consumption remain the authorization checks in WalletService.
+   */
+  retainVerificationRequest(nonce: string, userId: string, guildId: string): () => void {
+    const interaction = this.tempMessages[nonce];
+    if (!interaction) return () => {};
+    if (interaction.user.id !== userId || (interaction.guildId || interaction.guild?.id) !== guildId)
+      throw new Error('Verification request does not match this member and server.');
+    this.activeVerificationRequests.set(nonce, (this.activeVerificationRequests.get(nonce) || 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.activeVerificationRequests.get(nonce) || 1) - 1;
+      if (remaining) this.activeVerificationRequests.set(nonce, remaining);
+      else {
+        this.activeVerificationRequests.delete(nonce);
+        const scope = this.nonceScopes[nonce];
+        // A rejected signature may retry the current link. A superseded
+        // request is cleaned up once its last in-flight submission finishes.
+        if (!scope || this.latestRequestNonces[scope] !== nonce) this.clearTrackedRequest(nonce);
+      }
+    };
+  }
+
   private async retirePreviousVerificationRequest(scopeKey: string): Promise<void> {
     const previousNonce = this.latestRequestNonces[scopeKey];
     if (!previousNonce) return;
+    // A new unsigned link supersedes only other unsigned links. Do not discard
+    // the reply required to finish a proof already being processed.
+    if (this.activeVerificationRequests.has(previousNonce)) {
+      delete this.latestRequestNonces[scopeKey];
+      return;
+    }
 
     const previousInteraction = this.tempMessages[previousNonce];
     if (!previousInteraction) {
@@ -559,11 +598,13 @@ export class DiscordVerificationService {
     if (!role) throw new Error('Role not found');
 
     if (await this.roleActions?.blockedBy(member, roleId))
-      throw new Error('This role is excluded by another role you hold in this server.');
+      throw new RoleExcludedError();
       
     const storedInteraction = this.tempMessages[nonce];
     // For reverification or other background processes, nonce might not have a stored interaction
-    if (!storedInteraction && nonce !== 'reverification') {
+    const portal = context?.portalVerification;
+    const provenPortalRequest = portal?.userId === userId && portal.guildId === guildId && portal.nonce === nonce;
+    if (!storedInteraction && nonce !== 'reverification' && !provenPortalRequest) {
       throw new Error('No stored interaction found for this nonce');
     }
 
@@ -613,7 +654,7 @@ export class DiscordVerificationService {
       if (!wasAlreadyAssigned) await this.undoDeletionGrant(member, role, guildId, userId);
       throw error;
     }
-    if (!wasAlreadyAssigned) await this.activityLog?.record(guildId, userId, 'role_added', nonce === 'reverification' ? 'background' : 'discord', roleId);
+    if (!wasAlreadyAssigned) await this.activityLog?.record(guildId, userId, 'role_added', provenPortalRequest ? 'portal' : nonce === 'reverification' ? 'background' : 'discord', roleId);
     return {
       roleId,
       roleName: role.name,
@@ -675,7 +716,8 @@ export class DiscordVerificationService {
 
     const storedInteraction = this.tempMessages[nonce];
     if (!storedInteraction) {
-      throw new Error('No stored interaction found for this nonce');
+      Logger.warn('Verification reply unavailable; Discord completion notification skipped.');
+      return;
     }
 
     try {
