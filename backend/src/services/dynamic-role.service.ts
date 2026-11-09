@@ -22,6 +22,10 @@ import { OrdinalsOwnershipService } from './ordinals-ownership.service';
  * - Graceful handling of Discord API rate limits
  * - Detailed logging and metrics for monitoring
  */
+class OwnershipCheckUnavailableError extends Error {
+  constructor() { super('Ownership check unavailable; retaining existing role.'); }
+}
+
 @Injectable()
 export class DynamicRoleService {
   private scheduledRunning = false;
@@ -83,7 +87,7 @@ export class DynamicRoleService {
               Logger.log(`🚫 Revoked role ${assignment.role_name || assignment.role_id} from user ${assignment.user_name || assignment.user_id}`);
             }
           } catch (error) {
-            Logger.error(`Error verifying assignment ${assignment.id}:`, error.message);
+            if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error verifying assignment ${assignment.id}:`, error.message);
             errorCount++;
           }
         }
@@ -188,6 +192,7 @@ export class DynamicRoleService {
     let verified = 0;
     let revoked = 0;
     let errors = 0;
+    let unavailable = 0;
     const context: NftCheckContext = sharedContext || { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
     const discordContext: RoleSyncContext = new Map();
 
@@ -204,10 +209,12 @@ export class DynamicRoleService {
         }
       } catch (error) {
         errors++;
-        Logger.error(`Error during manual re-verification:`, error.message);
+        if (error instanceof OwnershipCheckUnavailableError) unavailable++;
+        else Logger.error('Role reconciliation failed:', error.message);
       }
     }
 
+    if (unavailable) Logger.warn(`Role reconciliation incomplete: ${unavailable} assignment(s) unavailable; existing roles retained.`);
     if(!sharedContext)await this.verificationEngine.finishWalletChecks?.(context);
     return { verified, revoked, errors };
   }
@@ -233,7 +240,7 @@ export class DynamicRoleService {
           Logger.log(`Revoked role from user ${assignment.user_id} due to rule change`);
         }
       } catch (error) {
-        Logger.error(`Error re-verifying rule assignment:`, error.message);
+        if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error re-verifying rule assignment:`, error.message);
       }
     }
     await this.verificationEngine.finishWalletChecks?.(context);
@@ -257,7 +264,7 @@ export class DynamicRoleService {
       matched_rule_ids: result.results.filter(check => check.isValid).map(check => check.ruleId),
       rule_checks: result.results,
     });
-    if (result.status === 'unavailable') throw new Error('Ownership check unavailable; retaining existing role.');
+    if (result.status === 'unavailable') throw new OwnershipCheckUnavailableError();
     return result.status === 'passed';
   }
 

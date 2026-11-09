@@ -1,3 +1,4 @@
+import { EthscriptionDataUnavailableError } from '../src/utils/ethscription-data-error.util';
 import { WalletBlockService } from '../src/services/wallet-block.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
@@ -104,6 +105,13 @@ describe('VerificationEngine', () => {
   });
 
   describe('verifyUser', () => {
+    it('keeps shared marketplace failures unavailable without repeating their already logged cause per rule', async () => {
+      mockDbService.getRuleById.mockResolvedValue(mockRule);
+      mockDataService.checkAssetOwnershipWithCriteria.mockRejectedValue(new EthscriptionDataUnavailableError());
+      const results = await Promise.all([1,2].map(id => service.verifyUser('user123',id,'wallet')));
+      expect(results.every(result=>result.status==='unavailable')).toBe(true);
+      expect(Logger.error).not.toHaveBeenCalled();
+    });
     it('reuses loaded rules and wallet addresses within a run but reads wallets again on a fresh run', async () => {
       const rules = [mockRule, mockModernRule];
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(5);

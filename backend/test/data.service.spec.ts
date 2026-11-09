@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+import { EthscriptionDataUnavailableError } from '../src/utils/ethscription-data-error.util';
 import { IncompleteEthscriptionTraitsError } from '../src/utils/ethscription-traits.util';
 const mockSupabase = {
   from: jest.fn(),
@@ -64,6 +66,12 @@ describe('DataService', () => {
     return recorder;
   };
 
+  const queueInventory = (result: { data: any[]; error: any }, traits = true): QueryRecorder => {
+    const direct = queueQuery({ data: result.data.map(({attributes_new, ...row}) => row), error: result.error });
+    queueQuery({ data: [], error: null });
+    return traits ? queueQuery(result) : direct;
+  };
+
   it('does not execute an ownership query for a multi-collection rule', async () => {
     await expect(service.matchingAssetIdsWithCriteria('0x123', 'one,two')).rejects.toThrow('one collection per rule');
     expect(mockSupabase.from).not.toHaveBeenCalled();
@@ -87,10 +95,11 @@ describe('DataService', () => {
   afterEach(() => {
     expect(queuedQueries).toHaveLength(0);
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('counts all matching items even when their trait key capitalization differs', async () => {
-    queueQuery({data: [
+    queueInventory({data: [
       {hashId: '1', slug: 'pizza-comrades', attributes_new: {values: {EyeColor: 'Gold Crown'}}},
       {hashId: '2', slug: 'pizza-comrades', attributes_new: {values: {EYECOLOR: 'GOLD CROWN'}}},
       {hashId: '3', slug: 'pizza-comrades', attributes_new: {values: {eyecolor: 'Silver Crown'}}},
@@ -98,7 +107,7 @@ describe('DataService', () => {
     expect(await service.checkAssetOwnershipWithCriteria('0x123', 'pizza-comrades', 'eyecolor', 'gold crown', 1)).toBe(2);
   });
   it('evaluates AND/OR per asset, deduplicates OR and shares inventory across predicates', async () => {
-    queueQuery({data:[
+    queueInventory({data:[
       {hashId:'A',slug:'comrades',attributes_new:{values:{Background:'Blue',Hat:'Crown'}}},
       {hashId:'B',slug:'comrades',attributes_new:{values:{Background:'Blue'}}},
       {hashId:'C',slug:'comrades',attributes_new:{values:{Hat:'Crown'}}},
@@ -107,20 +116,20 @@ describe('DataService', () => {
     const conditions=[{key:'Background',value:'Blue'},{key:'Hat',value:'Crown'}];
     expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'AND',conditions})).toEqual(['a']);
     expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,{operator:'OR',conditions})).toEqual(['a','b','c']);
-    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(3);
   });
   it('accepts real collection list shapes without aborting unrelated trait checks or double counting an OR match', async () => {
-    queueQuery({data:[
+    queueInventory({data:[
       {hashId:'A',slug:'call-data-comrades',attributes_new:{values:{Type:'Purr People',Affiliation:['Gold Bearer','Pirate']}}},
       {hashId:'B',slug:'call-data-comrades',attributes_new:{values:{Type:'Pork People',Mouth:['Pipe','Smile']}}},
     ],error:null});
     const context={checks:new Map()};
     expect(await service.matchingAssetIdsWithCriteria('wallet','call-data-comrades','ALL','ALL',1,context,{operator:'OR',conditions:[{key:'Type',value:'Purr People'},{key:'Type',value:'Pork People'}]})).toEqual(['a','b']);
     expect(await service.matchingAssetIdsWithCriteria('wallet','call-data-comrades','ALL','ALL',1,context,{operator:'OR',conditions:[{key:'Affiliation',value:'Gold Bearer'},{key:'Affiliation',value:'Pirate'}]})).toEqual(['a']);
-    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(3);
   });
   it('keeps distinct proven matches as a lower bound when other metadata is missing', async () => {
-    queueQuery({data:[
+    queueInventory({data:[
       {hashId:'A',slug:'comrades',attributes_new:{values:{Type:'Purr People'}}},
       {hashId:'A',slug:'comrades',attributes_new:{values:{Type:'Purr People'}}},
       {hashId:'B',slug:'comrades',attributes_new:null},
@@ -134,7 +143,7 @@ describe('DataService', () => {
     }
   });
   it('preserves uncertainty when multi-trait metadata is missing', async () => {
-    queueQuery({data:[{hashId:'A',slug:'comrades',attributes_new:null}],error:null});
+    queueInventory({data:[{hashId:'A',slug:'comrades',attributes_new:null}],error:null});
     await expect(service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,undefined,{operator:'AND',conditions:[{key:'Hat',value:'Crown'},{key:'Background',value:'Blue'}]})).rejects.toThrow('unavailable');
   });
   it('offers values from arbitrary mixed-case keys without changing their spelling', async () => {
@@ -143,7 +152,7 @@ describe('DataService', () => {
   });
 
   it('filters by attribute key when the rule is category-only', async () => {
-    const query = queueQuery({
+    const query = queueInventory({
       data: [
         {
           hashId: '1',
@@ -173,7 +182,7 @@ describe('DataService', () => {
   });
 
   it('keeps category-only rules on the attribute-filtered path during batch checks', async () => {
-    const query = queueQuery({
+    const query = queueInventory({
       data: [
         {
           hashId: '1',
@@ -204,7 +213,7 @@ describe('DataService', () => {
 
   it('shares one fresh inventory across parallel rules, stacked wallets, and later recommendations', async () => {
     const context = { checks: new Map() };
-    const query = queueQuery({ data: [
+    const query = queueInventory({ data: [
       { hashId: '0xA', slug: 'one', attributes_new: { values: { Crown: 'Gold' } } },
       { hashId: '0xB', slug: 'one', attributes_new: null },
       { hashId: '0xC', slug: 'two', attributes_new: { values: { Crown: 'Silver' } } },
@@ -216,25 +225,31 @@ describe('DataService', () => {
     ])).toEqual([2, 1, 0]);
     expect(await service.matchingAssetIdsWithCriteria(['0xdef', '0xabc'], 'ALL', 'ALL', 'ALL', 1, context))
       .toEqual(['0xa', '0xb', '0xc']);
-    expect(mockSupabase.from).toHaveBeenCalledTimes(1);
-    expect(query.or).toContain('owner.eq.0xabc');
-    expect(query.or).toContain('owner.eq.0xdef');
-    expect(query.or).toContain('and(owner.eq.0xd3418772623be1a3cc6b6d45cb46420cedd9154a,prevOwner.eq.0xabc)');
+    expect(mockSupabase.from).toHaveBeenCalledTimes(3);
+    const direct = mockSupabase.from.mock.results[0].value;
+    expect(direct.in).toHaveBeenCalledWith('owner', ['0xabc','0xdef']);
+    const escrow = mockSupabase.from.mock.results[1].value;
+    expect(escrow.eq).toHaveBeenCalledWith('owner', '0xd3418772623be1a3cc6b6d45cb46420cedd9154a');
+    expect(escrow.in).toHaveBeenCalledWith('prevOwner', ['0xabc','0xdef']);
+    expect(query.in).toEqual(['hashId', ['0xA','0xB']]);
 
-    queueQuery({ data: [], error: null });
+    queueInventory({ data: [], error: null }, false);
     expect(await service.checkAssetOwnershipWithCriteria(['0xabc', '0xdef'], 'one', 'ALL', 'ALL', 1, { checks: new Map() })).toBe(0);
-    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(5);
   });
 
   it('reads beyond the Supabase row limit before evaluating counts', async () => {
     const rows = Array.from({ length: 1001 }, (_, index) => ({ hashId: String(index), slug: 'one', attributes_new: null }));
-    const pages = [0, 500, 1000].map(offset => queueQuery({ data: rows.slice(offset, offset + 500), error: null }));
+    const pages = [queueQuery({ data: rows.slice(0,500), error: null })];
+    queueQuery({ data: [], error: null });
+    pages.push(...[500,1000].map(offset => queueQuery({ data: rows.slice(offset, offset + 500), error: null })));
     expect(await service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'ALL', 'ALL', 1001)).toBe(1001);
     expect(pages.map(page => page.range)).toEqual([[0, 499], [500, 999], [1000, 1499]]);
   });
 
   it('rejects a partial inventory for every rule when a later page fails', async () => {
     queueQuery({ data: Array.from({ length: 500 }, (_, index) => ({ hashId: String(index), slug: 'one', attributes_new: null })), error: null });
+    queueQuery({ data: [], error: null });
     queueQuery({ data: null, error: { message: 'unavailable' } });
     const context = { checks: new Map() };
     const results = await Promise.allSettled([
@@ -243,15 +258,69 @@ describe('DataService', () => {
     ]);
     expect(results.every(result => result.status === 'rejected')).toBe(true);
     await expect(service.checkAssetOwnershipWithCriteria('0xabc', 'one', 'ALL', 'ALL', 1, context)).rejects.toThrow('unavailable');
-    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(3);
   });
 
   it('keeps inventories separate when server wallet restrictions allow different wallets', async () => {
-    queueQuery({ data: [{ hashId: 'a', slug: 'one', attributes_new: null }], error: null });
-    queueQuery({ data: [], error: null });
+    queueInventory({ data: [{ hashId: 'a', slug: 'one', attributes_new: null }], error: null }, false);
+    queueInventory({ data: [], error: null }, false);
     const context = { checks: new Map() };
     expect(await service.checkAssetOwnershipWithCriteria(['0xabc', '0xdef'], 'one', 'ALL', 'ALL', 1, context)).toBe(1);
     expect(await service.checkAssetOwnershipWithCriteria(['0xdef'], 'one', 'ALL', 'ALL', 1, context)).toBe(0);
-    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(4);
   });
+  it('requires complete direct and escrow reads and never reports a failed query as zero holdings', async () => {
+    const warning = jest.spyOn(Logger.prototype,'warn').mockImplementation(() => {});
+    const log = jest.spyOn(Logger.prototype,'log').mockImplementation(() => {});
+    queueQuery({data: [], error: null});
+    queueQuery({data: null, error: {code:'57014',message:'canceling statement due to statement timeout: private wallet'}});
+    const context = {checks:new Map()};
+    await expect(service.matchingAssetIdsWithCriteria('wallet','one','ALL','ALL',1,context)).rejects.toBeInstanceOf(EthscriptionDataUnavailableError);
+    await expect(service.matchingAssetIdsWithCriteria('wallet','two','ALL','ALL',1,context)).rejects.toBeInstanceOf(EthscriptionDataUnavailableError);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning.mock.calls[0][0]).toContain('reason=statement_timeout');
+    expect(warning.mock.calls[0][0]).not.toContain('private wallet');
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('keeps collection counts available when scoped metadata times out and shares the failed trait read', async () => {
+    const direct = queueInventory({data:[{hashId:'a',slug:'one'},{hashId:'b',slug:'two'}],error:null},false);
+    const metadata = queueQuery({data:null,error:{code:'57014'}});
+    const context = {checks:new Map()};
+    expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',1,context)).toBe(1);
+    await expect(service.matchingAssetIdsWithCriteria('wallet','one','ALL','ALL',1,context,{operator:'AND',conditions:[{key:'Hat',value:'Gold'}]})).rejects.toBeInstanceOf(EthscriptionDataUnavailableError);
+    await expect(service.matchingAssetIdsWithCriteria('wallet','one','ALL','ALL',1,context,{operator:'AND',conditions:[{key:'Hat',value:'Silver'}]})).rejects.toBeInstanceOf(EthscriptionDataUnavailableError);
+    expect(await service.checkAssetOwnershipWithCriteria('wallet','two','ALL','ALL',1,context)).toBe(1);
+    expect(direct.select).toBe('hashId, slug');
+    expect(direct.or).toBeUndefined();
+    expect(metadata.in).toEqual(['hashId',['a']]);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(3);
+  });
+
+  it('deduplicates direct and escrow holdings before thresholds or metadata matching', async () => {
+    queueQuery({data:[{hashId:'A',slug:'one'}],error:null});
+    queueQuery({data:[{hashId:'a',slug:'one'},{hashId:'B',slug:'one'}],error:null});
+    expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',3)).toBe(0);
+  });
+
+  it('bounds metadata batches and treats missing rows as unknown traits, never absence of ownership', async () => {
+    const rows = Array.from({length:55},(_,i)=>({hashId:String(i),slug:'one'}));
+    queueInventory({data:rows,error:null},false);
+    const first = queueQuery({data:rows.slice(0,50).map(row=>({...row,attributes_new:{values:{Hat:'Gold'}}})),error:null});
+    const second = queueQuery({data:[],error:null});
+    const context={checks:new Map()};
+    try {
+      await service.matchingAssetIdsWithCriteria('wallet','one','ALL','ALL',1,context,{operator:'AND',conditions:[{key:'Hat',value:'Gold'}]});
+      throw new Error('Expected incomplete metadata');
+    } catch(error) {
+      expect(error).toBeInstanceOf(IncompleteEthscriptionTraitsError);
+      expect(error.unknownItems).toBe(5);
+      expect(error.matchingAssets.size).toBe(50);
+    }
+    expect(first.in[1]).toHaveLength(50);
+    expect(second.in[1]).toHaveLength(5);
+    expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',55,context)).toBe(55);
+  });
+
 });

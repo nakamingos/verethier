@@ -312,7 +312,7 @@ describe('DynamicRoleService', () => {
       expect(result.verified).toBe(0); // Unavailable checks retain roles without recording success
       expect(result.revoked).toBe(0);
       expect(Logger.error).toHaveBeenCalledWith(
-        'Error during manual re-verification:',
+        'Role reconciliation failed:',
         'Rule fetch failed'
       );
     });

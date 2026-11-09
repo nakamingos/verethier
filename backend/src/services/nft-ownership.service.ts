@@ -39,6 +39,8 @@ export interface NftCheckContext {
   provenAddresses?: Map<string, string>;
   userAddresses?: Map<string, Promise<string[]>>;
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;
+  /** Metadata is loaded only for scoped trait rules, once per held asset per run. */
+  ethscriptionTraits?: Map<string, Promise<EthscriptionAsset['attributes_new']>>;
   walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
   /** Grants-only bulk checks follow the configured verification-family priority. */

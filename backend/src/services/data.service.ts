@@ -1,3 +1,5 @@
+import { AsyncSemaphore } from '@/utils/async-semaphore.util';
+import { EthscriptionDataUnavailableError } from '@/utils/ethscription-data-error.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { createClient } from '@supabase/supabase-js';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -31,6 +33,7 @@ const supabase = createClient(
 @Injectable()
 export class DataService {
   private readonly logger = new Logger(DataService.name);
+  private readonly traitReads = new AsyncSemaphore(2);
 
   async checkSetupHealth(traits: boolean): Promise<void> {
     const result = await supabase.from('ethscriptions').select('hashId').limit(1).abortSignal(AbortSignal.timeout(6000));
@@ -499,10 +502,13 @@ export class DataService {
     if (!inventories.has(key)) inventories.set(key, this.readEthscriptionAssets(wallets));
     const assets = await inventories.get(key);
     const collection = slug?.trim();
-    const scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
+    let scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
       ? assets.filter(asset => asset.slug === collection) : assets;
+    const filter = traitFilter !== undefined ? normalizeTraitFilter(traitFilter) : null;
+    if (filter || (traitFilter === undefined && this.hasAttributeCriteria(attributeKey, attributeValue))) {
+      scoped = await this.withEthscriptionTraits(scoped, context);
+    }
     if (traitFilter !== undefined) {
-      const filter = normalizeTraitFilter(traitFilter);
       const matching = new Set<string>();
       let unknownItems = 0;
       for (const asset of scoped) {
@@ -522,29 +528,85 @@ export class DataService {
   private async readEthscriptionAssets(wallets: string[]): Promise<EthscriptionAsset[]> {
     const startedAt = Date.now();
     const market = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
-    const pageSize = 500;
-    const assets: EthscriptionAsset[] = [];
-    const ownership = wallets.map(wallet =>
-      `owner.eq.${wallet},and(owner.eq.${market},prevOwner.eq.${wallet})`
-    ).join(',');
+    const assets = new Map<string, EthscriptionAsset>();
     let pages = 0;
     try {
-      for (let offset = 0; ; offset += pageSize) {
-        // A left join retains assets without metadata for collection/count rules.
-        const { data, error } = await supabase.from('ethscriptions')
-          .select('hashId, slug, attributes_new(values)')
-          .or(ownership)
-          .order('hashId', { ascending: true })
-          .range(offset, offset + pageSize - 1);
-        pages++;
-        if (error) throw new Error(`Failed to fetch ethscriptions: ${error.message}`);
-        if (!Array.isArray(data)) throw new Error('Failed to fetch ethscriptions.');
-        assets.push(...data as unknown as EthscriptionAsset[]);
-        if (data.length < pageSize) return assets;
+      // Separate direct and escrow predicates so neither needs a cross-column OR.
+      // Do not join metadata while locating owned rows. Both inventories must be
+      // complete before any rule can interpret a zero as absence of holdings.
+      for (let index = 0; index < wallets.length; index += 50) {
+        const batch = wallets.slice(index, index + 50);
+        const reads = await Promise.allSettled([false, true].map(async escrow => {
+          for (let offset = 0; ; offset += 500) {
+            let query = supabase.from('ethscriptions').select('hashId, slug');
+            query = escrow ? query.eq('owner', market).in('prevOwner', batch) : query.in('owner', batch);
+            const { data, error } = await query.order('hashId', { ascending: true }).range(offset, offset + 499);
+            pages++;
+            if (error || !Array.isArray(data)) throw error || { code: 'invalid_response' };
+            for (const row of data) {
+              if (!row || typeof row.hashId !== 'string' || !row.hashId || (row.slug !== null && typeof row.slug !== 'string'))
+                throw { code: 'invalid_response' };
+              assets.set(row.hashId.toLowerCase(), { hashId: row.hashId, slug: row.slug, attributes_new: null });
+            }
+            if (data.length < 500) break;
+          }
+        }));
+        const failed = reads.find((read): read is PromiseRejectedResult => read.status === 'rejected');
+        if (failed) throw failed.reason;
       }
-    } finally {
-      this.logger.log(`Ethscriptions holdings: ${Date.now() - startedAt}ms; wallets=${wallets.length}; assets=${assets.length}; pages=${pages}`);
+      this.logger.log(`Ethscriptions holdings: status=complete; ${Date.now() - startedAt}ms; wallets=${wallets.length}; assets=${assets.size}; pages=${pages}`);
+      return [...assets.values()];
+    } catch (error) {
+      this.logEthscriptionReadFailure('holdings', startedAt, pages, error);
+      throw new EthscriptionDataUnavailableError();
     }
+  }
+
+  private async withEthscriptionTraits(assets: EthscriptionAsset[], context?: NftCheckContext): Promise<EthscriptionAsset[]> {
+    const traits = context ? (context.ethscriptionTraits ||= new Map()) : new Map();
+    const missing = [...new Map(assets.filter(asset => !traits.has(asset.hashId.toLowerCase()))
+      .map(asset => [asset.hashId.toLowerCase(), asset])).values()];
+    let failure: unknown;
+    for (let index = 0; index < missing.length; index += 50) {
+      const batch = missing.slice(index, index + 50);
+      const read = this.traitReads.run(async () => {
+        if (failure) throw failure;
+        try { return await this.readEthscriptionTraits(batch.map(asset => asset.hashId)); }
+        catch (error) { failure = error; throw error; }
+      });
+      // Install all promises before awaiting so concurrent AND/OR rules share
+      // both successful metadata and failures. Collection-only rules stay usable.
+      for (const asset of batch) traits.set(asset.hashId.toLowerCase(), read.then(rows => rows.get(asset.hashId.toLowerCase()) ?? null));
+    }
+    return Promise.all(assets.map(async asset => ({ ...asset, attributes_new: await traits.get(asset.hashId.toLowerCase()) })));
+  }
+
+  private async readEthscriptionTraits(ids: string[]): Promise<Map<string, EthscriptionAsset['attributes_new']>> {
+    const startedAt = Date.now();
+    try {
+      // The join now starts from at most 50 already identified primary keys,
+      // rather than joining metadata during an entire ownership scan.
+      const { data, error } = await supabase.from('ethscriptions')
+        .select('hashId, attributes_new(values)').in('hashId', ids);
+      if (error || !Array.isArray(data)) throw error || { code: 'invalid_response' };
+      const result = new Map<string, EthscriptionAsset['attributes_new']>();
+      for (const row of data) {
+        if (!row || typeof row.hashId !== 'string') throw { code: 'invalid_response' };
+        const attributes: unknown = row.attributes_new;
+        result.set(row.hashId.toLowerCase(), attributes && typeof attributes === 'object' && !Array.isArray(attributes)
+          ? attributes as EthscriptionAsset['attributes_new'] : null);
+      }
+      return result;
+    } catch (error) {
+      this.logEthscriptionReadFailure('traits', startedAt, 1, error);
+      throw new EthscriptionDataUnavailableError();
+    }
+  }
+
+  private logEthscriptionReadFailure(phase: 'holdings' | 'traits', startedAt: number, pages: number, error: any): void {
+    const code = typeof error?.code === 'string' && /^(?:[A-Z0-9]{5}|PGRST\d{3}|invalid_response)$/.test(error.code) ? error.code : 'unknown';
+    const reason = code === '57014' ? 'statement_timeout' : code === 'invalid_response' ? 'invalid_response' : 'request_failed';
+    this.logger.warn(`Ethscriptions marketplace read: status=unavailable; phase=${phase}; elapsed_ms=${Date.now() - startedAt}; pages=${pages}; code=${code}; reason=${reason}. Dependent checks remain unavailable; this is not an empty-wallet result.`);
   }
 
   /**

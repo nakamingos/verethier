@@ -1,3 +1,4 @@
+import { EthscriptionDataUnavailableError } from '@/utils/ethscription-data-error.util';
 import { checkPriority } from '@/utils/check-priority.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
@@ -135,7 +136,8 @@ export class VerificationEngine {
       };
 
     } catch (error) {
-      Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error.message);
+      if (!(error instanceof EthscriptionDataUnavailableError))
+        Logger.error(`VerificationEngine: Error verifying user ${userId} with rule ${ruleId}:`, error.message);
       let ownershipDetails: OrdinalCheckDetails | undefined;
       try {
         if (checkedRule) ownershipDetails = this.ownershipSvc.checkDetails?.(checkedRule, checkedAddresses, run);
