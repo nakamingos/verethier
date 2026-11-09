@@ -266,6 +266,14 @@
                     <br />Proven networks: {{ walletNetworks(wallet) }}
                   }
                 </p>
+                @for (state of wallet.checking || []; track state.server_id + state.network) {
+                  <p class="muted">
+                    <span class="badge">Dormant</span> · {{ state.network_name }} · {{ state.server_name }}<br />
+                    No matching assets found: {{ state.empty_checked_at | date: "medium" }}.
+                    Sign with this wallet again to resume checks.
+                    @if (state.review_recommended) { This is an additional empty wallet; you can keep it saved or review whether you still need it. }
+                  </p>
+                }
                 <div class="actions">
                   <button (click)="copy(wallet.address)" [disabled]="busy">
                     Copy address</button

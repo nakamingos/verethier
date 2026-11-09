@@ -307,6 +307,22 @@ describe('Bulk member read/write pipeline',()=>{
   const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
   expect(result.granted).toHaveLength(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(2);
  });
+ it('refreshes expired collection evidence when a scoped proof omits its private selection',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),other=role+'other';
+  f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,role_id:other,slug:null,inscription_criteria:{kind:'numbers',ranges:[[1,2]],collection_slug:'pizza-comrades'}}]);
+  let release:()=>void;const delayed=new Promise<void>(done=>release=done);
+  const read=jest.fn(async()=>({slug:'pizza-comrades',items:new Map(),fetched_at:new Date().toISOString()}));
+  let calls=0;
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId,context)=>{
+   await context.ordinalCollectionRead('pizza-comrades',read);
+   if(roleId===other && calls++===0)await delayed;
+   return {status:'passed',results:[{isValid:true,ruleId:roleId===role?204:205,rule:{asset_type:'ordinal',slug:roleId===role?'pizza-comrades':null}}]};
+  });
+  f.roles.addUserRoleDynamic.mockImplementation(async(_user,_server,roleId)=>{if(roleId===role){clock=61000;release();}return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.granted).toHaveLength(2);expect(read).toHaveBeenCalledTimes(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(3);
+ });
  it('does not force an unrelated numeric alternative into an exact selected-rule check',async()=>{
   const f=fixture();f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,slug:null,inscription_criteria:{kind:'numbers',ranges:[[1,2]]}}]);
   await f.service.checkMember(job,{user_id:user,result:{}});

@@ -1,3 +1,4 @@
+import { NftCheckContext } from './nft-ownership.service';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
@@ -107,7 +108,8 @@ export class SimpleRoleMonitorService {
       Logger.log(`🔍 Re-verifying ${userAddresses.length} wallet(s) for user ${userId}`);
 
       // Evaluate each Discord role once, with OR semantics across its rules.
-      const checked = await this.verificationEngine.verifyUserBulk(userId, rules.map(rule => rule.id), userAddresses[0], rules);
+      const context: NftCheckContext={checks:new Map()};
+      const checked = await this.verificationEngine.verifyUserBulk(userId, rules.map(rule => rule.id), userAddresses[0], rules, context);
       const roleIds = [...new Set([...rules.map(rule => rule.role_id), ...userRoles.filter(role => role.status === 'active').map(role => role.role_id)])];
       for (const roleId of roleIds) {
         try {
@@ -145,6 +147,7 @@ export class SimpleRoleMonitorService {
         }
       }
 
+      await this.verificationEngine.finishWalletChecks?.(context);
       Logger.log(`Re-verification complete for user ${userId}: ${result.verified.length} verified, ${result.revoked.length} revoked, ${result.errors.length} errors`);
       return result;
       

@@ -94,6 +94,7 @@ export class DynamicRoleService {
         }
       }
 
+      await this.verificationEngine.finishWalletChecks?.(context);
       Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors`);
       
     } catch (error) {
@@ -127,7 +128,9 @@ export class DynamicRoleService {
     // An assignment's rule_id is only its representative rule. Recheck every
     // previous holder of this role, including holders who matched another rule.
     const assignments = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
-    return this.reverifyAssignments(assignments, 'scheduled', context);
+    const result=await this.reverifyAssignments(assignments, 'scheduled', context);
+    if(context)await this.verificationEngine.finishWalletChecks?.(context);
+    return result;
   }
 
   /** An explicit admin role change may move earlier qualifiers to a new role. */
@@ -171,6 +174,7 @@ export class DynamicRoleService {
         result.verified++;
       } catch { result.errors++; Logger.warn(`Role move for rule ${ruleId} is pending retry.`); }
     }
+    await this.verificationEngine.finishWalletChecks?.(context);
     return result;
   }
 
@@ -204,6 +208,7 @@ export class DynamicRoleService {
       }
     }
 
+    if(!sharedContext)await this.verificationEngine.finishWalletChecks?.(context);
     return { verified, revoked, errors };
   }
 
@@ -231,6 +236,7 @@ export class DynamicRoleService {
         Logger.error(`Error re-verifying rule assignment:`, error.message);
       }
     }
+    await this.verificationEngine.finishWalletChecks?.(context);
   }
 
   /**

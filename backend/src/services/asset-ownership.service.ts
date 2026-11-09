@@ -1,3 +1,4 @@
+import { WalletCheckService } from './wallet-check.service';
 import { StampsOwnershipService } from './stamps-ownership.service';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
@@ -19,13 +20,15 @@ export class AssetOwnershipService {
     @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
     @Optional() private readonly tokensSvc?: Erc20OwnershipService,
     @Optional() private readonly solanaSvc?: SolanaOwnershipService,
-    @Optional() private readonly stampsSvc?: StampsOwnershipService) {}
+    @Optional() private readonly stampsSvc?: StampsOwnershipService,
+    @Optional() private readonly walletChecks?: WalletCheckService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
   }
 
   async matchingAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    if(this.walletChecks)addresses=await this.walletChecks.allowed(rule,addresses,context);
     if (rule.asset_type === 'stamp') {
       if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
       return this.stampsSvc.matchingAssets(rule, addresses.filter(isBitcoinAddress), context);
@@ -50,7 +53,18 @@ export class AssetOwnershipService {
     return new Map(ids.map(id => [id.toLowerCase(), 1n]));
   }
 
+  async finishWalletChecks(context:NftCheckContext):Promise<void> {await this.walletChecks?.finish(context);}
+
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
+    const run=context||{checks:new Map()};
+    const active=this.walletChecks?await this.walletChecks.allowed(rule,addresses,run):addresses;
+    const count=await this.countInternal(rule,active,run);
+    if(this.walletChecks)try{await this.walletChecks.observe(rule,active,count,run,(candidate,address)=>this.countInternal(candidate,[address],run));}
+    catch { /* Unavailable checking metadata never becomes evidence of empty holdings. */ }
+    return count;
+  }
+
+  private async countInternal(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
     if (rule.asset_type === 'stamp') {
       if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
       return this.stampsSvc.count(rule, addresses.filter(isBitcoinAddress), context);

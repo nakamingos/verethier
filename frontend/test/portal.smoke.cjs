@@ -468,6 +468,7 @@ const base = {
                   wallet_type: 'bitcoin',
                   address: lookupBitcoin,
                   last_verified_at: '2026-10-18T12:00:00Z',
+                  checking: [{network:'bitcoin',network_name:'Bitcoin',empty_checked_at:'2026-11-09T12:00:00Z',review_recommended:true}],
                 },
               ],
               removed_wallets: [
@@ -2066,6 +2067,8 @@ const base = {
           .count(),
         1,
       );
+      assert((await savedWallets.innerText()).includes('Dormant'));
+      assert((await savedWallets.innerText()).includes('A fresh member signature resumes checks.'));
       assert.equal(
         await savedWallets.locator('time').first().getAttribute('datetime'),
         '2026-10-18T12:00:00Z',

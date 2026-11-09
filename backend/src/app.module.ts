@@ -1,3 +1,4 @@
+import { WalletCheckService } from './services/wallet-check.service';
 import { BulkRoleController } from './portal/bulk-role.controller';
 import { BulkRoleService } from './portal/bulk-role.service';
 import { BouncerLogService } from './services/bouncer-log.service';
@@ -206,6 +207,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     SolanaSignatureService,
     SolanaOwnershipService,
     StampsOwnershipService,
+    WalletCheckService,
     UserAddressService,         // Multi-wallet address management
 
     // Role management services

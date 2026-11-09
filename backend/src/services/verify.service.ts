@@ -85,9 +85,22 @@ export class VerifyService {
     payload: DecodedData & { address?: string },
     walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>,
   ) {
-    const { address, walletOwnershipTransferred } = walletVerification;
+    const { address } = walletVerification;
     const ownershipContext: NftCheckContext = { checks: new Map(), provenAddresses: new Map([[payload.userId, address]]) };
     
+    try {
+      return await this.completeVerificationWithContext(payload, walletVerification, ownershipContext);
+    } finally {
+      await this.verificationSvc.finishWalletChecks?.(ownershipContext);
+    }
+  }
+
+  private async completeVerificationWithContext(
+    payload: DecodedData & { address?: string },
+    walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>,
+    ownershipContext: NftCheckContext,
+  ) {
+    const { address, walletOwnershipTransferred } = walletVerification;
     // Get the message data associated with the nonce for message-based verification
     const { channelId } = walletVerification.nonceContext
       || await this.nonceSvc.getNonceData(payload.userId, payload.nonce);

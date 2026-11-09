@@ -28,6 +28,10 @@ export class VerificationService {
     private readonly verificationEngine: VerificationEngine,
   ) {}
 
+  async finishWalletChecks(context: NftCheckContext): Promise<void> {
+    await this.verificationEngine.finishWalletChecks?.(context);
+  }
+
   /**
    * Verify a user's wallet address using the VerificationEngine
    * 

@@ -1,3 +1,4 @@
+import type { WalletCheckRun } from './wallet-check.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { Address, BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, PublicClient, createPublicClient, http, parseAbi } from 'viem';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -22,6 +23,9 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  walletCheck?: WalletCheckRun;
+  dormancyJobId?: string;
+  dormancyWorker?: string;
   stampHealth?: Promise<void>;
   stampBalances?: Map<string, Promise<import('./stamps-ownership.service').StampHoldings>>;
   stampDetails?: Map<string, Promise<{id:string;asset:string;creator:string;divisible:boolean} | null>>;
@@ -34,7 +38,7 @@ export interface NftCheckContext {
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;
   walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
-  /** Grants-only bulk checks can qualify through database-backed alternatives first. */
+  /** Grants-only bulk checks follow the configured verification-family priority. */
   bulkGrantOnly?: boolean;
   /** Automatic rule-save checks must never consume another Ordinals provider. */
   ordinalProviderPolicy?: 'ordnet-only';

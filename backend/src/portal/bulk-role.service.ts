@@ -245,11 +245,14 @@ export class BulkRoleService {
       && rule.inscription_criteria?.kind==='numbers' && !rule.inscription_criteria.collection_slug);
     const memberEvidence=()=>{
       const evidence=this.reads.member(cacheKey);
+      evidence.context.dormancyJobId=job.id;
+      evidence.context.dormancyWorker=item.locked_by;
       evidence.context.bulkGrantOnly=job.mode==='grant';
       evidence.context.ordinalNeedsNumbers=needsNumbers;
       return evidence;
     };
     const initial=memberEvidence();
+    const evidenceRuns=[initial.context];
     const evaluate = async (roleId:string, context:NftCheckContext) => {
       const started=Date.now();timing.role_checks++;
       try {
@@ -287,14 +290,14 @@ export class BulkRoleService {
           const proof=checked.status==='passed' ? checked.results.filter(result=>result.isValid) : [];
           // A sufficient database-only alternative does not depend on Ordinals
           // evidence read for a different qualification path.
-          if(proof.length && proof.every(result=>result.rule)) return new Set<string>(proof
+          if(proof.length && proof.every(result=>result.rule && (result.rule.asset_type!=='ordinal' || (result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug)))) return new Set<string>(proof
             .filter(result=>result.rule.asset_type==='ordinal')
             .map(result=>result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug).filter(Boolean));
           return roleCollections.get(roleId);
         };
         const fresh=()=>evidence.isFresh(collections()) && Date.now()-checkedAt<60000;
         if(!fresh()) {
-          evidence=memberEvidence();
+          evidence=memberEvidence();evidenceRuns.push(evidence.context);
           checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();
           if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
         }
@@ -307,7 +310,7 @@ export class BulkRoleService {
         timing.mutation_queue_ms+=Date.now()-queuedAt;
         if(!fresh()) {
           release();
-          evidence=memberEvidence();checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();
+          evidence=memberEvidence();evidenceRuns.push(evidence.context);checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();
           if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
           if(checked.status==='failed' && (job.mode==='grant' || !member.roles.cache.has(roleId))) {result.ineligible.push(roleId);continue;}
           queuedAt=Date.now();release=await this.mutations.acquire();
@@ -378,6 +381,7 @@ export class BulkRoleService {
         result.errors.push(roleId);
       }
     } } finally {checks.stop();await checks.done;}
+    if(!result.interrupted)for(const context of evidenceRuns)await this.engine.finishWalletChecks?.(context);
     result.timing=timing;
     return result;
   }

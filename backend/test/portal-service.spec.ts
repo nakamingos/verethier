@@ -214,7 +214,7 @@ describe('Portal server boundaries', () => {
     (service as any).privacy = { isOperator: () => false, policy: async () => ({share_since:'2026-01-01T00:00:00Z'}), visible: (since,time) => !!time && Date.parse(time)>=Date.parse(since) };
     const result = await service.member(session, server, target, false);
     expect(result.wallets).toEqual([
-      { ...current, blocked: false, block: null },
+      { ...current, blocked: false, block: null, checking: [] },
     ]);
     expect(result.removed_wallets).toEqual([
       {

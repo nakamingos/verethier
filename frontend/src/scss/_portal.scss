@@ -1308,6 +1308,13 @@ app-root:has(app-admin) .app-footer {
 }
 .wallet-table th:last-child { width:30%; }
 .wallet-table .address a { text-decoration:underline; text-underline-offset:3px; }
+.wallet-table .wallet-has-checking > td {
+  border-bottom: 0;
+  background-image: none;
+  padding-bottom: 0.2rem;
+}
+.wallet-table .wallet-checking td { padding-top: 0; }
+.wallet-table .wallet-checking p { margin: 0.4rem 0 0.6rem; font-size: 1.6rem; }
 .wallet-restriction-action { display:block;margin-top:0.4rem; }
 .wallet-block-status { display:table;margin-top:0.4rem; }
 .wallet-block-review { border-image-source:var(--pixel-card-highlight); }

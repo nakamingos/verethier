@@ -1,3 +1,4 @@
+import { WalletCheckService } from '@/services/wallet-check.service';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
@@ -40,6 +41,7 @@ export class MemberService {
     private readonly auth: PortalAuthService,
     @Optional() private readonly privacy?: PrivacyService,
     @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
+    @Optional() private readonly walletChecks?: WalletCheckService,
   ) {}
 
   private checked<T extends { error: any; data: any }>(result: T): T['data'] {
@@ -215,6 +217,7 @@ export class MemberService {
         sensitivity: 'base',
       }),
     );
+    const checking = await this.walletChecks?.statuses(session.user.id) || [];
     const history = this.checked(actions);
     const jobs = history.length
       ? this.checked(
@@ -229,7 +232,7 @@ export class MemberService {
       : [];
     return {
       capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED},
-      wallets: this.checked(wallets),
+      wallets: this.checked(wallets).map(wallet=>({...wallet,checking:checking.filter(state=>state.address===wallet.address && communities.some(community=>community.id===state.server_id)).map(state=>({...state,server_name:communities.find(community=>community.id===state.server_id)?.name}))})),
       communitiesUnavailable,
       communities,
       counts: {

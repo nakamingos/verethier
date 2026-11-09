@@ -1,3 +1,4 @@
+import { WalletCheckService } from '@/services/wallet-check.service';
 import { expandRuleRoles, ruleRoles } from '@/utils/rule-roles.util';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -87,6 +88,7 @@ export class PortalService {
     @Optional() private readonly nftCollections?: NftCollectionService,
     @Optional() private readonly solana?: SolanaOwnershipService,
     @Optional() private readonly stamps?: StampsOwnershipService,
+    @Optional() private readonly walletChecks?: WalletCheckService,
   ) {}
 
   client() {
@@ -1021,13 +1023,15 @@ export class PortalService {
             : undefined,
       });
     }
+    if(check)await this.engine.finishWalletChecks?.(context);
+    const checking = wallets.length ? await this.walletChecks?.statuses(id,server,wallets.map(wallet=>wallet.address)) || [] : [];
     return {
       id,
       name: member.displayName,
       username: member.user.username,
       avatar: member.displayAvatarURL(),
       wallets_private: !operator && !policy.share_since,
-      wallets: (wallets || []).map(withRestriction),
+      wallets: (wallets || []).map(wallet=>({...withRestriction(wallet),checking:checking.filter(state=>state.address===wallet.address)})),
       removed_wallets: removedWallets.map(withRestriction),
       ...(operator ? { blocked_attempts: await this.blockedAttempts(server, id) } : {}),
       roles,

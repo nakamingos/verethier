@@ -1,3 +1,4 @@
+import { checkPriority } from '@/utils/check-priority.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
@@ -69,6 +70,8 @@ export class VerificationEngine {
    * @param address - Ethereum wallet address to verify asset ownership for (also retrieves other user wallets)
    * @returns Promise<VerificationResult> - Comprehensive verification outcome
    */
+  async finishWalletChecks(context:NftCheckContext):Promise<void> {await this.ownershipSvc.finishWalletChecks?.(context);}
+
   async verifyUser(
     userId: string, 
     ruleId: string | number, 
@@ -454,14 +457,19 @@ export class VerificationEngine {
     const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
     const proven = context?.provenAddresses?.get(userId);
     if (!addresses.length && !proven) return { status: 'failed', results: [] };
-    if (context?.bulkGrantOnly && rules.some(rule => rule.asset_type === 'ordinal')) {
-      const databaseRules = rules.filter(rule => (!rule.asset_type || rule.asset_type === 'ethscription') && !rule.inscription_criteria);
-      if (databaseRules.length) {
-        const quick = await this.verifyUserBulk(userId, databaseRules.map(rule => rule.id), proven || addresses[0], databaseRules, context);
-        if (quick.validRules.length) return { status: 'passed', results: quick.results };
+    let checked: BulkVerificationResult;
+    if (context?.bulkGrantOnly) {
+      const tiers = [...new Set(rules.map(checkPriority))].sort((a,b) => a-b);
+      for (const tier of tiers) {
+        const included = rules.filter(rule => checkPriority(rule) <= tier);
+        // Keep prior contributions for cross-network combined thresholds. Reads
+        // within a tier remain parallel and earlier provider results are reused.
+        checked = await this.verifyUserBulk(userId, included.map(rule => rule.id), proven || addresses[0], included, context);
+        if (checked.validRules.length) return { status: 'passed', results: checked.results };
       }
+    } else {
+      checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), proven || addresses[0], rules, context);
     }
-    const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), proven || addresses[0], rules, context);
     return {
       status: checked.results.some(result => result.isValid) ? 'passed'
         : checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',
