@@ -45,6 +45,13 @@ export class BulkRoleService {
     private readonly roleActions: RoleActionService,
     private readonly privacy: PrivacyService,
   ) {}
+  requireOperator(actor: string) { this.privacy.requireOperator(actor); }
+  private async operatorJob(job: any) {
+    if (!this.privacy.isOperator(job.started_by)) {
+      await this.stop(job, 'failed', 'The execution account no longer has Bouncer Operator access. An authorized operator must resume this check.', job.started_by);
+      throw new BulkStopped('Operator access required');
+    }
+  }
   private checked(result: any) {
     if (result.error) throw new Error('Bulk role storage unavailable');
     return result.data;
@@ -57,6 +64,7 @@ export class BulkRoleService {
     }
   }
   async preview(guild: Guild, actor: string, input: BulkRolePreviewDto) {
+    this.requireOperator(actor);
     if(input.audience==='role' && !input.source_role_id) throw new BadRequestException('Choose an audience role.');
     const rules=await this.rules.getRoleMappings(guild.id);
     const selected=expandRuleRoles(input.rule_id ? rules.filter(r=>r.id===input.rule_id) : rules);
@@ -117,6 +125,7 @@ export class BulkRoleService {
     return {job,summary:this.checked(summary),members:this.checked(members),page};
   }
   async action(server: string,id: string,actor: string,action: string,request: string) {
+    this.requireOperator(actor);
     if(action==='delete') {
       if(!uuid(id)) throw new BadRequestException('Invalid bulk check ID.');
       const result=await this.db.rpc('verifier_delete_bulk_role_check',{p_server:server,p_job:id});
@@ -182,9 +191,13 @@ export class BulkRoleService {
     const current=await state.value;
     if(!['pending','running'].includes(current.status) || bulkRunKey(current)!==bulkRunKey(job))
       throw new BulkStopped('Check stopped or resumed');
+    await this.operatorJob(current);
   }
-  private async stop(job: any,status: string,message: string) {
-    this.checked(await this.db.from('verifier_bulk_role_jobs').update({status,message,updated_at:new Date().toISOString()}).eq('id',job.id).in('status',['pending','running']));
+  private async stop(job: any,status: string,message: string,executionActor?: string) {
+    let query=this.db.from('verifier_bulk_role_jobs').update({status,message,updated_at:new Date().toISOString()}).eq('id',job.id).in('status',['pending','running']);
+    // An old non-operator worker cannot stop a run taken over by an operator.
+    if(executionActor)query=query.eq('started_by',executionActor);
+    this.checked(await query);
   }
   private async guard(job: any,item: any,guild: Guild) {
     const [current,leaseResult,rules]=await Promise.all([
@@ -194,6 +207,7 @@ export class BulkRoleService {
       this.rules.getRoleMappings(job.server_id),
     ]);
     if(!['pending','running'].includes(current.status) || bulkRunKey(current)!==bulkRunKey(job)) throw new BulkStopped('Check stopped or resumed');
+    await this.operatorJob(current);
     if(!this.checked(leaseResult)) throw new Error('Check lease lost');
     if(bulkRulesVersion(rules)!==job.rules_version) {
       await this.stop(job,'stale','Rules changed. Create a new preview for the remaining members.'); throw new BulkStopped('Rules changed');

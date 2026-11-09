@@ -13,19 +13,21 @@ import { BulkRoleActionDto, BulkRolePreviewDto } from './bulk-role.dto';
 export class BulkRoleController {
   constructor(private readonly auth:PortalAuthService,private readonly portal:PortalService,private readonly checks:BulkRoleService) {}
   @Get() async list(@Req() req:Request,@Param('server') server:string) {
-    await this.portal.readAccess(await this.auth.session(req),server,'bulk_role_checks');
+    const session=await this.auth.session(req);this.checks.requireOperator(session.user.id);
+    await this.portal.readAccess(session,server,'bulk_role_checks');
     return this.checks.list(server);
   }
   @Post('preview') async preview(@Req() req:Request,@Param('server') server:string,@Body() body:BulkRolePreviewDto) {
-    const session=await this.auth.session(req);this.auth.assertMutation(req,session);
+    const session=await this.auth.session(req);this.auth.assertMutation(req,session);this.checks.requireOperator(session.user.id);
     return this.checks.preview(await this.portal.access(session,server),session.user.id,body);
   }
   @Get(':id') async info(@Req() req:Request,@Param('server') server:string,@Param('id') id:string,@Query('page') page='1') {
-    await this.portal.readAccess(await this.auth.session(req),server,'bulk_role_check');
+    const session=await this.auth.session(req);this.checks.requireOperator(session.user.id);
+    await this.portal.readAccess(session,server,'bulk_role_check');
     return this.checks.info(server,id,Number(page));
   }
   @Post(':id') async action(@Req() req:Request,@Param('server') server:string,@Param('id') id:string,@Body() body:BulkRoleActionDto) {
-    const session=await this.auth.session(req);this.auth.assertMutation(req,session);await this.portal.access(session,server);
+    const session=await this.auth.session(req);this.auth.assertMutation(req,session);this.checks.requireOperator(session.user.id);await this.portal.access(session,server);
     return this.checks.action(server,id,session.user.id,body.action,body.request_id);
   }
 }

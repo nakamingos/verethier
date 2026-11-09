@@ -6,7 +6,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
  const browser=await chromium.launch({executablePath:process.env.CHROME_BIN || '/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',headless:true,args:['--no-sandbox']});
  try{for(const width of [1280,768,393,320]){
   const context=await browser.newContext({viewport:{width,height:1000},hasTouch:width<800}),page=await context.newPage(),errors=[],writes=[];
-  let deleted=false,denyDeleteOnce=false;
+  let deleted=false,denyDeleteOnce=false,operator=true;
   let state='preview',mode='grant',started=false,processed=0,failed=0,granted=0,failResume=false,resumeReceipt;
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
   const info=()=>({job:{id,status:state,mode,started_by:started?user:null,labels:{audience:'Pizza Comrade',target:'Rule 204 · Comrade',roles:{[role]:'Comrade',rank1:'Gold Bearer',rank2:'Korporal',rank3:'Leutnant',unknown1:'Lord',unknown2:'McSkullx'}},created_at:new Date().toISOString(),preview_expires_at:new Date(Date.now()+1800000).toISOString()},summary:{total:2,processed,granted,removed:0,already_held:1,no_wallet:0,ineligible:0,unavailable:failed,excluded:0,left_audience:0,errors:failed},members:[{user_id:user,member_name:'Pizza member',status:started?'completed':'pending',result:started?{granted:[role],ineligible:['rank1','rank2','rank3'],unavailable:['unknown1','unknown2']}:{},updated_at:new Date().toISOString()}],page:1});
@@ -14,7 +14,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
    const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();
    if(url.pathname.startsWith('/api/portal')){
     const p=url.pathname.slice(11);let data={};
-    if(p==='/session')data={user:{id:user,name:'Admin'},csrf:'csrf',configured:true};
+    if(p==='/session')data={user:{id:user,name:'Admin'},csrf:'csrf',configured:true,operator};
     else if(p==='/servers')data={servers:[{id:server,name:'NoMoreLabs',installed:true}]};
     else if(p===`/servers/${server}`)data={server:{id:server,name:'NoMoreLabs'},rules:[{id:204,role_id:role,role_name:'Comrade',asset_type:'ordinal',slug:'pizza-comrades',min_items:1,fields:[]}],roles:[{id:source,name:'Pizza Comrade',manageable:true},{id:role,name:'Comrade',manageable:true}],channels:[],diagnostics:[],role_actions:[],settings:{background_checks_enabled:true}};
     else if(p.includes('/bulk-role-checks')){
@@ -96,6 +96,10 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
   await page.getByText('No recent bulk checks.',{exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'Bulk check results'}).count(),0);assert.equal(granted,grantsBeforeDelete,'Deleting a report does not undo grants');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');assert.deepEqual(errors,[]);
+  operator=false;await page.goto(origin+'/admin?server='+server+'&tab=bulk');
+  await page.getByRole('button',{name:'Rules',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Bulk role check',exact:true}).count(),0,'Ordinary admins have no bulk tab');
+  assert.equal(await page.locator('app-bulk-role-checks').count(),0,'A direct bulk URL cannot mount the component');
   console.log('PASS bulk roles '+width);await context.close();
  }}finally{await browser.close();}
  console.log('Artifacts: '+artifacts);

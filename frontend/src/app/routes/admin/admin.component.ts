@@ -52,7 +52,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       ['rules', 'Rules'],
       ['settings', 'Bot Settings'],
       ['members', 'Member Lookup'],
-      ['bulk', 'Bulk role check'],
+      ...(this.isOperator ? [['bulk', 'Bulk role check']] : []),
       ['audit', 'Audit Log'],
       ['exports', 'Exports'],
       ...(this.isOperator ? [['operator', 'Operator']] : []),
@@ -60,6 +60,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   get isOperator() {
     return this.session.operator;
+  }
+  get bulkCheckAdvice() {
+    return this.isOperator ? 'Run a bulk role check to recheck saved wallets.'
+      : 'Contact a Bouncer Operator to request a bulk role check.';
   }
   async savePrivacySettings() {
     if (this.busy) return;
@@ -1203,7 +1207,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.notice = creating
         ? 'Rule created.'
         : action.rechecks_queued === 0
-          ? 'Rule saved. No automatic check was queued. Run a bulk role check to recheck saved wallets.'
+          ? 'Rule saved. No automatic check was queued. ' + this.bulkCheckAdvice
           : 'Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.';
     });
   }
@@ -1221,7 +1225,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       );
       this.undoLabel = 'Undo';
       await this.reload();
-      this.notice = this.undo.rechecks_queued === 0 ? 'Rule deleted. No automatic check was queued. Run a bulk role check to recheck saved wallets.' : 'Rule deleted. Compatible role checks are queued.';
+      this.notice = this.undo.rechecks_queued === 0 ? 'Rule deleted. No automatic check was queued. ' + this.bulkCheckAdvice : 'Rule deleted. Compatible role checks are queued.';
     });
   }
   async reverse(action = this.undo) {
@@ -1234,7 +1238,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.undoLabel = this.undoLabel === 'Undo' ? 'Redo' : 'Undo';
       await this.reload();
       if (this.tab === 'audit') await this.loadActivity();
-      this.notice = this.undo.rechecks_queued === 0 ? 'Change reversed. No automatic check was queued. Run a bulk role check to recheck saved wallets.' : 'Change reversed. Compatible role checks are queued.';
+      this.notice = this.undo.rechecks_queued === 0 ? 'Change reversed. No automatic check was queued. ' + this.bulkCheckAdvice : 'Change reversed. Compatible role checks are queued.';
     });
   }
   async settings() {

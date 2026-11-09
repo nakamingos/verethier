@@ -13,11 +13,11 @@ function fixture() {
  const roles:any={addUserRoleDynamic:jest.fn().mockResolvedValue(true),removeUserRole:jest.fn().mockResolvedValue(true)};
  const passed={status:'passed',isValid:true,ruleId:204,results:[{isValid:true,ruleId:204}]};
  const engine:any={verifyUser:jest.fn().mockResolvedValue(passed),evaluateRole:jest.fn().mockResolvedValue(passed)};
- const blocks:any={allowedAddresses:jest.fn().mockResolvedValue(['wallet'])},actions:any={blockedBy:jest.fn().mockResolvedValue(false)},privacy:any={assertActive:jest.fn()};
+ const blocks:any={allowedAddresses:jest.fn().mockResolvedValue(['wallet'])},actions:any={blockedBy:jest.fn().mockResolvedValue(false)},privacy:any={assertActive:jest.fn(),requireOperator:jest.fn(),isOperator:jest.fn().mockReturnValue(true)};
  const service:any=new BulkRoleService(db,rules,discord,roles,engine,blocks,actions,privacy);
  jest.spyOn(service,'assertRunning').mockResolvedValue(undefined);
  jest.spyOn(service,'guard').mockResolvedValue([rule]);jest.spyOn(service,'walletSnapshot').mockResolvedValue({rows:[{address:'wallet'}],key:'original'});
- return {service,rule,member,guild,db,query,rules,roles,engine,blocks,actions};
+ return {service,rule,member,guild,db,query,rules,roles,engine,blocks,actions,privacy};
 }
 describe('Bulk role eligibility and grants',()=>{
  it('grants a newly eligible role and tracks it without removing source roles',async()=>{
@@ -71,9 +71,47 @@ describe('Bulk role eligibility and grants',()=>{
 });
 describe('Bulk role authorization',()=>{
  it('requires CSRF and normal administrator access for preview and execution',async()=>{
-  const auth:any={session:jest.fn().mockResolvedValue({user:{id:user}}),assertMutation:jest.fn(()=>{throw new Error('CSRF')})},portal:any={access:jest.fn()},checks:any={preview:jest.fn(),action:jest.fn()};const c=new BulkRoleController(auth,portal,checks);
+  const auth:any={session:jest.fn().mockResolvedValue({user:{id:user}}),assertMutation:jest.fn(()=>{throw new Error('CSRF')})},portal:any={access:jest.fn()},checks:any={preview:jest.fn(),action:jest.fn(),requireOperator:jest.fn()};const c=new BulkRoleController(auth,portal,checks);
   await expect(c.preview({} as any,server,{} as any)).rejects.toThrow('CSRF');await expect(c.action({} as any,server,job.id,{} as any)).rejects.toThrow('CSRF');expect(checks.action).not.toHaveBeenCalled();
   auth.assertMutation.mockImplementation(()=>{});portal.access.mockRejectedValue(new Error('Administrator required'));await expect(c.preview({} as any,server,{} as any)).rejects.toThrow('Administrator required');expect(checks.preview).not.toHaveBeenCalled();
+ });
+});
+
+describe('Operator-only bulk access',()=>{
+ it.each(['list','info','preview','action'])('rejects ordinary admins on the %s endpoint before accessing reports or audiences',async endpoint=>{
+  const auth:any={session:async()=>({user:{id:user}}),assertMutation:jest.fn()};
+  const portal:any={readAccess:jest.fn(),access:jest.fn()};
+  const checks:any={requireOperator:jest.fn(()=>{throw new Error('Bouncer Operator access is required.');}),list:jest.fn(),info:jest.fn(),preview:jest.fn(),action:jest.fn()};
+  const c=new BulkRoleController(auth,portal,checks);
+  const calls={list:()=>c.list({} as any,server),info:()=>c.info({} as any,server,job.id),preview:()=>c.preview({} as any,server,{} as any),action:()=>c.action({} as any,server,job.id,{} as any)};
+  await expect(calls[endpoint]()).rejects.toThrow('Bouncer Operator');
+  expect(portal.readAccess).not.toHaveBeenCalled();expect(portal.access).not.toHaveBeenCalled();
+  for(const method of ['list','info','preview','action'])expect(checks[method]).not.toHaveBeenCalled();
+ });
+ it('preserves audited server read access for operator reports',async()=>{
+  const auth:any={session:async()=>({user:{id:user}})},portal:any={readAccess:jest.fn()},checks:any={requireOperator:jest.fn(),list:jest.fn().mockResolvedValue([])};
+  const c=new BulkRoleController(auth,portal,checks);expect(await c.list({} as any,server)).toEqual([]);
+  expect(checks.requireOperator).toHaveBeenCalledWith(user);expect(portal.readAccess).toHaveBeenCalledWith({user:{id:user}},server,'bulk_role_checks');
+ });
+ it.each(['start','resume','retry','cancel','delete'])('protects the %s service action even when called outside the controller',async action=>{
+  const f=fixture();f.privacy.requireOperator.mockImplementation(()=>{throw new Error('Operator required');});f.db.rpc=jest.fn();
+  await expect(f.service.action(server,job.id,user,action,job.id)).rejects.toThrow('Operator required');expect(f.db.rpc).not.toHaveBeenCalled();expect(f.db.from).not.toHaveBeenCalled();
+ });
+ it('protects expensive audience previews before any Discord or database reads',async()=>{
+  const f=fixture();f.privacy.requireOperator.mockImplementation(()=>{throw new Error('Operator required');});
+  await expect(f.service.preview(f.guild,user,{})).rejects.toThrow('Operator required');expect(f.rules.getRoleMappings).not.toHaveBeenCalled();expect(f.guild.members.fetch).not.toHaveBeenCalled();
+ });
+ it('fences a permission stop to the original execution account',async()=>{
+  const f=fixture();f.query.update=jest.fn().mockReturnThis();f.query.in=jest.fn().mockReturnThis();f.privacy.isOperator.mockReturnValue(false);
+  await expect(f.service.operatorJob({...job,started_by:user})).rejects.toThrow('Operator access required');
+  expect(f.query.eq).toHaveBeenCalledWith('started_by',user);
+ });
+ it('stops queued or active work when the execution account is no longer an operator',async()=>{
+  const f=fixture();f.service.guard.mockRestore();jest.spyOn(f.service,'job').mockResolvedValue({...job,status:'running',started_by:user,rules_version:bulkRulesVersion([f.rule])});
+  jest.spyOn(f.service,'stop').mockResolvedValue(undefined);f.privacy.isOperator.mockReturnValue(false);
+  await expect(f.service.checkMember(job,{user_id:user,result:{}})).rejects.toThrow('Operator access required');
+  expect(f.service.stop).toHaveBeenCalledWith(expect.anything(),'failed',expect.stringContaining('Bouncer Operator'),user);
+  expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.engine.evaluateRole).not.toHaveBeenCalled();expect(f.roles.addUserRoleDynamic).not.toHaveBeenCalled();expect(f.roles.removeUserRole).not.toHaveBeenCalled();
  });
 });
 
@@ -247,7 +285,7 @@ describe('Deleting saved bulk-check reports',()=>{
  });
  it('requires CSRF and live administrator permission for deletion',async()=>{
   const auth:any={session:async()=>({user:{id:user}}),assertMutation:jest.fn(()=>{throw new Error('CSRF')})};
-  const portal:any={access:jest.fn().mockRejectedValue(new Error('Administrator required'))},checks:any={action:jest.fn()};
+  const portal:any={access:jest.fn().mockRejectedValue(new Error('Administrator required'))},checks:any={action:jest.fn(),requireOperator:jest.fn()};
   const c=new BulkRoleController(auth,portal,checks);
   await expect(c.action({} as any,server,job.id,{action:'delete',request_id:job.id})).rejects.toThrow('CSRF');
   auth.assertMutation.mockImplementation(()=>{});
