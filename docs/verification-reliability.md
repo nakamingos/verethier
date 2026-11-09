@@ -63,3 +63,11 @@ Outstanding: affected desktop wallet/browser and actual error; real iOS follow-u
 Previously earned-role history can remain after a Discord role is deleted. Removal is idempotent: a fresh member without the role, a missing role result, or Discord's explicit Unknown Role response already satisfies removal. These cases retain the history without a Discord write or a fabricated removal event. Permission and transport failures still retain assignments for retry. Add/grant handling continues to require an existing role.
 
 Validation covers absent roles on fresh members, deletion races, explicit Unknown Role responses and transient lookup/removal failures. These corrections are local until published; no historical assignments are deleted.
+
+## Ethscriptions provider failure diagnostics
+
+Global numbered Ethscription rules read complete direct and marketplace-escrow inventories through the protocol API. They use 50-item pages, a 1,000-item inventory safety limit and a serialized request queue. Requests waiting more than 45 seconds are rejected; upstream requests have a ten-second timeout and up to three attempts. Queue expiry, HTTP failures, invalid JSON, malformed records, ownership mismatches and incomplete pagination all remain unavailable results rather than false zero holdings.
+
+Sanitized server warnings now distinguish these failure classes without including wallet addresses, request URLs, raw exceptions or response bodies. The member-facing message stays generic. Earlier generic logs cannot establish which failure class occurred retrospectively; a successful health probe later does not prove the provider was healthy at the earlier failure time. Priority-tier evaluation can log the same cached failed requirement again when trying later alternatives; that does not establish another upstream request.
+
+The diagnostic changes preserve existing request pacing, retries, inventory bounds, role-retention behavior and dormancy safeguards. Local validation passed all 1,995 backend tests across 96 suites and the production backend build. Targeted member-wallet replays require authorization before sending saved addresses to an external provider; no such replay was performed during this investigation.

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { NftCheckContext } from '../src/services/nft-ownership.service';
@@ -143,6 +144,30 @@ describe('Ethscriptions API requests', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toMatch(/^https:\/\/api.ethscriptions.com\/v2\/ethscriptions\?/);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'error', headers: { Accept: 'application/json' } });
+  });
+  it('distinguishes a local queue deadline from an upstream failure',async()=>{
+    let release:(response:Response)=>void;
+    const fetchMock=jest.spyOn(global,'fetch').mockImplementationOnce(()=>new Promise(resolve=>release=resolve));
+    const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
+    const service=new EthscriptionsOwnershipService(),first=service.checkSetupHealth();
+    const queued=service.checkSetupHealth(),assertion=expect(queued).rejects.toThrow('temporarily unavailable');
+    await jest.advanceTimersByTimeAsync(45001);release(response(200,page()));await jest.runAllTimersAsync();await first;await assertion;
+    expect(fetchMock).toHaveBeenCalledTimes(1);expect(warning).toHaveBeenCalledWith(expect.stringContaining('request queue expired'), 'EthscriptionsOwnershipService');
+  });
+  it('logs sanitized HTTP status while retaining the generic public message',async()=>{
+    jest.spyOn(global,'fetch').mockResolvedValue(response(503,null));const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
+    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria,run());
+    const assertion=expect(pending).rejects.toThrow('Ethscriptions verification is temporarily unavailable. Please try again.');
+    await jest.runAllTimersAsync();await assertion;
+    expect(warning).toHaveBeenCalledWith('Ethscriptions provider unavailable: HTTP 503 after 3 attempts','EthscriptionsOwnershipService');
+    expect(JSON.stringify(warning.mock.calls)).not.toContain(wallet);
+  });
+  it('does not log raw transport exceptions containing addresses or URLs',async()=>{
+    jest.spyOn(global,'fetch').mockRejectedValue(new Error('https://private.example/?wallet='+wallet));const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
+    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria,run()),assertion=expect(pending).rejects.toThrow('temporarily unavailable');
+    await jest.runAllTimersAsync();await assertion;
+    expect(warning).toHaveBeenCalledWith('Ethscriptions provider unavailable: network request failed','EthscriptionsOwnershipService');
+    expect(JSON.stringify(warning.mock.calls)).not.toContain(wallet);expect(JSON.stringify(warning.mock.calls)).not.toContain('private.example');
   });
   it('does not turn rejected requests into zero ownership', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(response(401, null));

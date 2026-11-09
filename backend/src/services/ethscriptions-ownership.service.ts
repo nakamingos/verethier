@@ -1,5 +1,5 @@
 import { RuleInputError } from '@/utils/rule-input-error';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EthscriptionOwnership } from '@/models/ethscription-ownership.interface';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
 import { NftRuleFields } from '@/models/verifier-role.interface';
@@ -17,6 +17,13 @@ const UNAVAILABLE = 'Ethscriptions verification is temporarily unavailable. Plea
 @Injectable()
 export class EthscriptionsOwnershipService {
   private requestTail: Promise<unknown> = Promise.resolve();
+
+  private unavailable(reason: string): Error {
+    // Server-only diagnostics: never include addresses, URLs, response bodies or
+    // raw upstream errors in the log or the member-facing exception.
+    Logger.warn(`Ethscriptions provider unavailable: ${reason}`, EthscriptionsOwnershipService.name);
+    return new Error(UNAVAILABLE);
+  }
 
   async checkSetupHealth(): Promise<void> {
     this.validatePage(await this.request('/ethscriptions?max_results=1'));
@@ -39,7 +46,7 @@ export class EthscriptionsOwnershipService {
 
   async matchingIds(wallets: string[], criteria: InscriptionCriteria, context: NftCheckContext): Promise<string[]> {
     const addresses = [...new Set(wallets.map(wallet => wallet.toLowerCase()))].sort();
-    if (addresses.some(wallet => !ADDRESS.test(wallet))) throw new Error(UNAVAILABLE);
+    if (addresses.some(wallet => !ADDRESS.test(wallet))) throw this.unavailable('invalid wallet address');
     if (!addresses.length) return [];
     const linked = new Set(addresses);
     if (criteria.kind === 'ids') {
@@ -51,7 +58,7 @@ export class EthscriptionsOwnershipService {
     for (const wallet of addresses) {
       if (!context.ethscriptionInventories.has(wallet)) context.ethscriptionInventories.set(wallet, this.readInventory(wallet));
       for (const [id, record] of await context.ethscriptionInventories.get(wallet)) {
-        if (selected.has(id) && selected.get(id) !== record.number) throw new Error(UNAVAILABLE);
+        if (selected.has(id) && selected.get(id) !== record.number) throw this.unavailable('inconsistent inventory numbers');
         selected.set(id, record.number);
       }
     }
@@ -84,13 +91,13 @@ export class EthscriptionsOwnershipService {
     for (const id of ids) query.append('transaction_hash[]', id);
     const data = await this.request('/ethscriptions?' + query);
     this.validatePage(data);
-    if (data.pagination.has_more || data.result.length !== ids.length) throw new Error(UNAVAILABLE);
+    if (data.pagination.has_more || data.result.length !== ids.length) throw this.unavailable('incomplete selected-owner response');
     const requested = new Set(ids);
     const owners = new Map<string, EthscriptionOwnership>();
     const numbers = new Set<number>();
     for (const item of data.result) {
       const [id, record] = this.record(item);
-      if (!requested.has(id) || owners.has(id) || numbers.has(record.number)) throw new Error(UNAVAILABLE);
+      if (!requested.has(id) || owners.has(id) || numbers.has(record.number)) throw this.unavailable('invalid or duplicate selected-owner record');
       owners.set(id, record);
       numbers.add(record.number);
     }
@@ -113,25 +120,25 @@ export class EthscriptionsOwnershipService {
         for (const item of data.result) {
           const [id, record] = this.record(item);
           if (items.has(id) || numbers.has(record.number) || record.owner !== (escrow ? MARKET : wallet)
-            || (escrow && record.prevOwner !== wallet)) throw new Error(UNAVAILABLE);
+            || (escrow && record.prevOwner !== wallet)) throw this.unavailable('duplicate inventory record or ownership filter mismatch');
           items.set(id, record);
           numbers.add(record.number);
         }
-        if (items.size > MAX_ITEMS) throw new Error(UNAVAILABLE);
+        if (items.size > MAX_ITEMS) throw this.unavailable(`inventory exceeds ${MAX_ITEMS}-item safety limit`);
         if (!data.pagination.has_more) { complete = true; break; }
         const cursor = data.pagination.page_key;
-        if (!data.result.length || typeof cursor !== 'string' || !cursor.length || cursor.length > 2000 || cursors.has(cursor)) throw new Error(UNAVAILABLE);
+        if (!data.result.length || typeof cursor !== 'string' || !cursor.length || cursor.length > 2000 || cursors.has(cursor)) throw this.unavailable('invalid or repeated inventory pagination cursor');
         cursors.add(cursor);
         query.set('page_key', cursor);
       }
-      if (!complete) throw new Error(UNAVAILABLE);
+      if (!complete) throw this.unavailable('inventory page safety limit reached before completion');
     }
     return items;
   }
 
   private validatePage(data: any): void {
     if (!data || !Array.isArray(data.result) || data.result.length > PAGE_SIZE
-      || typeof data.pagination?.has_more !== 'boolean') throw new Error(UNAVAILABLE);
+      || typeof data.pagination?.has_more !== 'boolean') throw this.unavailable('unexpected API page format');
   }
 
   private record(item: any): [string, EthscriptionOwnership] {
@@ -140,14 +147,15 @@ export class EthscriptionsOwnershipService {
     if (!item || typeof item.transaction_hash !== 'string' || !ETHSCRIPTION_ID.test(item.transaction_hash)
       || !Number.isSafeInteger(number) || number < 0 || typeof item.current_owner !== 'string' || !ADDRESS.test(item.current_owner)
       || (item.previous_owner != null && (typeof item.previous_owner !== 'string' || !ADDRESS.test(item.previous_owner)))
-      || (item.current_owner.toLowerCase() === MARKET && item.previous_owner == null)) throw new Error(UNAVAILABLE);
+      || (item.current_owner.toLowerCase() === MARKET && item.previous_owner == null)) throw this.unavailable('invalid inscription record');
     return [item.transaction_hash, { owner: item.current_owner.toLowerCase(), prevOwner: item.previous_owner?.toLowerCase() ?? null, number }];
   }
 
   private request(path: string): Promise<any> {
     const queuedAt = Date.now();
     const result = this.requestTail.then(async () => {
-      if (Date.now() - queuedAt > 45000) throw new Error(UNAVAILABLE);
+      if (Date.now() - queuedAt > 45000) throw this.unavailable(`request queue expired after ${Date.now() - queuedAt}ms (limit 45000ms)`);
+      let lastReason = 'request failed';
       for (let attempt = 0; attempt < 3; attempt++) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
@@ -155,15 +163,19 @@ export class EthscriptionsOwnershipService {
         try {
           const response = await fetch(API_URL + path, { headers: { Accept: 'application/json' }, signal: controller.signal, redirect: 'error' });
           if (response.ok) return await response.json();
-          if (response.status !== 429 && response.status < 500) throw new Error(UNAVAILABLE);
+          lastReason = `HTTP ${response.status}`;
+          if (response.status !== 429 && response.status < 500) throw this.unavailable(lastReason);
           const retryAfter = Number(response.headers.get('retry-after'));
           if (Number.isFinite(retryAfter) && retryAfter > 0) retryDelay = Math.min(retryAfter * 1000, 3000);
         } catch (error) {
-          if (error.message === UNAVAILABLE || attempt === 2) throw new Error(UNAVAILABLE);
+          if (error.message === UNAVAILABLE) throw error;
+          lastReason = error.name === 'AbortError' ? 'request timed out (10000ms)'
+            : error instanceof SyntaxError ? 'invalid JSON response' : 'network request failed';
+          if (attempt === 2) throw this.unavailable(lastReason);
         } finally { clearTimeout(timeout); }
         if (attempt < 2) await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-      throw new Error(UNAVAILABLE);
+      throw this.unavailable(`${lastReason} after 3 attempts`);
     });
     this.requestTail = result.catch(() => undefined).then(() => new Promise(resolve => setTimeout(resolve, 200)));
     return result;
