@@ -115,6 +115,14 @@ export class BulkRoleService {
     return {job,summary:this.checked(summary),members:this.checked(members),page};
   }
   async action(server: string,id: string,actor: string,action: string,request: string) {
+    if(action==='delete') {
+      if(!uuid(id)) throw new BadRequestException('Invalid bulk check ID.');
+      const result=await this.db.rpc('verifier_delete_bulk_role_check',{p_server:server,p_job:id});
+      if(result.error?.code==='55000') throw new ConflictException('Cancel the check and wait for any member currently being processed to finish before deleting it.');
+      this.checked(result);
+      this.reads.clear(id);this.states.delete(id);
+      return {deleted:true};
+    }
     const job=await this.job(server,id);
     if(action!=='cancel' && bulkRulesVersion(await this.rules.getRoleMappings(server))!==job.rules_version)
       throw new ConflictException('Rules changed. Create a new preview.');

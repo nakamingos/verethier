@@ -6,6 +6,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
  const browser=await chromium.launch({executablePath:process.env.CHROME_BIN || '/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',headless:true,args:['--no-sandbox']});
  try{for(const width of [1280,768,393,320]){
   const context=await browser.newContext({viewport:{width,height:1000},hasTouch:width<800}),page=await context.newPage(),errors=[],writes=[];
+  let deleted=false,denyDeleteOnce=false;
   let state='preview',mode='grant',started=false,processed=0,failed=0,granted=0,failResume=false,resumeReceipt;
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
   const info=()=>({job:{id,status:state,mode,started_by:started?user:null,labels:{audience:'Pizza Comrade',target:'Rule 204 · Comrade',roles:{[role]:'Comrade',rank1:'Gold Bearer',rank2:'Korporal',rank3:'Leutnant',unknown1:'Lord',unknown2:'McSkullx'}},created_at:new Date().toISOString(),preview_expires_at:new Date(Date.now()+1800000).toISOString()},summary:{total:2,processed,granted,removed:0,already_held:1,no_wallet:0,ineligible:0,unavailable:failed,excluded:0,left_audience:0,errors:failed},members:[{user_id:user,member_name:'Pizza member',status:started?'completed':'pending',result:started?{granted:[role],ineligible:['rank1','rank2','rank3'],unavailable:['unknown1','unknown2']}:{},updated_at:new Date().toISOString()}],page:1});
@@ -22,13 +23,17 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
       if(p.endsWith('/preview')){assert.equal(body.source_role_id,source);assert.equal(body.rule_id,204);mode=body.mode;state='preview';started=false;processed=failed=granted=0;}
       else if(body.action==='start'){state='completed';started=true;processed=2;granted=1;}
       else if(body.action==='cancel')state='cancelled';
+      else if(body.action==='delete'){
+       if(denyDeleteOnce){denyDeleteOnce=false;return route.fulfill({status:409,json:{message:'A member is still finishing. Try deleting again shortly.'}});}
+       assert.ok(!['pending','running'].includes(state),'Active reports cannot be deleted');deleted=true;return route.fulfill({json:{deleted:true}});
+      }
       else if(body.action==='resume'){
        state='pending';
        if(failResume){failResume=false;resumeReceipt=body.request_id;return route.fulfill({status:503,json:{message:'Resume response was lost. Retry the same action.'}});}
        if(resumeReceipt)assert.equal(body.request_id,resumeReceipt,'Resume retry reuses the accepted receipt');
       }else if(body.action==='retry'){state=state==='running'?'running':'pending';processed-=failed;failed=0;}
       data=info();
-     }else data=p.endsWith('/bulk-role-checks')?[info().job]:info();
+     }else data=p.endsWith('/bulk-role-checks')?(deleted?[]:[info().job]):info();
     }else throw new Error('Unexpected '+p);
     return route.fulfill({json:data});
    }
@@ -72,6 +77,22 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
   started=true;processed=1;state='cancelled';const before=writes.length;
   await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('button',{name:'Resume check',exact:true}).waitFor();
   page.once('dialog',d=>d.dismiss());await page.getByRole('button',{name:'Resume check',exact:true}).click();assert.equal(writes.length,before);
+  // Delete is disabled for active jobs, confirmed, recoverable after a conflict, and clears the open report.
+  const recent=page.getByRole('group',{name:'Recent bulk check: Pizza Comrade → Rule 204 · Comrade',exact:true});
+  state='running';await page.getByRole('button',{name:'Refresh history',exact:true}).click();
+  await recent.getByRole('button',{name:/· running$/}).waitFor();assert.equal(await recent.getByRole('button',{name:'Delete',exact:true}).isEnabled(),false);
+  state='cancelled';await page.getByRole('button',{name:'Refresh history',exact:true}).click();
+  await recent.getByRole('button',{name:/· cancelled$/}).waitFor();
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'History deletion controls fit the viewport');
+  await page.screenshot({path:path.join(artifacts,`delete-history-${width}.png`),fullPage:true});
+  const deletionCount=()=>writes.filter(w=>w.action==='delete').length;
+  const beforeDelete=deletionCount(),grantsBeforeDelete=granted;
+  page.once('dialog',d=>d.dismiss());await recent.getByRole('button',{name:'Delete',exact:true}).click();assert.equal(deletionCount(),beforeDelete);
+  denyDeleteOnce=true;page.once('dialog',d=>d.accept());await recent.getByRole('button',{name:'Delete',exact:true}).click();
+  await page.getByRole('alert').getByText('A member is still finishing. Try deleting again shortly.',{exact:true}).waitFor();assert.equal(deleted,false);
+  page.once('dialog',d=>d.accept());await recent.getByRole('button',{name:'Delete',exact:true}).click();
+  await page.getByText('No recent bulk checks.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('region',{name:'Bulk check results'}).count(),0);assert.equal(granted,grantsBeforeDelete,'Deleting a report does not undo grants');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');assert.deepEqual(errors,[]);
   console.log('PASS bulk roles '+width);await context.close();
  }}finally{await browser.close();}

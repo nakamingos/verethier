@@ -55,7 +55,14 @@ import { PortalSessionService } from '../../services/portal-session.service';
     </section>
   }
   <section class="panel"><div class="section-heading"><h2>Recent bulk checks</h2><button (click)="history()" [disabled]="busy">Refresh history</button></div>
-    @for(job of jobs;track job.id) { <p><button (click)="open(job.id)" [disabled]="busy">{{job.labels.audience}} → {{job.labels.target}} · {{job.status}}</button> <time>{{job.created_at | date:'short'}}</time></p> }
+    <p class="muted">Delete removes a saved check and its member results. Granted roles stay in place. Cancel active checks before deleting them.</p>
+    @for(job of jobs;track job.id) {
+      <div class="actions" role="group" [attr.aria-label]="'Recent bulk check: '+job.labels.audience+' → '+job.labels.target">
+        <button (click)="open(job.id)" [disabled]="busy">{{job.labels.audience}} → {{job.labels.target}} · {{job.status}}</button>
+        <time>{{job.created_at | date:'short'}}</time>
+        <button (click)="remove(job)" [disabled]="busy || !canDelete(job)" [title]="canDelete(job)?'Delete this saved check':'Cancel this check before deleting it'">Delete</button>
+      </div>
+    }
     @if(!jobs.length) { <p>No recent bulk checks.</p> }
   </section>`
 })
@@ -63,7 +70,7 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   @Input() server=''; @Input() rules:any[]=[]; @Input() roles:any[]=[];
   private session=inject(PortalSessionService);
   private actionRequest?:{job:string;action:string;id:string};
-  private generation=0; private timer?:ReturnType<typeof setTimeout>;
+  private generation=0; private historyEpoch=0; private timer?:ReturnType<typeof setTimeout>;
   busy=false;error='';view:any=null;jobs:any[]=[];
   filters:any={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};
   audiences=[{value:'verified',label:'All verified members'},{value:'role',label:'Current role holders'}];
@@ -79,10 +86,22 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
     const data=await response.json();if(!response.ok) {if(response.status===401)this.session.clear();throw new Error(typeof data.message==='string'?data.message:'Could not load this bulk check.');}return data;
   }
   private async perform(work:()=>Promise<void>){if(this.busy)return;const generation=this.generation;this.busy=true;this.error='';try{await work();}catch(e){if(generation===this.generation)this.error=(e as Error).message;}finally{if(generation===this.generation)this.busy=false;}}
-  async history(){const generation=this.generation;try{const jobs=await this.request();if(generation===this.generation)this.jobs=jobs;}catch(e){if(generation===this.generation)this.error=(e as Error).message;}}
+  async history(){const generation=this.generation,epoch=++this.historyEpoch;try{const jobs=await this.request();if(generation===this.generation && epoch===this.historyEpoch)this.jobs=jobs;}catch(e){if(generation===this.generation && epoch===this.historyEpoch)this.error=(e as Error).message;}}
+  canDelete(job:any){return ['preview','completed','failed','stale','cancelled'].includes(job.status);}
+  async remove(job:any){
+    if(this.busy || !this.canDelete(job) || !confirm('Delete this saved bulk check and its member results? Roles already granted or removed will stay as they are.'))return;
+    await this.perform(async()=>{
+      const generation=this.generation;
+      await this.request('/'+job.id,{action:'delete',request_id:crypto.randomUUID()});
+      if(generation!==this.generation)return;
+      this.historyEpoch++;this.jobs=this.jobs.filter(entry=>entry.id!==job.id);
+      if(this.view?.job.id===job.id){clearTimeout(this.timer);this.view=null;this.actionRequest=undefined;}
+      await this.history();
+    });
+  }
   async preview(){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/preview',{audience:this.filters.audience,...(this.filters.audience==='role'?{source_role_id:this.filters.source_role_id}:{}),...(this.filters.rule_id?{rule_id:Number(this.filters.rule_id)}:{}),mode:this.filters.mode,request_id:crypto.randomUUID()});if(generation===this.generation){this.view=view;await this.history();}});}
   async open(id:string){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/'+id);if(generation===this.generation){this.view=view;this.poll();}});}
-  async refresh(page=this.view?.page || 1){if(!this.view)return;const id=this.view.job.id,generation=this.generation;try{const view=await this.request(`/${id}?page=${page}`);if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();}}catch(e){if(generation===this.generation)this.error=(e as Error).message;}}
+  async refresh(page=this.view?.page || 1){if(!this.view)return;const id=this.view.job.id,generation=this.generation;try{const view=await this.request(`/${id}?page=${page}`);if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();}}catch(e){if(generation===this.generation && this.view?.job.id===id)this.error=(e as Error).message;}}
   async act(action:string) {
     if(!this.view)return;
     if(['start','resume','retry'].includes(action) && this.view.job.mode==='reconcile'

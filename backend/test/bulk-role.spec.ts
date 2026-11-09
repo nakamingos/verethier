@@ -196,3 +196,33 @@ describe('Bulk worker throughput and fresh evidence',()=>{
   await f.service.action(server,job.id,user,'retry','request');expect(f.db.rpc).toHaveBeenCalledWith('verifier_bulk_role_transition',expect.objectContaining({p_action:'retry'}));
  });
 });
+
+
+describe('Deleting saved bulk-check reports',()=>{
+ it('deletes only the scoped report without checking ownership or changing roles',async()=>{
+  const f=fixture();f.db.rpc=jest.fn().mockResolvedValue({data:null,error:null});
+  expect(await f.service.action(server,job.id,user,'delete',job.id)).toEqual({deleted:true});
+  expect(f.db.rpc).toHaveBeenCalledWith('verifier_delete_bulk_role_check',{p_server:server,p_job:job.id});
+  expect(f.rules.getRoleMappings).not.toHaveBeenCalled();expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.roles.removeUserRole).not.toHaveBeenCalled();
+ });
+ it('rejects an invalid check ID before storage access',async()=>{
+  const f=fixture();f.db.rpc=jest.fn();await expect(f.service.action(server,'invalid',user,'delete',job.id)).rejects.toThrow('Invalid bulk check ID');expect(f.db.rpc).not.toHaveBeenCalled();
+ });
+ it('explains active-job or live-lease conflicts and retains the report',async()=>{
+  const f=fixture();f.db.rpc=jest.fn().mockResolvedValue({error:{code:'55000'}});
+  await expect(f.service.action(server,job.id,user,'delete',job.id)).rejects.toThrow('wait for any member');
+ });
+ it('does not return private database errors when deleting fails',async()=>{
+  const f=fixture();f.db.rpc=jest.fn().mockResolvedValue({error:{code:'08006',message:'https://private.example/secret'}});
+  await expect(f.service.action(server,job.id,user,'delete',job.id)).rejects.toThrow('Bulk role storage unavailable');
+ });
+ it('requires CSRF and live administrator permission for deletion',async()=>{
+  const auth:any={session:async()=>({user:{id:user}}),assertMutation:jest.fn(()=>{throw new Error('CSRF')})};
+  const portal:any={access:jest.fn().mockRejectedValue(new Error('Administrator required'))},checks:any={action:jest.fn()};
+  const c=new BulkRoleController(auth,portal,checks);
+  await expect(c.action({} as any,server,job.id,{action:'delete',request_id:job.id})).rejects.toThrow('CSRF');
+  auth.assertMutation.mockImplementation(()=>{});
+  await expect(c.action({} as any,server,job.id,{action:'delete',request_id:job.id})).rejects.toThrow('Administrator required');
+  expect(checks.action).not.toHaveBeenCalled();
+ });
+});
