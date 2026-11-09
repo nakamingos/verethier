@@ -197,7 +197,7 @@ Control Room → Bot Settings → Bouncer activity log selects an optional Disco
 
 ## Bulk role checks
 
-Control Room → Bulk role check previews current role holders or verified server members, then checks saved proven wallets against one rule or all server rules. It can grant new roles without another signature. Grants-only is the default; optional reconciliation requires separate confirmation and preserves roles during provider uncertainty. Durable progress, per-member results, retries and cancellation are included. Apply migration `20261107030000_bulk_role_checks.sql` before deployment. See [bulk role checks](docs/bulk-role-checks.md).
+Control Room → Bulk role check previews current role holders or verified server members, then checks saved proven wallets against one rule or all server rules. It can grant new roles without another signature. Grants-only is the default; optional reconciliation requires separate confirmation and preserves roles during provider uncertainty. Durable progress, per-member results, cancellation/resume and failed-member retries are included. Three member workers overlap bounded ownership reads and share short-lived fresh collection responses. Apply migrations `20261107030000_bulk_role_checks.sql` and `20261109030000_bulk_role_throughput_resume.sql` before deploying these controls. See [bulk role checks](docs/bulk-role-checks.md).
 
 ## Wallet blocks
 

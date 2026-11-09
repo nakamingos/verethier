@@ -49,6 +49,8 @@ export interface NftCheckContext {
   ordinalSummaries?: Map<string, Promise<Map<string, bigint>>>;
   ordinalIds?: Map<string, Promise<Set<string>>>;
   ordinalCollections?: Map<string, Promise<OrdinalCollectionSnapshot>>;
+  /** Bulk workers may share a bounded fresh collection response across members. */
+  ordinalCollectionRead?: (slug: string, load: () => Promise<OrdinalCollectionSnapshot>) => Promise<OrdinalCollectionSnapshot>;
   blocks?: Map<number, Promise<bigint>>;
   nftOwnedTokens?: Map<string, Promise<Map<string, bigint>>>;
   nftMetadata?: Map<string, Promise<Map<string, NftAttributes>>>;

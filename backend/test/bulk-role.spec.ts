@@ -6,7 +6,7 @@ function fixture() {
  const rule:any={id:204,server_id:server,channel_id:'channel',role_id:role,role_name:'Comrade',asset_type:'ordinal',slug:'pizza-comrades',min_items:1};
  const member:any={id:user,user:{bot:false},displayName:'Member',roles:{cache:new Map([[source,{}]])}};
  const guild:any={id:server,name:'Server',members:{fetch:jest.fn().mockResolvedValue(member)}};
- const query:any={select:jest.fn().mockReturnThis(),eq:jest.fn().mockReturnThis(),maybeSingle:jest.fn().mockResolvedValue({data:null,error:null})};
+ const query:any={select:jest.fn().mockReturnThis(),eq:jest.fn().mockReturnThis(),gt:jest.fn().mockReturnThis(),maybeSingle:jest.fn().mockResolvedValue({data:null,error:null})};
  const db:any={from:jest.fn(()=>query)};
  const rules:any={getRoleMappings:jest.fn().mockResolvedValue([rule]),trackRoleAssignment:jest.fn().mockResolvedValue({}),getEarnedRoleAssignments:jest.fn().mockResolvedValue([{id:'assignment'}]),updateRoleAssignmentStatus:jest.fn()};
  const discord:any={getBotClient:()=>({guilds:{fetch:async()=>guild}})};
@@ -15,6 +15,7 @@ function fixture() {
  const engine:any={verifyUser:jest.fn().mockResolvedValue(passed),evaluateRole:jest.fn().mockResolvedValue(passed)};
  const blocks:any={allowedAddresses:jest.fn().mockResolvedValue(['wallet'])},actions:any={blockedBy:jest.fn().mockResolvedValue(false)},privacy:any={assertActive:jest.fn()};
  const service:any=new BulkRoleService(db,rules,discord,roles,engine,blocks,actions,privacy);
+ jest.spyOn(service,'assertRunning').mockResolvedValue(undefined);
  jest.spyOn(service,'guard').mockResolvedValue([rule]);jest.spyOn(service,'walletSnapshot').mockResolvedValue({rows:[{address:'wallet'}],key:'original'});
  return {service,rule,member,guild,db,query,rules,roles,engine,blocks,actions};
 }
@@ -124,4 +125,74 @@ it('retains actual grants in the report if a member removes their wallet before 
  const f=fixture();f.service.walletSnapshot.mockResolvedValue({rows:[],key:'empty'});
  const result=await f.service.checkMember(job,{user_id:user,result:{granted:[role]}});
  expect(result.skip).toBe('no_wallet');expect(result.granted).toEqual([role]);expect(f.roles.addUserRoleDynamic).not.toHaveBeenCalled();
+});
+
+describe('Bulk worker throughput and fresh evidence',()=>{
+ afterEach(()=>jest.restoreAllMocks());
+ it('runs at most three member workers and refills a freed worker immediately',async()=>{
+  const {EnvironmentConfig}=require('../src/config/environment.config');
+  jest.replaceProperty(EnvironmentConfig,'IS_TEST',false);
+  const f=fixture();let active=0,max=0,next=0;const releases:Array<()=>void>=[];
+  jest.spyOn(f.service,'workOnce').mockImplementation(async()=>{
+   if(next++>=6)return false;
+   active++;max=Math.max(max,active);
+   await new Promise<void>(resolve=>releases.push(()=>{active--;resolve();}));return true;
+  });
+  f.service.run();f.service.run();expect(releases).toHaveLength(3);expect(max).toBe(3);
+  releases[0]();await new Promise(resolve=>setImmediate(resolve));expect(releases).toHaveLength(4);
+  releases[1]();releases[2]();releases[3]();await new Promise(resolve=>setImmediate(resolve));
+  releases[4]();releases[5]();await Promise.all([...f.service.active]);expect(max).toBe(3);
+  const calls=f.service.workOnce.mock.calls.length;f.service.run();expect(f.service.workOnce).toHaveBeenCalledTimes(calls);
+ });
+ it('prefetches role eligibility concurrently but applies role changes one at a time in rule order',async()=>{
+  const f=fixture();const rules=Array.from({length:5},(_,i)=>({...f.rule,id:204+i,role_id:role+i}));
+  f.service.guard.mockResolvedValue(rules);
+  let active=0,max=0;const resolve:Array<()=>void>=[];
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId,_context,loaded)=>{
+   expect(loaded).toBe(rules);active++;max=Math.max(max,active);
+   await new Promise<void>(done=>resolve.push(done));active--;
+   return {status:'passed',results:[{isValid:true,ruleId:rules.find(r=>r.role_id===roleId).id}]};
+  });
+  const changes:string[]=[];let writes=0,maxWrites=0;
+  f.roles.addUserRoleDynamic.mockImplementation(async(_user,_server,roleId)=>{writes++;maxWrites=Math.max(maxWrites,writes);changes.push(roleId);await Promise.resolve();writes--;return true;});
+  const done=f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  await new Promise(resolve=>setImmediate(resolve));expect(resolve).toHaveLength(3);
+  resolve[1]();await new Promise(done=>setImmediate(done));expect(resolve).toHaveLength(4);expect(changes).toEqual([]);
+  resolve[0]();resolve[2]();resolve[3]();await new Promise(done=>setImmediate(done));resolve[4]();
+  const result=await done;expect(max).toBe(3);expect(maxWrites).toBe(1);expect(changes).toEqual(rules.map(r=>r.role_id));expect(result.granted).toEqual(changes);
+ });
+ it('refreshes expired shared collection evidence before a later role mutation',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture();const rules=[f.rule,{...f.rule,id:205,role_id:role+'other'}];f.service.guard.mockResolvedValue(rules);
+  const read=jest.fn(async()=>({slug:'sample',items:new Map(),fetched_at:new Date().toISOString()}));
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,_role,context)=>{
+   await context.ordinalCollectionRead('sample',read);return {status:'passed',results:[{isValid:true,ruleId:204}]};
+  });
+  f.roles.addUserRoleDynamic.mockImplementation(async()=>{clock+=61000;return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.granted).toHaveLength(2);expect(read).toHaveBeenCalledTimes(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(3);
+ });
+ it('refreshes non-collection ownership that expired while earlier role changes were being applied',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture();const rules=[f.rule,{...f.rule,id:205,role_id:role+'other'}];f.service.guard.mockResolvedValue(rules);
+  f.roles.addUserRoleDynamic.mockImplementation(async()=>{clock+=61000;return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.granted).toHaveLength(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(3);
+  expect(f.engine.evaluateRole.mock.calls[2][3]).not.toBe(f.engine.evaluateRole.mock.calls[0][3]);
+ });
+ it('does not schedule provider checks from a cancelled or resumed run',async()=>{
+  const f=fixture();f.service.assertRunning.mockRestore();
+  const start={action:'start',request:'original'};const current={...job,status:'running',actions:[start,{action:'resume',request:'new-run'}]};
+  jest.spyOn(f.service,'job').mockResolvedValue(current);
+  const result=await f.service.checkMember({...job,actions:[start]},{user_id:user,result:{granted:[role+'old']}});
+  expect(result.interrupted).toBe(true);expect(result.granted).toEqual([role+'old']);expect(result.errors).toEqual([]);
+  expect(f.engine.verifyUser).not.toHaveBeenCalled();expect(f.roles.addUserRoleDynamic).not.toHaveBeenCalled();
+ });
+ it('requires unchanged rule definitions before resuming and allows retrying failures in a running check',async()=>{
+  const f=fixture();jest.spyOn(f.service,'job').mockResolvedValue({...job,rules_version:'changed'});f.db.rpc=jest.fn();
+  await expect(f.service.action(server,job.id,user,'resume','request')).rejects.toThrow('Rules changed');expect(f.db.rpc).not.toHaveBeenCalled();
+  f.service.job.mockResolvedValue({...job,status:'running',rules_version:bulkRulesVersion([f.rule])});
+  f.db.rpc.mockResolvedValue({data:null,error:null});jest.spyOn(f.service,'info').mockResolvedValue({});
+  await f.service.action(server,job.id,user,'retry','request');expect(f.db.rpc).toHaveBeenCalledWith('verifier_bulk_role_transition',expect.objectContaining({p_action:'retry'}));
+ });
 });

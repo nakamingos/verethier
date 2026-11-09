@@ -34,11 +34,12 @@ import { PortalSessionService } from '../../services/portal-session.service';
       @if(v.job.message) { <p role="status">{{v.job.message}}</p> }
       <div class="actions">
         @if(v.job.status==='preview') { <button (click)="act('start')" [disabled]="busy || !v.summary.total">Run bulk check</button> }
-        @if(v.job.status==='failed') { <button (click)="act('retry')" [disabled]="busy">Retry unavailable checks</button> }
+        @if(v.job.started_by && ['cancelled','failed'].includes(v.job.status) && v.summary.processed < v.summary.total) { <button (click)="act('resume')" [disabled]="busy">Resume check</button> }
+        @if(v.summary.errors>0 && ['failed','cancelled','pending','running'].includes(v.job.status)) { <button (click)="act('retry')" [disabled]="busy">{{v.job.status==='cancelled' && v.summary.processed < v.summary.total ? 'Resume and retry failed' : 'Retry failed'}}</button> }
         @if(['preview','pending','running','failed'].includes(v.job.status)) { <button (click)="act('cancel')" [disabled]="busy">Cancel remaining checks</button> }
         <button (click)="refresh()" [disabled]="busy">Refresh results</button>
       </div>
-      <p class="muted">Cancelling stops remaining work. Role changes already made remain.</p>
+      <p class="muted">Cancelling keeps completed results and role changes. Resume continues unfinished members. Retry failed rechecks failed members; on a cancelled check, it also resumes unfinished work.</p>
       <table class="history-table" aria-label="Bulk role members">
         <thead><tr><th scope="col">Member</th><th scope="col">Result</th><th scope="col">Updated</th></tr></thead>
         <tbody>@for(member of v.members; track member.user_id) {
@@ -61,6 +62,7 @@ import { PortalSessionService } from '../../services/portal-session.service';
 export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   @Input() server=''; @Input() rules:any[]=[]; @Input() roles:any[]=[];
   private session=inject(PortalSessionService);
+  private actionRequest?:{job:string;action:string;id:string};
   private generation=0; private timer?:ReturnType<typeof setTimeout>;
   busy=false;error='';view:any=null;jobs:any[]=[];
   filters:any={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};
@@ -69,7 +71,7 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   get roleChoices(){return [{value:null,label:'Choose a role'},...this.roles.map(r=>({value:r.id,label:r.name}))];}
   get ruleChoices(){return [{value:null,label:'All server rules'},...this.rules.map(r=>({value:r.id,label:`Rule ${r.id} · ${r.role_name}`}))];}
   get pages(){return Math.max(1,Math.ceil((this.view?.summary.total || 0)/20));}
-  ngOnChanges(){this.generation++;clearTimeout(this.timer);this.view=null;this.jobs=[];this.error='';this.busy=false;this.filters={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};void this.history();}
+  ngOnChanges(){this.actionRequest=undefined;this.generation++;clearTimeout(this.timer);this.view=null;this.jobs=[];this.error='';this.busy=false;this.filters={audience:'verified',source_role_id:null,rule_id:null,mode:'grant'};void this.history();}
   ngOnDestroy(){this.generation++;clearTimeout(this.timer);}
   changed(){if(this.view?.job.status==='preview') this.view=null;}
   private async request(path='',body?:any){
@@ -81,7 +83,22 @@ export class BulkRoleChecksComponent implements OnChanges,OnDestroy {
   async preview(){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/preview',{audience:this.filters.audience,...(this.filters.audience==='role'?{source_role_id:this.filters.source_role_id}:{}),...(this.filters.rule_id?{rule_id:Number(this.filters.rule_id)}:{}),mode:this.filters.mode,request_id:crypto.randomUUID()});if(generation===this.generation){this.view=view;await this.history();}});}
   async open(id:string){await this.perform(async()=>{const generation=this.generation;const view=await this.request('/'+id);if(generation===this.generation){this.view=view;this.poll();}});}
   async refresh(page=this.view?.page || 1){if(!this.view)return;const id=this.view.job.id,generation=this.generation;try{const view=await this.request(`/${id}?page=${page}`);if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();}}catch(e){if(generation===this.generation)this.error=(e as Error).message;}}
-  async act(action:string){if(!this.view)return;if(action==='start' && this.view.job.mode==='reconcile' && !confirm('Run with role removals enabled? Only proven failures are removed; provider uncertainty retains roles.'))return;await this.perform(async()=>{const id=this.view.job.id,generation=this.generation;const view=await this.request('/'+id,{action,request_id:crypto.randomUUID()});if(generation===this.generation && this.view?.job.id===id){this.view=view;this.poll();await this.history();}});}
+  async act(action:string) {
+    if(!this.view)return;
+    if(['start','resume','retry'].includes(action) && this.view.job.mode==='reconcile'
+      && !confirm('Run with role removals enabled? Only proven failures are removed; provider uncertainty retains roles.'))return;
+    await this.perform(async()=>{
+      const id=this.view.job.id,generation=this.generation;
+      let receipt=this.actionRequest;
+      if(!receipt || receipt.job!==id || receipt.action!==action) {
+        receipt={job:id,action,id:crypto.randomUUID()};this.actionRequest=receipt;
+      }
+      const view=await this.request('/'+id,{action,request_id:receipt.id});
+      if(generation===this.generation && this.view?.job.id===id) {
+        this.actionRequest=undefined;this.view=view;this.poll();await this.history();
+      }
+    });
+  }
   private poll(){clearTimeout(this.timer);if(['pending','running'].includes(this.view?.job.status))this.timer=setTimeout(()=>void this.refresh(),3000);}
   describe(result:any,roles:any):string[]{
     if(result?.skip)return [result.skip==='no_wallet'?'No saved wallet':'No longer in this audience'];

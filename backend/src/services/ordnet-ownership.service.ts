@@ -103,7 +103,10 @@ export class OrdnetOwnershipService {
     const id = ordinalCollectionId(slug);
     context.ordinalCollections ||= new Map();
     const key = JSON.stringify(['ordnet', id]);
-    if (!context.ordinalCollections.has(key)) context.ordinalCollections.set(key, this.collectionScan(id, ordinalRequestWork(context)));
+    if (!context.ordinalCollections.has(key)) {
+      const load = () => this.collectionScan(id, ordinalRequestWork(context));
+      context.ordinalCollections.set(key, context.ordinalCollectionRead ? context.ordinalCollectionRead(id, load) : load());
+    }
     return context.ordinalCollections.get(key);
   }
 

@@ -436,8 +436,8 @@ export class VerificationEngine {
    * @param ruleId - Rule ID (string or number)
    * @returns Promise<VerifierRole | null>
    */
-  async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    const rules = expandRuleRoles(await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
+  async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext, loadedRules?: VerifierRole[]): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
+    const rules = expandRuleRoles(loadedRules || await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.server_id === serverId && rule.role_id === roleId);
     return this.evaluateRoleRules(userId, rules, context);
   }
 

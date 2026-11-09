@@ -104,7 +104,7 @@ describe('Ordinals ownership counts', () => {
   it('shares provider requests across role assignments and servers for one scheduled run', async () => {
     request.mockResolvedValue(summary());
     const assignments = ['guild', 'other-guild'].map((server, index) => ({ id: String(index), user_id: 'user', server_id: server, role_id: 'holder' }));
-    const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue(assignments), getRoleMappings: jest.fn().mockResolvedValue([rule]),
+    const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue(assignments), getRoleMappings: jest.fn().mockImplementation(async server => [{...rule,server_id:server,id:server==='guild'?rule.id:rule.id+1}]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const ownership = new AssetOwnershipService({} as any, {} as any, service);
     const engine = new VerificationEngine(db as any, ownership, { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);

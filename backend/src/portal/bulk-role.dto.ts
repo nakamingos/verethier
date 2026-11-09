@@ -7,6 +7,6 @@ export class BulkRolePreviewDto {
   @IsUUID() request_id: string;
 }
 export class BulkRoleActionDto {
-  @IsIn(['start','retry','cancel']) action: 'start' | 'retry' | 'cancel';
+  @IsIn(['start','resume','retry','cancel']) action: 'start' | 'resume' | 'retry' | 'cancel';
   @IsUUID() request_id: string;
 }
