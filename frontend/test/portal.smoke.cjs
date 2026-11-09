@@ -57,6 +57,7 @@ const base = {
     const widths = process.env.PORTAL_SMOKE_WIDTHS ? process.env.PORTAL_SMOKE_WIDTHS.split(',').map(Number) : [1280, 768, 600, 393, 320];
     assert.ok(widths.length && widths.every(width => [1280,768,600,393,320].includes(width)), 'Supported viewport widths');
     for (const width of widths) {
+      let ruleRechecksQueued = 0;
       let holdEdit = false,
         releaseEdit,
         editEntered;
@@ -387,7 +388,7 @@ const base = {
               });
             }
             assert.equal(request.postDataJSON().version, 'version1');
-            data = { id: 'a' + ++actions, kind: 'edit' };
+            data = { id: 'a' + ++actions, kind: 'edit', rechecks_queued: ruleRechecksQueued };
             rules[0] = {
               ...base,
               min_items: Number(request.postDataJSON().inputs.min_items),
@@ -1511,6 +1512,8 @@ const base = {
         .getByRole('status')
         .filter({ hasText: 'Rule saved' })
         .waitFor();
+      assert.match(await page.locator('.portal-feedback').innerText(), /No automatic check was queued/);
+      ruleRechecksQueued = 1;
       assert.equal(
         await page
           .locator('.community-title')
@@ -1582,6 +1585,7 @@ const base = {
       await page
         .getByRole('heading', { name: 'New Comrade', exact: true })
         .waitFor();
+      await page.getByRole('status').filter({hasText:'Compatible roles are queued'}).waitFor();
       assert.ok(
         requests.some(
           (r) =>

@@ -25,7 +25,7 @@ describe('persistent Ordinals collection catalogs', () => {
   beforeEach(() => {
     db = { getOrdinalCollection: jest.fn().mockResolvedValue(raw()), replaceOrdinalCollection: jest.fn().mockResolvedValue(true),
       getOrdinalCatalogRules: jest.fn().mockResolvedValue([{ slug }, { slug }, { slug: null, inscription_criteria: { kind: 'numbers' } }]) };
-    ordnet = { snapshot: jest.fn().mockResolvedValue(live()), promoteScan: jest.fn() };
+    ordnet = { count: jest.fn().mockRejectedValue(new Error('ord.net unavailable')), snapshot: jest.fn().mockResolvedValue(live()), promoteScan: jest.fn() };
     requests = { promote: jest.fn(work => work.priority = 'interactive') };
     cache = new OrdinalCollectionCacheService(db, ordnet, requests);
     jest.replaceProperty(EnvironmentConfig, 'ORDINALS_PROVIDER', 'ordnet');
@@ -129,7 +129,8 @@ describe('persistent Ordinals collection catalogs', () => {
     expect((await cache.refresh(slug)).fetched_at).toBe(newer.fetched_at);
   });
 
-  it('counts only fresh wallet IDs against saved membership and traits', async () => {
+  it('falls back to fresh wallet IDs against saved membership and traits when ord.net is unavailable', async () => {
+    ordnet.snapshot.mockRejectedValue(new Error('ord.net unavailable'));
     const inventory = { inventory: jest.fn().mockResolvedValue({ ids: new Set([id(1), id(99)]), provider: 'subfrost' }) };
     const service = new OrdinalsOwnershipService(ordnet, db, requests, cache, inventory as any);
     const context: any = run();
@@ -137,10 +138,11 @@ describe('persistent Ordinals collection catalogs', () => {
     expect(await service.count({ ...rule, attribute_key: 'Category', attribute_value: 'cosmic oven-lord' }, [wallet], context)).toBe(1n);
     expect(await service.count({ ...rule, attribute_key: 'Category', attribute_value: 'Pirate' }, [wallet], context)).toBe(0n);
     expect(service.checkDetails(rule, [wallet], context)).toMatchObject({ provider: 'subfrost', source: 'collection-cache' });
-    expect(ordnet.snapshot).not.toHaveBeenCalled();
+    expect(ordnet.snapshot).toHaveBeenCalled();
   });
 
   it('returns unavailable when every ownership lookup fails, even with valid metadata', async () => {
+    ordnet.snapshot.mockRejectedValue(new Error('ord.net unavailable'));
     const inventory = { inventory: jest.fn().mockRejectedValue(new Error('Ordinals verification is temporarily unavailable.')) };
     const service = new OrdinalsOwnershipService(ordnet, db, requests, cache, inventory as any);
     await expect(service.count(rule, [wallet], run())).rejects.toThrow('unavailable');

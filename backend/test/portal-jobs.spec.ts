@@ -16,6 +16,7 @@ describe('Durable portal reconciliation worker', () => {
     const db: any = {
       rpc: jest.fn().mockResolvedValue({ data: [job], error: null }),
       from: jest.fn(() => ({
+        select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnThis(), maybeSingle: jest.fn().mockResolvedValue({data:{kind:'edit'},error:null}) }),
         update: (value: any) => {
           writes.push(value);
           return query;
@@ -30,8 +31,19 @@ describe('Durable portal reconciliation worker', () => {
     const service = new PortalJobsService(db, roles, {
       getBotClient: () => ({}),
     } as any);
-    return { service, roles, writes, query };
+    return { service, roles, writes, query, db };
   }
+  it('passes the persisted ord.net-only policy through automatic role rechecks', async () => {
+    const { service, roles } = setup({ id:'job',server_id:'server',role_id:'role',attempts:1,ordinal_provider_policy:'ordnet-only' }, {verified:0,revoked:0,errors:0});
+    await service.run();
+    expect(roles.reverifyRoleInServer).toHaveBeenCalledWith('server','role',expect.objectContaining({ordinalProviderPolicy:'ordnet-only',ordinalMode:'scheduled'}));
+  });
+  it('restricts legacy rule-save jobs and role-move audiences without rewriting their saved progress', async () => {
+    const { service, roles, db } = setup({ id:'job',server_id:'server',role_id:'role',action_id:'action',rule_id:1,member_ids:['member'],attempts:1 }, {verified:0,revoked:0,errors:0});
+    await service.run();
+    expect(db.from).toHaveBeenCalledWith('verifier_portal_actions');
+    expect(roles.reverifyRoleChangeInServer).toHaveBeenCalledWith('server','role','1',['member'],expect.objectContaining({ordinalProviderPolicy:'ordnet-only'}));
+  });
   it('runs only the queued server/role scope and records completion', async () => {
     const { service, roles, writes, query } = setup(
       { id: 'job', server_id: 'server', role_id: 'role', attempts: 1 },

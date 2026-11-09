@@ -1,3 +1,4 @@
+import { ordnetCompatible } from '@/utils/ordinal-rule.util';
 import { ruleRoles } from '@/utils/rule-roles.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
@@ -120,22 +121,26 @@ export class DynamicRoleService {
     return this.reverifyAssignments(assignments, undefined, context);
   }
 
-  async reverifyRoleInServer(serverId: string, roleId: string): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyRoleInServer(serverId: string, roleId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number; skipped?: string }> {
+    if (!await this.automaticRoleAllowed(serverId, roleId, context))
+      return { verified: 0, revoked: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
     // An assignment's rule_id is only its representative rule. Recheck every
     // previous holder of this role, including holders who matched another rule.
     const assignments = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
-    return this.reverifyAssignments(assignments, 'scheduled');
+    return this.reverifyAssignments(assignments, 'scheduled', context);
   }
 
   /** An explicit admin role change may move earlier qualifiers to a new role. */
-  async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[]): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[], suppliedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number; skipped?: string }> {
+    if (!await this.automaticRoleAllowed(serverId, roleId, suppliedContext))
+      return { verified: 0, revoked: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
     const canonical = await this.dbSvc.getRuleForServer(ruleId, serverId);
     const target = canonical && ruleRoles(canonical).find(r => r.id === roleId);
     const rule = target ? { ...canonical, role_id: target.id, role_name: target.name, additional_roles: [] } : null;
     // A newer edit carries this audience forward in its own durable job.
     if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, errors: 0 };
     const rules = await this.dbSvc.getRoleMappings(serverId);
-    const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled',
+    const context: NftCheckContext = suppliedContext || { checks: new Map(), ordinalMode: 'scheduled',
       ordinalNeedsNumbers: rules.some(candidate => candidate.asset_type === 'ordinal' && candidate.inscription_criteria?.kind === 'numbers' && !candidate.inscription_criteria.collection_slug) };
     const existing = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
     const result = await this.reverifyAssignments(existing, 'scheduled', context);
@@ -167,6 +172,12 @@ export class DynamicRoleService {
       } catch { result.errors++; Logger.warn(`Role move for rule ${ruleId} is pending retry.`); }
     }
     return result;
+  }
+
+  private async automaticRoleAllowed(serverId: string, roleId: string, context?: NftCheckContext): Promise<boolean> {
+    if (context?.ordinalProviderPolicy !== 'ordnet-only') return true;
+    const rules = await this.dbSvc.getRoleMappings(serverId);
+    return rules.filter(rule => rule.server_id === serverId && ruleRoles(rule).some(role => role.id === roleId)).every(ordnetCompatible);
   }
 
   private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled', sharedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {

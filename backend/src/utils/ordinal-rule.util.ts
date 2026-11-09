@@ -8,6 +8,16 @@ import { matchesTraits, ruleTraits, traitFilterKey, traitFilterLabel } from './t
 export const ORDINAL_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const ORDINAL_INSCRIPTION_ID = /^[0-9a-f]{64}i\d+$/;
 
+/** Public collection ownership can be checked entirely through ord.net. */
+export function ordnetCompatible(rule: Partial<VerifierRole>): boolean {
+  if (rule.asset_type !== 'ordinal') return true;
+  try {
+    const criteria = inscriptionCriteria(rule);
+    const slug = criteria ? criteria.kind === 'numbers' ? criteria.collection_slug : null : rule.slug;
+    return !!slug && ordinalCollectionId(slug) === slug;
+  } catch { return false; }
+}
+
 export function ordinalTrait(rule: Partial<VerifierRole>) {
   const filter = ruleTraits(rule);
   if (rule.trait_filter !== undefined && filter?.conditions.some(c => c.key === 'ALL' || c.key.length > 100 || c.value.length > 100)) throw new Error('Ordinals attribute keys and values must be 1–100 characters; choose a key before a value.');

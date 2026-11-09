@@ -4,7 +4,7 @@ import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
-import { buildOrdinalTraitSnapshot, matchesOrdinalTrait, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
+import { buildOrdinalTraitSnapshot, matchesOrdinalTrait, ordnetCompatible, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
 import { inscriptionCriteria, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { OrdinalCheckDetails, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
@@ -56,7 +56,11 @@ export class OrdinalsOwnershipService {
     return { slug: catalog.slug, count: catalog.items.size, fetched_at: catalog.fetched_at };
   }
 
-  private provider(rule?: Partial<VerifierRole>): 'xverse' | 'ordnet' {
+  private provider(rule?: Partial<VerifierRole>, context?: NftCheckContext): 'xverse' | 'ordnet' {
+    if (context?.ordinalProviderPolicy === 'ordnet-only') {
+      if (!rule || !ordnetCompatible(rule) || !this.ordnet) throw new Error(UNAVAILABLE);
+      return 'ordnet';
+    }
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
     if (provider !== 'xverse' && provider !== 'ordnet') throw new Error('ORDINALS_PROVIDER must be xverse or ordnet.');
     const criteria = rule && inscriptionCriteria(rule);
@@ -118,17 +122,17 @@ export class OrdinalsOwnershipService {
     return this.ordnet.suggestions(ordinalCollectionId(slug), key);
   }
 
-  private checkKey(rule: VerifierRole, addresses: string[]): string {
+  private checkKey(rule: VerifierRole, addresses: string[], context?: NftCheckContext): string {
     const criteria = inscriptionCriteria(rule);
-    if (criteria) return JSON.stringify(['ordinal', this.provider(rule), criteria, addresses]);
+    if (criteria) return JSON.stringify(['ordinal', this.provider(rule, context), criteria, addresses, context?.ordinalProviderPolicy || null]);
     const trait = ordinalTrait(rule);
-    return JSON.stringify(['ordinal', this.provider(), ordinalCollectionId(rule.slug), addresses,
+    return JSON.stringify(['ordinal', this.provider(rule, context), ordinalCollectionId(rule.slug), addresses, context?.ordinalProviderPolicy || null,
       ...(trait.enabled ? [rule.id, ordinalTraitHash(rule), rule.min_items || 1] : [])]);
   }
 
   checkDetails(rule: VerifierRole, wallets: string[], context: NftCheckContext): OrdinalCheckDetails | undefined {
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
-    return context.ordinalDetails?.get(this.checkKey(rule, addresses));
+    return context.ordinalDetails?.get(this.checkKey(rule, addresses, context));
   }
 
   async count(rule: VerifierRole, wallets: string[], context?: NftCheckContext): Promise<bigint> {
@@ -138,15 +142,14 @@ export class OrdinalsOwnershipService {
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return 0n;
     const run = context || { checks: new Map() };
-    const provider = this.provider(rule);
-    const key = this.checkKey(rule, addresses);
+    const provider = this.provider(rule, run);
+    const key = this.checkKey(rule, addresses, run);
     if (criteria?.kind === 'numbers' && criteria.collection_slug) {
       if (!run.checks.has(key)) run.checks.set(key, this.collectionNumberAssets(rule, addresses, run).then(items => BigInt(items.size)));
       return run.checks.get(key);
     }
-    if (!run.checks.has(key)) run.checks.set(key, this.inventories && (criteria || provider === 'ordnet')
-      ? this.readCachedRule(rule, addresses, run, key)
-      : criteria ? this.readSelection(criteria, addresses, run, key)
+    if (!run.checks.has(key)) run.checks.set(key, criteria
+      ? this.inventories ? this.readCachedRule(rule, addresses, run, key) : this.readSelection(criteria, addresses, run, key)
       : this.readRule(rule, collectionId, addresses, run, key, provider, trait.enabled));
     return run.checks.get(key);
   }
@@ -156,6 +159,22 @@ export class OrdinalsOwnershipService {
     if (!addresses.length) return new Map();
     const criteria = inscriptionCriteria(rule);
     if (criteria?.kind === 'numbers' && criteria.collection_slug) return this.collectionNumberAssets(rule, addresses, context);
+    const provider = this.provider(rule, context);
+    if (!criteria && provider === 'ordnet') {
+      try {
+        // Validate the complete live scan (including traits/unknown owners)
+        // before returning IDs for combined-group deduplication.
+        await this.readRule(rule, ordinalCollectionId(rule.slug), addresses, context,
+          this.checkKey(rule, addresses, context), 'ordnet', ordinalTrait(rule).enabled, false);
+        const collection = await this.ordnet.snapshot(rule.slug, context);
+        const wallets = new Set(addresses);
+        const traits = ordinalTrait(rule).enabled;
+        return new Map([...collection.items].filter(([, item]) => wallets.has(item.owner)
+          && (!traits || matchesOrdinalTrait(item.traits, rule))).map(([id]) => [id, 1n]));
+      } catch (error) {
+        if (context.ordinalProviderPolicy === 'ordnet-only' || context.freshExport) throw error;
+      }
+    }
     if (!this.inventories) throw new Error(UNAVAILABLE);
     let catalog: Awaited<ReturnType<OrdinalCollectionCacheService['snapshot']>> | null = null;
     const trait = ordinalTrait(rule);
@@ -205,7 +224,7 @@ export class OrdinalsOwnershipService {
       if (item.owner === null) throw new Error(UNAVAILABLE);
       if (wallets.has(item.owner)) matching.set(id, 1n);
     }
-    this.detail(context, this.checkKey(rule, addresses), { provider: 'ordnet', source: 'live', snapshot_fetched_at: collection.fetched_at });
+    this.detail(context, this.checkKey(rule, addresses, context), { provider: 'ordnet', source: 'live', snapshot_fetched_at: collection.fetched_at });
     return matching;
   }
 
@@ -301,11 +320,11 @@ export class OrdinalsOwnershipService {
     throw new Error(UNAVAILABLE);
   }
 
-  private async liveTraitSnapshot(rule: Partial<VerifierRole>, context: NftCheckContext): Promise<OrdinalTraitSnapshot> {
+  private async liveTraitSnapshot(rule: Partial<VerifierRole>, context: NftCheckContext, liveOwners = false): Promise<OrdinalTraitSnapshot> {
     context.ordinalSnapshots ||= new Map();
-    const key = ordinalTraitHash(rule);
+    const key = JSON.stringify([ordinalTraitHash(rule), liveOwners]);
     if (!context.ordinalSnapshots.has(key)) context.ordinalSnapshots.set(key,
-      (this.catalog && this.provider() === 'ordnet' ? this.catalog.snapshot(rule.slug, context)
+      (this.catalog && !liveOwners && this.provider() === 'ordnet' ? this.catalog.snapshot(rule.slug, context)
         : this.ordnet.snapshot(rule.slug, context)).then(collection => buildOrdinalTraitSnapshot(rule, collection)));
     return context.ordinalSnapshots.get(key);
   }
@@ -316,12 +335,12 @@ export class OrdinalsOwnershipService {
   }
 
   private async readRule(rule: VerifierRole, collectionId: string, addresses: string[], context: NftCheckContext,
-    key: string, provider: 'xverse' | 'ordnet', traits: boolean): Promise<bigint> {
+    key: string, provider: 'xverse' | 'ordnet', traits: boolean, allowFallback = true): Promise<bigint> {
     if (provider === 'ordnet') {
       this.detail(context, key, { provider: 'ordnet', source: 'live' });
       try {
         if (!traits) return await this.ordnet.count(collectionId, addresses, context);
-        const snapshot = await this.liveTraitSnapshot(rule, context);
+        const snapshot = await this.liveTraitSnapshot(rule, context, true);
         // Refresh only after a complete trait scan. Ownership stays ephemeral.
         rule.ordinal_trait_snapshot = snapshot;
         if (this.db && rule.id != null) {
@@ -341,7 +360,9 @@ export class OrdinalsOwnershipService {
         }
         return count;
       } catch (error) {
-        if (context.freshExport || !EnvironmentConfig.XVERSE_API_KEY) throw error;
+        if (!allowFallback || context.ordinalProviderPolicy === 'ordnet-only' || context.freshExport) throw error;
+        if (this.inventories) return this.readCachedRule(rule, addresses, context, key);
+        if (!EnvironmentConfig.XVERSE_API_KEY) throw error;
       }
     }
     this.detail(context, key, { provider: 'xverse', source: traits ? 'trait-snapshot' : 'live' });

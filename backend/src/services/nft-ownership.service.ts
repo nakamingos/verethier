@@ -34,6 +34,8 @@ export interface NftCheckContext {
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;
   walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
+  /** Automatic rule-save checks must never consume another Ordinals provider. */
+  ordinalProviderPolicy?: 'ordnet-only';
   ordinalWork?: OrdinalRequestWork;
   ordinalOwners?: Map<string, Promise<string>>;
   ordinalInventories?: Map<string, Promise<Map<string, number>>>;

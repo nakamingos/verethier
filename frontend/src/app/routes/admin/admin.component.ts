@@ -1202,13 +1202,15 @@ export class AdminComponent implements OnInit, OnDestroy {
       await this.reload();
       this.notice = creating
         ? 'Rule created.'
-        : 'Rule saved. Previously earned roles are queued for a fresh check.';
+        : action.rechecks_queued === 0
+          ? 'Rule saved. No automatic check was queued. Run a bulk role check to recheck saved wallets.'
+          : 'Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.';
     });
   }
   async remove(rule: any) {
     if (
       !confirm(
-        `Delete rule ${rule.id} for ${rule.role_name}? Previously earned roles will be checked against the remaining rules and saved wallets.`,
+        `Delete rule ${rule.id} for ${rule.role_name}? Compatible roles will be checked against remaining rules and saved wallets. Unsupported Ordinals selections require an explicit role check.`,
       )
     )
       return;
@@ -1219,7 +1221,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       );
       this.undoLabel = 'Undo';
       await this.reload();
-      this.notice = 'Rule deleted. Role checks are queued.';
+      this.notice = this.undo.rechecks_queued === 0 ? 'Rule deleted. No automatic check was queued. Run a bulk role check to recheck saved wallets.' : 'Rule deleted. Compatible role checks are queued.';
     });
   }
   async reverse(action = this.undo) {
@@ -1232,7 +1234,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.undoLabel = this.undoLabel === 'Undo' ? 'Redo' : 'Undo';
       await this.reload();
       if (this.tab === 'audit') await this.loadActivity();
-      this.notice = 'Change reversed. Eligibility will be checked again.';
+      this.notice = this.undo.rechecks_queued === 0 ? 'Change reversed. No automatic check was queued. Run a bulk role check to recheck saved wallets.' : 'Change reversed. Compatible role checks are queued.';
     });
   }
   async settings() {

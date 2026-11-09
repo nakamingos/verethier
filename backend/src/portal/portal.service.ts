@@ -633,7 +633,7 @@ export class PortalService {
       throw new ConflictException('Request conflict.');
     if (data && !['create', 'edit', 'delete', 'reverse'].includes(data.kind))
       throw new ConflictException('Request conflict.');
-    return data ? this.safeAction(data) : null;
+    return data ? this.actionWithRechecks(data) : null;
   }
   private async mutate(
     session: PortalSession,
@@ -656,7 +656,12 @@ export class PortalService {
         'This rule or action already changed. Reload before trying again.',
       );
     this.dbError(error);
-    return this.safeAction(data);
+    return this.actionWithRechecks(data);
+  }
+  private async actionWithRechecks(action: any) {
+    const queued = await this.db.from('verifier_reconciliation_jobs').select('id', { count: 'exact', head: true }).eq('action_id', action.id).eq('server_id', action.server_id);
+    this.dbError(queued.error);
+    return { ...this.safeAction(action), rechecks_queued: queued.count };
   }
   private safeAction(a: any) {
     if (['setup_channels', 'setup_recover'].includes(a.kind))
@@ -1259,7 +1264,7 @@ export class PortalService {
     await this.access(session, server);
     const prior = await this.db
       .from('verifier_reconciliation_jobs')
-      .select('role_id,user_id,status,rule_id,member_ids,role_action_role_id')
+      .select('role_id,user_id,status,rule_id,member_ids,role_action_role_id,ordinal_provider_policy')
       .eq('server_id', server)
       .eq('id', id)
       .maybeSingle();
@@ -1276,6 +1281,7 @@ export class PortalService {
         rule_id: prior.data.rule_id,
         member_ids: prior.data.member_ids,
         role_action_role_id: prior.data.role_action_role_id,
+        ordinal_provider_policy: prior.data.ordinal_provider_policy,
       })
       .select('id,status')
       .single();

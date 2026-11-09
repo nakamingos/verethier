@@ -3,6 +3,7 @@ import { RoleActionService } from '@/services/role-action.service';
 import { Interval } from '@nestjs/schedule';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { NftCheckContext } from '@/services/nft-ownership.service';
 import { DynamicRoleService } from '@/services/dynamic-role.service';
 import { DiscordService } from '@/services/discord.service';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -48,6 +49,15 @@ export class PortalJobsService {
             if (result.error) Logger.warn('Portal job lease renewal failed.');
           });
       }, 30000);
+      let ruleSave = job.ordinal_provider_policy === 'ordnet-only';
+      // Existing rule-save jobs also receive the policy without rewriting their rows.
+      if (!ruleSave && job.action_id && job.role_id && !job.user_id && !job.role_action_role_id) {
+        const action = await this.db.from('verifier_portal_actions').select('kind').eq('id', job.action_id).eq('server_id', job.server_id).maybeSingle();
+        if (action.error) throw new Error('action');
+        ruleSave = ['create', 'edit', 'delete', 'reverse'].includes(action.data?.kind);
+      }
+      const context: NftCheckContext = ruleSave
+        ? { checks: new Map(), ordinalMode: 'scheduled', ordinalProviderPolicy: 'ordnet-only' } : undefined;
       const result = job.role_action_role_id
         ? await this.roleActions.enforce(
             await this.discord.getBotClient().guilds.fetch(job.server_id),
@@ -60,10 +70,11 @@ export class PortalJobsService {
               job.role_id,
               String(job.rule_id),
               job.member_ids,
+              ...(context ? [context] : []),
             )
           : job.user_id
             ? await this.roles.reverifyUserInServer(job.user_id, job.server_id)
-            : await this.roles.reverifyRoleInServer(job.server_id, job.role_id);
+            : await this.roles.reverifyRoleInServer(job.server_id, job.role_id, ...(context ? [context] : []));
       const status = result.errors
         ? job.attempts < 3
           ? 'pending'

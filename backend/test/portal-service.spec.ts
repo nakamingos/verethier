@@ -39,6 +39,18 @@ describe('Portal server boundaries', () => {
       {} as any,
     );
   });
+  it.each([0, 2])('reports %s queued rule-save checks using the actual scoped jobs', async count => {
+    const action = { id: 'action', server_id: server, actor_id: user, kind: 'edit', before_rule: null, after_rule: null };
+    db.rpc = jest.fn().mockResolvedValue({ data: action, error: null });
+    const query: any = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: action, error: null }),
+      then: (resolve: any) => Promise.resolve(resolve({ count, error: null })) };
+    db.from.mockReturnValue(query);
+    expect(await (service as any).mutate(session, server, 'request', null, {})).toHaveProperty('rechecks_queued', count);
+    expect(query.eq).toHaveBeenCalledWith('action_id', 'action');
+    expect(query.eq).toHaveBeenCalledWith('server_id', server);
+    expect(await (service as any).replay(session, server, 'request')).toHaveProperty('rechecks_queued', count);
+  });
   it('does not trust OAuth guild snapshots for server administration', async () => {
     guild.members.fetch.mockResolvedValue({
       id: user,

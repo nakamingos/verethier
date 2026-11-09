@@ -800,11 +800,7 @@
                           <strong
                             >{{ editor.role_name || editor.role_id }} →
                             {{ targetRoleName }}</strong
-                          ><br />Previous holders will be checked against this
-                          rule’s new group and receive the new role when
-                          eligible. The old role is checked against its
-                          remaining rules. Changes to the combined count groups
-                          take effect after saving.
+                          ><br />When automatic checks are supported, previous holders are checked against the new group and receive the new role when eligible; the old role is checked against its remaining rules. Ordinals automatic checks require ord.net-compatible rules. Other Ordinals changes require an explicit role check. Combined count groups take effect after saving.
                         </p>
                       }
 
@@ -817,7 +813,7 @@
                         @if (editor.new || editor.duplicate) {
                           Members can verify to qualify, or you can run a bulk role check for their saved wallets.
                         } @else {
-                          Previously earned roles will be checked against all remaining rules and saved wallets.
+                          Previously earned roles are checked against the remaining rules and saved wallets when automatic checks are supported. Ordinals automatic checks use ord.net only; run a bulk role check for unsupported selections.
                           @if (!changedRole) { New qualifiers still need to verify. }
                         }
                       </p>
@@ -2209,6 +2205,8 @@
                                       {{ item.result.removed || 0 }} removed ·
                                       {{ item.result.errors || 0 }} errors</span
                                     >
+                                  } @else if (item.result.skipped) {
+                                    <span class="history-note">{{ item.result.skipped }}</span>
                                   } @else {
                                     <span
                                       >{{ item.result.verified || 0 }} eligible
