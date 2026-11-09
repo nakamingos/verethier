@@ -1023,6 +1023,10 @@ app-root:has(app-admin) .app-footer {
   align-items: stretch;
 }
 .rule-card {
+  // The SVG paints the side borders. Keep both card sections on one layout
+  // edge instead of compensating for a physical border with negative offsets.
+  border-inline-width: 0;
+  padding-inline: calc(2rem + 1px);
   container-type: inline-size;
   display: flex;
   flex-direction: column;
@@ -1063,15 +1067,17 @@ app-root:has(app-admin) .app-footer {
 .inline-rule-editor {
   position: absolute;
   top: calc(100% - 1px);
-  left: -1px;
-  right: -1px;
+  left: 0;
+  right: 0;
   border: 1px solid transparent;
   border-top: 0;
+  border-inline-width: 0;
   @include pixel-surface(var(--pixel-card-lower-highlight));
   border-image-slice: 6 fill;
   border-image-width: 6px;
 }
 .inline-rule-editor .rule-editor {
+  padding-inline: calc(2rem + 1px);
   margin: 0;
   border: 0;
   border-image: none;
@@ -1441,6 +1447,17 @@ button:disabled:hover,
     background: Canvas;
     color: CanvasText;
   }
+  // Forced colors use physical borders in place of the SVG frames.
+  .rule-card {
+    border-inline-width: 1px;
+    padding-inline: 2rem;
+  }
+  .inline-rule-editor {
+    left: -1px;
+    right: -1px;
+    border-inline-width: 1px;
+  }
+  .inline-rule-editor .rule-editor { padding-inline: 2rem; }
   button.selected,
   .server-list button.selected,
   button[aria-pressed='true']:not(.theme-toggle) {

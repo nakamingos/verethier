@@ -237,7 +237,6 @@ export class AdminComponent implements OnInit, OnDestroy {
   member: any = null;
   roleActionsOpen = false;
   roleActionEditor: any = null;
-  roleActionTarget = '';
   roleActionReview = false;
   walletAuditResult: any = null;
   walletRestriction: {
@@ -524,12 +523,18 @@ export class AdminComponent implements OnInit, OnDestroy {
     ];
   }
   get roleActionTargetChoices(): SelectChoice[] {
-    return this.roleActionChoices.filter(
-      (role) =>
-        !role.value ||
-        (role.value !== this.roleActionEditor?.trigger_role_id &&
-          !this.roleActionEditor?.remove_role_ids.includes(role.value)),
-    );
+    const action = this.roleActionEditor;
+    const choices = this.roleActionChoices.filter(role => !!role.value && role.value !== action?.trigger_role_id);
+    for (const id of action?.remove_role_ids || []) {
+      if (id !== action.trigger_role_id && !choices.some(role => role.value === id))
+        choices.push({value:id,label:this.roleName(id),disabled:true});
+    }
+    return choices;
+  }
+  roleActionTriggerChanged() {
+    const action = this.roleActionEditor;
+    action.remove_role_ids = action.remove_role_ids.filter((id:string) => id !== action.trigger_role_id);
+    this.roleActionReview = false;
   }
   roleName(id: string) {
     return this.data?.roles.find((role: any) => role.id === id)?.name || id;
@@ -544,16 +549,6 @@ export class AdminComponent implements OnInit, OnDestroy {
       : { trigger_role_id: '', remove_role_ids: [], version: null };
     this.roleActionEditor.existing = !!action;
     this.roleActionReview = false;
-    this.roleActionTarget = '';
-  }
-  addRoleActionTarget() {
-    if (
-      this.roleActionTarget &&
-      this.roleActionEditor.remove_role_ids.length < 20
-    ) {
-      this.roleActionEditor.remove_role_ids.push(this.roleActionTarget);
-      this.roleActionTarget = '';
-    }
   }
   reviewRoleAction() {
     this.roleActionEditor.request_id = crypto.randomUUID();

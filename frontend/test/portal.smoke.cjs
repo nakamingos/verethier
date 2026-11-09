@@ -1404,6 +1404,14 @@ const base = {
         Math.max(...expandedHeights) - Math.min(...expandedHeights) < 1,
         'opening the editor must keep card heights equal',
       );
+      for (const zoom of [1, 0.9, 1.1, 1.25]) {
+        await page.evaluate(value => document.body.style.zoom = String(value), zoom);
+        const cardFrame = await page.locator('#rule-1').boundingBox();
+        const editorFrame = await page.locator('#edit-rule-1').boundingBox();
+        assert.ok(Math.abs(cardFrame.x-editorFrame.x)<0.02 && Math.abs(cardFrame.x+cardFrame.width-editorFrame.x-editorFrame.width)<0.02,
+          `Both expanded card edges align at zoom ${zoom}`);
+      }
+      await page.evaluate(() => document.body.style.zoom = '');
       const editorHeading = page.locator('#edit-rule-1 .editor-heading');
       const headingTitle = await editorHeading.locator('h2').boundingBox();
       const reviewButton = await editorHeading
@@ -2419,17 +2427,15 @@ const base = {
         }),
         'Comrade',
       );
-      await chooseOption(
-        page,
-        policyEditor.getByRole('combobox', {
-          name: 'Remove role',
-          exact: true,
-        }),
-        'New Comrade',
-      );
-      await policyEditor
-        .getByRole('button', { name: 'Add role to remove', exact: true })
-        .click();
+      const removalPicker = policyEditor.getByRole('combobox', { name: 'Remove roles', exact: true });
+      await removalPicker.locator('.pixel-select-arrow').click();
+      assert.equal(await page.getByRole('listbox').getAttribute('aria-multiselectable'), 'true');
+      assert.equal(await page.getByRole('option', {name:'Comrade',exact:true}).count(), 0, 'Trigger cannot remove itself');
+      await page.getByRole('option', {name:'New Comrade',exact:true}).click();
+      await page.getByRole('option', {name:'Additional community role 1 with a longer name',exact:true}).click();
+      assert.equal(await removalPicker.getAttribute('aria-expanded'),'true','Selecting removal roles keeps the dropdown open');
+      assert.equal(await page.getByRole('option', {name:'New Comrade',exact:true}).getAttribute('aria-selected'),'true');
+      await removalPicker.press('Escape');
       await policyEditor
         .getByRole('button', { name: 'Review role action', exact: true })
         .click();
@@ -2456,25 +2462,26 @@ const base = {
       );
       assert.deepEqual(policyRequests[1].body.remove_role_ids, [
         '666666666666666666',
+        '800000000000000000',
       ]);
       await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      await policies.getByRole('button',{name:'Add role action',exact:true}).click();
+      assert.ok(await policyEditor.evaluate(el => !!(el.compareDocumentPosition(el.parentElement.querySelector('.role-action-row')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'New role action editor is before the saved actions');
+      await policyEditor.getByRole('button',{name:'Cancel',exact:true}).click();
+      assert.equal(requests.filter(r=>r.path.endsWith('/role-actions')).length,2,'Cancelling a new draft leaves saved actions unchanged');
       await policies
         .getByRole('button', { name: 'Edit role action', exact: true })
         .click();
-      await policyEditor
-        .getByRole('button', { name: 'Remove selection', exact: true })
-        .click();
+      await chooseOption(page, removalPicker, 'New Comrade');
+      await chooseOption(page, removalPicker, 'Additional community role 1 with a longer name');
       await chooseOption(
         page,
         policyEditor.getByRole('combobox', {
-          name: 'Remove role',
+          name: 'Remove roles',
           exact: true,
         }),
-        'Additional community role 1 with a longer name',
+        'Additional community role 2 with a longer name',
       );
-      await policyEditor
-        .getByRole('button', { name: 'Add role to remove', exact: true })
-        .click();
       await policyEditor
         .getByRole('button', { name: 'Review role action', exact: true })
         .click();

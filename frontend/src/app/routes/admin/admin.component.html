@@ -282,40 +282,6 @@
                     selected roles. Bouncer keeps those roles excluded while the
                     trigger role is held.
                   </p>
-                  @for (
-                    action of data.role_actions || [];
-                    track action.trigger_role_id
-                  ) {
-                    <div class="role-action-row">
-                      <p>
-                        <strong>{{ roleName(action.trigger_role_id) }}</strong>
-                        removes
-                        @for (
-                          id of action.remove_role_ids;
-                          track id;
-                          let last = $last
-                        ) {
-                          {{ roleName(id) }}{{ last ? "" : ", " }}
-                        }
-                      </p>
-                      <div class="actions">
-                        <button
-                          [disabled]="busy"
-                          (click)="editRoleAction(action)"
-                        >
-                          Edit role action</button
-                        ><button
-                          [disabled]="busy"
-                          (click)="deleteRoleAction(action)"
-                        >
-                          Delete role action
-                        </button>
-                      </div>
-                    </div>
-                  }
-                  @if (!data.role_actions?.length && !roleActionEditor) {
-                    <p>No role actions configured.</p>
-                  }
                   @if (roleActionEditor; as action) {
                     <section
                       class="panel role-action-editor"
@@ -333,42 +299,22 @@
                           <label
                             >Trigger role:<app-pixel-select
                               [(ngModel)]="action.trigger_role_id"
+                              (ngModelChange)="roleActionTriggerChanged()"
                               [disabled]="busy || action.existing"
                               [options]="roleActionChoices"
                               label="Trigger role"
                           /></label>
                           <label
-                            >Remove role:<app-pixel-select
-                              [(ngModel)]="roleActionTarget"
+                            >Remove roles:<app-pixel-select
+                              [(ngModel)]="action.remove_role_ids"
+                              (ngModelChange)="roleActionReview = false"
+                              multiple
+                              [maxSelections]="20"
+                              placeholder="Select roles"
                               [disabled]="busy || !action.trigger_role_id"
                               [options]="roleActionTargetChoices"
-                              label="Remove role" /></label
-                          ><button
-                            [disabled]="
-                              busy ||
-                              !roleActionTarget ||
-                              action.remove_role_ids.length >= 20
-                            "
-                            (click)="addRoleActionTarget()"
-                          >
-                            Add role to remove
-                          </button>
+                              label="Remove roles" /></label>
                         </div>
-                        @for (
-                          id of action.remove_role_ids;
-                          track id;
-                          let index = $index
-                        ) {
-                          <div class="actions">
-                            <span>{{ roleName(id) }}</span
-                            ><button
-                              [disabled]="busy"
-                              (click)="action.remove_role_ids.splice(index, 1)"
-                            >
-                              Remove selection
-                            </button>
-                          </div>
-                        }
                         <div class="actions">
                           <button
                             [disabled]="
@@ -425,6 +371,40 @@
                         </div>
                       }
                     </section>
+                  }
+                  @for (
+                    action of data.role_actions || [];
+                    track action.trigger_role_id
+                  ) {
+                    <div class="role-action-row">
+                      <p>
+                        <strong>{{ roleName(action.trigger_role_id) }}</strong>
+                        removes
+                        @for (
+                          id of action.remove_role_ids;
+                          track id;
+                          let last = $last
+                        ) {
+                          {{ roleName(id) }}{{ last ? "" : ", " }}
+                        }
+                      </p>
+                      <div class="actions">
+                        <button
+                          [disabled]="busy"
+                          (click)="editRoleAction(action)"
+                        >
+                          Edit role action</button
+                        ><button
+                          [disabled]="busy"
+                          (click)="deleteRoleAction(action)"
+                        >
+                          Delete role action
+                        </button>
+                      </div>
+                    </div>
+                  }
+                  @if (!data.role_actions?.length && !roleActionEditor) {
+                    <p>No role actions configured.</p>
                   }
                 </section>
               }
