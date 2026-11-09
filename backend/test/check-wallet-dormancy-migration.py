@@ -1,5 +1,5 @@
 """Rehearse wallet dormancy and signed reactivation using a private backup in disposable PostgreSQL.
-Usage: python3 backend/test/check-wallet-dormancy-migration.py BACKUP
+Usage: python3 backend/test/check-wallet-dormancy-migration.py BACKUP [GUARDED_SQL]
 No remote database is changed. Existing application values must remain identical.
 """
 from pathlib import Path
@@ -67,10 +67,18 @@ try:
         sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109030000_bulk_role_throughput_resume.sql").read_text())
     if sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_reconciliation_jobs' AND column_name='ordinal_provider_policy';").strip() == '0':
         sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109040000_ordnet_rule_save_checks.sql").read_text())
-    sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109050000_delete_bulk_role_checks.sql").read_text())
+    if sql("SELECT to_regprocedure('public.verifier_delete_bulk_role_check(text,uuid)') IS NULL;").strip() == 't':
+        sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109050000_delete_bulk_role_checks.sql").read_text())
     originals = sql("SELECT proname || ':' || md5(prosrc) FROM pg_proc JOIN pg_namespace n ON n.oid=pronamespace WHERE n.nspname='public' AND proname IN ('verifier_link_verified_wallet','verifier_member_link_wallet') ORDER BY proname;").strip()
     before = fingerprints()
-    sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109060000_wallet_dormancy.sql").read_text())
+    if len(sys.argv) > 2:
+        sql("SET ROLE postgres; CREATE SCHEMA IF NOT EXISTS supabase_migrations; "
+            "CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]); "
+            "INSERT INTO supabase_migrations.schema_migrations(version) VALUES('20261109050000');")
+        sql(Path(sys.argv[2]).read_text())
+        assert sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='20261109060000';").strip() == '1'
+    else:
+        sql("SET ROLE postgres;\n" + (root / "backend/supabase/migrations/20261109060000_wallet_dormancy.sql").read_text())
     assert fingerprints() == before, "Existing application values changed"
     preserved = sql("SELECT replace(proname,'_before_dormancy','') || ':' || md5(prosrc) FROM pg_proc JOIN pg_namespace n ON n.oid=pronamespace WHERE n.nspname='public' AND proname IN ('verifier_link_verified_wallet_before_dormancy','verifier_member_link_wallet_before_dormancy') ORDER BY proname;").strip()
     assert originals == preserved, "Existing proof implementation changed"
