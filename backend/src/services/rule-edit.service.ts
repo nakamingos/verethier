@@ -1,3 +1,4 @@
+import { RuleInputError } from '@/utils/rule-input-error';
 import { roleIds } from '@/utils/rule-roles.util';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Injectable } from '@nestjs/common';
@@ -31,7 +32,7 @@ export class RuleEditService {
     }
     const minimum = inputs.min_items?.trim();
     if (!/^\d+$/.test(minimum || '') || !Number.isSafeInteger(Number(minimum)) || Number(minimum) < 1) {
-      throw new Error('Minimum items must be a positive whole number.');
+      throw new RuleInputError('Minimum items must be a positive whole number.');
     }
     candidate.min_items = Number(minimum);
     if (before.asset_type === 'stamp') return candidate;

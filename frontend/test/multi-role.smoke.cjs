@@ -6,7 +6,7 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
 try{for(const width of [1280,768,393,320]){const context=await browser.newContext({viewport:{width,height:1000},hasTouch:width<800}),page=await context.newPage(),errors=[],writes=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
 const ruleData={id:204,server_id:server,channel_id:channel,role_id:role,role_name:'Comrade',primary_role_name:'Comrade',additional_roles:[],asset_type:'ordinal',slug:null,min_items:1,inscription_criteria:{kind:'numbers',ranges:[[1,10],[20,20]]},version:'v1',fields:[{key:'selection',label:'Inscription numbers / ranges',value:'1-10,20',list:true,required:true},{key:'label',label:'Label (optional)',value:'Pizza selection'},{key:'min_items',label:'Minimum items',value:'1',required:true}]};
 await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();if(url.pathname.startsWith('/api/portal')){const p=url.pathname.slice(11);let data={};if(p==='/session')data={user:{id:'admin',name:'Admin'},csrf:'csrf',configured:true};else if(p==='/servers')data={servers:[{id:server,name:'NoMoreLabs',installed:true}]};else if(p===`/servers/${server}`)data={server:{id:server,name:'NoMoreLabs'},rules:[ruleData],roles:[{id:role,name:'Comrade',manageable:true},{id:extra,name:'Pizza Comrade',manageable:true},{id:other,name:'Another role',manageable:true}],channels:[{id:channel,name:'verify'}],diagnostics:[],role_actions:[],settings:{background_checks_enabled:true}};
-else if(p.endsWith('/edit') || p.endsWith('/duplicate')){assert.equal(req.headers()['x-csrf-token'],'csrf');writes.push({path:p,body:req.postDataJSON()});data={id:'action',kind:p.endsWith('/edit')?'edit':'create'};}else throw new Error('Unexpected '+p);return route.fulfill({json:data});}
+else if(p.endsWith('/edit') || p.endsWith('/duplicate')){assert.equal(req.headers()['x-csrf-token'],'csrf');writes.push({path:p,body:req.postDataJSON()});if(req.postDataJSON().inputs.selection==='10-1') return route.fulfill({status:400,json:{message:'Inscription ranges must use safe whole numbers with the start no greater than the end.'}});data={id:'action',kind:p.endsWith('/edit')?'edit':'create'};}else throw new Error('Unexpected '+p);return route.fulfill({json:data});}
 let file=url.pathname==='/' || url.pathname==='/admin'?path.join(root,'index.html'):path.join(root,decodeURIComponent(url.pathname));if(!fs.existsSync(file))file=path.join(root,'index.html');return route.fulfill({path:file});});
 await page.goto(origin+'/admin');await page.getByRole('button',{name:'Edit',exact:true}).click();const picker=page.getByRole('combobox',{name:'Discord roles',exact:true});
 await picker.locator('.pixel-select-arrow').click();
@@ -16,12 +16,15 @@ await page.getByRole('option',{name:'Pizza Comrade',exact:true}).click();
 assert.equal(await picker.getAttribute('aria-expanded'),'true','Multi-select remains open');
 assert.equal(await page.getByRole('option',{name:'Pizza Comrade',exact:true}).getAttribute('aria-selected'),'true');
 await page.screenshot({path:path.join(artifacts,`dropdown-${width}.png`),fullPage:true});
-await picker.press('Escape');
+// Full-page captures can reposition the anchor and dismiss its popup.
+if (await picker.getAttribute('aria-expanded') === 'true') await picker.press('Escape');
 await page.getByRole('button',{name:'Review changes',exact:true}).click();await page.screenshot({path:path.join(artifacts,`edit-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule saved. Previously earned roles are queued for a fresh check.',{exact:true}).waitFor();assert.deepEqual(writes[0].body.additional_roles,[{id:extra}]);assert.equal(writes[0].body.inputs.selection,'1-10,20');
 await page.getByRole('button',{name:'Duplicate',exact:true}).click();await page.getByRole('heading',{name:'Duplicate rule 204',exact:true}).waitFor();assert.equal(await page.getByLabel('Inscription numbers / ranges:',{exact:true}).inputValue(),'1-10,20');assert.equal(await page.getByRole('button',{name:'Review changes',exact:true}).isDisabled(),true,'Duplicate requires a role');
 await choose(page,'Discord roles','Another role');
 await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Tab');
-await page.getByRole('button',{name:'Review changes',exact:true}).click();assert.ok(await page.getByText('This creates an independent rule. Changes here will not change the original.',{exact:true}).isVisible());await page.screenshot({path:path.join(artifacts,`duplicate-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule created.',{exact:true}).waitFor();assert.ok(writes[1].path.endsWith('/204/duplicate'));assert.equal(writes[1].body.role_id,other);assert.deepEqual(writes[1].body.additional_roles,[]);assert.equal(writes[1].body.inputs.selection,'1-10,20');await page.getByRole('button',{name:'Edit',exact:true}).click();
+await page.getByLabel('Inscription numbers / ranges:',{exact:true}).fill('10100838');
+await page.getByLabel('Minimum items:',{exact:true}).fill('5');
+await page.getByRole('button',{name:'Review changes',exact:true}).click();assert.ok(await page.getByText('This creates an independent rule. Changes here will not change the original.',{exact:true}).isVisible());await page.screenshot({path:path.join(artifacts,`duplicate-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule created.',{exact:true}).waitFor();assert.ok(writes[1].path.endsWith('/204/duplicate'));assert.equal(writes[1].body.role_id,other);assert.deepEqual(writes[1].body.additional_roles,[]);assert.equal(writes[1].body.inputs.selection,'10100838');assert.equal(writes[1].body.inputs.min_items,'5');await page.getByRole('button',{name:'Edit',exact:true}).click();
 const roles=page.getByRole('combobox',{name:'Discord roles',exact:true});
 await roles.locator('.pixel-select-arrow').click();
 await page.getByRole('option',{name:'Comrade',exact:true}).click();
@@ -36,4 +39,10 @@ await page.getByRole('button',{name:'Review changes',exact:true}).click();
 await page.getByRole('button',{name:'Save rule',exact:true}).click();
 await page.getByText('Rule saved. Previously earned roles are queued for a fresh check.',{exact:true}).waitFor();
 assert.equal(writes[2].body.role_name,'Fresh role');assert.deepEqual(writes[2].body.additional_roles,[]);
+await page.getByRole('button',{name:'Edit',exact:true}).click();
+await page.getByLabel('Inscription numbers / ranges:',{exact:true}).fill('10-1');
+await page.getByRole('button',{name:'Review changes',exact:true}).click();
+await page.getByRole('button',{name:'Save rule',exact:true}).click();
+await page.getByText('Inscription ranges must use safe whole numbers with the start no greater than the end.',{exact:true}).waitFor();
+assert.equal(await page.getByLabel('Inscription numbers / ranges:',{exact:true}).inputValue(),'10-1','Failed saves retain the draft');
 assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');assert.deepEqual(errors,[]);console.log('PASS multi-role rules '+width);await context.close();}}finally{await browser.close();}console.log('Artifacts: '+artifacts);})().catch(e=>{console.error(e);process.exitCode=1});

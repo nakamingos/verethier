@@ -1,3 +1,4 @@
+import { RuleInputError } from '@/utils/rule-input-error';
 import { StampsOwnershipService } from './stamps-ownership.service';
 import { solanaCriteria, isSolanaRule } from '@/utils/solana-rule.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
@@ -66,7 +67,7 @@ export async function prepareRuleCriteria(
   const traits = () => filter === undefined ? {} : { trait_filter: filter };
   const minItems = input.min_items ?? 1;
   if (!Number.isSafeInteger(minItems) || minItems < 1)
-    throw new Error('Minimum items must be a positive whole number.');
+    throw new RuleInputError('Minimum items must be a positive whole number.');
   const selected =
     input.inscription_ids != null || input.inscription_numbers != null;
   if (input.label != null && !selected)

@@ -28,6 +28,27 @@ describe('combined collectible role counts', () => {
     expect(ownership.matchingAssets).not.toHaveBeenCalled();
     expect((await engine.evaluateRole('member', 'server', 'role')).status).toBe('passed');
   });
+  it('adds a single selected inscription to four others without lowering the shared minimum',async()=>{
+    rules=[rule(174,'ordinal',5,{channel_id:'verify',slug:null,inscription_criteria:{kind:'numbers',ranges:[[10100838,10100838]]}}),
+      rule(175,'ordinal',5,{channel_id:'verify',slug:null,inscription_criteria:{kind:'numbers',ranges:[[100,103]]}})];
+    ownership.count.mockImplementation(async r=>r.id===174?1n:4n);
+    ownership.matchingAssets.mockImplementation(async r=>new Map((r.id===174?['selected']:['a','b','c','d']).map(id=>[id,1n])));
+    const result=await verify();
+    expect(result.validRules).toHaveLength(2);
+    expect(result.results.every(r=>r.combinedAssetCount===5 && r.rule.min_items===5)).toBe(true);
+    expect(ownership.matchingAssets.mock.calls[0][0].inscription_criteria).toEqual(rules[0].inscription_criteria);
+    rules=rules.slice(0,1);
+    expect((await verify()).validRules).toHaveLength(0);
+  });
+  it('does not count an inscription twice when its single-number rule overlaps another selection',async()=>{
+    rules=[rule(174,'ordinal',5,{slug:null,inscription_criteria:{kind:'numbers',ranges:[[10100838,10100838]]}}),
+      rule(175,'ordinal',5,{slug:null,inscription_criteria:{kind:'numbers',ranges:[[10100830,10100840]]}})];
+    ownership.count.mockImplementation(async r=>r.id===174?1n:4n);
+    ownership.matchingAssets.mockImplementation(async r=>new Map((r.id===174?['selected']:['selected','a','b','c']).map(id=>[id,1n])));
+    const result=await verify();
+    expect(result.validRules).toHaveLength(0);
+    expect(result.results.every(r=>r.combinedAssetCount===4)).toBe(true);
+  });
   it('does not combine different minimums or roles or servers', async () => {
     for (const change of [{ min_items: 11 }, { role_id: 'other' }, { server_id: 'other' }]) {
       rules[1] = rule(2, 'ordinal', 10, change);

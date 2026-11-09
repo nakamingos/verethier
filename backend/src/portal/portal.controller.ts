@@ -1,3 +1,4 @@
+import { RuleInputError } from '@/utils/rule-input-error';
 import { PrivacyService } from './privacy.service';
 import {
   ArgumentsHost,
@@ -43,13 +44,15 @@ export class PortalErrors implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
     // Provider/database errors may include URLs or credentials. Never return their raw messages.
-    const status = error instanceof HttpException ? error.getStatus() : 503;
+    const status = error instanceof RuleInputError ? 400 : error instanceof HttpException ? error.getStatus() : 503;
     const body =
-      error instanceof HttpException
+      error instanceof RuleInputError
+        ? { message: error.message }
+        : error instanceof HttpException
         ? error.getResponse()
         : {
             message:
-              'Could not complete this action. Check the inputs and try again. Provider checks may be temporarily unavailable.',
+              'Bouncer could not complete this action. Try again. If it keeps failing, contact a Bouncer operator.',
           };
     response
       .status(status)

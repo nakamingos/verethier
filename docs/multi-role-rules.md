@@ -13,3 +13,13 @@ Removing an output or deleting the rule queues each affected role for reconcilia
 Apply `backend/supabase/migrations/20261108010000_multi_role_rules.sql` before deploying this release. No new environment variables or user signatures are required. Existing single-role rules keep their IDs, requirements and primary roles, and their additional-output lists start empty. Existing single-role version hashes stay stable. Refresh an editor after upgrading before adding outputs.
 
 Validation includes backend multi-role and duplicate regression tests; production builds; `npm run test:multi-role-smoke` in `frontend` at desktop/tablet/mobile widths; and `python3 backend/test/check-multi-role-migration.py PRIVATE_BACKUP_DIRECTORY`. The database rehearsal checks original data preservation, role-list validation, overlap rejection, independent range copies, stale writes, Undo/Redo, reconciliation audience and RPC permissions using a disposable PostgreSQL instance. It never changes the remote database.
+
+## Specific inscription contributions
+
+A single inscription ID or number may use a minimum greater than one so it can contribute to a combined group. For example, a rule selecting number 10100838 with minimum 5 contributes one distinct owned inscription; the member still needs five distinct matches across the applicable rules. Keep the same role, channel and minimum across contributing rules. Overlapping selections count an inscription once, and the single-number rule cannot qualify someone alone.
+
+The selection's capacity no longer limits the saved minimum. This permits building the group one rule at a time, consistent with ERC-721 selections. Positive safe-integer minimums, valid canonical IDs, range ordering and the 1,000-selection limit still apply. Create, edit, duplicate and Undo/Redo retain the chosen minimum.
+
+Migration `20261109010000_combined_inscription_minimums.sql` updates only the inscription-criteria validator and rewrites no saved rules or assignments. Apply before deploying the backend change. Rehearse against a private backup with `python3 backend/test/check-combined-inscription-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`.
+
+Portal input errors now distinguish trusted validation messages from unexpected service failures. Invalid ranges or minimums show specific input guidance with HTTP 400; unexpected provider/database errors remain sanitized with retry/operator guidance. Provider URLs, credentials and raw database details are never copied into the response.

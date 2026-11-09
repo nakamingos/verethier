@@ -1,8 +1,9 @@
+import { RuleInputError } from '@/utils/rule-input-error';
 import { Injectable } from '@nestjs/common';
 import { EthscriptionOwnership } from '@/models/ethscription-ownership.interface';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
 import { NftRuleFields } from '@/models/verifier-role.interface';
-import { ETHSCRIPTION_ID, inscriptionCriteriaCapacity, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
+import { ETHSCRIPTION_ID, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { NftCheckContext } from './nft-ownership.service';
 
 const API_URL = 'https://api.ethscriptions.com/v2';
@@ -23,9 +24,9 @@ export class EthscriptionsOwnershipService {
 
   async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number): Promise<NftRuleFields & { slug: null }> {
     const criteria = parseInscriptionCriteria(ids, numbers, 'ethscription');
-    if (!criteria) throw new Error('Enter inscription_ids or inscription_numbers.');
-    if (!Number.isSafeInteger(minItems) || minItems < 1 || BigInt(minItems) > inscriptionCriteriaCapacity(criteria)) {
-      throw new Error('Minimum items cannot exceed the number of selected inscriptions.');
+    if (!criteria) throw new RuleInputError('Enter at least one inscription ID, number, or range.');
+    if (!Number.isSafeInteger(minItems) || minItems < 1) {
+      throw new RuleInputError('Minimum items must be a positive whole number.');
     }
     if (criteria.kind === 'ids') await this.selectionOwners(criteria.ids, { checks: new Map() });
     return { asset_type: 'ethscription', slug: null, chain_id: 1, collection_name: null,

@@ -31,12 +31,17 @@ describe('Global Ethscription ownership', () => {
       asset_type: 'ethscription', slug: null, chain_id: 1, inscription_criteria: base.inscription_criteria,
     });
     expect(new URLSearchParams(request.mock.calls[0][0].split('?')[1]).getAll('transaction_hash[]')).toEqual([hash(1)]);
-    await expect(service.prepareInscriptionRule(`${hash(1)},${hash(1)}`, null, 2)).rejects.toThrow('cannot exceed');
+    expect(await service.prepareInscriptionRule(`${hash(1)},${hash(1)}`, null, 2)).toMatchObject({inscription_criteria:base.inscription_criteria});
   });
   it('stores global numbers and large ranges without expanding them into requests', async () => {
     expect(await service.prepareInscriptionRule(null, '5853618,0-99999', 1)).toMatchObject({
       inscription_criteria: { kind: 'numbers', ranges: [[0, 99999], [5853618, 5853618]] },
     });
+    expect(request).not.toHaveBeenCalled();
+  });
+  it('permits single-number contributions to a combined minimum of five',async()=>{
+    expect(await service.prepareInscriptionRule(null,'5853618',5)).toMatchObject({inscription_criteria:{kind:'numbers',ranges:[[5853618,5853618]]}});
+    await expect(service.prepareInscriptionRule(null,'5853618',0)).rejects.toThrow('positive whole number');
     expect(request).not.toHaveBeenCalled();
   });
   it('shares batches across overlapping rules and members, and preserves escrow ownership', async () => {

@@ -1,3 +1,4 @@
+import { RuleInputError } from '@/utils/rule-input-error';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -5,7 +6,7 @@ import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { buildOrdinalTraitSnapshot, matchesOrdinalTrait, ordinalCollectionId, ordinalTrait, ordinalTraitHash, ORDINAL_INSCRIPTION_ID, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { InscriptionCriteria } from '@/models/inscription-criteria.interface';
-import { inscriptionCriteria, inscriptionCriteriaCapacity, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
+import { inscriptionCriteria, parseInscriptionCriteria } from '@/utils/inscription-rule.util';
 import { OrdinalCheckDetails, OrdinalTraitSnapshot } from '@/models/ordinal-collection.interface';
 import { DbService } from './db.service';
 import { NftCheckContext } from './nft-ownership.service';
@@ -75,9 +76,9 @@ export class OrdinalsOwnershipService {
 
   async prepareInscriptionRule(ids: string | null, numbers: string | null, minItems: number): Promise<NftRuleFields & { slug: null }> {
     const criteria = parseInscriptionCriteria(ids, numbers);
-    if (!criteria) throw new Error('Enter inscription_ids or inscription_numbers.');
-    if (!Number.isSafeInteger(minItems) || minItems < 1 || BigInt(minItems) > inscriptionCriteriaCapacity(criteria)) {
-      throw new Error('Minimum items cannot exceed the number of selected inscriptions.');
+    if (!criteria) throw new RuleInputError('Enter at least one inscription ID, number, or range.');
+    if (!Number.isSafeInteger(minItems) || minItems < 1) {
+      throw new RuleInputError('Minimum items must be a positive whole number.');
     }
     const fields: NftRuleFields & { slug: null } = {
       asset_type: 'ordinal', slug: null, chain_id: null, collection_name: null,

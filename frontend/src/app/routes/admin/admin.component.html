@@ -706,6 +706,9 @@
                         }
                       </div>
                     }
+                    @if (editor.inscription_criteria || (editor.new && ['ordinal','ethscription'].includes(draft.asset_type) && mode !== 'collection')) {
+                      <p class="muted">For combined rules, use the same minimum for the same role and verification channel. A single selected inscription contributes one item toward that shared total, even when the minimum is higher.</p>
+                    }
                     @if (editor.duplicate) { <p class="muted">This creates an independent rule. Changes here will not change the original.</p> }
                     <ng-template #roleControl>
                       <label>Discord roles:<span class="select-control"><app-pixel-select

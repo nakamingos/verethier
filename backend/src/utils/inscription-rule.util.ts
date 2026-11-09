@@ -1,3 +1,4 @@
+import { RuleInputError } from './rule-input-error';
 import { ruleTraits } from './trait-filter.util';
 import { escapeMarkdown } from 'discord.js';
 import { VerifierRole } from '@/models/verifier-role.interface';
@@ -10,27 +11,27 @@ const CANONICAL_ID = /^[0-9a-f]{64}i(0|[1-9]\d*)$/;
 export function normalizeRuleLabel(value?: string | null): string | null {
   const label = value?.trim();
   if (!label) return null;
-  if (label.length > 100 || /[\u0000-\u001f\u007f]/u.test(label)) throw new Error('Rule labels must be one line and at most 100 characters.');
+  if (label.length > 100 || /[\u0000-\u001f\u007f]/u.test(label)) throw new RuleInputError('Rule labels must be one line and at most 100 characters.');
   return label;
 }
 
 export function parseInscriptionCriteria(ids?: string | null, numbers?: string | null, assetType: 'ordinal' | 'ethscription' = 'ordinal'): InscriptionCriteria | null {
   if (ids == null && numbers == null) return null;
-  if (ids != null && numbers != null) throw new Error('Use inscription_ids or inscription_numbers, not both.');
+  if (ids != null && numbers != null) throw new RuleInputError('Use inscription_ids or inscription_numbers, not both.');
   const parts = (ids ?? numbers).split(',').map(part => part.trim());
-  if (parts.length > MAX_SELECTIONS || parts.some(part => !part)) throw new Error('Enter 1–1,000 comma-separated inscription IDs or numbers.');
+  if (parts.length > MAX_SELECTIONS || parts.some(part => !part)) throw new RuleInputError('Enter 1–1,000 comma-separated inscription IDs or numbers.');
   if (ids != null) {
     const normalized = [...new Set(parts.map(id => id.toLowerCase()))].sort();
-    if (normalized.some(id => !(assetType === 'ordinal' ? CANONICAL_ID : ETHSCRIPTION_ID).test(id))) throw new Error(assetType === 'ordinal' ? 'Enter full inscription IDs in transactionhashi0 format. Use inscription_numbers for numeric values or ranges.' : 'Enter full Ethscription transaction hashes in 0x format. Use inscription_numbers for numeric values or ranges.');
+    if (normalized.some(id => !(assetType === 'ordinal' ? CANONICAL_ID : ETHSCRIPTION_ID).test(id))) throw new RuleInputError(assetType === 'ordinal' ? 'Enter full inscription IDs in transactionhashi0 format. Use inscription_numbers for numeric values or ranges.' : 'Enter full Ethscription transaction hashes in 0x format. Use inscription_numbers for numeric values or ranges.');
     return { kind: 'ids', ids: normalized };
   }
   const ranges: Array<[number, number]> = parts.map(part => {
     // Signed numbers also support historical cursed inscriptions, e.g. -10--1.
     const match = /^(-?\d+)(?:\s*-\s*(-?\d+))?$/.exec(part);
-    if (!match) throw new Error('Enter inscription numbers or inclusive ranges, such as 12345,100000-100999.');
+    if (!match) throw new RuleInputError('Enter inscription numbers or inclusive ranges, such as 12345,100000-100999.');
     const start = Number(match[1]);
     const end = match[2] === undefined ? start : Number(match[2]);
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || (assetType === 'ethscription' && start < 0)) throw new Error('Inscription ranges must use safe whole numbers with the start no greater than the end.');
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || (assetType === 'ethscription' && start < 0)) throw new RuleInputError('Inscription ranges must use safe whole numbers with the start no greater than the end.');
     return [Object.is(start, -0) ? 0 : start, Object.is(end, -0) ? 0 : end];
   });
   ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);

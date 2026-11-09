@@ -1,3 +1,5 @@
+import { RuleEditService } from '../src/services/rule-edit.service';
+import { prepareRuleCriteria } from '../src/services/rule-create.util';
 import { normalizeRuleLabel } from '../src/utils/inscription-rule.util';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { VerifierRole } from '../src/models/verifier-role.interface';
@@ -73,7 +75,20 @@ describe('Specific Ordinals ownership', () => {
     request.mockClear();
     expect(await service.prepareInscriptionRule(null, '0-99999', 2)).toMatchObject({ inscription_criteria: { kind: 'numbers', ranges: [[0, 99999]] } });
     expect(request).not.toHaveBeenCalled();
-    await expect(service.prepareInscriptionRule(`${id(1)},${id(1)}`, null, 2)).rejects.toThrow('cannot exceed');
+    expect(await service.prepareInscriptionRule(`${id(1)},${id(1)}`, null, 2)).toMatchObject({inscription_criteria:base.inscription_criteria});
+  });
+  it('allows one number to contribute toward a higher combined minimum during creation and editing', async () => {
+    const criteria={kind:'numbers',ranges:[[10100838,10100838]]};
+    expect(await service.prepareInscriptionRule(null,'10100838',5)).toMatchObject({inscription_criteria:criteria});
+    const prepared=await prepareRuleCriteria({asset_type:'ordinal',inscription_numbers:'10100838',min_items:5}, {data:null,nfts:null,ordinals:service});
+    expect(prepared).toMatchObject({minItems:5,assetFields:{inscription_criteria:criteria}});
+    const editor=new RuleEditService(null,null,service,null);
+    expect(await editor.prepare({...base,inscription_criteria:criteria} as any,{selection:'10100838',label:'McSkull',min_items:'5'})).toMatchObject({min_items:5,inscription_criteria:criteria});
+    expect(request).not.toHaveBeenCalled();
+  });
+  it.each([0,-1,1.5,Number.MAX_SAFE_INTEGER+1])('still rejects invalid minimum %s without provider requests',async minimum=>{
+    await expect(service.prepareInscriptionRule(null,'10100838',minimum)).rejects.toThrow('positive whole number');
+    expect(request).not.toHaveBeenCalled();
   });
   it('requires the provider capability and backend key for these rules', async () => {
     jest.replaceProperty(EnvironmentConfig, 'XVERSE_API_KEY', undefined);
