@@ -70,4 +70,13 @@ Global numbered Ethscription rules read complete direct and marketplace-escrow i
 
 Sanitized server warnings now distinguish these failure classes without including wallet addresses, request URLs, raw exceptions or response bodies. The member-facing message stays generic. Earlier generic logs cannot establish which failure class occurred retrospectively; a successful health probe later does not prove the provider was healthy at the earlier failure time. Priority-tier evaluation can log the same cached failed requirement again when trying later alternatives; that does not establish another upstream request.
 
-The diagnostic changes preserve existing request pacing, retries, inventory bounds, role-retention behavior and dormancy safeguards. Local validation passed all 1,995 backend tests across 96 suites and the production backend build. Targeted member-wallet replays require authorization before sending saved addresses to an external provider; no such replay was performed during this investigation.
+The diagnostic changes preserve existing request pacing, retries, inventory bounds, role-retention behavior and dormancy safeguards. Local validation passed all 1,995 backend tests across 96 suites and the production backend build. Targeted member-wallet replays require authorization before sending saved addresses to an external provider. Three affected member-wallet replays were subsequently authorized and completed; the findings follow.
+
+
+## Numbered Ethscription checks for large holders
+
+Authorized read-only replays on November 9 reproduced the same failure for all three affected wallets: the API returned 20 successful 50-item pages with more data remaining, and the verifier reached its inventory safety limit. This establishes the cap as the cause of the reproduced failures; earlier generic messages alone cannot rule out additional historical timeout or queue failures.
+
+Selections covering up to 1,000 individual numbers now query the API's `ethscription_number[]` filter in batches of 50. Matching uses each returned record's current ownership, including the existing marketplace escrow rule. Overlapping number selections share records only within the current check context. Responses must contain valid requested numbers and unique identifiers, with complete pagination. Missing selected numbers fall back to the existing complete-inventory path instead of becoming a false empty result. Larger ranges retain the existing bounded inventory implementation.
+
+The three authorized replays then each completed with one response containing all seven selected records, returning zero matching holdings in approximately 0.07–0.38 seconds. These are isolated checks under different conditions, not production bulk-job latency measurements. No saved wallet, rule, role, or running job was changed by these probes. This removes the need to scan a large wallet for the affected seven-number rule; no API key or database migration is needed.

@@ -24,6 +24,7 @@ const ABI = parseAbi([
 
 export interface NftCheckContext {
   walletCheck?: WalletCheckRun;
+  ethscriptionNumberOwners?: Map<number, Promise<{id: string; record: EthscriptionOwnership} | null>>;
   dormancyJobId?: string;
   dormancyWorker?: string;
   stampHealth?: Promise<void>;

@@ -53,6 +53,16 @@ export class EthscriptionsOwnershipService {
       const owners = await this.selectionOwners(criteria.ids, context);
       return [...owners].filter(([, record]) => this.owned(record, linked)).map(([id]) => id);
     }
+    // Small number selections can be queried globally in batches. Scanning a
+    // whole wallet would otherwise reject holders above the inventory limit.
+    const total = criteria.ranges.reduce((sum, [start, end]) => sum + end - start + 1, 0);
+    if (total <= MAX_ITEMS) {
+      const numbers = criteria.ranges.flatMap(([start, end]) => Array.from({length: end - start + 1}, (_, index) => start + index));
+      const records = await this.numberOwners(numbers, context);
+      if (records.every(Boolean)) return records.filter(item => this.owned(item.record, linked)).map(item => item.id);
+      // A missing number is not a proven empty holding. Preserve the existing
+      // complete-inventory path for future numbers or incomplete selections.
+    }
     context.ethscriptionInventories ||= new Map();
     const selected = new Map<string, number>();
     for (const wallet of addresses) {
@@ -102,6 +112,41 @@ export class EthscriptionsOwnershipService {
       numbers.add(record.number);
     }
     return owners;
+  }
+
+  private async numberOwners(numbers: number[], context: NftCheckContext): Promise<Array<{id: string; record: EthscriptionOwnership} | null>> {
+    context.ethscriptionNumberOwners ||= new Map();
+    const missing = numbers.filter(number => !context.ethscriptionNumberOwners.has(number));
+    let tail: Promise<unknown> = Promise.resolve();
+    for (let start = 0; start < missing.length; start += PAGE_SIZE) {
+      const chunk = missing.slice(start, start + PAGE_SIZE);
+      const batch = tail.then(() => this.readNumberOwners(chunk));
+      tail = batch;
+      for (const number of chunk) {
+        const record = batch.then(rows => rows.get(number) || null);
+        record.catch(() => undefined);
+        context.ethscriptionNumberOwners.set(number, record);
+      }
+    }
+    return Promise.all(numbers.map(number => context.ethscriptionNumberOwners.get(number)));
+  }
+
+  private async readNumberOwners(numbers: number[]): Promise<Map<number, {id: string; record: EthscriptionOwnership}>> {
+    const query = new URLSearchParams({max_results: String(PAGE_SIZE)});
+    for (const number of numbers) query.append('ethscription_number[]', String(number));
+    const data = await this.request('/ethscriptions?' + query);
+    this.validatePage(data);
+    if (data.pagination.has_more) throw this.unavailable('incomplete selected-number response');
+    const requested = new Set(numbers), ids = new Set<string>();
+    const records = new Map<number, {id: string; record: EthscriptionOwnership}>();
+    for (const item of data.result) {
+      const [id, record] = this.record(item);
+      if (!requested.has(record.number) || records.has(record.number) || ids.has(id)) {
+        throw this.unavailable('invalid or duplicate selected-number record');
+      }
+      ids.add(id);records.set(record.number, {id, record});
+    }
+    return records;
   }
 
   private async readInventory(wallet: string): Promise<Map<string, EthscriptionOwnership>> {

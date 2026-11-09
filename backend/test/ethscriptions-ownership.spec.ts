@@ -66,14 +66,46 @@ describe('Global Ethscription ownership', () => {
     expect(await service.countSelection([other], criteria, context)).toBe(0n);
     expect(request).toHaveBeenCalledTimes(2);
   });
+  it('checks seven selected numbers in one global request without scanning a large wallet',async()=>{
+    const numbers=[6173092,6173101,6173107,6173117,6173119,6173123,6173126];
+    request.mockResolvedValue(page(numbers.map((n,index)=>row(n,index===0?wallet:index===1?market:other,index===1?wallet:null))));
+    const criteria=parseInscriptionCriteria(null,numbers.join(','),'ethscription'),context=run();
+    expect(await service.countSelection([wallet],criteria,context)).toBe(2n);
+    expect(await service.countSelection([other],criteria,context)).toBe(5n);
+    expect(request).toHaveBeenCalledTimes(1);
+    const params=new URLSearchParams(request.mock.calls[0][0].split('?')[1]);
+    expect(params.getAll('ethscription_number[]')).toEqual(numbers.map(String));expect(params.has('current_owner')).toBe(false);
+    expect(context.ethscriptionInventories).toBeUndefined();
+  });
+  it('batches numeric selections by 50 and reuses overlapping numbers',async()=>{
+    request.mockImplementation(async path=>page(new URLSearchParams(path.split('?')[1]).getAll('ethscription_number[]').map(n=>row(Number(n)))));
+    const context=run();expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-51','ethscription'),context)).toBe(51n);
+    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'50-52','ethscription'),context)).toBe(3n);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(new URLSearchParams(request.mock.calls[2][0].split('?')[1]).getAll('ethscription_number[]')).toEqual(['52']);
+  });
+  it('falls back to complete inventories when selected numbers are absent',async()=>{
+    request.mockResolvedValueOnce(page()).mockResolvedValueOnce(page()).mockResolvedValueOnce(page());
+    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription'),run())).toBe(0n);
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+  it.each(['unexpected-number','duplicate-number','duplicate-id','incomplete','invalid-owner'])('keeps %s selected-number responses unavailable',async problem=>{
+    const records=[row(1),row(2)];
+    if(problem==='unexpected-number')records[1]=row(3);
+    if(problem==='duplicate-number')records[1]=row(1);
+    if(problem==='duplicate-id')records[1].transaction_hash=records[0].transaction_hash;
+    if(problem==='invalid-owner')records[1].current_owner='invalid';
+    request.mockResolvedValue(page(records,problem==='incomplete','next'));
+    await expect(service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription'),run())).rejects.toThrow('unavailable');
+  });
   it('reads every direct and escrow page once per wallet/run for all numeric rules', async () => {
     request.mockResolvedValueOnce(page([row(10), row(100)], true, 'next'))
       .mockResolvedValueOnce(page([row(101)]))
       .mockResolvedValueOnce(page([row(102, market, wallet)]));
     const context = run();
-    const criteria = parseInscriptionCriteria(null, '100-102', 'ethscription');
+    const criteria = parseInscriptionCriteria(null, '100-102,10000-11000', 'ethscription');
     expect(await service.countSelection([wallet], criteria, context)).toBe(3n);
-    expect(await service.countSelection([wallet], parseInscriptionCriteria(null, '0-99', 'ethscription'), context)).toBe(1n);
+    expect(await service.countSelection([wallet], parseInscriptionCriteria(null, '0-99,10000-11000', 'ethscription'), context)).toBe(1n);
     expect(request).toHaveBeenCalledTimes(3);
     expect(request.mock.calls[1][0]).toContain('page_key=next');
     const escrow = new URLSearchParams(request.mock.calls[2][0].split('?')[1]);
@@ -84,7 +116,7 @@ describe('Global Ethscription ownership', () => {
     const data = { checkAssetOwnershipWithCriteria: jest.fn() };
     const assets = new AssetOwnershipService(data as any, {} as any, undefined, service);
     request.mockResolvedValueOnce(page([row(1)])).mockResolvedValueOnce(page());
-    const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-10', 'ethscription') };
+    const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-1010', 'ethscription') };
     const context = run();
     expect(await assets.count(rule, [wallet, wallet.toUpperCase()], context)).toBe(1n);
     expect(await assets.count({ ...rule, min_items: 2 }, [wallet], context)).toBe(1n);
@@ -114,7 +146,7 @@ describe('Global Ethscription ownership', () => {
     await expect(service.countSelection([wallet], { kind: 'numbers', ranges: [[0, 1000]] }, run())).rejects.toThrow('unavailable');
   });
   it('retains the role if either inventory fails, and removes it after a complete non-match', async () => {
-    const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-10', 'ethscription') };
+    const rule = { ...base, inscription_criteria: parseInscriptionCriteria(null, '1-1010', 'ethscription') };
     const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
