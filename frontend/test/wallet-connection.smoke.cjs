@@ -23,7 +23,7 @@ for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
   assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
 }
 
-async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false, privacy = false } = {}) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false, privacy = false, transferred = false } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -111,7 +111,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
       ...(privacy ? {privacy:{epoch:'00000000-0000-4000-8000-000000000001',notice:'2026-10-27',sharing_enabled:true,has_saved_choice:false}} : {}),
       data: { userId: 'test-member', userTag: 'Collector', avatar: '', discordId: 'test-guild', discordName: 'NoMoreLabs', discordIcon: '', nonce: request.postDataJSON().nonce },
     } });
-    if (url.pathname === '/api/verify-signature') { proof = request.postDataJSON(); return route.fulfill({ json: { assignedRoles: ['holder'] } }); }
+    if (url.pathname === '/api/verify-signature') { proof = request.postDataJSON(); return route.fulfill({ json: { assignedRoles: ['holder'], walletOwnershipTransferred:transferred } }); }
     if (url.pathname === '/appkit/v1/config') return route.fulfill({ json: { features: [] } });
     if (url.pathname === '/appkit/v1/project-limits') return route.fulfill({ json: { planLimits: { tier: 'starter', isAboveMauLimit: false, isAboveRpcLimit: false } } });
     if (url.pathname === '/getWallets') {
@@ -165,7 +165,7 @@ async function restorePreviousWalletConnectConnection(page) {
   try {
     for (const mobile of [false, true]) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} injected wallet connection`;
-      const test = await setup(browser, mobile, true);
+      const test = await setup(browser, mobile, true, '/verify/'+nonce, {transferred:true});
       const { page } = test;
       await page.evaluate(() => document.fonts.ready);
       const smallText = await page.locator('.user-tag .warn,.step-1 .sub,.wallet-choice button').evaluateAll(elements => elements.map(el=>Number.parseFloat(getComputedStyle(el).fontSize)));
@@ -193,6 +193,20 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal(signSize.height, verifyingSize.height, 'verification button height must stay stable');
       releaseVerification();
       await page.locator('.step-3.active').waitFor();
+      const transferNotice=page.locator('.step-3.active .sub.success');
+      await transferNotice.getByText('This wallet was previously linked to another Discord account and has now been moved to this account.',{exact:true}).waitFor();
+      const noticeColors=[];
+      for(const theme of ['dark','light']){
+        await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+        const noticeColor=await transferNotice.evaluate(el=>getComputedStyle(el).color);
+        const accent=await page.locator('.step-3.active .label').evaluate(el=>getComputedStyle(el).color);
+        assert.equal(noticeColor,accent,'Wallet transfer notice uses the current theme accent');
+        assert.notEqual(noticeColor,'rgb(255, 4, 180)','Legacy magenta must not override the theme');noticeColors.push(noticeColor);
+        await page.screenshot({path:path.join(artifacts,`transfer-${mobile?'mobile':'desktop'}-${theme}.png`),fullPage:true});
+      }
+      assert.notEqual(noticeColors[0],noticeColors[1],'Transfer notice follows theme switching');
+      await page.evaluate(()=>document.documentElement.dataset.theme='dark');
+
       assert.equal(test.proof.data.walletType, 'evm');
       assert.equal(test.proof.data.address.toLowerCase(), account.address.toLowerCase());
       assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
