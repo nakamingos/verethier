@@ -129,19 +129,19 @@ it('retains actual grants in the report if a member removes their wallet before 
 
 describe('Bulk worker throughput and fresh evidence',()=>{
  afterEach(()=>jest.restoreAllMocks());
- it('runs at most three member workers and refills a freed worker immediately',async()=>{
+ it('runs at most twelve member readers and refills a freed reader immediately',async()=>{
   const {EnvironmentConfig}=require('../src/config/environment.config');
   jest.replaceProperty(EnvironmentConfig,'IS_TEST',false);
   const f=fixture();let active=0,max=0,next=0;const releases:Array<()=>void>=[];
   jest.spyOn(f.service,'workOnce').mockImplementation(async()=>{
-   if(next++>=6)return false;
+   if(next++>=24)return false;
    active++;max=Math.max(max,active);
    await new Promise<void>(resolve=>releases.push(()=>{active--;resolve();}));return true;
   });
-  f.service.run();f.service.run();expect(releases).toHaveLength(3);expect(max).toBe(3);
-  releases[0]();await new Promise(resolve=>setImmediate(resolve));expect(releases).toHaveLength(4);
-  releases[1]();releases[2]();releases[3]();await new Promise(resolve=>setImmediate(resolve));
-  releases[4]();releases[5]();await Promise.all([...f.service.active]);expect(max).toBe(3);
+  f.service.run();f.service.run();expect(releases).toHaveLength(12);expect(max).toBe(12);
+  releases[0]();await new Promise(resolve=>setImmediate(resolve));expect(releases).toHaveLength(13);
+  for(let i=1;i<24;i++){releases[i]();await new Promise(resolve=>setImmediate(resolve));}
+  await Promise.all([...f.service.active]);expect(max).toBe(12);
   const calls=f.service.workOnce.mock.calls.length;f.service.run();expect(f.service.workOnce).toHaveBeenCalledTimes(calls);
  });
  it('prefetches role eligibility concurrently but applies role changes one at a time in rule order',async()=>{
@@ -253,5 +253,63 @@ describe('Deleting saved bulk-check reports',()=>{
   auth.assertMutation.mockImplementation(()=>{});
   await expect(c.action({} as any,server,job.id,{action:'delete',request_id:job.id})).rejects.toThrow('Administrator required');
   expect(checks.action).not.toHaveBeenCalled();
+ });
+});
+
+
+describe('Bulk member read/write pipeline',()=>{
+ afterEach(()=>jest.restoreAllMocks());
+ it('lets eight members read while at most three apply role changes',async()=>{
+  const f=fixture();let active=0,max=0;const releases:Array<()=>void>=[];
+  f.roles.addUserRoleDynamic.mockImplementation(async()=>{active++;max=Math.max(max,active);await new Promise<void>(done=>releases.push(()=>{active--;done();}));return true;});
+  const work=Array.from({length:8},(_,index)=>f.service.checkMember(job,{user_id:user+index,result:{}}));
+  await new Promise(done=>setImmediate(done));expect(f.engine.verifyUser).toHaveBeenCalledTimes(8);expect(releases).toHaveLength(3);
+  for(let i=0;i<8;i++){releases[i]();await new Promise(done=>setImmediate(done));}
+  const result=await Promise.all(work);expect(max).toBe(3);expect(result.every(r=>r.granted.length===1)).toBe(true);
+ });
+ it('refreshes evidence outside the mutation slots after a long mutation queue wait',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),held=await Promise.all(Array.from({length:3},()=>f.service.mutations.acquire()));
+  const work=f.service.checkMember(job,{user_id:user,result:{}});await new Promise(done=>setImmediate(done));
+  expect(f.engine.verifyUser).toHaveBeenCalledTimes(1);clock=61000;held[0]();
+  const result=await work;held[1]();held[2]();
+  expect(result.granted).toEqual([role]);expect(f.engine.verifyUser).toHaveBeenCalledTimes(2);
+ });
+ it('observes cancellation again after waiting for a mutation slot',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture();f.service.assertRunning.mockRestore();let status='running';
+  jest.spyOn(f.service,'job').mockImplementation(async()=>({...job,status}));
+  f.service.guard.mockImplementation(async()=>{await f.service.assertRunning(job);return [f.rule];});
+  const held=await Promise.all(Array.from({length:3},()=>f.service.mutations.acquire()));
+  const work=f.service.checkMember(job,{user_id:user,result:{}});await new Promise(done=>setImmediate(done));
+  status='cancelled';clock=2000;held[0]();const result=await work;held[1]();held[2]();
+  expect(result.interrupted).toBe(true);expect(f.roles.addUserRoleDynamic).not.toHaveBeenCalled();
+ });
+ it('plans one numbered inventory only when an unchecked rule needs one',async()=>{
+  const f=fixture(),numberRole=role+'number',selection={...f.rule,id:205,role_id:numberRole,slug:null,inscription_criteria:{kind:'numbers',ranges:[[1,2]]}};
+  f.service.guard.mockResolvedValue([f.rule,selection]);
+  await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(f.engine.evaluateRole.mock.calls.every(call=>call[3].ordinalNeedsNumbers && call[3].bulkGrantOnly)).toBe(true);
+  f.member.roles.cache.set(numberRole,{});f.engine.evaluateRole.mockClear();
+  await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(f.engine.evaluateRole.mock.calls.every(call=>!call[3].ordinalNeedsNumbers)).toBe(true);
+ });
+ it('keeps fresh database proof independent of an expired Ordinals alternative',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),other=role+'other';f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,role_id:other},
+   {...f.rule,id:206,role_id:other,asset_type:'ethscription',slug:'nakamingos'}]);
+  let release:()=>void;const delayed=new Promise<void>(done=>release=done);
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId,context)=>{
+   if(roleId===role){await context.ordinalCollectionRead('pizza-comrades',async()=>({slug:'pizza-comrades',items:new Map(),fetched_at:new Date().toISOString()}));return {status:'passed',results:[{isValid:true,ruleId:204}]};}
+   await delayed;return {status:'passed',results:[{isValid:true,ruleId:206,rule:{asset_type:'ethscription',slug:'nakamingos'}}]};
+  });
+  f.roles.addUserRoleDynamic.mockImplementation(async(_user,_server,roleId)=>{if(roleId===role){clock=61000;release();}return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.granted).toHaveLength(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(2);
+ });
+ it('does not force an unrelated numeric alternative into an exact selected-rule check',async()=>{
+  const f=fixture();f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,slug:null,inscription_criteria:{kind:'numbers',ranges:[[1,2]]}}]);
+  await f.service.checkMember(job,{user_id:user,result:{}});
+  expect(f.engine.verifyUser.mock.calls[0][3].ordinalNeedsNumbers).toBe(false);
  });
 });

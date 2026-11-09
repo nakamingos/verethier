@@ -21,6 +21,26 @@ describe('Fresh shared bulk collection reads',()=>{
   expect(members[1].context.checks.has('private')).toBe(false);
   expect(members[1].context.userAddresses).toBeUndefined();expect(members[1].context.walletBlocks).toBeUndefined();
  });
+ it('amortizes a 51-page collection across twelve members within one fresh cohort',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const cache=new BulkRoleReadCache();let pages=0;
+  const get=jest.fn(async()=>{
+   const page=pages++%51;const id='b'.repeat(64)+'i'+page;
+   return {items:[{id,inscriptionId:id,inscription:page,collection:'sample',collections:[],owner:wallet,traits:[]}],
+    pagination:{pageSize:100,hasNext:page<50,nextCursor:page<50?'page-'+page:null}};
+  });
+  const provider=new OrdnetOwnershipService({get} as any);
+  // Model four former three-member cohorts more than a freshness window apart.
+  for(let cohort=0;cohort<4;cohort++){
+   const members=Array.from({length:3},()=>cache.member('old:rules:run'));
+   expect(await Promise.all(members.map(member=>provider.count('sample',[wallet],member.context)))).toEqual([51n,51n,51n]);
+   clock+=60001;
+  }
+  expect(get).toHaveBeenCalledTimes(204);get.mockClear();
+  const members=Array.from({length:12},()=>cache.member('new:rules:run'));
+  expect(await Promise.all(members.map(member=>provider.count('sample',[wallet],member.context)))).toEqual(Array(12).fill(51n));
+  expect(get).toHaveBeenCalledTimes(51);
+ });
  it('expires responses after one minute and reports when earlier eligibility has become stale',async()=>{
   let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
   const cache=new BulkRoleReadCache(),read=jest.fn().mockImplementation(async()=>snapshot());

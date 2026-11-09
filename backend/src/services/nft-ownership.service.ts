@@ -34,6 +34,8 @@ export interface NftCheckContext {
   ethscriptionAssets?: Map<string, Promise<EthscriptionAsset[]>>;
   walletBlocks?: Map<string, Promise<Set<string>>>;
   ordinalMode?: 'scheduled';
+  /** Grants-only bulk checks can qualify through database-backed alternatives first. */
+  bulkGrantOnly?: boolean;
   /** Automatic rule-save checks must never consume another Ordinals provider. */
   ordinalProviderPolicy?: 'ordnet-only';
   ordinalWork?: OrdinalRequestWork;

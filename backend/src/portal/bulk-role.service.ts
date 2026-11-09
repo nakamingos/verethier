@@ -1,3 +1,4 @@
+import { AsyncSemaphore } from '@/utils/async-semaphore.util';
 import { BulkRoleReadCache, bulkRoleChecks } from './bulk-role-read-cache';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -30,6 +31,7 @@ export function bulkRulesVersion(rules: any[]) {
 @Injectable()
 export class BulkRoleService {
   private readonly active = new Set<Promise<void>>();
+  private readonly mutations = new AsyncSemaphore(3);
   private idleUntil = 0;
   private readonly reads = new BulkRoleReadCache();
   private readonly states = new Map<string,{expires:number;value:Promise<any>}>();
@@ -135,7 +137,7 @@ export class BulkRoleService {
   @Interval(1000)
   run() {
     if(EnvironmentConfig.IS_TEST || !this.discord.getBotClient() || Date.now()<this.idleUntil) return;
-    while(this.active.size < 3) {
+    while(this.active.size < 12) {
       const lane = this.drain().catch(() => Logger.warn('Bulk role checks are waiting for retry.'))
         .finally(() => this.active.delete(lane));
       this.active.add(lane);
@@ -164,7 +166,7 @@ export class BulkRoleService {
       result.timing={...result.timing,elapsed_ms:Date.now()-started};
       const retry=!!result.errors?.length || !!result.unavailable?.length;
       this.checked(await this.db.rpc('verifier_finish_bulk_role_member',{p_job:item.job_id,p_user:item.user_id,p_worker:worker,p_result:result,p_retry:retry}));
-      Logger.log(`Bulk role member: job=${item.job_id}; elapsed_ms=${result.timing.elapsed_ms}; eligibility_work_ms=${result.timing.eligibility_work_ms || 0}; guard_work_ms=${result.timing.guard_work_ms || 0}; mutation_work_ms=${result.timing.mutation_work_ms || 0}; interrupted=${!!result.interrupted}`);
+      Logger.log(`Bulk role member: job=${item.job_id}; elapsed_ms=${result.timing.elapsed_ms}; eligibility_work_ms=${result.timing.eligibility_work_ms || 0}; guard_work_ms=${result.timing.guard_work_ms || 0}; mutation_work_ms=${result.timing.mutation_work_ms || 0}; mutation_queue_ms=${result.timing.mutation_queue_ms || 0}; interrupted=${!!result.interrupted}`);
     } finally { clearInterval(heartbeat); }
     return true;
   }
@@ -234,10 +236,20 @@ export class BulkRoleService {
       .map(rule=>rule.inscription_criteria?.kind==='numbers' ? rule.inscription_criteria.collection_slug : rule.slug)
       .filter(Boolean))]));
     const cacheKey = `${job.id}:${job.rules_version}:${bulkRunKey(job)}`;
-    const initial = this.reads.member(cacheKey);
-    const timing={eligibility_work_ms:0,mutation_work_ms:0,guard_work_ms:Date.now()-memberStarted,role_checks:0};
+    const timing={eligibility_work_ms:0,mutation_work_ms:0,guard_work_ms:Date.now()-memberStarted,mutation_queue_ms:0,role_checks:0};
     const skip = (roleId:string) => job.mode==='grant' && member.roles.cache.has(roleId)
       && !(item.result?.granted?.includes(roleId) && item.result?.errors?.includes(roleId));
+    const checkedRoles=targetRoles.filter(roleId=>!skip(roleId));
+    const inventoryRules=job.rule_id && job.mode==='grant' ? targets : expanded;
+    const needsNumbers=inventoryRules.some(rule=>checkedRoles.includes(rule.role_id) && rule.asset_type==='ordinal'
+      && rule.inscription_criteria?.kind==='numbers' && !rule.inscription_criteria.collection_slug);
+    const memberEvidence=()=>{
+      const evidence=this.reads.member(cacheKey);
+      evidence.context.bulkGrantOnly=job.mode==='grant';
+      evidence.context.ordinalNeedsNumbers=needsNumbers;
+      return evidence;
+    };
+    const initial=memberEvidence();
     const evaluate = async (roleId:string, context:NftCheckContext) => {
       const started=Date.now();timing.role_checks++;
       try {
@@ -251,7 +263,7 @@ export class BulkRoleService {
         return checked;
       } finally {timing.eligibility_work_ms+=Date.now()-started;}
     };
-    const checks=bulkRoleChecks(targetRoles.filter(roleId=>!skip(roleId)),async roleId=>({checked:await evaluate(roleId,initial.context),checkedAt:Date.now()}));
+    const checks=bulkRoleChecks(checkedRoles,async roleId=>({checked:await evaluate(roleId,initial.context),checkedAt:Date.now()}));
     try { for(const roleId of targetRoles) {
       try {
         if(skip(roleId)) {
@@ -271,9 +283,18 @@ export class BulkRoleService {
           result.ineligible.push(roleId);continue;
         }
         let evidence=initial;
-        const fresh=()=>evidence.isFresh(roleCollections.get(roleId)) && Date.now()-checkedAt<60000;
+        const collections=()=>{
+          const proof=checked.status==='passed' ? checked.results.filter(result=>result.isValid) : [];
+          // A sufficient database-only alternative does not depend on Ordinals
+          // evidence read for a different qualification path.
+          if(proof.length && proof.every(result=>result.rule)) return new Set<string>(proof
+            .filter(result=>result.rule.asset_type==='ordinal')
+            .map(result=>result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug).filter(Boolean));
+          return roleCollections.get(roleId);
+        };
+        const fresh=()=>evidence.isFresh(collections()) && Date.now()-checkedAt<60000;
         if(!fresh()) {
-          evidence=this.reads.member(cacheKey);
+          evidence=memberEvidence();
           checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();
           if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
         }
@@ -281,64 +302,77 @@ export class BulkRoleService {
         if(checked.status==='failed' && (job.mode==='grant' || !member.roles.cache.has(roleId))) {
           result.ineligible.push(roleId);continue;
         }
-        const guardStarted=Date.now();
+        let queuedAt=Date.now();
+        let release=await this.mutations.acquire();
+        timing.mutation_queue_ms+=Date.now()-queuedAt;
+        if(!fresh()) {
+          release();
+          evidence=memberEvidence();checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();
+          if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
+          if(checked.status==='failed' && (job.mode==='grant' || !member.roles.cache.has(roleId))) {result.ineligible.push(roleId);continue;}
+          queuedAt=Date.now();release=await this.mutations.acquire();
+          timing.mutation_queue_ms+=Date.now()-queuedAt;
+        }
         try {
-          const [freshRules,latest]=await Promise.all([this.guard(job,item,guild),this.walletSnapshot(item.user_id)]);
-          rules=freshRules;
-          const [nowAllowed,currentMember]=await Promise.all([
-            this.blocks.allowedAddresses(job.server_id,latest.rows.map(w=>w.address)),
-            guild.members.fetch({user:item.user_id,force:true}),
-          ]);
-          if(latest.key!==wallets.key || JSON.stringify(nowAllowed)!==JSON.stringify(allowed)) throw new Error('Wallet evidence changed');
-          member=currentMember;
-        } finally {timing.guard_work_ms+=Date.now()-guardStarted;}
-        if(job.audience==='role' && !member.roles.cache.has(job.source_role_id)) {result.skip='left_audience';break;}
-        if(!fresh()) throw new Error('Ownership response expired before mutation');
-        const mutationStarted=Date.now();
-        try {
-          const held=member.roles.cache.has(roleId);
-          if(checked.status==='passed') {
-            // The dynamic reconciler removes excluded roles; a grants-only job must not.
-            if(await this.roleActions.blockedBy(member,roleId)) {result.excluded.push(roleId);continue;}
-            if(!held) {
-              if(job.mode==='grant') {
-                const policy=this.checked(await this.db.from('verifier_role_actions').select('remove_role_ids').eq('server_id',job.server_id).eq('trigger_role_id',roleId).maybeSingle());
-                if(policy?.remove_role_ids.some(id=>member.roles.cache.has(id))) {result.excluded.push(roleId);continue;}
-              }
-              if(!fresh()) throw new Error('Ownership response expired before grant');
-              const granted=await this.roles.addUserRoleDynamic(item.user_id,job.server_id,roleId,undefined,true);
-              if(granted==='suppressed') {result.excluded.push(roleId);continue;}
-              if(!granted) throw new Error('Discord grant unavailable');
-              if(!result.granted.includes(roleId)) result.granted.push(roleId);
-            } else if(!result.granted.includes(roleId)) result.already_held.push(roleId);
-            const match=checked.results.find(r=>r.isValid);
-            await this.rules.trackRoleAssignment({userId:item.user_id,serverId:job.server_id,roleId,ruleId:String(match?.ruleId || selected.id),
-              userName:member.displayName,serverName:guild.name,roleName:selected.role_name || roleId,
-              verificationData:{bulk_role_job_id:job.id,last_check_status:'passed',matched_rule_ids:checked.results.filter(r=>r.isValid).map(r=>r.ruleId)}});
-            // A transfer during the Discord request must not strand a new grant.
-            // Tracking precedes this final check so a later transfer also queues
-            // the ordinary earned-role reconciliation path.
-            if(!held) {
-              const finalWallets=await this.walletSnapshot(item.user_id);
-              const finalAllowed=await this.blocks.allowedAddresses(job.server_id,finalWallets.rows.map(w=>w.address));
-              if(finalWallets.key!==wallets.key || JSON.stringify(finalAllowed)!==JSON.stringify(allowed)) {
-                result.granted=result.granted.filter(id=>id!==roleId);
-                if(await this.roles.removeUserRole(item.user_id,job.server_id,roleId)) {
-                  for(const assignment of await this.rules.getEarnedRoleAssignments({serverId:job.server_id,userId:item.user_id,roleId})) await this.rules.updateRoleAssignmentStatus(assignment.id,'revoked');
+          const guardStarted=Date.now();
+          try {
+            const [freshRules,latest]=await Promise.all([this.guard(job,item,guild),this.walletSnapshot(item.user_id)]);
+            rules=freshRules;
+            const [nowAllowed,currentMember]=await Promise.all([
+              this.blocks.allowedAddresses(job.server_id,latest.rows.map(w=>w.address)),
+              guild.members.fetch({user:item.user_id,force:true}),
+            ]);
+            if(latest.key!==wallets.key || JSON.stringify(nowAllowed)!==JSON.stringify(allowed)) throw new Error('Wallet evidence changed');
+            member=currentMember;
+          } finally {timing.guard_work_ms+=Date.now()-guardStarted;}
+          if(job.audience==='role' && !member.roles.cache.has(job.source_role_id)) {result.skip='left_audience';break;}
+          if(!fresh()) throw new Error('Ownership response expired before mutation');
+          const mutationStarted=Date.now();
+          try {
+            const held=member.roles.cache.has(roleId);
+            if(checked.status==='passed') {
+              // The dynamic reconciler removes excluded roles; a grants-only job must not.
+              if(await this.roleActions.blockedBy(member,roleId)) {result.excluded.push(roleId);continue;}
+              if(!held) {
+                if(job.mode==='grant') {
+                  const policy=this.checked(await this.db.from('verifier_role_actions').select('remove_role_ids').eq('server_id',job.server_id).eq('trigger_role_id',roleId).maybeSingle());
+                  if(policy?.remove_role_ids.some(id=>member.roles.cache.has(id))) {result.excluded.push(roleId);continue;}
                 }
-                throw new Error('Wallet evidence changed during grant');
+                if(!fresh()) throw new Error('Ownership response expired before grant');
+                const granted=await this.roles.addUserRoleDynamic(item.user_id,job.server_id,roleId,undefined,true);
+                if(granted==='suppressed') {result.excluded.push(roleId);continue;}
+                if(!granted) throw new Error('Discord grant unavailable');
+                if(!result.granted.includes(roleId)) result.granted.push(roleId);
+              } else if(!result.granted.includes(roleId)) result.already_held.push(roleId);
+              const match=checked.results.find(r=>r.isValid);
+              await this.rules.trackRoleAssignment({userId:item.user_id,serverId:job.server_id,roleId,ruleId:String(match?.ruleId || selected.id),
+                userName:member.displayName,serverName:guild.name,roleName:selected.role_name || roleId,
+                verificationData:{bulk_role_job_id:job.id,last_check_status:'passed',matched_rule_ids:checked.results.filter(r=>r.isValid).map(r=>r.ruleId)}});
+              // A transfer during the Discord request must not strand a new grant.
+              // Tracking precedes this final check so a later transfer also queues
+              // the ordinary earned-role reconciliation path.
+              if(!held) {
+                const finalWallets=await this.walletSnapshot(item.user_id);
+                const finalAllowed=await this.blocks.allowedAddresses(job.server_id,finalWallets.rows.map(w=>w.address));
+                if(finalWallets.key!==wallets.key || JSON.stringify(finalAllowed)!==JSON.stringify(allowed)) {
+                  result.granted=result.granted.filter(id=>id!==roleId);
+                  if(await this.roles.removeUserRole(item.user_id,job.server_id,roleId)) {
+                    for(const assignment of await this.rules.getEarnedRoleAssignments({serverId:job.server_id,userId:item.user_id,roleId})) await this.rules.updateRoleAssignmentStatus(assignment.id,'revoked');
+                  }
+                  throw new Error('Wallet evidence changed during grant');
+                }
+              }
+            } else {
+              result.ineligible.push(roleId);
+              if(job.mode==='reconcile' && held) {
+                if(!fresh()) throw new Error('Ownership response expired before removal');
+                if(!await this.roles.removeUserRole(item.user_id,job.server_id,roleId)) throw new Error('Discord removal unavailable');
+                if(!result.removed.includes(roleId)) result.removed.push(roleId);
+                for(const assignment of await this.rules.getEarnedRoleAssignments({serverId:job.server_id,userId:item.user_id,roleId})) await this.rules.updateRoleAssignmentStatus(assignment.id,'revoked');
               }
             }
-          } else {
-            result.ineligible.push(roleId);
-            if(job.mode==='reconcile' && held) {
-              if(!fresh()) throw new Error('Ownership response expired before removal');
-              if(!await this.roles.removeUserRole(item.user_id,job.server_id,roleId)) throw new Error('Discord removal unavailable');
-              if(!result.removed.includes(roleId)) result.removed.push(roleId);
-              for(const assignment of await this.rules.getEarnedRoleAssignments({serverId:job.server_id,userId:item.user_id,roleId})) await this.rules.updateRoleAssignmentStatus(assignment.id,'revoked');
-            }
-          }
-        } finally { timing.mutation_work_ms+=Date.now()-mutationStarted; }
+          } finally { timing.mutation_work_ms+=Date.now()-mutationStarted; }
+        } finally {release();}
       } catch (error) {
         if(error instanceof BulkStopped) {result.interrupted=true;break;}
         result.errors.push(roleId);

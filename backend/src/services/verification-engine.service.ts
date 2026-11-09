@@ -454,6 +454,13 @@ export class VerificationEngine {
     const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
     const proven = context?.provenAddresses?.get(userId);
     if (!addresses.length && !proven) return { status: 'failed', results: [] };
+    if (context?.bulkGrantOnly && rules.some(rule => rule.asset_type === 'ordinal')) {
+      const databaseRules = rules.filter(rule => (!rule.asset_type || rule.asset_type === 'ethscription') && !rule.inscription_criteria);
+      if (databaseRules.length) {
+        const quick = await this.verifyUserBulk(userId, databaseRules.map(rule => rule.id), proven || addresses[0], databaseRules, context);
+        if (quick.validRules.length) return { status: 'passed', results: quick.results };
+      }
+    }
     const checked = await this.verifyUserBulk(userId, rules.map(rule => rule.id), proven || addresses[0], rules, context);
     return {
       status: checked.results.some(result => result.isValid) ? 'passed'

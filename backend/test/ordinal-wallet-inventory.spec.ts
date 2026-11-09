@@ -32,7 +32,29 @@ describe('ordered Ordinals wallet ownership providers', () => {
     });
     service = new OrdinalWalletInventoryService(requests, db);
   });
+  it('lets interactive verification bypass occupied background inventory slots',async()=>{
+    jest.replaceProperty(EnvironmentConfig,'ORDINALS_OWNERSHIP_PROVIDERS','xverse');
+    const releases:Array<()=>void>=[];
+    xverse.mockImplementation(async(_wallet,work)=>{if(work.priority==='background')await new Promise<void>(done=>releases.push(done));return new Map([[id(1),123]]);});
+    const jobs=Array.from({length:4},()=>service.inventory(wallet,{...run(),ordinalMode:'scheduled'},true,xverse));
+    await new Promise(done=>setImmediate(done));expect(releases).toHaveLength(3);
+    expect((await service.inventory(wallet,run(),true,xverse)).provider).toBe('xverse');
+    expect(releases).toHaveLength(3); // Interactive work did not wait for any bulk slot.
+    for(let i=0;i<4;i++){releases[i]();await new Promise(done=>setImmediate(done));}await Promise.all(jobs);
+  });
+
   afterEach(() => jest.restoreAllMocks());
+
+  it('bounds background wallet inventories to three while allowing a larger member cohort',async()=>{
+    jest.replaceProperty(EnvironmentConfig,'ORDINALS_OWNERSHIP_PROVIDERS','xverse');
+    let active=0,max=0;const releases:Array<()=>void>=[];
+    xverse.mockImplementation(async()=>{active++;max=Math.max(max,active);await new Promise<void>(done=>releases.push(()=>{active--;done();}));return new Map([[id(1),123]]);});
+    const jobs=Array.from({length:12},()=>service.inventory(wallet,{...run(),ordinalMode:'scheduled'},true,xverse));
+    await new Promise(done=>setImmediate(done));expect(releases).toHaveLength(3);
+    for(let i=0;i<12;i++){releases[i]();await new Promise(done=>setImmediate(done));}
+    expect(await Promise.all(jobs)).toHaveLength(12);expect(max).toBe(3);
+  });
+
 
   it('uses Ordiscan first and shares one complete wallet inventory across rules', async () => {
     const context = run();

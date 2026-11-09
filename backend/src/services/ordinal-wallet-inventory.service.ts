@@ -1,3 +1,4 @@
+import { AsyncSemaphore } from '@/utils/async-semaphore.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { OrdinalWalletInventory } from '@/models/ordinal-collection.interface';
@@ -14,6 +15,7 @@ const UNAVAILABLE = 'Ordinals verification is temporarily unavailable. Please tr
 
 @Injectable()
 export class OrdinalWalletInventoryService {
+  private readonly reads = new AsyncSemaphore(3);
   private readonly cooldowns = new Map<Provider, number>();
   private readonly health = new Map<PublicProvider, { expires: number; work: OrdinalRequestWork; result: Promise<void> }>();
 
@@ -45,7 +47,14 @@ export class OrdinalWalletInventoryService {
     return providers as Provider[];
   }
 
-  private async lookup(wallet: string, numbers: boolean, work: OrdinalRequestWork, xverse: NumberInventory): Promise<OrdinalWalletInventory> {
+  private lookup(wallet: string, numbers: boolean, work: OrdinalRequestWork, xverse: NumberInventory): Promise<OrdinalWalletInventory> {
+    // Interactive verification must not wait for a background inventory: its
+    // provider priority pauses background requests until verification finishes.
+    if (work.priority === 'interactive') return this.readInventory(wallet, numbers, work, xverse);
+    return this.reads.run(() => this.readInventory(wallet, numbers, work, xverse));
+  }
+
+  private async readInventory(wallet: string, numbers: boolean, work: OrdinalRequestWork, xverse: NumberInventory): Promise<OrdinalWalletInventory> {
     normalizeBitcoinAddress(wallet);
     for (const provider of this.providers()) {
       if ((this.cooldowns.get(provider) || 0) > Date.now()) continue;
