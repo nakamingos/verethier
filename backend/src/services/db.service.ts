@@ -720,10 +720,10 @@ export class DbService {
     const changes = Object.fromEntries(RULE_EDIT_MUTABLE_FIELDS.map(key => [key, key === 'trait_filter' ? ruleTraits(after) : after[key] ?? null]));
     let query = this.supabase.from('verifier_rules').update(changes).eq('id', before.id);
     for (const key of RULE_EDIT_GUARD_FIELDS) {
-      const value = key === 'trait_filter' ? ruleTraits(before) : before[key] ?? null;
+      const value = key === 'additional_roles' ? before.additional_roles || [] : key === 'trait_filter' ? ruleTraits(before) : before[key] ?? null;
       if (value === null) query = query.is(key, null);
       else {
-        const serialized = ['trait_filter', 'inscription_criteria'].includes(key) ? JSON.stringify(value)
+        const serialized = ['trait_filter', 'inscription_criteria', 'additional_roles'].includes(key) ? JSON.stringify(value)
           : key === 'token_ids' ? `{${(value as string[]).join(',')}}` : value;
         query = query.eq(key, serialized);
       }

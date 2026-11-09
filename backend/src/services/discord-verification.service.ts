@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { BouncerLogService } from './bouncer-log.service';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
@@ -688,7 +689,7 @@ export class DiscordVerificationService {
       
       // Get rule details for all assigned roles to show requirements
       const channelId = storedInteraction.channelId;
-      const allRules = await this.dbSvc.getRoleMappings(guildId, channelId);
+      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId));
       const collectionNames = await this.getCollectionNamesForRules(allRules);
       
       // Add new roles section if any
@@ -1030,7 +1031,7 @@ export class DiscordVerificationService {
       }
       
       // Recommendations follow the same channel scope as verification.
-      const allRules = await this.dbSvc.getRoleMappings(guildId, channelId);
+      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId));
       
       // Filter out rules for roles they already have or were just assigned in this verification
       const unassignedRules = allRules.filter(rule => !excludedRoleIds.has(rule.role_id));
@@ -1147,7 +1148,7 @@ export class DiscordVerificationService {
     allRules: VerificationDisplayRule[]
   ): Array<{ rule: VerificationDisplayRule; matchingCount?: AssetCount }> {
     if (role.matchedRules.length > 0) {
-      const rulesById = new Map(allRules.map(rule => [rule.id.toString(), rule]));
+      const rulesById = new Map(allRules.filter(rule => rule.role_id === role.roleId).map(rule => [rule.id.toString(), rule]));
       const matchedRules = role.matchedRules.flatMap(match => {
         const rule = rulesById.get(match.ruleId);
         return rule ? [{ rule, matchingCount: match.matchingCount }] : [];

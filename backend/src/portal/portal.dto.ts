@@ -1,3 +1,5 @@
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
 import { BOUNCER_LOG_EVENTS, BouncerLogKind } from '@/models/bouncer-log.interface';
 import {
   IsBoolean,
@@ -17,7 +19,13 @@ import {
   IsISO8601,
 } from 'class-validator';
 
+export class PortalAdditionalRoleDto {
+  @IsOptional() @IsString() @Matches(/^\d{17,22}$/) id?: string;
+  @IsOptional() @IsString() @MaxLength(100) name?: string;
+}
 export class PortalRuleDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(19) @ValidateNested({ each: true }) @Type(() => PortalAdditionalRoleDto)
+  additional_roles?: PortalAdditionalRoleDto[];
   @IsOptional() @IsObject() stamp_criteria?: import('@/utils/stamp-rule.util').StampCriteria;
   @IsOptional() @IsObject() solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria;
   @IsOptional() @IsObject() trait_filter?: import('@/utils/trait-filter.util').TraitFilter | null;
@@ -46,6 +54,8 @@ export class PortalRuleDto {
 }
 
 export class PortalEditDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(19) @ValidateNested({ each: true }) @Type(() => PortalAdditionalRoleDto)
+  additional_roles?: PortalAdditionalRoleDto[];
   @IsOptional() @IsString() @Matches(/^\d{17,22}$/) role_id?: string;
   @IsOptional() @IsString() @MaxLength(100) role_name?: string;
   @IsString() @MaxLength(64000) version: string;

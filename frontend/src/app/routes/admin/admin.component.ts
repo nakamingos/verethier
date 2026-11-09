@@ -224,6 +224,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   private combinedIndex = new Map<string, any>();
   groupFilter = '';
   editRoleId = '';
+  extraRoles: { id: string; name: string }[] = [];
   editRoleName = '';
   member: any = null;
   roleActionsOpen = false;
@@ -851,17 +852,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     const groups = new Map<string, any>();
     for (const rule of this.data?.rules || []) {
       if (['erc20','solana_token'].includes(rule.asset_type)) continue;
-      const key = this.groupKey(rule);
-      if (!groups.has(key))
-        groups.set(key, {
-          key,
-          roleName: rule.role_name || rule.role_id,
-          roleId: rule.role_id,
-          channelId: rule.channel_id,
-          minimum: rule.min_items || 1,
-          rules: [],
-        });
-      groups.get(key).rules.push(rule);
+      const outputs = [{id:rule.role_id,name:rule.primary_role_name || rule.role_name}, ...(rule.additional_roles || [])];
+      for (const role of outputs) {
+        const key = this.groupKey({...rule,role_id:role.id});
+        if (!groups.has(key)) groups.set(key, {key,roleName:role.name || role.id,roleId:role.id,channelId:rule.channel_id,minimum:rule.min_items || 1,rules:[]});
+        groups.get(key).rules.push(rule);
+      }
     }
     this.combinedGroups = [...groups.values()].filter(
       (group) => group.rules.length > 1,
@@ -875,11 +871,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     )
       this.groupFilter = '';
   }
-  groupFor(rule: any) {
-    return ['erc20','solana_token'].includes(rule.asset_type)
-      ? null
-      : this.combinedIndex.get(this.groupKey(rule));
+  groupsFor(rule: any): any[] {
+    if (['erc20','solana_token'].includes(rule.asset_type)) return [];
+    return [{id:rule.role_id}, ...(rule.additional_roles || [])]
+      .map(role => this.combinedIndex.get(this.groupKey({...rule,role_id:role.id}))).filter(Boolean);
   }
+  groupFor(rule: any) { return this.groupsFor(rule)[0]; }
   get activeGroup() {
     return this.combinedIndex.get(this.groupFilter);
   }
@@ -962,6 +959,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.rememberNewRule();
     this.editor = rule;
     this.editRoleId = rule.role_id;
+    this.extraRoles = (rule.additional_roles || []).map((r: any) => ({...r}));
     this.editRoleName = '';
     this.review = false;
     this.inputs = Object.fromEntries(
@@ -975,16 +973,29 @@ export class AdminComponent implements OnInit, OnDestroy {
         ?.focus({ preventScroll: true }),
     );
   }
+  duplicate(rule: any) {
+    if (this.busy) return;
+    this.rememberNewRule(); this.editor = null;
+    this.edit(rule);
+    this.editor = {...rule, duplicate: true};
+    this.editRoleId = ''; this.editRoleName = ''; this.extraRoles = [];
+  }
+  get additionalRoles() { return this.editor?.new ? (this.draft.additional_roles ||= []) : this.extraRoles; }
+  addRole() { if (!this.busy && this.additionalRoles.length < 19) this.additionalRoles.push({id:'',name:''}); this.review = false; }
+  removeRole(index: number) { if (!this.busy) this.additionalRoles.splice(index, 1); this.review = false; }
+  rolePayload() { return this.additionalRoles.map((r: any) => r.id ? {id:r.id} : {name:r.name}); }
   changeAsset() {
     const asset = this.draft.asset_type,
       channel = this.draft.channel_id,
       role = this.draft.role_id,
       name = this.draft.role_name;
+    const additional = this.draft.additional_roles;
     this.draft = {
       asset_type: asset,
       channel_id: channel,
       role_id: role,
       role_name: name,
+      additional_roles: additional,
       min_items: 1,
       network: 'ethereum',
       solana_kind:'collection', solana_addresses:'', solana_formats:'standard', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -1034,6 +1045,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       asset_type: d.asset_type,
       channel_id: d.channel_id,
       request_id: crypto.randomUUID(),
+      additional_roles: this.rolePayload(),
     };
     if (d.role_id) result.role_id = d.role_id;
     else result.role_name = d.role_name;
@@ -1079,26 +1091,25 @@ export class AdminComponent implements OnInit, OnDestroy {
     return result;
   }
   get changedRole() {
-    return !this.editor?.new && this.editRoleId !== this.editor?.role_id;
+    return !this.editor?.new && !this.editor?.duplicate && (this.editRoleId !== this.editor?.role_id || JSON.stringify(this.extraRoles.map(r=>r.id)) !== JSON.stringify((this.editor.additional_roles || []).map((r:any)=>r.id)));
   }
   get targetRoleName() {
-    return this.editRoleId
-      ? this.data.roles.find((role: any) => role.id === this.editRoleId)
-          ?.name || this.editRoleId
-      : this.editRoleName;
+    return [{id:this.editRoleId,name:this.editRoleName},...this.extraRoles].map(role => role.id
+      ? this.data.roles.find((r: any) => r.id === role.id)?.name || role.id : role.name).join(', ');
   }
   async save() {
     await this.run(async () => {
-      const creating = this.editor.new;
+      const creating = this.editor.new || this.editor.duplicate;
       const action = this.editor.new
         ? await this.api(`/servers/${this.selected}/rules`, this.payload())
         : await this.api(
-            `/servers/${this.selected}/rules/${this.editor.id}/edit`,
+            `/servers/${this.selected}/rules/${this.editor.id}/${this.editor.duplicate ? 'duplicate' : 'edit'}`,
             {
               version: this.editor.version,
               ...(this.editRoleId
                 ? { role_id: this.editRoleId }
                 : { role_name: this.editRoleName }),
+              additional_roles: this.rolePayload(),
               inputs: this.inputs,
               request_id: crypto.randomUUID(),
             },

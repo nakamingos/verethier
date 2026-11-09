@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -48,7 +49,7 @@ export class BulkRoleService {
   async preview(guild: Guild, actor: string, input: BulkRolePreviewDto) {
     if(input.audience==='role' && !input.source_role_id) throw new BadRequestException('Choose an audience role.');
     const rules=await this.rules.getRoleMappings(guild.id);
-    const selected=input.rule_id ? rules.filter(r=>r.id===input.rule_id) : rules;
+    const selected=expandRuleRoles(input.rule_id ? rules.filter(r=>r.id===input.rule_id) : rules);
     if(!selected.length) throw new BadRequestException('Choose an existing rule in this server.');
     await guild.members.fetchMe();
     await guild.roles.fetch();
@@ -82,7 +83,7 @@ export class BulkRoleService {
     this.checked(await this.db.rpc('verifier_bulk_role_preview',{
       p_job:{id:input.request_id,server_id:guild.id,created_by:actor,audience:input.audience,source_role_id:source?.id || null,
         rule_id:input.rule_id || null,mode:input.mode,rules_version:bulkRulesVersion(rules),
-        labels:{server:guild.name,audience:source?.name || 'Verified members in this server',target:input.rule_id?`Rule ${input.rule_id} · ${selected[0].role_name}`:'All server rules',roles:Object.fromEntries(rules.map(r=>[r.role_id,r.role_name || r.role_id]))}},
+        labels:{server:guild.name,audience:source?.name || 'Verified members in this server',target:input.rule_id?`Rule ${input.rule_id} · ${selected[0].role_name}`:'All server rules',roles:Object.fromEntries(expandRuleRoles(rules).map(r=>[r.role_id,r.role_name || r.role_id]))}},
       p_members:members,
     }));
     return this.info(guild.id,input.request_id);
@@ -180,7 +181,7 @@ export class BulkRoleService {
     const addresses=wallets.rows.map(w=>w.address);
     const allowed=await this.blocks.allowedAddresses(job.server_id,addresses);
     const result:any={granted:[...(item.result?.granted || [])],removed:[...(item.result?.removed || [])],already_held:[],ineligible:[],unavailable:[],excluded:[],errors:[]};
-    const targets=job.rule_id ? rules.filter(r=>r.id===Number(job.rule_id)) : rules;
+    const targets=expandRuleRoles(job.rule_id ? rules.filter(r=>r.id===Number(job.rule_id)) : rules);
     const targetRoles=[...new Set(targets.map(r=>r.role_id))];
     const context:NftCheckContext={checks:new Map(),ordinalMode:'scheduled'};
     for(const roleId of targetRoles) {

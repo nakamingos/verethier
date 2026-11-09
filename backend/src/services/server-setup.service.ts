@@ -1,3 +1,4 @@
+import { ruleRoles } from '@/utils/rule-roles.util';
 import {
   BadRequestException,
   ConflictException,
@@ -120,17 +121,19 @@ export class ServerSetupService {
       });
     const grouped = new Map<string, number[]>();
     for (const rule of rules) {
-      const role = roles.get(rule.role_id);
-      if (!role || !role.editable)
-        issues.push({
-          id: `role:${rule.id}`,
-          status: 'warning',
-          message: `Rule #${rule.id}: ${role ? 'role cannot be assigned.' : 'role was deleted.'}`,
-          remedy: role
-            ? 'Move Bouncer above the target role and check Manage Roles. Managed roles cannot be assigned.'
-            : 'Edit the rule and select or create an existing manageable role.',
-          rule_ids: [rule.id],
-        });
+      for (const output of ruleRoles(rule)) {
+        const role = roles.get(output.id);
+        if (!role || !role.editable)
+          issues.push({
+            id: output.id === rule.role_id ? `role:${rule.id}` : `role:${rule.id}:${output.id}`,
+            status: 'warning',
+            message: `Rule #${rule.id}: ${role ? 'role cannot be assigned.' : 'role was deleted.'}`,
+            remedy: role
+              ? 'Move Bouncer above the target role and check Manage Roles. Managed roles cannot be assigned.'
+              : 'Edit the rule and select or create an existing manageable role.',
+            rule_ids: [rule.id],
+          });
+      }
       if (!grouped.has(rule.channel_id)) grouped.set(rule.channel_id, []);
       grouped.get(rule.channel_id).push(rule.id);
     }

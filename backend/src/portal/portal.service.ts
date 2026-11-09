@@ -1,3 +1,4 @@
+import { expandRuleRoles, ruleRoles } from '@/utils/rule-roles.util';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { StampsOwnershipService } from '@/services/stamps-ownership.service';
@@ -200,7 +201,9 @@ export class PortalService {
       rules: rules.map(rule => ({
         ...portalRule(rule),
         // Resolve display names without changing persisted rule definitions or edit versions.
-        role_name: roles.get(rule.role_id)?.name || rule.role_name || rule.role_id,
+        role_name: ruleRoles(rule).map(r => roles.get(r.id)?.name || r.name).join(', '),
+        primary_role_name: roles.get(rule.role_id)?.name || rule.role_name || rule.role_id,
+        additional_roles: (rule.additional_roles || []).map(r => ({ ...r, name: roles.get(r.id)?.name || r.name })),
       })),
       capabilities: { solana: EnvironmentConfig.SOLANA_ENABLED, solana_editions: EnvironmentConfig.SOLANA_ENABLED, multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
       privacy: this.privacy ? await this.privacy.server(server) : null,
@@ -221,7 +224,7 @@ export class PortalService {
     const issues: string[] = [];
     if (!guild.members.me?.permissions.has(PermissionFlagsBits.ManageRoles))
       issues.push('Enable Manage Roles for Bouncer.');
-    for (const rule of rules) {
+    for (const rule of expandRuleRoles(rules)) {
       const role = guild.roles.cache.get(rule.role_id);
       const channel = guild.channels.cache.get(rule.channel_id);
       if (!role)
@@ -429,6 +432,7 @@ export class PortalService {
       channel_name: channel.name,
       role_id: role.id,
       role_name: role.name,
+      additional_roles: await this.additionalRoles(guild, role.id, input.additional_roles, session.user.id),
       slug: prepared.slug,
 
       trait_filter: ruleTraits({...prepared.assetFields,attribute_key:prepared.attributeKey,attribute_value:prepared.attributeValue}),
@@ -478,6 +482,7 @@ export class PortalService {
       after.role_id = role.id;
       after.role_name = role.name;
     }
+    if (input.additional_roles !== undefined) after.additional_roles = await this.additionalRoles(guild, after.role_id, input.additional_roles, session.user.id);
     if (
       this.edits.duplicates(after, await this.rules.getRoleMappings(server))
         .exact
@@ -488,6 +493,35 @@ export class PortalService {
     return this.mutate(session, server, input.request_id, before, after);
   }
 
+  async duplicate(session: PortalSession, server: string, id: string, input: PortalEditDto) {
+    await this.access(session, server);
+    const replay = await this.replay(session, server, input.request_id);
+    if (replay) return replay;
+    const source = await this.rule(server, id, input.version);
+    if (!input.inputs || Object.keys(input.inputs).length > 8 || Object.entries(input.inputs).some(([key,v]) =>
+      typeof v !== 'string' || v.length > (key === 'trait_filter' ? 20000 : 8000))) throw new BadRequestException('Invalid rule fields.');
+    const fields = portalRule(source).fields;
+    const unchanged = fields.every(f => input.inputs[f.key] === f.value) && Object.keys(input.inputs).every(k => fields.some(f => f.key === k));
+    const candidate = unchanged ? { ...source } : await this.edits.prepare(source, input.inputs);
+    const guild = await this.access(session, server);
+    const role = await this.targetRole(guild, input.role_id, input.role_name, session.user.id);
+    candidate.role_id = role.id; candidate.role_name = role.name;
+    candidate.additional_roles = await this.additionalRoles(guild, role.id, input.additional_roles, session.user.id);
+    delete candidate.id;
+    if (this.edits.duplicates(candidate, await this.rules.getRoleMappings(server)).exact) throw new ConflictException('This exact rule already exists.');
+    // Copy only rule fields; no assignment history or role-action policies.
+    return this.mutate(session, server, input.request_id, null, candidate);
+  }
+  private async additionalRoles(guild: Guild, primary: string, inputs: {id?:string;name?:string}[] = [], actor: string) {
+    if (!Array.isArray(inputs) || inputs.length > 19) throw new BadRequestException('A rule can grant up to 20 roles.');
+    const result: {id:string;name:string}[] = []; const seen = new Set([primary]);
+    for (const input of inputs) {
+      const role = await this.targetRole(guild, input.id, input.id ? undefined : input.name, actor);
+      if (seen.has(role.id)) throw new BadRequestException('Choose each role only once.');
+      seen.add(role.id); result.push({id:role.id,name:role.name});
+    }
+    return result;
+  }
   private async targetRole(
     guild: Guild,
     roleId: string | undefined,
@@ -559,17 +593,8 @@ export class PortalService {
     if (!data) throw new NotFoundException('Action not found.');
     if (!['create', 'edit', 'delete', 'reverse'].includes(data.kind))
       throw new BadRequestException('This action cannot be reversed.');
-    if (
-      data.before_rule &&
-      data.after_rule &&
-      data.before_rule.role_id !== data.after_rule.role_id
-    ) {
-      await this.targetRole(
-        guild,
-        data.before_rule.role_id,
-        undefined,
-        session.user.id,
-      );
+    if (data.before_rule) {
+      for (const role of ruleRoles(data.before_rule)) await this.targetRole(guild, role.id, undefined, session.user.id);
     }
     return this.mutate(
       session,

@@ -1,3 +1,4 @@
+import { ruleRoles } from '@/utils/rule-roles.util';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
@@ -271,10 +272,11 @@ export class ListRulesHandler {
     }
 
     try {
-      if (['erc20','solana_token'].includes(rule.asset_type)) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
-      if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
-      if (rule.asset_type === 'stamp') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | ${stampRuleLabel(rule)}`;
-      if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: <@&${rule.role_id}> | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
+      const mentions = ruleRoles(rule).map(r => `<@&${r.id}>`).join(', ');
+      if (['erc20','solana_token'].includes(rule.asset_type)) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
+      if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
+      if (rule.asset_type === 'stamp') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | ${stampRuleLabel(rule)}`;
+      if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
       const slug = rule.slug || 'ALL';
       const minItems = rule.min_items || 1;
@@ -285,7 +287,7 @@ export class ListRulesHandler {
       // Only include Min when it's greater than 1
       const minPart = minItems > 1 ? ` | Min: ${minItems}` : '';
 
-      return `ID: ${ruleId} | Channel: <#${channelId}> | Role: <@&${roleId}> | Slug: ${slug} | Attr: ${attribute}${minPart}`;
+      return `ID: ${ruleId} | Channel: <#${channelId}> | Role: ${mentions} | Slug: ${slug} | Attr: ${attribute}${minPart}`;
     } catch (error) {
       this.logger.warn('Error formatting rule:', rule, error);
       return `ID: ${rule.id || 'N/A'} | Error formatting rule data`;

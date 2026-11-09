@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import {
   BadRequestException,
@@ -365,8 +366,9 @@ export class WalletExportService {
       job.reason,
     );
     const members = await this.members(guild),
-      allRules = await this.rules.getRoleMappings(job.server_id),
-      hash = this.hash(allRules);
+      canonicalRules = await this.rules.getRoleMappings(job.server_id),
+      allRules = expandRuleRoles(canonicalRules),
+      hash = this.hash(canonicalRules);
     if (
       (f.channel && !allRules.some((r) => r.channel_id === f.channel)) ||
       (f.rule && !allRules.some((r) => String(r.id) === f.rule))
@@ -415,16 +417,11 @@ export class WalletExportService {
           (r) => !f.channel || r.channel_id === f.channel,
         );
         if (f.rule) {
-          const selected = allRules.find((r) => String(r.id) === f.rule);
-          scope = scope.filter(
-            (r) =>
-              r.role_id === selected.role_id &&
-              r.channel_id === selected.channel_id &&
-              (['erc20','solana_token'].includes(selected.asset_type)
-                ? r.id === selected.id
-                : !['erc20','solana_token'].includes(r.asset_type) &&
-                  r.min_items === selected.min_items),
-          );
+          const selected = allRules.filter((r) => String(r.id) === f.rule);
+          scope = scope.filter(r => selected.some(output =>
+            r.role_id === output.role_id && r.channel_id === output.channel_id &&
+            (['erc20','solana_token'].includes(output.asset_type) ? r.id === output.id
+              : !['erc20','solana_token'].includes(r.asset_type) && r.min_items === output.min_items)));
         } else if (f.roles?.length && !f.channel)
           scope = scope.filter((r) => f.roles.includes(r.role_id));
         const checked = scope.length

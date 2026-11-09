@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule, solanaRuleLabel } from '@/utils/solana-rule.util';
 import { solanaMessage, verifySolanaMessage } from '@/utils/solana.util';
@@ -98,7 +99,7 @@ export class MemberService {
       guild.roles.fetch(),
     ]);
     const defaultChannel = this.checked(settings)?.verification_channel_id;
-    const visible = rules.filter((rule) =>
+    const visible = expandRuleRoles(rules).filter((rule) =>
       channels
         .get(rule.channel_id)
         ?.permissionsFor(member)

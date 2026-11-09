@@ -463,7 +463,7 @@
                         {{
                           editor.new
                             ? "Create a rule"
-                            : "Edit rule " + editor.id
+                            : (editor.duplicate ? "Duplicate rule " : "Edit rule ") + editor.id
                         }}
                       </h2>
                       <div class="actions">
@@ -740,6 +740,18 @@
                         }
                       </div>
                     }
+                    <div class="wide">
+                      <div class="actions"><span>Additional roles:</span><button type="button" (click)="addRole()" [disabled]="busy || additionalRoles.length >= 19">Add role</button></div>
+                      @for (role of additionalRoles; track $index; let i = $index) {
+                        <div class="form-grid">
+                          <label>Discord role:<span class="select-control"><app-pixel-select [name]="'additionalRole'+i" [(ngModel)]="role.id" [options]="roleChoices" label="Additional Discord role" /></span></label>
+                          @if (!role.id) { <label>New role name:<input [name]="'additionalRoleName'+i" [(ngModel)]="role.name" required maxlength="100" /></label> }
+                          <button type="button" (click)="removeRole(i)" [disabled]="busy">Remove role</button>
+                        </div>
+                      }
+                      @if (additionalRoles.length) { <p class="muted">These roles share this rule’s requirements. Each role is checked against its other qualifying rules before removal.</p> }
+                      @if (editor.duplicate) { <p class="muted">This creates an independent rule. Changes here will not change the original.</p> }
+                    </div>
                     <ng-template #traitControls>
                       @if (traitModel; as traits) {
                         <div class="wide">
@@ -843,14 +855,15 @@
 
                       <p>
                         {{
-                          editor.new
+                          (editor.new || editor.duplicate)
                             ? "Create this rule with the requirements above."
                             : "Replace this rule’s requirements with the values above."
                         }}
-                        Previously earned roles will be checked against all
-                        remaining rules and saved wallets.
-                        @if (!changedRole) {
-                          New qualifiers still need to verify.
+                        @if (editor.new || editor.duplicate) {
+                          Members can verify to qualify, or you can run a bulk role check for their saved wallets.
+                        } @else {
+                          Previously earned roles will be checked against all remaining rules and saved wallets.
+                          @if (!changedRole) { New qualifiers still need to verify. }
                         }
                       </p>
                       <div class="actions">
@@ -952,22 +965,23 @@
                               editor?.id === rule.id ? "Cancel" : "Edit"
                             }}</span></span
                           ></button
+                        ><button (click)="duplicate(rule)" [disabled]="busy">Duplicate</button
                         ><button (click)="remove(rule)" [disabled]="busy">
                           Delete
                         </button>
                       </div>
                       <div class="rule-card-group">
-                        @if (groupFor(rule); as group) {
+                        @for (group of groupsFor(rule); track group.key) {
                           <button
                             class="combined-badge"
                             (click)="showGroup(group.key)"
                             [disabled]="busy"
                             [attr.aria-pressed]="activeGroup?.key === group.key"
                             [attr.aria-label]="
-                              'Combined · ' + group.rules.length + ' rules'
+                              group.roleName + ' · Combined · ' + group.rules.length + ' rules'
                             "
                             [title]="
-                              'Combined · ' + group.rules.length + ' rules'
+                              group.roleName + ' · Combined · ' + group.rules.length + ' rules'
                             "
                           >
                             <span class="combined-label" aria-hidden="true"

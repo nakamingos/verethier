@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
@@ -170,23 +171,32 @@ export class VerificationEngine {
     
     // Process all verifications in parallel for better performance
     const context: NftCheckContext = sharedContext || { checks: new Map() };
-    const ruleEntries = await Promise.all(ruleIds.map(async id => [id.toString(), loadedRules
+    const ruleEntries = await Promise.all([...new Set(ruleIds)].map(async id => [id, loadedRules
       ? loadedRules.find(rule => rule.id.toString() === id.toString())
       : await this.getRuleById(id)] as const));
-    const ruleMap = new Map(ruleEntries);
-    const rules = ruleEntries.map(([, rule]) => rule).filter(Boolean);
+    const entries = loadedRules
+      ? expandRuleRoles(loadedRules.filter(r => ruleIds.some(id => String(id) === String(r.id)))).map(r => [r.id, r] as const)
+      : ruleEntries.flatMap<readonly [string | number, VerifierRole]>(([id, rule]) => rule ? expandRuleRoles([rule]).map(r => [id, r] as const) : [[id, rule] as const]);
+    const rules = entries.map(([, rule]) => rule).filter(Boolean);
     // Scheduled contexts span many members. A numeric role for one member must
     // not force every later member onto a numbered (potentially paid) lookup.
     if (context.ordinalMode !== 'scheduled'
       && rules.some(rule => rule.asset_type === 'ordinal' && rule.inscription_criteria?.kind === 'numbers')) context.ordinalNeedsNumbers = true;
     const timings = new Map<string, { startedAt: number; endedAt: number; rules: number }>();
-    const verificationPromises = ruleIds.map(ruleId => {
-      const rule = ruleMap.get(ruleId.toString());
+    const ownershipChecks = new Map<string, Promise<VerificationResult>>();
+    const verificationPromises = entries.map(([ruleId, rule]) => {
       const type = rule?.asset_type || 'ethscription';
       if (!timings.has(type)) timings.set(type, { startedAt: Date.now(), endedAt: 0, rules: 0 });
       const timing = timings.get(type);
       timing.rules++;
-      return this.verifyUser(userId, ruleId, address, context, rule).finally(() => { timing.endedAt = Date.now(); });
+      const key = String(ruleId);
+      if (!ownershipChecks.has(key)) ownershipChecks.set(key, this.verifyUser(userId, ruleId, address, context, rule));
+      return ownershipChecks.get(key).then(result => ({
+        ...result,
+        // Independent results prevent combined-count qualification for one output
+        // from changing another output that shares this ownership proof.
+        ...(result.rule && rule ? {rule:{...result.rule,role_id:rule.role_id,role_name:rule.role_name}} : {}),
+      })).finally(() => { timing.endedAt = Date.now(); });
     });
     
     const results = await Promise.all(verificationPromises);
@@ -427,13 +437,13 @@ export class VerificationEngine {
    * @returns Promise<VerifierRole | null>
    */
   async evaluateRole(userId: string, serverId: string, roleId: string, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    const rules = (await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
+    const rules = expandRuleRoles(await this.dbSvc.getRoleMappings(serverId)).filter(rule => rule.role_id === roleId);
     return this.evaluateRoleRules(userId, rules, context);
   }
 
   /** Role moves grant through the changed channel/count group, not unrelated paths. */
   async evaluateRuleGroup(userId: string, rule: VerifierRole, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    const rules = ['erc20','solana_token'].includes(rule.asset_type) ? [rule] : (await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
+    const rules = ['erc20','solana_token'].includes(rule.asset_type) ? [rule] : expandRuleRoles(await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
       candidate.role_id === rule.role_id && candidate.channel_id === rule.channel_id && !['erc20','solana_token'].includes(candidate.asset_type)
       && (candidate.min_items || 1) === (rule.min_items || 1));
     return this.evaluateRoleRules(userId, rules, context);

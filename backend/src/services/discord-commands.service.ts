@@ -1,3 +1,4 @@
+import { roleIds } from '@/utils/rule-roles.util';
 import {singleTrait,ruleTraits,traitFilterLabel} from '@/utils/trait-filter.util';
 import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
@@ -1122,7 +1123,7 @@ export class DiscordCommandsService {
     try {
       // Check if any other rules are using this role
       const allRules = await this.dbSvc.getRoleMappings(serverId);
-      const rulesUsingRole = allRules?.filter(rule => rule.role_id === roleId) || [];
+      const rulesUsingRole = allRules?.filter(rule => roleIds(rule).includes(roleId)) || [];
       
       // If no other rules use this role, delete it
       if (rulesUsingRole.length === 0) {

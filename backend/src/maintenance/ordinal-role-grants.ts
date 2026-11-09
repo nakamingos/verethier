@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '../utils/rule-roles.util';
 import { VerifierRole } from '../models/verifier-role.interface';
 import { NftCheckContext } from '../services/nft-ownership.service';
 import { BulkVerificationResult, VerificationResult } from '../services/verification-engine.service';
@@ -14,6 +15,7 @@ export type OrdinalGrantDependencies = {
 
 /** Match the channel scope of a fresh verification, including ALL-channel rules. */
 export function ordinalGrantGroups(rules: VerifierRole[]): VerifierRole[][] {
+  rules = expandRuleRoles(rules);
   const channels = [...new Set(rules.map(rule => rule.channel_id).filter(id => id !== 'ALL'))];
   if (!channels.length) channels.push('ALL');
   return channels.map(channel => {

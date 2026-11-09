@@ -242,3 +242,7 @@ Initial Solana wallet proofs, fungible-token rules and Token Metadata/Core NFT s
 ## Bitcoin Stamps
 
 Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are released; the production migration was applied November 5, 2026. See [scope, providers, migration and release status](docs/bitcoin-stamps.md). Ordinals-only channels remain Taproot-only.
+
+### Duplicate rules and multiple roles
+
+Rules → Duplicate copies the complete requirements into an independent draft with a new role selection. Add role in a rule editor grants multiple Discord roles from one set of requirements; rechecks and role removals still respect alternative qualifying rules. Apply migration `20261108010000_multi_role_rules.sql` before deployment. No new environment variables are needed. See [behavior and validation](docs/multi-role-rules.md).

@@ -5,7 +5,7 @@ import { ruleTraits, singleTrait, traitFilterKey, traitFilterLabel } from './tra
 
 // Ignore provider display names and the trait snapshot, which scheduled checks can
 // refresh while an administrator has the editor open.
-export const RULE_EDIT_GUARD_FIELDS = ['server_id', 'channel_id', 'role_id', 'asset_type', 'chain_id', 'contract_address',
+export const RULE_EDIT_GUARD_FIELDS = ['server_id', 'channel_id', 'role_id', 'additional_roles', 'asset_type', 'chain_id', 'contract_address',
   'slug', 'trait_filter', 'min_items', 'token_standard', 'token_ids', 'collection_name',
   'solana_criteria', 'stamp_criteria', 'inscription_criteria', 'rule_label', 'min_balance', 'token_decimals', 'token_symbol'] as const;
 export const RULE_EDIT_MUTABLE_FIELDS = ['slug', 'trait_filter', 'min_items', 'token_ids',
@@ -17,12 +17,12 @@ function canonical(value: unknown): unknown {
   return value ?? null;
 }
 export function ruleEditVersion(rule: VerifierRole): string {
-  return JSON.stringify(RULE_EDIT_GUARD_FIELDS.map(key => canonical(key === 'trait_filter' ? ruleTraits(rule) : rule[key])));
+  return JSON.stringify(RULE_EDIT_GUARD_FIELDS.filter(key => key !== 'additional_roles' || rule.additional_roles?.length).map(key => canonical(key === 'additional_roles' ? (rule.additional_roles || []).map(r => r.id).sort() : key === 'trait_filter' ? ruleTraits(rule) : rule[key])));
 }
 export function ruleCriteriaKey(rule: VerifierRole, includeRole = true): string {
   const fields = RULE_EDIT_GUARD_FIELDS.filter(key => !['collection_name', 'token_decimals', 'token_symbol', 'rule_label'].includes(key)
-    && (includeRole || key !== 'role_id'));
-  return JSON.stringify(fields.map(key => canonical(key === 'trait_filter' ? traitFilterKey(rule) : rule[key])));
+    && (includeRole || !['role_id', 'additional_roles'].includes(key)));
+  return JSON.stringify(fields.map(key => canonical(key === 'additional_roles' ? (rule.additional_roles || []).map(r => r.id).sort() : key === 'trait_filter' ? traitFilterKey(rule) : rule[key])));
 }
 
 export function compactTokenIds(ids: string[] | null | undefined): string {

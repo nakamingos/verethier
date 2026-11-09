@@ -142,6 +142,15 @@ function setup(filters: any = {}) {
   };
 }
 describe("Fresh wallet exports", () => {
+  it('includes additional role outputs when both a rule and an additional role filter are selected',async()=>{
+    const additional='666666666666666666', t=setup({rule:'1',roles:[additional]});
+    (t.rule as any).additional_roles=[{id:additional,name:'Additional'}];
+    t.member.roles.cache.set(additional,{});
+    t.engine.verifyUserBulk.mockImplementation(async(_u,_ids,_a,scope)=>({results:scope.map(rule=>({isValid:true,status:'passed',rule}))}));
+    expect((await t.service.build(t.job)).rows).toHaveLength(2);
+    expect(t.engine.verifyUserBulk.mock.calls[0][3].map(r=>r.role_id)).toEqual([role,additional]);
+  });
+
   it("evaluates combined holdings using all saved wallets in a fresh context, without altering roles or proof times", async () => {
     const t = setup(),
       result = await t.service.build(t.job);

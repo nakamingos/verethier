@@ -1,3 +1,4 @@
+import { roleIds } from '@/utils/rule-roles.util';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { Injectable } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
@@ -107,7 +108,7 @@ export class RuleEditService {
   duplicates(candidate: VerifierRole, rules: VerifierRole[]): { exact?: VerifierRole; shared: VerifierRole[] } {
     const others = rules.filter(rule => rule.id !== candidate.id);
     return {
-      exact: others.find(rule => ruleCriteriaKey(rule) === ruleCriteriaKey(candidate)),
+      exact: others.find(rule => ruleCriteriaKey(rule, false) === ruleCriteriaKey(candidate, false) && roleIds(rule).some(id => roleIds(candidate).includes(id))),
       shared: others.filter(rule => rule.role_id !== candidate.role_id && ruleCriteriaKey(rule, false) === ruleCriteriaKey(candidate, false))
     };
   }

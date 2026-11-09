@@ -173,6 +173,9 @@ export class PortalController {
   ) {
     return this.portal.walletAudit(await this.mutation(req), server, body);
   }
+  @Post('servers/:server/rules/:id/duplicate') async duplicate(
+    @Req() req: Request, @Param('server') server: string, @Param('id') id: string, @Body() body: PortalEditDto,
+  ) { return this.portal.duplicate(await this.mutation(req), server, id, body); }
   @Post('servers/:server/rules/:id/edit') async edit(
     @Req() req: Request,
     @Param('server') server: string,

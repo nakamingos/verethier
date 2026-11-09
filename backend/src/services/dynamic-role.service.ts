@@ -1,3 +1,4 @@
+import { ruleRoles } from '@/utils/rule-roles.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DbService } from './db.service';
@@ -128,7 +129,9 @@ export class DynamicRoleService {
 
   /** An explicit admin role change may move earlier qualifiers to a new role. */
   async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[]): Promise<{ verified: number; revoked: number; errors: number }> {
-    const rule = await this.dbSvc.getRuleForServer(ruleId, serverId);
+    const canonical = await this.dbSvc.getRuleForServer(ruleId, serverId);
+    const target = canonical && ruleRoles(canonical).find(r => r.id === roleId);
+    const rule = target ? { ...canonical, role_id: target.id, role_name: target.name, additional_roles: [] } : null;
     // A newer edit carries this audience forward in its own durable job.
     if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, errors: 0 };
     const rules = await this.dbSvc.getRoleMappings(serverId);

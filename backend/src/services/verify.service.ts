@@ -260,7 +260,10 @@ export class VerifyService {
           for (const rule of matches) roleResults.push({
             ...roleResult,
             ruleId: rule.id.toString(),
-            matchingCount: result.matchingAssetCounts.get(rule.id.toString()) || 0,
+            matchingCount: (() => {
+              const check = result.results?.find(r => String(r.ruleId) === String(rule.id) && r.rule?.role_id === roleId);
+              return check?.combinedAssetCount ?? check?.matchingAssetCount ?? result.matchingAssetCounts.get(rule.id.toString()) ?? 0;
+            })(),
           });
         } catch (error) {
           Logger.error(`Failed to assign role ${roleId}:`, error.message);

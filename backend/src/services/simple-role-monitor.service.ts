@@ -1,3 +1,4 @@
+import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from './db.service';
 import { DiscordVerificationService } from './discord-verification.service';
@@ -90,11 +91,12 @@ export class SimpleRoleMonitorService {
 
     try {
       // Get user's current role assignments and rules in parallel for better performance
-      const [userRoles, rules] = await Promise.all([
+      const [userRoles, rawRules] = await Promise.all([
         this.dbSvc.getUserRoleHistory(userId, serverId),
         this.dbSvc.getRoleMappings(serverId)
       ]);
       
+      const rules = expandRuleRoles(rawRules);
       // Get ALL user's verified addresses for wallet stacking
       const userAddresses = await this.userAddressService.getUserAddresses(userId);
       if (userAddresses.length === 0) {
@@ -109,7 +111,7 @@ export class SimpleRoleMonitorService {
       const roleIds = [...new Set([...rules.map(rule => rule.role_id), ...userRoles.filter(role => role.status === 'active').map(role => role.role_id)])];
       for (const roleId of roleIds) {
         try {
-          const checks = checked.results.filter(check => check.rule?.role_id === roleId || rules.some(rule => rule.role_id === roleId && rule.id === check.ruleId));
+          const checks = checked.results.filter(check => check.rule ? check.rule.role_id === roleId : rules.some(rule => rule.role_id === roleId && rule.id === check.ruleId));
           const passing = checks.find(check => check.isValid);
           const unavailable = checks.some(check => check.status === 'unavailable' || check.error);
           const checkDetails = {
