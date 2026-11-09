@@ -197,7 +197,11 @@ export class PortalService {
     this.dbError(actions.error);
     return {
       server: { id: guild.id, name: guild.name, icon: guild.iconURL() },
-      rules: rules.map(portalRule),
+      rules: rules.map(rule => ({
+        ...portalRule(rule),
+        // Resolve display names without changing persisted rule definitions or edit versions.
+        role_name: roles.get(rule.role_id)?.name || rule.role_name || rule.role_id,
+      })),
       capabilities: { solana: EnvironmentConfig.SOLANA_ENABLED, solana_editions: EnvironmentConfig.SOLANA_ENABLED, multi_trait: true, operator: this.privacy?.isOperator(session.user.id) || false },
       privacy: this.privacy ? await this.privacy.server(server) : null,
       settings,

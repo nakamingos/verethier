@@ -45,7 +45,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
       iconURL: () => null,
       members: { fetch: jest.fn().mockResolvedValue({ id: user }) },
       channels: { fetch: jest.fn() },
-      roles: { cache: new Map() },
+      roles: { cache: new Map(), fetch: jest.fn().mockResolvedValue(new Map()) },
     };
     service = new MemberService(
       db,
@@ -351,6 +351,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
         id: 1,
         channel_id: channel,
         role_id: 'holder',
+        role_name: 'Old holder',
         slug: 'nakamingos',
         min_items: 1,
       },
@@ -374,13 +375,15 @@ describe('Member account boundaries and fresh wallet proofs', () => {
                 : [],
           ),
     );
+    guild.roles.fetch.mockResolvedValue(new Map([['holder', { name: 'Renamed holder' }]]));
     const result = await service.overview({
       ...session,
       guilds: [{ id: server }, { id: 'not-joined' }],
     });
     expect(result.counts).toEqual({ wallets: 1, communities: 1, roles: 1 });
+    expect(result.communities[0].roles[0].name).toBe('Renamed holder');
     expect(result.communities[0].channels.map((c) => c.id)).toEqual([channel]);
-    expect(result.communities[0].channels[0].rules[0]).toMatchObject({roleId:'holder',earned:true,previouslyEarned:true});
+    expect(result.communities[0].channels[0].rules[0]).toMatchObject({roleId:'holder',role:'Renamed holder',earned:true,previouslyEarned:true});
     expect(JSON.stringify(result)).not.toContain('staff-only');
     expect(JSON.stringify(result)).not.toContain('private-role');
     expect(walletQuery.eq).toHaveBeenCalledWith('user_id', user);

@@ -596,3 +596,31 @@ describe('Portal wallet block mutations', () => {
     expect(portal.walletBlock).not.toHaveBeenCalled();
   });
 });
+
+describe('Current Discord role display names', () => {
+  it('uses renamed roles without changing saved definitions or edit versions', async () => {
+    const saved = [
+      { id: 1, role_id: 'role', role_name: 'Old name', asset_type: 'ordinal', slug: 'pizza-comrades', min_items: 1 },
+      { id: 2, role_id: 'missing', role_name: 'Stored fallback' },
+      { id: 3, role_id: 'unknown', role_name: '' },
+    ] as any[];
+    const before = JSON.stringify(saved);
+    const roles = new Map([['role', { id: 'role', name: 'New name', position: 1 }]]);
+    const guild = { id: 'server', name: 'Server', iconURL: () => null,
+      channels: { fetch: async () => new Map() }, roles: { fetch: jest.fn().mockResolvedValue(roles) } };
+    const service: any = Object.create(PortalService.prototype);
+    service.readAccess = jest.fn().mockResolvedValue(guild);
+    service.rules = { getRoleMappings: async () => saved };
+    service.settings = async () => ({});
+    service.diagnostics = () => [];
+    service.db = { from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: [], error: null }) }) }) }) };
+    const result = await service.overview({ user: { id: 'admin' } }, 'server');
+    expect(result.rules.map((r: any) => r.role_name)).toEqual(['New name', 'Stored fallback', 'unknown']);
+    expect(result.rules[0].version).toBe(portalRule(saved[0]).version);
+    expect(JSON.stringify(saved)).toBe(before);
+    roles.set('role', { id: 'role', name: 'Renamed again', position: 1 });
+    const refreshed = await service.overview({ user: { id: 'admin' } }, 'server');
+    expect(refreshed.rules[0].role_name).toBe('Renamed again');
+    expect(guild.roles.fetch).toHaveBeenCalledTimes(2);
+  });
+});

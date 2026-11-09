@@ -87,7 +87,7 @@ export class MemberService {
     assignments: any[],
   ) {
     const { guild, member } = await this.membership(session, server);
-    const [rules, channels, settings] = await Promise.all([
+    const [rules, channels, settings, rolesById] = await Promise.all([
       this.rules.getRoleMappings(server),
       guild.channels.fetch(),
       this.db
@@ -95,6 +95,7 @@ export class MemberService {
         .select('verification_channel_id')
         .eq('server_id', server)
         .maybeSingle(),
+      guild.roles.fetch(),
     ]);
     const defaultChannel = this.checked(settings)?.verification_channel_id;
     const visible = rules.filter((rule) =>
@@ -111,7 +112,7 @@ export class MemberService {
           .filter((rule) => rule.channel_id === id)
           .map((rule) => ({
             id: String(rule.id),
-            role: rule.role_name || rule.role_id,
+            role: rolesById.get(rule.role_id)?.name || rule.role_name || rule.role_id,
             roleId: rule.role_id,
             earned: assignments.some(
               (row) =>
@@ -151,7 +152,7 @@ export class MemberService {
       const records = earned.filter((row) => row.role_id === id);
       return {
         id,
-        name: guild.roles.cache.get(id)?.name || records[0].role_name || id,
+        name: rolesById.get(id)?.name || records[0].role_name || id,
         status: records.some((row) => row.status === 'active')
           ? 'active'
           : 'previously earned',
