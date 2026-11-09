@@ -19,7 +19,8 @@
     "test:member-smoke": "node test/member.smoke.cjs",
     "test:privacy-smoke": "node test/privacy.smoke.cjs",
     "test:bulk-role-smoke": "node test/bulk-role.smoke.cjs",
-    "test:multi-role-smoke": "node test/multi-role.smoke.cjs"
+    "test:multi-role-smoke": "node test/multi-role.smoke.cjs",
+    "test:portal-history-smoke": "node test/portal-history.smoke.cjs"
   },
   "private": true,
   "engines": {

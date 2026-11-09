@@ -401,6 +401,37 @@ describe('Verification page wallet choice', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('return to Discord');
     expect(bitcoin.connect).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[role="status"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('a[href="/admin"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('a[href="/member"]')).not.toBeNull();
+  });
+
+  it('can resolve another route token after showing an inactive link',()=>{
+    const fixture=TestBed.createComponent(VerifyComponent);fixture.detectChanges();
+    http.expectOne(request=>request.url.endsWith('/verification-context')).flush('expired',{status:400,statusText:'Bad Request'});
+    fixture.detectChanges();expect(fixture.componentInstance.inactiveLink).toBeTrue();
+    routeParams.next({data:'b'.repeat(64)});
+    http.expectOne(request=>request.url.endsWith('/verification-context')).flush({walletTypes:['evm'],expiry,data:{...data,nonce:'b'.repeat(64)}});
+    fixture.detectChanges();
+    expect(fixture.componentInstance.inactiveLink).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#inactive-link-title')).toBeNull();
+  });
+  it('clears the previous identity while another verification token is loading',()=>{
+    const fixture=page(['evm']);
+    expect(fixture.nativeElement.querySelector('.user-info-wrapper')).not.toBeNull();
+    routeParams.next({data:'c'.repeat(64)});fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.user-info-wrapper')).toBeNull();
+    http.expectOne(request=>request.url.endsWith('/verification-context')).flush({walletTypes:['evm'],expiry,data:{...data,nonce:'c'.repeat(64),userTag:'New User'}});
+    fixture.detectChanges();expect(fixture.nativeElement.textContent).toContain('New User');
+    expect(ethereum.signTypedMessage).not.toHaveBeenCalled();
+  });
+  it('does not label a service failure as an inactive verification link',()=>{
+    const fixture=TestBed.createComponent(VerifyComponent);fixture.detectChanges();
+    http.expectOne(request=>request.url.endsWith('/verification-context')).flush('offline',{status:503,statusText:'Unavailable'});
+    fixture.detectChanges();expect(fixture.componentInstance.inactiveLink).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain('Could not load verification.');
+    expect(fixture.nativeElement.textContent).not.toContain('no longer active');
   });
 
   async function shortLinkPage(walletType: 'evm' | 'bitcoin') {

@@ -1,7 +1,9 @@
-import { Injectable } from '@angular/core';
+import { PortalDraftsService } from './portal-drafts.service';
+import { inject, Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class PortalSessionService {
+  private readonly drafts = inject(PortalDraftsService);
   user: { id: string; name: string } | null = null;
   csrf = '';
   configured = false;
@@ -43,6 +45,7 @@ export class PortalSessionService {
   }
 
   clear() {
+    this.drafts.clear();
     this.user = null;
     this.operator = false;
     this.csrf = '';

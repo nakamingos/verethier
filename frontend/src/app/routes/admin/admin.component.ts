@@ -1,9 +1,12 @@
+import { PortalDraftsService } from '@/services/portal-drafts.service';
+import { ActivatedRoute, Router, ParamMap } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { BulkRoleChecksComponent } from '@/components/bulk-role-checks/bulk-role-checks.component';
 import { NftCollectionLookupComponent, NftCollectionSelection } from '@/components/nft-collection-lookup/nft-collection-lookup.component';
 import { WalletExportsComponent } from '@/components/wallet-exports/wallet-exports.component';
 import { EVM_NETWORKS, evmNetworkValue } from '@/utils/evm-network.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
-import { Component, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, DestroyRef, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PortalSessionService } from '../../services/portal-session.service';
@@ -35,6 +38,15 @@ export class AdminComponent implements OnInit, OnDestroy {
     return address.slice(0, 8) + '…' + address.slice(-6);
   }
   private readonly session = inject(PortalSessionService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly draftStore = inject(PortalDraftsService);
+  private destroyed = false;
+  private navigating = false;
+  private pendingNavigation: {server:string; tab:string | null} | null = null;
+  private get drafts() { return this.draftStore.forUser(this.user?.id || ''); }
+
   get adminTabs() {
     return [
       ['rules', 'Rules'],
@@ -63,6 +75,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.error = (e as Error).message;
     } finally {
       this.busy = false;
+      void this.flushNavigation();
     }
   }
   get user() {
@@ -188,10 +201,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     }
   }
   review = false;
-  private newRuleDrafts = new Map<
-    string,
-    { draft: any; mode: string; review: boolean }
-  >();
+  private get newRuleDrafts() { return this.drafts.newRules; }
   activity: any = {
     items: [],
     page: 1,
@@ -643,12 +653,8 @@ export class AdminComponent implements OnInit, OnDestroy {
           'Discord sign-in could not be completed. Please try again.';
       if (this.user) {
         await this.loadServers();
-        const remembered = sessionStorage.getItem('bouncer-admin-server');
-        const first =
-          this.servers.find((s) => s.id === remembered && s.installed) ||
-          this.servers.find((s) => s.installed);
         this.ready = true;
-        if (first) await this.select(first.id);
+        this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => this.queueNavigation(params));
       }
     } catch (e) {
       this.failure(e);
@@ -713,11 +719,62 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.failure(e);
     } finally {
       this.busy = false;
+      void this.flushNavigation();
     }
   }
+  private queueNavigation(params: ParamMap) {
+    if (this.destroyed || !this.user) return;
+    const installed = this.servers.filter(server => server.installed);
+    const server = installed.find(server => server.id === params.get('server'))
+      || installed.find(server => server.id === this.selected)
+      || installed.find(server => server.id === sessionStorage.getItem('bouncer-admin-server'))
+      || installed[0];
+    if (!server) return;
+    const tab = this.adminTabs.some(([id]) => id === params.get('tab')) ? params.get('tab') : null;
+    if (!this.busy && !this.loadingServer && this.selected === server.id && this.tab === tab
+      && params.get('server') === server.id && params.keys.every(key => ['server','tab'].includes(key))) return;
+    this.pendingNavigation = {server:server.id,tab};
+    if (this.activityLoading && (server.id !== this.selected || tab !== 'audit')) this.cancelActivity();
+    void this.flushNavigation();
+  }
+  private async flushNavigation() {
+    if (this.destroyed || this.navigating || this.busy || !this.user || !this.ready) return;
+    this.navigating = true;
+    try {
+      while (this.pendingNavigation && !this.destroyed && this.user) {
+        const target = this.pendingNavigation; this.pendingNavigation = null;
+        if (this.selected !== target.server) await this.loadServer(target.server);
+        if (this.destroyed || !this.user) break;
+        if (this.pendingNavigation) continue;
+        if (this.selected === target.server) await this.applyTab(target.tab || this.tab);
+        // A newer Back/Forward event takes priority over normalizing an older URL.
+        if (!this.pendingNavigation) await this.canonicalNavigation();
+      }
+    } catch (error) {
+      if (!this.destroyed) { this.failure(error); await this.canonicalNavigation(); }
+    } finally {
+      this.navigating = false;
+      if (this.pendingNavigation && !this.destroyed) void this.flushNavigation();
+    }
+  }
+  private async canonicalNavigation() {
+    if (this.destroyed || !this.user || !this.selected) return;
+    await this.router.navigate([], {relativeTo:this.route,queryParams:{server:this.selected,tab:this.tab},replaceUrl:true});
+  }
   async select(id: string) {
+    if (this.busy || !this.servers.some(server => server.id === id && server.installed)) return;
+    if (id === this.selected) {
+      const tab = this.tab;
+      await this.loadServer(id);
+      if (!this.error && !this.navigating && !this.destroyed) await this.applyTab(tab);
+      return;
+    }
+    if (this.route.snapshot.queryParamMap.get('server') === id && !this.route.snapshot.queryParamMap.get('tab')) this.queueNavigation(this.route.snapshot.queryParamMap);
+    else await this.router.navigate([], {relativeTo:this.route,queryParams:{server:id}});
+  }
+  private async loadServer(id: string) {
     await this.run(async () => {
-      this.rememberNewRule();
+      this.rememberEditor();
       this.cancelActivity();
       this.resetMemberSearch();
       this.suggestionEpoch++;
@@ -726,6 +783,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         // Keep the current server visible and inert until its replacement is ready.
         // Commit the ID and data together so controls never target another server.
         const data = await this.api('/servers/' + id);
+        if (this.destroyed || (this.pendingNavigation && this.pendingNavigation.server !== id)) return;
         this.selected = id;
         this.data = data;
         this.memberQuery = '';
@@ -788,7 +846,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.session.clear();
       this.data = null;
       this.servers = [];
-      this.newRuleDrafts.clear();
+      this.draftStore.clear();
     });
   }
   get rules() {
@@ -896,30 +954,51 @@ export class AdminComponent implements OnInit, OnDestroy {
       card?.focus({ preventScroll: true });
     });
   }
+  private editorKey(editor: any) { return `${this.selected}:${editor?.duplicate ? 'duplicate' : 'edit'}:${editor?.id}`; }
+  private discardEditor() {
+    if (!this.editor) return;
+    if (this.editor.new) this.newRuleDrafts.delete(this.selected);
+    else this.drafts.edits.delete(this.editorKey(this.editor));
+    this.drafts.visible.delete(this.selected);
+  }
   closeEditor() {
     if (!this.busy) {
-      if (this.editor?.new) {
-        this.newRuleDrafts.delete(this.selected);
-        this.draft = {};
-        this.mode = 'collection';
-      }
-      this.editor = null;
-      this.review = false;
+      this.discardEditor();
+      if (this.editor?.new) { this.draft = {}; this.mode = 'collection'; }
+      this.editor = null; this.review = false;
     }
   }
   private rememberNewRule() {
-    if (this.editor?.new)
-      this.newRuleDrafts.set(this.selected, {
-        draft: { ...this.draft },
-        mode: this.mode,
-        review: this.review,
-      });
+    if (this.editor?.new) this.newRuleDrafts.set(this.selected, structuredClone({draft:this.draft,mode:this.mode,review:this.review}));
+  }
+  private rememberEditor() {
+    if (!this.user || !this.selected || !this.editor) return;
+    this.rememberNewRule();
+    if (this.editor.new) this.drafts.visible.set(this.selected, 'new');
+    else {
+      const key = this.editorKey(this.editor);
+      this.drafts.edits.set(key, structuredClone({editor:this.editor,inputs:this.inputs,traits:this.editTraits,roles:this.editRoles,review:this.review}));
+      this.drafts.visible.set(this.selected,key);
+    }
+  }
+  private restoreEditor() {
+    if (this.editor || !this.user) return;
+    const key = this.drafts.visible.get(this.selected);
+    if (key === 'new' && this.newRuleDrafts.has(this.selected)) {
+      const saved = structuredClone(this.newRuleDrafts.get(this.selected)!);
+      this.editor = {new:true}; this.draft = saved.draft; this.mode = saved.mode; this.review = saved.review;
+    } else if (key) {
+      const saved = this.drafts.edits.get(key);
+      if (saved && this.data.rules.some((rule:any) => rule.id === saved.editor.id)) {
+        const copy = structuredClone(saved);
+        this.editor = copy.editor; this.inputs = copy.inputs; this.editTraits = copy.traits; this.editRoles = copy.roles; this.review = copy.review;
+      } else this.drafts.visible.delete(this.selected);
+    }
   }
   private hideEditor() {
     if (this.busy) return;
-    this.rememberNewRule();
-    this.editor = null;
-    this.review = false;
+    this.rememberEditor(); this.drafts.visible.delete(this.selected);
+    this.editor = null; this.review = false;
   }
   create() {
     if (this.busy) return;
@@ -927,6 +1006,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.hideEditor();
       return;
     }
+    this.rememberEditor();
     this.suggestions = {};
     this.editor = { new: true };
     const saved = this.newRuleDrafts.get(this.selected);
@@ -951,31 +1031,20 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   edit(rule: any) {
     if (this.busy) return;
-    if (this.editor?.id === rule.id) {
-      this.closeEditor();
-      return;
-    }
-    this.rememberNewRule();
-    this.editor = rule;
-    this.editRoles = [{value:rule.role_id,id:rule.role_id}, ...(rule.additional_roles || []).map((role:any) => ({value:role.id,id:role.id,name:role.name}))];
-    this.review = false;
-    this.inputs = Object.fromEntries(
-      rule.fields.map((f: any) => [f.key, f.value]),
-    );
-    this.editTraits = this.traitState(rule);
-    requestAnimationFrame(() =>
-      document
-        .getElementById('edit-rule-' + rule.id)
-        ?.querySelector<HTMLElement>('select,input,textarea')
-        ?.focus({ preventScroll: true }),
-    );
+    if (this.editor?.id === rule.id) { this.closeEditor(); return; }
+    this.openRuleEditor(rule, false);
   }
-  duplicate(rule: any) {
-    if (this.busy) return;
-    this.rememberNewRule(); this.editor = null;
-    this.edit(rule);
-    this.editor = {...rule, duplicate: true};
-    this.editRoles = [];
+  duplicate(rule: any) { if (!this.busy) this.openRuleEditor(rule, true); }
+  private openRuleEditor(rule: any, duplicate: boolean) {
+    this.rememberEditor();
+    const editor = duplicate ? {...rule,duplicate:true} : rule;
+    const saved = this.drafts.edits.get(this.editorKey(editor));
+    this.editor = saved ? structuredClone(saved.editor) : editor;
+    this.editRoles = saved ? structuredClone(saved.roles) : duplicate ? [] : [{value:rule.role_id,id:rule.role_id}, ...(rule.additional_roles || []).map((role:any) => ({value:role.id,id:role.id,name:role.name}))];
+    this.review = saved?.review || false;
+    this.inputs = saved ? structuredClone(saved.inputs) : Object.fromEntries(rule.fields.map((field:any) => [field.key,field.value]));
+    this.editTraits = saved ? structuredClone(saved.traits) : this.traitState(rule);
+    requestAnimationFrame(() => document.getElementById('edit-rule-'+rule.id)?.querySelector<HTMLElement>('select,input,textarea')?.focus({preventScroll:true}));
   }
   get chosenRoles(): {value:string;id?:string;name?:string}[] {
     return this.editor?.new ? (this.draft.role_selections ||= []) : this.editRoles;
@@ -1131,7 +1200,7 @@ export class AdminComponent implements OnInit, OnDestroy {
             },
           );
       this.undo = action;
-      if (creating) this.newRuleDrafts.delete(this.selected);
+      this.discardEditor();
       this.undoLabel = 'Undo';
       this.editor = null;
       await this.reload();
@@ -1197,11 +1266,17 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   messageUrl = '';
   async switchTab(tab: string) {
-    if (this.busy) return;
-    if (tab !== 'rules' && this.editor?.new) this.hideEditor();
+    if (this.busy || !this.adminTabs.some(([id]) => id === tab)) return;
+    if (tab === this.tab) { await this.applyTab(tab); return; }
+    await this.router.navigate([], {relativeTo:this.route,queryParams:{server:this.selected,tab}});
+  }
+  private async applyTab(tab: string) {
+    if (this.tab === 'rules' && tab !== 'rules') {
+      this.rememberEditor(); this.editor = null; this.review = false;
+    }
     this.tab = tab;
-    this.error = '';
-    this.notice = '';
+    this.error = ''; this.notice = '';
+    if (tab === 'rules') this.restoreEditor();
     if (tab === 'audit') await this.readActivity(1);
     else this.cancelActivity();
   }
@@ -1292,6 +1367,8 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.memberSearchError = '';
   }
   ngOnDestroy() {
+    this.rememberEditor();
+    this.destroyed = true; this.pendingNavigation = null;
     this.cancelActivity();
     this.resetMemberSearch();
   }

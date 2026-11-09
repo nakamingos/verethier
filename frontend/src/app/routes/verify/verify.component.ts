@@ -9,7 +9,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
-import { BehaviorSubject, Observable, catchError, firstValueFrom, map, of, tap, switchMap, shareReplay } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, defer, startWith, firstValueFrom, map, of, tap, switchMap, shareReplay } from 'rxjs';
 
 import { WalletService } from '@/services/wallet.service';
 import { BitcoinWalletProvider, BitcoinWalletService } from '@/services/bitcoin-wallet.service';
@@ -52,6 +52,7 @@ interface State {
 export class VerifyComponent {
   readonly fromMember = new URL(window.location.href).searchParams.get('from') === 'member';
 
+  inactiveLink = false;
   privacyPolicy: any = null;
   privacyChoice: any = null;
   routeData$!: Observable<DecodedData | null>;
@@ -83,8 +84,11 @@ export class VerifyComponent {
 
     // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
-      map((params: any) => this.decodeData(params.data)),
-      switchMap(data => this.http.post<{ walletTypes: Array<'evm' | 'bitcoin' | 'solana'>; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
+      switchMap((params: any) => defer(() => {
+        this.inactiveLink = false;
+        this.setState({errorMessage:null,successMessage:null,messageVerified:false,messageSigned:false});
+        const data = this.decodeData(params.data);
+        return this.http.post<{ walletTypes: Array<'evm' | 'bitcoin' | 'solana'>; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }>(env.apiUrl + '/verification-context', {
         ...(data.userId !== undefined ? { userId: data.userId } : {}),
         ...(data.discordId !== undefined ? { discordId: data.discordId } : {}),
         nonce: data.nonce,
@@ -102,16 +106,15 @@ export class VerifyComponent {
           this.setWalletType('solana');
         } else this.setWalletType(context.walletTypes[0]);
         return resolvedData as DecodedData;
-      }))),
-      catchError((err) => {
-        // Only log detailed errors in development (check for localhost)
-        if (window.location.hostname === 'localhost') {
-          // Error already handled by UI feedback
-        }
-        this.setState({ errorMessage: this.rateLimitMessage(err)
-          || 'This verification link is no longer active. Please return to Discord and request a new one.' });
+      }));
+      }).pipe(catchError((err) => {
+        const transient = err instanceof HttpErrorResponse && (err.status === 0 || err.status === 429 || err.status >= 500);
+        this.inactiveLink = !transient;
+        this.setState({ errorMessage: this.rateLimitMessage(err) || (transient
+          ? 'Could not load verification. Check your connection and reload this page to try again.'
+          : 'This verification link is no longer active. Please return to Discord and request a new one.') });
         return of(null);
-      }),
+      }), startWith(null))),
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
@@ -360,6 +363,7 @@ export class VerifyComponent {
    * @returns void
    */
   setState(state: Partial<State>, errorSource: 'connection' | 'verification' = 'verification'): void {
+    if (state.errorMessage?.includes('This verification link is no longer active') || state.errorMessage?.includes('This verification link has expired')) this.inactiveLink = true;
     if (state.errorMessage !== undefined) this.errorSource = state.errorMessage ? errorSource : null;
     this.state$.next({
       ...this.state$.value,

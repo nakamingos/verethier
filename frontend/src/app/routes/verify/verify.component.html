@@ -1,9 +1,20 @@
-@if (fromMember) {
+@let data = routeData$ | async;
+@if (fromMember && !inactiveLink) {
   <p class="member-return">
     <a class="button" routerLink="/member">Back to member portal</a>
   </p>
 }
-@if (routeData$ | async; as data) {
+@if (inactiveLink) {
+  <section class="panel verification-link-state" role="status" aria-labelledby="inactive-link-title">
+    <h1 id="inactive-link-title">This verification link is no longer active.</h1>
+    <p>It may have expired or already been used. To verify again, return to Discord and request a new link.</p>
+    <p>You can still visit Control Room or your Member Portal.</p>
+    <nav class="actions" aria-label="Continue in Bouncer">
+      <a class="button" routerLink="/admin">Control Room</a>
+      <a class="button" routerLink="/member">Member Portal</a>
+    </nav>
+  </section>
+} @else if (data) {
   <div class="user-info-wrapper">
     <div class="avatar-wrapper">
       <div class="server-avatar">

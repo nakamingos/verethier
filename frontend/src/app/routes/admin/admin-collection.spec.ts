@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { AdminComponent } from './admin.component';
 import { PortalSessionService } from '../../services/portal-session.service';
@@ -12,8 +13,9 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expected_token_standard: 'erc1155' as const,
   };
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [PortalSessionService] });
+    TestBed.configureTestingModule({ providers: [PortalSessionService, provideRouter([])] });
     component = TestBed.runInInjectionContext(() => new AdminComponent());
+    TestBed.inject(PortalSessionService).user = {id:'admin',name:'Admin'};
     component.selected = '111111111111111111';
     component.editor = { new: true };
     component.data = { capabilities: { multi_trait: true } };
