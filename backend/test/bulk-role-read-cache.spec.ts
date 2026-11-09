@@ -31,6 +31,17 @@ describe('Fresh shared bulk collection reads',()=>{
   const next=cache.member('job:v1:start');await next.context.ordinalCollectionRead('sample',read);
   expect(read).toHaveBeenCalledTimes(2);expect(next.isFresh()).toBe(true);
  });
+ it('does not expire unrelated role evidence when an earlier collection becomes stale',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const cache=new BulkRoleReadCache(),member=cache.member('job:rules:run');
+  await member.context.ordinalCollectionRead('old',async()=>snapshot());
+  clock=30000;await member.context.ordinalCollectionRead('new',async()=>snapshot());
+  clock=61000;
+  expect(member.isFresh()).toBe(false);
+  expect(member.isFresh(new Set(['old']))).toBe(false);
+  expect(member.isFresh(new Set(['new']))).toBe(true);
+  expect(member.isFresh(new Set())).toBe(true);
+ });
  it('shares a long in-flight scan, starts expiry at completion, and clears responses on resume or retry',async()=>{
   let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
   const cache=new BulkRoleReadCache(),pending=deferred<any>(),read=jest.fn(()=>pending.promise);

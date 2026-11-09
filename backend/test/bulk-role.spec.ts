@@ -180,6 +180,35 @@ describe('Bulk worker throughput and fresh evidence',()=>{
   expect(result.granted).toHaveLength(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(3);
   expect(f.engine.evaluateRole.mock.calls[2][3]).not.toBe(f.engine.evaluateRole.mock.calls[0][3]);
  });
+ it('does not repeat a stale ineligible result when no role mutation is needed',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),other=role+'other';f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,role_id:other}]);
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId)=>({status:roleId===role?'passed':'failed',results:[{isValid:roleId===role,ruleId:204}]}));
+  f.roles.addUserRoleDynamic.mockImplementation(async()=>{clock+=61000;return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.ineligible).toEqual([other]);expect(result.granted).toEqual([role]);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(2);
+ });
+ it('still refreshes a stale failure before removing a held role',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),other=role+'other';f.member.roles.cache.set(other,{});f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,role_id:other}]);
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId)=>({status:roleId===role?'passed':'failed',results:[{isValid:roleId===role,ruleId:204}]}));
+  f.roles.addUserRoleDynamic.mockImplementation(async()=>{clock+=61000;return true;});
+  const result=await f.service.checkMember({...job,rule_id:null,mode:'reconcile'},{user_id:user,result:{}});
+  expect(result.removed).toEqual([other]);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(3);
+ });
+ it('does not refresh a current unrelated role because another collection expired',async()=>{
+  let clock=0;jest.spyOn(Date,'now').mockImplementation(()=>clock);
+  const f=fixture(),other=role+'other';f.service.guard.mockResolvedValue([f.rule,{...f.rule,id:205,role_id:other,asset_type:'ethscription'}]);
+  let release:()=>void;const delayed=new Promise<void>(resolve=>release=resolve);
+  f.engine.evaluateRole.mockImplementation(async(_user,_server,roleId,context)=>{
+   if(roleId===role) await context.ordinalCollectionRead('pizza-comrades',async()=>({slug:'pizza-comrades',items:new Map(),fetched_at:new Date().toISOString()}));
+   else await delayed;
+   return {status:'passed',results:[{isValid:true,ruleId:204}]};
+  });
+  f.roles.addUserRoleDynamic.mockImplementation(async(_user,_server,roleId)=>{if(roleId===role){clock+=61000;release();}return true;});
+  const result=await f.service.checkMember({...job,rule_id:null},{user_id:user,result:{}});
+  expect(result.granted).toHaveLength(2);expect(f.engine.evaluateRole).toHaveBeenCalledTimes(2);
+ });
  it('does not schedule provider checks from a cancelled or resumed run',async()=>{
   const f=fixture();f.service.assertRunning.mockRestore();
   const start={action:'start',request:'original'};const current={...job,status:'running',actions:[start,{action:'resume',request:'new-run'}]};

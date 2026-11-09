@@ -63,7 +63,9 @@ async function choose(page,name,label){await page.getByRole('combobox',{name,exa
   await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('button',{name:'Retry failed',exact:true}).click();
   await page.getByRole('button',{name:'Retry failed',exact:true}).waitFor({state:'detached'});assert.equal(processed,1);assert.equal(granted,1);
   state='running';processed=1;failed=1;
-  await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('button',{name:'Retry failed',exact:true}).click();
+  await page.getByRole('button',{name:'Refresh results',exact:true}).click();
+  await page.getByText(/Provider retries are in progress/).waitFor();
+  await page.getByRole('button',{name:'Retry failed',exact:true}).click();
   await page.getByRole('button',{name:'Retry failed',exact:true}).waitFor({state:'detached'});assert.equal(state,'running');assert.equal(granted,1);
   state='cancelled';processed=1;failed=1;
   await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('button',{name:'Resume and retry failed',exact:true}).waitFor();

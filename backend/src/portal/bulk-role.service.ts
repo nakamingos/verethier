@@ -228,6 +228,11 @@ export class BulkRoleService {
     const result:any={granted:[...(item.result?.granted || [])],removed:[...(item.result?.removed || [])],already_held:[],ineligible:[],unavailable:[],excluded:[],errors:[]};
     const targets=expandRuleRoles(job.rule_id ? rules.filter(r=>r.id===Number(job.rule_id)) : rules);
     const targetRoles=[...new Set(targets.map(r=>r.role_id))];
+    const expanded=expandRuleRoles(rules);
+    const roleCollections=new Map(targetRoles.map(roleId=>[roleId,new Set(expanded
+      .filter(rule=>rule.role_id===roleId && rule.asset_type==='ordinal')
+      .map(rule=>rule.inscription_criteria?.kind==='numbers' ? rule.inscription_criteria.collection_slug : rule.slug)
+      .filter(Boolean))]));
     const cacheKey = `${job.id}:${job.rules_version}:${bulkRunKey(job)}`;
     const initial = this.reads.member(cacheKey);
     const timing={eligibility_work_ms:0,mutation_work_ms:0,guard_work_ms:Date.now()-memberStarted,role_checks:0};
@@ -260,8 +265,13 @@ export class BulkRoleService {
         if(outcome.stopped) throw new BulkStopped('Check stopped');
         let {checked,checkedAt}=outcome.value;
         if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
+        // A non-mutating failure does not need another ownership request just
+        // because an earlier role/provider took longer than the freshness window.
+        if(checked.status==='failed' && (job.mode==='grant' || !member.roles.cache.has(roleId))) {
+          result.ineligible.push(roleId);continue;
+        }
         let evidence=initial;
-        const fresh=()=>evidence.isFresh() && Date.now()-checkedAt<60000;
+        const fresh=()=>evidence.isFresh(roleCollections.get(roleId)) && Date.now()-checkedAt<60000;
         if(!fresh()) {
           evidence=this.reads.member(cacheKey);
           checked=await evaluate(roleId,evidence.context);checkedAt=Date.now();

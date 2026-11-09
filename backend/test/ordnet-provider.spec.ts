@@ -132,6 +132,33 @@ describe('ord.net ownership provider',()=>{
     get.mockResolvedValue(data);
     await expect(service.count('pizza-comrades',[wallet],context())).rejects.toThrow('unavailable');
   });
+  it('ignores display-only lot cards only when every member has a complete individual record',async()=>{
+    const lotId='lot:00000000-0000-4000-8000-000000000001';
+    const lot={...item(99),kind:'lot',id:lotId,inscriptionId:lotId,lotMemberCount:2,
+      lotMemberInscriptionIds:[item(1).id,item(2).id],lotMembers:[{inscriptionId:item(1).id,inscription:101},{inscriptionId:item(2).id,inscription:102}],
+      owner:otherWallet,traits:[{type:'Bundle-only trait',value:'Never copied'}]};
+    get.mockResolvedValueOnce(page([lot,{...item(1),inscription:101}],'next')).mockResolvedValueOnce(page([{...item(2,otherWallet),inscription:102}]));
+    const result=await service.snapshot('pizza-comrades',context());
+    expect(result.items.size).toBe(2);expect(result.items.has(lotId)).toBe(false);
+    expect(result.items.get(item(1).id)).toMatchObject({owner:wallet,number:101,traits:[{type:'Background',value:'Blue'}]});
+    expect(await service.suggestions('pizza-comrades')).toEqual(['Background']);
+  });
+  it.each(['missing member','wrong number','missing member IDs','truncated previews','duplicate member','invalid member','bad lot ID','duplicate lot'])('rejects %s in bundle listings rather than assuming owners or ignoring missing assets',async problem=>{
+    const lotId='lot:00000000-0000-4000-8000-000000000001';
+    const lot:any={...item(99),kind:'lot',id:lotId,inscriptionId:lotId,lotMemberCount:2,
+      lotMemberInscriptionIds:[item(1).id,item(2).id],lotMembers:[{inscriptionId:item(1).id,inscription:101},{inscriptionId:item(2).id,inscription:102}]};
+    const entries:any[]=[lot,{...item(1),inscription:101},{...item(2),inscription:102}];
+    if(problem==='missing member')entries.pop();
+    if(problem==='wrong number')entries[2].inscription=103;
+    if(problem==='missing member IDs')delete lot.lotMemberInscriptionIds;
+    if(problem==='truncated previews')lot.lotMembers.pop();
+    if(problem==='duplicate member'){lot.lotMemberInscriptionIds[1]=item(1).id;lot.lotMembers[1]={...lot.lotMembers[0]};}
+    if(problem==='invalid member')lot.lotMemberInscriptionIds[1]='invalid';
+    if(problem==='bad lot ID')lot.id=lot.inscriptionId='lot:invalid';
+    if(problem==='duplicate lot')entries.push(lot);
+    get.mockResolvedValue(page(entries));
+    await expect(service.count('pizza-comrades',[wallet],context())).rejects.toThrow('unavailable');
+  });
   it('rejects duplicate IDs and cursor loops across pages',async()=>{
     get.mockResolvedValueOnce(page([item(1)],'next')).mockResolvedValueOnce(page([item(1)]));
     await expect(service.snapshot('pizza-comrades',context())).rejects.toThrow('unavailable');

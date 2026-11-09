@@ -2,7 +2,7 @@ import { OrdinalCollectionSnapshot } from '@/models/ordinal-collection.interface
 import { NftCheckContext } from '@/services/nft-ownership.service';
 
 const FRESH_MS = 60_000;
-type Read = { promise: Promise<OrdinalCollectionSnapshot>; expires: number; failed: boolean };
+type Read = { slug: string; promise: Promise<OrdinalCollectionSnapshot>; expires: number; failed: boolean };
 type Window = { touched: number; collections: Map<string, Read> };
 
 /** Only public collection responses are shared; member wallets/blocks stay local. */
@@ -28,7 +28,7 @@ export class BulkRoleReadCache {
         let read = window.collections.get(slug);
         if (!read || read.expires <= Date.now()) {
           const promise = load();
-          read = { promise, expires: Infinity, failed: false };
+          read = { slug, promise, expires: Infinity, failed: false };
           const entry = read;
           window.collections.set(slug, entry);
           // Reuse only after all pages have completed; in-flight scans share too.
@@ -41,7 +41,7 @@ export class BulkRoleReadCache {
         return read.promise;
       },
     };
-    return { context, isFresh: () => [...used].every(read => read.failed || read.expires > Date.now()) };
+    return { context, isFresh: (slugs?: ReadonlySet<string>) => [...used].every(read => read.failed || slugs && !slugs.has(read.slug) || read.expires > Date.now()) };
   }
 
   clear(jobId: string) {

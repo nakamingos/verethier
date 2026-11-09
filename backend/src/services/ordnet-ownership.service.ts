@@ -150,11 +150,30 @@ export class OrdnetOwnershipService {
     return scan.result;
   }
 
+  private lotReferences(item: any, collection: string, page: number): Array<[string, number]> {
+    const invalid = () => new OrdnetUnavailableError(`collection ${collection}: invalid bundle listing on page ${page}`);
+    if (typeof item.id !== 'string' || !/^lot:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(item.id)
+      || item.inscriptionId !== item.id || item.collection !== collection || !Array.isArray(item.collections)
+      || !Number.isSafeInteger(item.lotMemberCount) || item.lotMemberCount < 1 || item.lotMemberCount > PAGE_LIMIT * MAX_PAGES
+      || !Array.isArray(item.lotMemberInscriptionIds) || item.lotMemberInscriptionIds.length !== item.lotMemberCount
+      || !Array.isArray(item.lotMembers) || item.lotMembers.length !== item.lotMemberCount) throw invalid();
+    const ids = new Set<string>(item.lotMemberInscriptionIds);
+    if (ids.size !== item.lotMemberCount || [...ids].some(id => typeof id !== 'string' || !/^[0-9a-f]{64}i\d+$/.test(id))) throw invalid();
+    const references: Array<[string, number]> = [];
+    for (const member of item.lotMembers) {
+      if (!member || !ids.delete(member.inscriptionId) || !Number.isSafeInteger(member.inscription)) throw invalid();
+      references.push([member.inscriptionId, member.inscription]);
+    }
+    return references;
+  }
+
   private async readCollection(id: string, scan: CollectionScan): Promise<OrdinalCollectionSnapshot> {
     const fetchedAt = new Date().toISOString();
     const items = scan.items;
     const cursors = new Set<string>();
     const numbers = new Set<number>();
+    const lots = new Set<string>();
+    const lotMembers = new Map<string, number>();
     let cursor: string | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
       const params = new URLSearchParams({ limit: String(PAGE_LIMIT), sort: 'oldest', ...(cursor ? { cursor } : {}) });
@@ -163,7 +182,20 @@ export class OrdnetOwnershipService {
       if (!Array.isArray(data?.items) || data.items.length > PAGE_LIMIT || !pagination
         || !Number.isSafeInteger(pagination.pageSize) || pagination.pageSize < 1 || pagination.pageSize > PAGE_LIMIT
         || data.items.length > pagination.pageSize || typeof pagination.hasNext !== 'boolean') throw new OrdnetUnavailableError(`collection ${id}: invalid page ${page + 1} pagination`);
+      const validatedPage: TraitItem[] = [];
       for (const item of data.items) {
+        if (item?.kind === 'lot') {
+          const references = this.lotReferences(item, id, page + 1);
+          if (lots.has(item.id)) throw new OrdnetUnavailableError(`collection ${id}: duplicate bundle listing across pages`);
+          lots.add(item.id);
+          for (const [memberId, number] of references) {
+            if (lotMembers.has(memberId) && lotMembers.get(memberId) !== number) throw new OrdnetUnavailableError(`collection ${id}: conflicting bundle member numbers`);
+            lotMembers.set(memberId, number);
+          }
+          // A lot card is display metadata, not an inscription. Its preview
+          // omits individual owners/traits; require the full records below.
+          continue;
+        }
         if (!item || !/^[0-9a-f]{64}i\d+$/.test(item.inscriptionId) || item.id !== item.inscriptionId) {
           throw new OrdnetUnavailableError(`collection ${id}: invalid inscription identifier on page ${page + 1}`);
         }
@@ -188,15 +220,19 @@ export class OrdnetOwnershipService {
           numbers.add(item.inscription);
         }
         items.set(item.inscriptionId, { owner, traits, ...(item.inscription !== undefined ? { number: item.inscription } : {}) });
+        validatedPage.push({ traits });
       }
       if (!pagination.hasNext) {
         if (pagination.nextCursor !== null) throw new OrdnetUnavailableError(`collection ${id}: final page has an unexpected cursor`);
-        for (const listener of scan.listeners) listener(data.items);
+        for (const [memberId, number] of lotMembers) {
+          if (items.get(memberId)?.number !== number) throw new OrdnetUnavailableError(`collection ${id}: bundle member missing or inconsistent after complete pagination`);
+        }
+        for (const listener of scan.listeners) listener(validatedPage);
         return { slug: id, items, fetched_at: fetchedAt };
       }
       if (!data.items.length || typeof pagination.nextCursor !== 'string' || !pagination.nextCursor
         || pagination.nextCursor.length > 4096 || cursors.has(pagination.nextCursor)) throw new OrdnetUnavailableError(`collection ${id}: empty continuing page or invalid/repeated cursor`);
-      for (const listener of scan.listeners) listener(data.items);
+      for (const listener of scan.listeners) listener(validatedPage);
       cursor = pagination.nextCursor;
       cursors.add(cursor);
     }

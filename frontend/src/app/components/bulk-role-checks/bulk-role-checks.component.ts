@@ -31,6 +31,9 @@ import { PortalSessionService } from '../../services/portal-session.service';
         <p role="status">{{v.summary.processed}} / {{v.summary.total}} members checked · {{v.summary.granted}} roles granted · {{v.summary.removed}} removed · {{v.summary.already_held}} already held</p>
         <p class="muted">{{v.summary.ineligible}} ineligible · {{v.summary.no_wallet}} without saved wallets · {{v.summary.unavailable}} unavailable · {{v.summary.excluded}} excluded by role actions · {{v.summary.left_audience}} left audience · {{v.summary.errors}} need retry</p>
       }
+      @if(['pending','running'].includes(v.job.status) && v.summary.unavailable>0) {
+        <p class="muted" role="status">Provider retries are in progress. The checked count advances when a member finishes or reaches the retry limit; individual attempts can take several minutes.</p>
+      }
       @if(v.job.message) { <p role="status">{{v.job.message}}</p> }
       <div class="actions">
         @if(v.job.status==='preview') { <button (click)="act('start')" [disabled]="busy || !v.summary.total">Run bulk check</button> }
