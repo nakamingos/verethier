@@ -570,7 +570,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         wallet_type: 'evm',
         last_verified_at: new Date().toISOString(),
         evm_chain_ids: [1, 8453, 4663],
-        checking: [{server_id: server, server_name: 'NoMoreLabs', network: 'ethereum', network_name: 'Ethereum', empty_checked_at: '2026-11-09T12:00:00Z', review_recommended: true}],
+        checking: [{server_id: server, server_name: 'NoMoreLabs', network: 'ethereum', network_name: 'Ethereum', empty_checked_at: '2026-11-09T12:00:00Z'}],
       });
       await page.reload();
       await page.getByRole('button', { name: 'Wallets', exact: true }).click();
@@ -579,7 +579,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       assert((await smartCard.innerText()).includes('Proven networks: Ethereum, Base, Robinhood'));
       assert((await smartCard.innerText()).includes('Dormant'));
       assert((await smartCard.innerText()).includes('Sign with this wallet again to resume checks.'));
-      assert((await smartCard.innerText()).includes('additional empty wallet'));
+      assert(!(await smartCard.innerText()).includes('additional empty wallet'));
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

@@ -468,7 +468,7 @@ const base = {
                   wallet_type: 'bitcoin',
                   address: lookupBitcoin,
                   last_verified_at: '2026-10-18T12:00:00Z',
-                  checking: [{network:'bitcoin',network_name:'Bitcoin',empty_checked_at:'2026-11-09T12:00:00Z',review_recommended:true}],
+                  checking: [{network:'bitcoin',network_name:'Bitcoin',empty_checked_at:'2026-11-09T12:00:00Z'}],
                 },
               ],
               removed_wallets: [

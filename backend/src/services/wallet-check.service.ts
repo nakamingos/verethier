@@ -161,14 +161,6 @@ export class WalletCheckService {
     }));
   }
 
-  private onNetwork(wallet: Proof, network: string): boolean {
-    if (network === 'bitcoin') return wallet.wallet_type === 'bitcoin';
-    if (network === 'solana') return wallet.wallet_type === 'solana';
-    const chain = network === 'ethereum' ? 1 : network === 'base' ? 8453 : 4663;
-    return (!wallet.wallet_type || wallet.wallet_type === 'evm')
-      && (wallet.evm_chain_ids == null || wallet.evm_chain_ids.includes(chain));
-  }
-
   async statuses(user: string, server?: string, visibleAddresses?: string[]): Promise<any[]> {
     let query = this.db.from('verifier_wallet_dormancy')
       .select('address,server_id,network,empty_checked_at').eq('user_id', user);
@@ -176,19 +168,6 @@ export class WalletCheckService {
     const visible = visibleAddresses && new Set(visibleAddresses);
     const rows = this.checked<any[]>(await query).filter(row => !visible || visible.has(row.address));
     if (!rows.length) return [];
-    const wallets = this.checked<Proof[]>(await this.db.from('user_wallets')
-      .select('address,user_id,wallet_type,last_verified_at,evm_chain_ids').eq('user_id', user))
-      .filter(wallet => !visible || visible.has(wallet.address));
-    return rows.map(row => {
-      const scope = rows.filter(other => other.server_id === row.server_id && other.network === row.network);
-      const choices = wallets.filter(wallet => this.onNetwork(wallet, row.network)).sort((a, b) => {
-        const dormantA = scope.some(state => state.address === a.address);
-        const dormantB = scope.some(state => state.address === b.address);
-        return Number(dormantA) - Number(dormantB)
-          || (b.last_verified_at || '').localeCompare(a.last_verified_at || '') || a.address.localeCompare(b.address);
-      });
-      return { ...row, status: 'dormant', network_name: WALLET_NETWORK_LABELS[row.network],
-        review_recommended: choices.length > 1 && choices[0].address !== row.address };
-    });
+    return rows.map(row => ({ ...row, status: 'dormant', network_name: WALLET_NETWORK_LABELS[row.network] }));
   }
 }

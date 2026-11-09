@@ -60,7 +60,7 @@ interface Account {
     address: string;
     wallet_type: 'evm' | 'bitcoin' | 'solana';
     last_verified_at: string;
-    checking?: Array<{server_id: string; server_name: string; network: string; network_name: string; empty_checked_at: string; review_recommended: boolean}>;
+    checking?: Array<{server_id: string; server_name: string; network: string; network_name: string; empty_checked_at: string}>;
     evm_chain_ids?: number[] | null;
   }>;
   capabilities?: {solana?: boolean};

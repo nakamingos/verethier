@@ -90,14 +90,10 @@ describe('Wallet dormancy completeness and retained proof',()=>{
  it('supplies the bulk worker lease for the database cancellation guard',async()=>{
   const f=fixture();f.context.dormancyJobId='job';f.context.dormancyWorker='worker';await f.read();await f.service.finish(f.context);expect(f.db.rpc.mock.calls[0][1]).toMatchObject({p_job:'job',p_worker:'worker'});
  });
- it('recommends review of extra dormant wallets while retaining one representative',async()=>{
+ it('returns dormant status without recommending removal or reading other saved wallets',async()=>{
   const f=fixture();f.rows.verifier_wallet_dormancy.push(...[address,other].map(address=>({address,user_id:'member',server_id:'server',network:'ethereum'})));
-  const states=await f.service.statuses('member','server');expect(states.map(s=>s.review_recommended)).toEqual([false,true]);
-  f.rows.verifier_wallet_dormancy.shift();expect((await f.service.statuses('member','server'))[0].review_recommended).toBe(true);
- });
- it('does not reveal hidden additional wallets through the admin review flag',async()=>{
-  const f=fixture();f.rows.verifier_wallet_dormancy.push({address:other,user_id:'member',server_id:'server',network:'ethereum'});
-  const states=await f.service.statuses('member','server',[other]);expect(states).toHaveLength(1);expect(states[0].review_recommended).toBe(false);
+  const states=await f.service.statuses('member','server',[other]);expect(states).toEqual([expect.objectContaining({address:other,status:'dormant',network_name:'Ethereum'})]);
+  expect(states[0]).not.toHaveProperty('review_recommended');expect(f.db.from.mock.calls.map(call=>call[0])).toEqual(['verifier_wallet_dormancy']);
  });
  it('does not probe Ordinals with a non-Taproot Stamps wallet',()=>{
   expect(walletMatchesRule({asset_type:'ordinal'},'1BoatSLRHtKNngkdXEeobR76b53LETtpyT')).toBe(false);
