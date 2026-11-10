@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, tick, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
@@ -135,6 +135,60 @@ describe('Verification page wallet choice', () => {
     expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({walletConnecting:false,walletConnected:true,errorMessage:'Could not disconnect your wallet. Please try again.'}));
   });
 
+  it('keeps listening to a delayed signature for minutes and submits it once approved', fakeAsync(() => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm']);
+    let approve!: (proof:any)=>void;
+    ethereum.signTypedMessage.and.returnValue(new Promise(resolve=>{approve=resolve;}));
+    void fixture.componentInstance.verify({...data,expiry:Math.floor(Date.now()/1000)+300});
+    flushMicrotasks();window.dispatchEvent(new Event('blur'));tick(90_000);window.dispatchEvent(new Event('focus'));
+    expect(ethereum.signTypedMessage).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.state$.value.messageSigning).toBeTrue();
+    expect(fixture.componentInstance.inactiveLink).toBeFalse();
+    approve({address:'0x'+'1'.repeat(40),signature:'late-signature'});flushMicrotasks();
+    const request=http.expectOne(req=>req.url.endsWith('/verify-signature'));
+    expect(request.request.body.signature).toBe('late-signature');
+    request.flush({assignedRoles:['holder']});flushMicrotasks();
+    expect(fixture.componentInstance.state$.value.messageVerified).toBeTrue();
+    expect(fixture.componentInstance.state$.value.messageSigning).toBeFalse();
+  }));
+  it('unlocks a delayed rejection so the member can sign again', fakeAsync(() => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm']);
+    let decline!: (error:Error)=>void;
+    ethereum.signTypedMessage.and.returnValue(new Promise((_resolve,reject)=>{decline=reject;}));
+    void fixture.componentInstance.verify({...data,expiry:Math.floor(Date.now()/1000)+300});
+    flushMicrotasks();tick(90_000);
+    decline(new Error('Request rejected in Rainbow'));flushMicrotasks();fixture.detectChanges();
+    expect(fixture.componentInstance.state$.value.messageSigning).toBeFalse();
+    expect(fixture.componentInstance.state$.value.errorMessage).toBe('Request rejected in Rainbow');
+    const sign=Array.from(fixture.nativeElement.querySelectorAll('.step-2 button')).find((button:any)=>button.textContent.includes('Sign Message')) as HTMLButtonElement;
+    expect(sign.disabled).toBeFalse();
+    http.expectNone(req=>req.url.endsWith('/verify-signature'));
+  }));
+  it('ends an expired wallet wait with a fresh-link message and ignores a signature returned afterward', fakeAsync(() => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm']);
+    let approve!: (proof:any)=>void;
+    ethereum.signTypedMessage.and.returnValue(new Promise(resolve=>{approve=resolve;}));
+    void fixture.componentInstance.verify({...data,expiry:Math.floor(Date.now()/1000)+10});
+    flushMicrotasks();tick(10_000);flushMicrotasks();
+    expect(fixture.componentInstance.state$.value.messageSigning).toBeFalse();
+    expect(fixture.componentInstance.state$.value.errorMessage).toContain('request a new one');
+    expect(fixture.componentInstance.inactiveLink).toBeTrue();
+    approve({address:'0x'+'1'.repeat(40),signature:'expired-signature'});flushMicrotasks();
+    http.expectNone(req=>req.url.endsWith('/verify-signature'));
+  }));
+  it('never submits a late wallet signature after leaving the verification page', fakeAsync(() => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm']);
+    let approve!: (proof:any)=>void;
+    ethereum.signTypedMessage.and.returnValue(new Promise(resolve=>{approve=resolve;}));
+    void fixture.componentInstance.verify(data);flushMicrotasks();fixture.destroy();flushMicrotasks();
+    approve({address:'0x'+'1'.repeat(40),signature:'obsolete-signature'});flushMicrotasks();
+    expect(fixture.componentInstance.state$.value.verificationSubmitting).toBeFalse();
+    http.expectNone(req=>req.url.endsWith('/verify-signature'));
+  }));
   it('restores the Ethereum account after switching back from Bitcoin without disconnecting it', () => {
     const fixture = page(['evm', 'bitcoin']);
     const evmAddress = '0x' + '2'.repeat(40);
@@ -320,7 +374,7 @@ describe('Verification page wallet choice', () => {
     expect(component.state$.value.bitcoinProvider).toBe('unisat');
     expect(fixture.nativeElement.textContent).toContain('Connect your UniSat wallet');
     await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat',false);
-    const pending = component.verify(data); await Promise.resolve();
+    const pending = component.verify(data); await new Promise(resolve => setTimeout(resolve, 0));
     http.expectOne(request => request.url.endsWith('/bitcoin-challenge')).flush({ address, message: 'UniSat challenge\nNonce: nonce', expiry });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(bitcoin.signMessage).toHaveBeenCalledWith(address, 'UniSat challenge\nNonce: nonce');
@@ -394,7 +448,7 @@ describe('Verification page wallet choice', () => {
     const component = fixture.componentInstance;
     await component.connect();
     const pending = component.verify(data);
-    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
     const challenge = http.expectOne(request => request.url.endsWith('/bitcoin-challenge'));
     expect(challenge.request.body.address).toBe(address);
     challenge.flush({ address, message: 'trusted server message', expiry: expiry - 1 });
@@ -416,7 +470,7 @@ describe('Verification page wallet choice', () => {
     const component = fixture.componentInstance;
     await component.connect();
     const pending = component.verify(data);
-    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
     http.expectOne(request => request.url.endsWith('/bitcoin-challenge')).flush({ message: 'Request a new verification link from Discord.' }, { status: 400, statusText: 'Bad Request' });
     await pending;
     expect(component.state$.value.errorMessage).toBe('Request a new verification link from Discord.');
@@ -505,7 +559,7 @@ describe('Verification page wallet choice', () => {
     const component = fixture.componentInstance;
     await component.connect();
     const pending = component.verify(resolvedData);
-    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
     const challenge = http.expectOne(request => request.url.endsWith('/bitcoin-challenge'));
     expect(challenge.request.body).toEqual({ userId: resolvedData.userId, discordId: resolvedData.discordId, nonce: resolvedData.nonce, address });
     challenge.flush({ address, message: 'trusted server message', expiry });

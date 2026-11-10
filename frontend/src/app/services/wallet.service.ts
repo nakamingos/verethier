@@ -13,7 +13,7 @@ import {
   watchAccount,
 } from '@wagmi/core';
 
-import { Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 
 import { env } from '@/../env/env';
 import { evmWalletMetadata, projectId } from './evm-wallet.config';
@@ -100,10 +100,12 @@ function connectionErrorMessage(error: unknown): string {
     : 'Could not connect to your wallet. Try again, or open your wallet and check for a pending connection request.';
 }
 
+class WalletConnectionError extends Error {}
+
 @Injectable({ providedIn: 'root' })
 export class WalletService implements OnDestroy {
   readonly connectedState$: Observable<GetAccountReturnType>;
-  private readonly connectionErrors = new Subject<string | null>();
+  private readonly connectionErrors = new BehaviorSubject<string | null>(null);
   readonly connectionErrors$ = this.connectionErrors.asObservable();
   readonly client: PublicClient;
   readonly config: Config;
@@ -117,10 +119,23 @@ export class WalletService implements OnDestroy {
     this.client = createPublicClient({ chain: mainnet, transport: http(env.rpcHttpProvider) });
 
     this.connectedState$ = new Observable((observer) => {
-      observer.next(getAccount(this.config));
-      return watchAccount(this.config, {
+      const refresh = () => this.ngZone.run(() => observer.next(getAccount(this.config)));
+      const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+      refresh();
+      const unwatch = watchAccount(this.config, {
         onChange: (account) => this.ngZone.run(() => observer.next(account)),
       });
+      // Mobile browsers can suspend rendering while the wallet app is in front.
+      // Re-read state on return, even if no further account-change event fires.
+      window.addEventListener('focus', refresh);
+      window.addEventListener('pageshow', refresh);
+      document.addEventListener('visibilitychange', visible);
+      return () => {
+        unwatch();
+        window.removeEventListener('focus', refresh);
+        window.removeEventListener('pageshow', refresh);
+        document.removeEventListener('visibilitychange', visible);
+      };
     });
     this.unsubscribeEvents = this.modal.subscribeEvents(({ data }) => {
       this.ngZone.run(() => {
@@ -145,15 +160,31 @@ export class WalletService implements OnDestroy {
       await this.modal.ready();
       if (getAccount(this.config).isConnected) await this.disconnectWeb3();
       await this.modal.open({ view: 'Connect', namespace: 'eip155' });
-      // Opening the picker is not a finished connection. Wait for approval or dismissal.
-      await new Promise<void>((resolve) => {
-        const unsubscribe = this.modal.subscribeState(({ open }) => {
-          if (!open) { unsubscribe(); resolve(); }
-        });
-        if (!this.modal.getState().open) { unsubscribe(); resolve(); }
+      // A delayed wallet approval/rejection need not close the picker. Settle
+      // on the actual outcome as well as dismissal, without a short UI timeout.
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const cleanup: Array<() => void> = [];
+        const finish = (error?: string) => {
+          if (settled) return;
+          settled = true;
+          cleanup.splice(0).forEach(stop => stop());
+          if (error) reject(new WalletConnectionError(error)); else resolve();
+        };
+        // Some SDK subscribers invoke their callback synchronously. Register
+        // cleanup safely even when the callback has already completed the wait.
+        const track = (stop: () => void) => { if (settled) stop(); else cleanup.push(stop); };
+        track(watchAccount(this.config, { onChange: account => {
+          if (account.isConnected && !account.isReconnecting) finish();
+        } }));
+        track(this.modal.subscribeState(({ open }) => { if (!open) finish(); }));
+        const errors = this.connectionErrors$.subscribe(message => { if (message) finish(message); });
+        track(() => errors.unsubscribe());
+        const account = getAccount(this.config);
+        if ((account.isConnected && !account.isReconnecting) || !this.modal.getState().open) finish();
       });
     } catch (error) {
-      throw new Error(connectionErrorMessage(error));
+      throw error instanceof WalletConnectionError ? error : new Error(connectionErrorMessage(error));
     }
   }
 

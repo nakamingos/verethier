@@ -186,6 +186,16 @@ async function restorePreviousWalletConnectConnection(page) {
       const signingSize = await page.getByRole('button', {name:'Signing...',exact:true}).boundingBox();
       assert.equal(signSize.width, signingSize.width, 'signature button width must stay stable');
       assert.equal(signSize.height, signingSize.height, 'signature button height must stay stable');
+      if (!mobile) {
+        // Reproduce taking a screenshot, switching to another browser, and
+        // returning before approving the original extension request.
+        await page.clock.install();
+        await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+        await page.clock.fastForward(90_000);
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        assert.equal(await page.getByRole('button', {name:'Signing...',exact:true}).isDisabled(), true);
+        assert.equal(test.signatures, 1, 'Returning to the tab must not open a duplicate signing request');
+      }
       releaseSignature();
       await page.getByRole('button', {name:'Verifying...',exact:true}).waitFor();
       const verifyingSize = await page.getByRole('button', {name:'Verifying...',exact:true}).boundingBox();

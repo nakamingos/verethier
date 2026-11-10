@@ -4,7 +4,7 @@ import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, DestroyRef, NgZone, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -50,6 +50,8 @@ interface State {
     styleUrl: './verify.component.scss'
 })
 export class VerifyComponent {
+  private readonly zone = inject(NgZone);
+  private readonly destroyRef = inject(DestroyRef);
   readonly fromMember = new URL(window.location.href).searchParams.get('from') === 'member';
 
   inactiveLink = false;
@@ -211,12 +213,12 @@ export class VerifyComponent {
         errorMessage: null,
       });
 
-      const evmAddress = this.state$.value.walletType === 'evm' ? await this.walletSvc.syncConnectedAccount() : undefined;
+      const evmAddress = this.state$.value.walletType === 'evm' ? await this.waitForWallet(() => this.walletSvc.syncConnectedAccount(), data.expiry) : undefined;
       // Create message to sign
       const domain = {
         name: 'Bouncer',
         version: '1',
-        chainId: this.state$.value.walletType === 'evm' ? await this.walletSvc.getSigningChainId() : 1,
+        chainId: this.state$.value.walletType === 'evm' ? await this.waitForWallet(() => this.walletSvc.getSigningChainId(), data.expiry) : 1,
       };
 
       const types = {
@@ -258,19 +260,19 @@ export class VerifyComponent {
       let proof: { signature: string; address: string };
       let verificationData = { ...data, ...(this.state$.value.walletType === 'evm' ? { chainId: domain.chainId } : {}), ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
       if (verificationData.walletType === 'solana') {
-        const address = await this.solanaWalletSvc.syncConnectedAccount();
+        const address = await this.waitForWallet(() => this.solanaWalletSvc.syncConnectedAccount(), data.expiry);
         const challenge = await firstValueFrom(this.http.post<{address:string;message:string;expiry:number}>(env.apiUrl+'/solana-challenge',{userId:data.userId,discordId:data.discordId,nonce:data.nonce,address,...(choice?{privacy:choice}:{})}));
-        proof = await this.solanaWalletSvc.signMessage(challenge.address,challenge.message);
+        proof = await this.waitForWallet(() => this.solanaWalletSvc.signMessage(challenge.address,challenge.message), challenge.expiry);
         verificationData = {...verificationData,expiry:challenge.expiry};
       } else if (verificationData.walletType === 'bitcoin') {
-        const address = await this.bitcoinWalletSvc.syncConnectedAccount();
+        const address = await this.waitForWallet(() => this.bitcoinWalletSvc.syncConnectedAccount(), data.expiry);
         const challenge = await firstValueFrom(this.http.post<{ address: string; message: string; expiry: number }>(env.apiUrl + '/bitcoin-challenge', {
           userId: data.userId, discordId: data.discordId, nonce: data.nonce, address, ...(choice ? { privacy: choice } : {}),
         }));
-        proof = await this.bitcoinWalletSvc.signMessage(challenge.address, challenge.message);
+        proof = await this.waitForWallet(() => this.bitcoinWalletSvc.signMessage(challenge.address, challenge.message), challenge.expiry);
         verificationData = { ...verificationData, expiry: challenge.expiry };
       } else {
-        proof = await this.walletSvc.signTypedMessage(typedData);
+        proof = await this.waitForWallet(() => this.walletSvc.signTypedMessage(typedData), data.expiry);
       }
       const { signature, address } = proof;
       
@@ -366,9 +368,47 @@ export class VerifyComponent {
   setState(state: Partial<State>, errorSource: 'connection' | 'verification' = 'verification'): void {
     if (state.errorMessage?.includes('This verification link is no longer active') || state.errorMessage?.includes('This verification link has expired')) this.inactiveLink = true;
     if (state.errorMessage !== undefined) this.errorSource = state.errorMessage ? errorSource : null;
-    this.state$.next({
+    this.zone.run(() => this.state$.next({
       ...this.state$.value,
       ...state
+    }));
+  }
+
+  /** Wait for the wallet for the full signed-link lifetime, including app handoffs. */
+  private waitForWallet<T>(request: () => Promise<T>, expiry: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let unregisterDestroy: (() => void) | undefined;
+      const finish = (error?: Error, value?: T) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener('focus', checkExpiry);
+        window.removeEventListener('pageshow', checkExpiry);
+        document.removeEventListener('visibilitychange', checkExpiry);
+        unregisterDestroy?.();
+        if (error) reject(error); else resolve(value as T);
+      };
+      const checkExpiry = () => {
+        if (Date.now() >= expiry * 1000)
+          finish(new Error('This verification link has expired. Please return to Discord and request a new one.'));
+      };
+      if (this.destroyRef.destroyed) { finish(new Error('Verification page closed.')); return; }
+      unregisterDestroy = this.destroyRef.onDestroy(() => finish(new Error('Verification page closed.')));
+      window.addEventListener('focus', checkExpiry);
+      window.addEventListener('pageshow', checkExpiry);
+      document.addEventListener('visibilitychange', checkExpiry);
+      checkExpiry();
+      if (settled) return;
+      timer = setTimeout(checkExpiry, Math.max(0, expiry * 1000 - Date.now()));
+      try {
+        request().then(value => {
+          // Returning from a suspended wallet tab can beat its expiry timer.
+          checkExpiry();
+          if (!settled) finish(undefined, value);
+        }, error => finish(error instanceof Error ? error : new Error('The wallet request failed. Please try again.')));
+      } catch (error) { finish(error instanceof Error ? error : new Error('The wallet request failed. Please try again.')); }
     });
   }
 

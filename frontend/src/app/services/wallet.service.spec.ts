@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, tick, TestBed } from '@angular/core/testing';
 import { createConfig, getAccount, http } from '@wagmi/core';
 import { base, mainnet } from 'viem/chains';
 import { EVM_WALLET_CONNECTION, EvmWalletConnection, WalletService } from './wallet.service';
@@ -81,6 +81,47 @@ describe('EVM wallet connection', () => {
     await retry.pending;
   });
 
+  it('accepts a late desktop approval even when the picker remains open', fakeAsync(() => {
+    let complete=false;
+    const pending=service.connect();void pending.then(()=>{complete=true;});flushMicrotasks();
+    tick(90_000);
+    expect(complete).toBeFalse();
+    connectedWallet(jasmine.createSpy().and.resolveTo([firstAddress]));flushMicrotasks();
+    expect(open).toBeTrue();
+    expect(complete).toBeTrue();
+    expect(stopState).toHaveBeenCalledTimes(1);
+  }));
+  it('releases a delayed rejection without requiring the picker to close and allows a retry', fakeAsync(() => {
+    let failure='';
+    void service.connect().catch(error=>{failure=error.message;});flushMicrotasks();
+    tick(90_000);event('USER_REJECTED','User rejected the request');flushMicrotasks();
+    expect(failure).toContain('was declined');
+    expect(open).toBeTrue();
+    expect(stopState).toHaveBeenCalledTimes(1);
+    const retry=service.connect();flushMicrotasks();
+    expect(modal.open).toHaveBeenCalledTimes(2);
+    closePicker();flushMicrotasks();
+    void retry;
+  }));
+  it('handles a synchronous picker-close callback without losing cleanup or hanging', async () => {
+    modal.subscribeState.and.callFake(callback=>{callback({open:false} as any);return stopState;});
+    await expectAsync(service.connect()).toBeResolved();
+    expect(stopState).toHaveBeenCalledTimes(1);
+  });
+  it('refreshes state on returning to the page and keeps watching subsequent account changes', () => {
+    const addresses: Array<string|undefined>=[];
+    const subscription=service.connectedState$.subscribe(account=>addresses.push(account.address));
+    connectedWallet(jasmine.createSpy().and.resolveTo([firstAddress]));
+    const before=addresses.length;
+    window.dispatchEvent(new Event('focus'));
+    expect(addresses.length).toBe(before+1);
+    expect(addresses.at(-1)).toBe(firstAddress);
+    window.dispatchEvent(new Event('pageshow'));
+    expect(addresses.length).toBe(before+2);
+    subscription.unsubscribe();
+    window.dispatchEvent(new Event('focus'));
+    expect(addresses.length).toBe(before+2);
+  });
   it('reports initialization failures and permits a fresh attempt', async () => {
     modal.ready.and.rejectWith(new Error('WebSocket connection timed out'));
     await expectAsync(service.connect()).toBeRejectedWithError(/Could not reach the wallet connection service/);
