@@ -241,11 +241,12 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
               challenge:
                 posted.walletType === 'evm'
                   ? {
-                      domain: { name: 'Bouncer', version: '1', chainId: 1 },
+                      domain: { name: 'Bouncer', version: '2', chainId: 1 },
                       types: {
                         WalletLink: [
                           { name: 'Purpose', type: 'string' },
-                          { name: 'UserID', type: 'string' },
+                          { name: 'Domain', type: 'string' },
+                          { name: 'Address', type: 'address' },
                           { name: 'Nonce', type: 'string' },
                           { name: 'Expiry', type: 'uint256' },
                         ],
@@ -253,12 +254,13 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
                       primaryType: 'WalletLink',
                       message: {
                         Purpose: 'Link wallet to Bouncer',
-                        UserID: user.id,
+                        Domain: origin,
+                        Address: posted.address.toLowerCase(),
                         Nonce: nonce,
                         Expiry: expiry,
                       },
                     }
-                  : 'Bouncer saved-wallet link\nDiscord user: ' + user.id,
+                  : 'Bouncer saved-wallet link\nDomain: ' + origin + '\nNetwork: Bitcoin mainnet',
             };
             body = flow;
             pending = {
@@ -510,7 +512,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         () => document.querySelectorAll('.saved-wallet').length === 2,
       );
       assert.deepEqual(await page.evaluate(() => window.__bitcoinMessage), {
-        message: 'Bouncer saved-wallet link\nDiscord user: ' + user.id,
+        message: 'Bouncer saved-wallet link\nDomain: ' + origin + '\nNetwork: Bitcoin mainnet',
         type: 'bip322-simple',
       });
       const evmCard = page.locator('.saved-wallet').filter({ hasText: 'EVM' });

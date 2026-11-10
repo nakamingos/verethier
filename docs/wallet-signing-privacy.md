@@ -1,0 +1,9 @@
+# Minimal wallet signing requests
+
+New verification requests do not send Discord user names, account IDs, community names, server IDs, channel IDs, avatars or raw sharing/export preferences to wallet signing methods. Bouncer still needs Discord context in its own API and UI. The server binds it to the cryptographically random, expiring, single-use nonce; a member-portal wallet-link flow is additionally bound to the authenticated session and saved flow.
+
+EVM verification uses EIP-712 `Verification` with Bouncer domain version `2` and the signing chain. Its message contains Purpose, Domain (the configured website origin), WalletAddress, Nonce and Expiry. When privacy choices apply, ConsentHash is SHA-256 of `JSON.stringify([nonce, canonicalPrivacyJSON])`. The nonce salt prevents a repeated choice from becoming a stable community fingerprint. The backend recomputes the hash, checks the nonce-bound account/server and exact stored expiry, verifies the signature and consumes the nonce before linking.
+
+Bitcoin and Solana challenges contain only application/purpose, website origin, network, wallet address, nonce, expiry, optional nonce-salted consent hash and explanatory text. They are verified against the exact server-stored challenge. Member-portal wallet-link messages use a separate purpose/type and do not expose the Discord account ID.
+
+New frontend code emits only the minimal EVM format. The backend retains verification of version-1 signatures from existing open pages; those remain subject to the same expiring, one-use nonce checks. Already signed Bitcoin/Solana challenges and saved portal link flows can finish against their stored message. Resuming a legacy portal link renews its challenge before any new wallet signing request. Reload or request a new challenge to use the new format. No database migration or additional provider credentials are required.

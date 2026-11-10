@@ -81,6 +81,7 @@ export class AppController {
       // Transform DTO data to match expected DecodedData interface
       const decodedData = {
         address: body.data.address || '',
+        ...(body.data.proofVersion !== undefined ? {proofVersion:body.data.proofVersion} : {}),
         ...(body.data.chainId !== undefined ? { chainId: body.data.chainId } : {}),
         ...(body.data.privacy !== undefined ? { privacy: body.data.privacy } : {}),
         ...(body.data.walletType !== undefined ? { walletType: body.data.walletType } : {}),

@@ -1,3 +1,4 @@
+import { consentCommitment } from './consent-proof.util';
 import { createPublicKey, verify, createHash } from "crypto";
 import { ed25519 } from "@noble/curves/ed25519";
 
@@ -188,7 +189,7 @@ export function solanaMessage(input: {
   origin: string;
   purpose: "verification" | "wallet_link";
   address: string;
-  userId: string;
+  userId?: string; // Legacy caller compatibility; never included in the signed message.
   nonce: string;
   expiry: number;
   serverId?: string;
@@ -225,13 +226,9 @@ export function solanaMessage(input: {
     "Network: Solana mainnet",
     `Purpose: ${input.purpose}`,
     `Address: ${input.address}`,
-    `Discord user: ${input.userId}`,
-    ...(input.serverId ? [`Discord server: ${input.serverId}`] : []),
-    ...(input.channelId ? [`Discord channel: ${input.channelId}`] : []),
     `Nonce: ${input.nonce}`,
-    `Issued at: ${new Date().toISOString()}`,
     `Expires at: ${new Date(input.expiry * 1000).toISOString()}`,
-    ...(input.privacy !== undefined ? [`Privacy: ${input.privacy}`] : []),
+    ...(input.privacy !== undefined ? [`Consent hash: ${consentCommitment(input.nonce, input.privacy)}`] : []),
     "",
     input.purpose === "wallet_link"
       ? "Link this wallet to Bouncer. This does not verify community roles."

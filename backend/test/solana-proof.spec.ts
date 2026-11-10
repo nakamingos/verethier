@@ -83,6 +83,7 @@ describe("Solana proof boundary", () => {
   });
   it("verifies real Ed25519 signatures without a chain transaction", () => {
     const message = solanaMessage(input);
+    expect(message).not.toMatch(/Discord (?:user|server|channel):/);
     const signature = sign(
       null,
       new TextEncoder().encode(message),
@@ -95,7 +96,6 @@ describe("Solana proof boundary", () => {
       message + " ",
       message.replace("mainnet", "devnet"),
       solanaMessage({ ...input, purpose: "wallet_link" }),
-      solanaMessage({ ...input, userId: "other" }),
       solanaMessage({ ...input, nonce: "other" }),
     ]) {
       expect(() => verifySolanaMessage(address, altered, signature)).toThrow(
@@ -129,7 +129,7 @@ describe("Solana proof boundary", () => {
   });
   it("binds privacy, origin and context and rejects line injection and expired messages", () => {
     expect(solanaMessage({ ...input, privacy: "consent" })).toContain(
-      "Privacy: consent",
+      "Consent hash: 0x",
     );
     expect(() =>
       solanaMessage({ ...input, nonce: "nonce\nAddress: spoof" }),

@@ -22,7 +22,7 @@ Ordinals-only Discord channels retain the existing mainnet Taproot (bc1p…) con
 
 UniSat uses its selected account. Legacy P2PKH accounts sign compact Bitcoin messages; SegWit/Taproot accounts sign BIP-322 simple messages. Xverse exposes an explicit address choice when Stamps are supported: the Ordinals address remains the initial choice, and the member can select the payment address holding Stamps. The saved-wallet portal exposes the same choice. No payment address is silently saved or assumed to share ownership with another address.
 
-Base58 address case is preserved throughout challenge, proof, linking, lookup, transfer, blocks and explorer links. Bech32 addresses are normalized to lower case after validation. Challenges remain bound to origin, Discord user/server/channel, address, nonce, expiry and privacy choices. Signing grants no token approval and creates no asset transfer.
+Base58 address case is preserved throughout challenge, proof, linking, lookup, transfer, blocks and explorer links. Bech32 addresses are normalized to lower case after validation. Challenges remain bound to origin, address, nonce, expiry and privacy choices; Discord user/server/channel context stays server-side, bound to the nonce. Wallet prompts contain no Discord identifiers or raw privacy choices. Signing grants no token approval and creates no asset transfer.
 
 ## Providers and failure behavior
 

@@ -101,11 +101,12 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     expect(flow.challenge.primaryType).toBe('WalletLink');
     expect(flow.challenge.message).toEqual(
       expect.objectContaining({
-        UserID: user,
         Domain: 'https://bouncer.example',
         Purpose: 'Link wallet to Bouncer',
       }),
     );
+    expect(JSON.stringify(flow.challenge)).not.toContain(user);
+    expect(flow.challenge.message.UserID).toBeUndefined();
     const signature = await account.signTypedData(flow.challenge as any);
     await expect(
       service.link(session, { flow: flow.id, signature }),
@@ -124,7 +125,7 @@ describe('Member account boundaries and fresh wallet proofs', () => {
       await other.signTypedData(flow.challenge as any),
       await account.signTypedData({
         ...flow.challenge,
-        message: { ...flow.challenge.message, UserID: 'other' },
+        message: { ...flow.challenge.message, Nonce: 'another-flow-nonce' },
       } as any),
       await account.signTypedData({
         ...flow.challenge,
@@ -277,6 +278,13 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     await expect(service.resume(session, 'different')).rejects.toThrow(
       'no longer available',
     );
+  });
+  it.each(['evm','bitcoin','solana'])('refreshes a legacy %s wallet-link challenge before asking the wallet to sign it again', async walletType => {
+    const challenge=walletType==='evm'?{domain:{version:'1',chainId:8453}}:'Bouncer wallet link\nDiscord user: private-user';
+    jest.spyOn(service as any,'flow').mockResolvedValue({id:'legacy',purpose:'wallet_link',wallet_type:walletType,address:account.address,challenge,expires_at:new Date(Date.now()+300000).toISOString()});
+    const fresh=jest.spyOn(service,'linkChallenge').mockResolvedValue({id:'minimal'} as any);
+    expect(await service.resume(session,'legacy')).toEqual({id:'minimal'});
+    expect(fresh).toHaveBeenCalledWith(session,{address:account.address,walletType,...(walletType==='evm'?{chainId:8453}:{})});
   });
   it('only removes the authenticated member’s link through an atomic database operation', async () => {
     await service.remove(session, account.address, 'request');

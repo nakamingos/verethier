@@ -1,4 +1,6 @@
 export interface DecodedData {
+  proofVersion?: 2;
+  signingOrigin?: string;
   address: string;      // Ethereum wallet address being verified
   walletType?: 'evm' | 'bitcoin';
   chainId?: number; // EIP-712 domain and smart-wallet authorization network

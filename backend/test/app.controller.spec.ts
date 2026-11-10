@@ -154,6 +154,12 @@ describe('AppController', () => {
       );
     });
 
+    it('forwards the minimal proof version to the signature verifier', async () => {
+      mockVerifyService.verifySignatureFlow.mockResolvedValue({assignedRoles:[]});
+      await controller.verify({...validRequestBody,data:{...validRequestBody.data,proofVersion:2}});
+      expect(mockVerifyService.verifySignatureFlow).toHaveBeenCalledWith({...expectedDecodedData,proofVersion:2},validRequestBody.signature);
+    });
+
     it('passes the Bitcoin wallet family to verification without changing the request shape', async () => {
       mockVerifyService.verifySignatureFlow.mockResolvedValue({ assignedRoles: [] });
       await controller.verify({ ...validRequestBody, data: { ...validRequestBody.data, walletType: 'bitcoin' } });

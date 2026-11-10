@@ -60,9 +60,10 @@ describe('Bitcoin wallet proof', () => {
   it('builds the signed challenge from trusted nonce context and consumes it once', async () => {
     const { data, signature, challenge } = await proof();
     expect(data.nonce).toMatch(/^[0-9a-f]{64}$/);
-    for (const value of ['Bouncer wallet verification', 'https://verify.example.test', vector.address, 'Discord user: user', 'Discord server: guild', 'Discord channel: channel', data.nonce]) {
+    for (const value of ['Bouncer wallet verification', 'https://verify.example.test', vector.address, data.nonce]) {
       expect(challenge.message).toContain(value);
     }
+    expect(challenge.message).not.toMatch(/Discord (?:user|server|channel):/);
     expect((await signatures.verify(data, signature)).context.channelId).toBe('channel');
     await expect(signatures.verify(data, signature)).rejects.toThrow('Invalid or expired nonce');
   });
@@ -113,7 +114,7 @@ describe('Bitcoin wallet proof', () => {
       db.getRulesByChannel.mockResolvedValue([{ asset_type }]);
       const context = await signatures.getContext(undefined, undefined, nonce);
       expect(context.walletTypes).toEqual([walletType]);
-      expect(context.data).toEqual({ ...display, address: '', userId: 'user', discordId: 'guild', nonce, expiry: context.expiry });
+      expect(context.data).toEqual({ ...display, signingOrigin:'https://verify.example.test', address: '', userId: 'user', discordId: 'guild', nonce, expiry: context.expiry });
     }
     expect(db.getRulesByChannel).toHaveBeenCalledWith('guild', 'channel');
   });

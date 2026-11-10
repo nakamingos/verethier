@@ -326,7 +326,8 @@ export class MemberComponent {
       const chainId = walletType === 'evm' ? await this.evmWallet().getSigningChainId() : undefined;
       if (
         !this.linkFlow ||
-        (walletType === 'evm' && this.linkFlow.challenge.domain.chainId !== chainId) ||
+        (walletType === 'evm' && (this.linkFlow.challenge.domain.version !== '2' || this.linkFlow.challenge.domain.chainId !== chainId)) ||
+        (walletType !== 'evm' && /^Discord (?:user|server|channel):/m.test(String(this.linkFlow.challenge))) ||
         this.linkFlow.walletType !== walletType || this.linkFlow.address !== (walletType === 'evm' ? address.toLowerCase() : walletType === 'bitcoin' ? canonicalBitcoinAddress(address) : address) ||
         new Date(this.linkFlow.expiresAt).getTime() <= Date.now()
       )
@@ -336,6 +337,13 @@ export class MemberComponent {
           ...(chainId ? { chainId } : {}),
         });
       const flow = this.linkFlow!;
+      // A rolling deployment may briefly serve an older backend. Never forward
+      // its identity-bearing challenge to a wallet; retry after the backend updates.
+      if ((walletType === 'evm' && flow.challenge?.domain?.version !== '2')
+        || (walletType !== 'evm' && /^Discord (?:user|server|channel):/m.test(String(flow.challenge)))) {
+        this.linkFlow = null;
+        throw new Error('Please reload Bouncer and start a new wallet link.');
+      }
       const proof =
         walletType === 'evm'
           ? await this.evmWallet().signTypedMessage(flow.challenge)

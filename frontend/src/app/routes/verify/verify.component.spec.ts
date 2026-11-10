@@ -535,6 +535,21 @@ describe('Verification page wallet choice', () => {
     return { fixture, resolvedData: resolvedData! };
   }
 
+  it('shows only a nonce-salted commitment for privacy choices in the wallet signing request', async () => {
+    const {fixture,resolvedData}=await shortLinkPage('evm');
+    const component=fixture.componentInstance;
+    component.privacyChoice={epoch:'11111111-2222-4333-8444-555555555555',share:true,exports:false,notice:'2026-10-27'};
+    component.state$.next({...component.state$.value,walletConnected:true});
+    const pending=component.verify(resolvedData);
+    await new Promise(resolve=>setTimeout(resolve,0));
+    const signed=ethereum.signTypedMessage.calls.mostRecent().args[0];
+    expect(signed.types.Verification.map((field:any)=>field.name)).toEqual(['Purpose','Domain','WalletAddress','Nonce','Expiry','ConsentHash']);
+    expect(signed.message.ConsentHash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(JSON.stringify(signed)).not.toMatch(/UserID|UserTag|ServerID|ServerName|epoch|share|exports|11111111-2222/);
+    const request=http.expectOne(req=>req.url.endsWith('/verify-signature'));
+    expect(request.request.body.data.privacy).toEqual(component.privacyChoice);
+    request.flush({assignedRoles:['holder']});await pending;
+  });
   it('signs and submits the saved Ethereum identity after resolving a short link', async () => {
     const { fixture, resolvedData } = await shortLinkPage('evm');
     const component = fixture.componentInstance;
@@ -542,13 +557,17 @@ describe('Verification page wallet choice', () => {
     const pending = component.verify(resolvedData);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(ethereum.signTypedMessage).toHaveBeenCalledWith(jasmine.objectContaining({ domain: {
-      name: 'Bouncer', version: '1', chainId: 1,
+      name: 'Bouncer', version: '2', chainId: 1,
     }, message: {
-      UserID: resolvedData.userId, UserTag: resolvedData.userTag, ServerID: resolvedData.discordId,
-      ServerName: resolvedData.discordName, Nonce: resolvedData.nonce, Expiry: resolvedData.expiry, WalletAddress: '0x' + '1'.repeat(40),
+      Purpose:'Verify wallet ownership', Domain:window.location.origin,
+      Nonce: resolvedData.nonce, Expiry: resolvedData.expiry, WalletAddress: '0x' + '1'.repeat(40),
     } }));
+    const signed=ethereum.signTypedMessage.calls.mostRecent().args[0];
+    expect(JSON.stringify(signed)).not.toMatch(/UserID|UserTag|ServerID|ServerName/);
+    expect(JSON.stringify(signed)).not.toContain(resolvedData.userTag);
+    expect(JSON.stringify(signed)).not.toContain(resolvedData.discordName);
     const verify = http.expectOne(request => request.url.endsWith('/verify-signature'));
-    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'evm', chainId: 1, address: '0x' + '1'.repeat(40) });
+    expect(verify.request.body.data).toEqual({ ...resolvedData, walletType: 'evm', chainId: 1, proofVersion:2, address: '0x' + '1'.repeat(40) });
     verify.flush({ assignedRoles: ['holder'] });
     await pending;
     expect(component.state$.value.messageVerified).toBeTrue();

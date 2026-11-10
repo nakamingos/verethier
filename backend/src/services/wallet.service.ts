@@ -1,3 +1,5 @@
+import { minimalEvmVerificationProof } from '@/utils/wallet-proof.util';
+import { EnvironmentConfig } from '@/config/environment.config';
 import { SolanaSignatureService } from './solana-signature.service';
 import { PrivacyService, privacyProof } from '@/portal/privacy.service';
 import { Injectable, Logger, Optional } from '@nestjs/common';
@@ -74,44 +76,56 @@ export class WalletService {
     const expired = expiry < Date.now();
     if (expired) throw new Error('Verification has expired.');
 
-    const types = {
-      Verification: [
-        { name: 'UserID', type: 'string' },
-        { name: 'UserTag', type: 'string' },
-        { name: 'ServerID', type: 'string' },
-        { name: 'ServerName', type: 'string' },
-        { name: 'Nonce', type: 'string' },
-        { name: 'Expiry', type: 'uint256' },
-      ]
-    };
+    if (data.proofVersion !== undefined && data.proofVersion !== 2) throw new Error('Invalid wallet proof version.');
+    let typedData: any;
+    if (data.proofVersion === 2) {
+      const context = await this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce);
+      if (data.expiry !== context.expiry || data.chainId === undefined)
+        throw new Error('Invalid wallet verification challenge.');
+      typedData = minimalEvmVerificationProof({ origin: EnvironmentConfig.BASE_URL,
+        chainId:data.chainId,address:data.address,nonce:context.nonce,expiry:context.expiry,
+        ...(data.privacy !== undefined ? {privacy:data.privacy} : {}) });
+    } else {
+      // Existing open pages can finish their short-lived v1 proof. Newly built
+      // signing requests use v2 and never include Discord identity fields.
+      const types = {
+        Verification: [
+          { name: 'UserID', type: 'string' },
+          { name: 'UserTag', type: 'string' },
+          { name: 'ServerID', type: 'string' },
+          { name: 'ServerName', type: 'string' },
+          { name: 'Nonce', type: 'string' },
+          { name: 'Expiry', type: 'uint256' },
+        ]
+      };
 
-    const message = {
-      UserID: data.userId,
-      UserTag: data.userTag,
-      ServerID: data.discordId,
-      ServerName: data.discordName,
-      Nonce: data.nonce,
-      Expiry: data.expiry,
-    };
+      const message = {
+        UserID: data.userId,
+        UserTag: data.userTag,
+        ServerID: data.discordId,
+        ServerName: data.discordName,
+        Nonce: data.nonce,
+        Expiry: data.expiry,
+      };
 
-    if (data.chainId !== undefined) {
-      types.Verification.push({ name: 'WalletAddress', type: 'address' });
-      (message as any).WalletAddress = data.address;
+      if (data.chainId !== undefined) {
+        types.Verification.push({ name: 'WalletAddress', type: 'address' });
+        (message as any).WalletAddress = data.address;
+      }
+      if (data.privacy !== undefined) {
+        types.Verification.push({ name: 'Privacy', type: 'string' });
+        (message as any).Privacy = privacyProof(data.privacy);
+      }
+      typedData = {
+        types,
+        domain: {
+          name: 'Bouncer',
+          version: '1',
+          chainId: data.chainId ?? 1,
+        },
+        message,
+      };
     }
-    if (data.privacy !== undefined) {
-      types.Verification.push({ name: 'Privacy', type: 'string' });
-      (message as any).Privacy = privacyProof(data.privacy);
-    }
-    const typedData = {
-      types,
-      domain: {
-        name: 'Bouncer',
-        version: '1',
-        chainId: data.chainId ?? 1,
-      },
-      message,
-    };
-
 
     let proof: { chainId?: number } | undefined;
     let failure: Error | undefined;

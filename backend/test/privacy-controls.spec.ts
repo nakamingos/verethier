@@ -1,3 +1,4 @@
+import { consentCommitment } from '../src/utils/consent-proof.util';
 import { DiscordVerificationService } from "../src/services/discord-verification.service";
 import {
   PrivacyService,
@@ -415,7 +416,8 @@ describe("Signed privacy choices", () => {
           choice,
         ),
         sig = Signer.sign(v.test_private_key, v.address, challenge.message);
-      expect(challenge.message).toContain(privacyProof(choice));
+      expect(challenge.message).toContain(consentCommitment(nonce, privacyProof(choice)));
+      expect(challenge.message).not.toContain(privacyProof(choice));
       const payload = {
         ...data,
         nonce,

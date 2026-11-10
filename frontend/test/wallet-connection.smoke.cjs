@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const artifacts = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'bouncer-wallet-smoke-'));
 const { generatePrivateKey, privateKeyToAccount } = require('viem/accounts');
-const { recoverTypedDataAddress, parseErc6492Signature, serializeErc6492Signature } = require('viem');
+const { recoverTypedDataAddress, parseErc6492Signature, serializeErc6492Signature, sha256, toHex } = require('viem');
 const account = privateKeyToAccount(generatePrivateKey());
 const dist = root + '/dist/frontend/browser';
 const index = fs.readFileSync(dist + '/index.html', 'utf8');
@@ -165,7 +165,7 @@ async function restorePreviousWalletConnectConnection(page) {
   try {
     for (const mobile of [false, true]) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} injected wallet connection`;
-      const test = await setup(browser, mobile, true, '/verify/'+nonce, {transferred:true});
+      const test = await setup(browser, mobile, true, '/verify/'+nonce, {transferred:true,privacy:true});
       const { page } = test;
       await page.evaluate(() => document.fonts.ready);
       const smallText = await page.locator('.user-tag .warn,.step-1 .sub,.wallet-choice button').evaluateAll(elements => elements.map(el=>Number.parseFloat(getComputedStyle(el).fontSize)));
@@ -221,6 +221,14 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal(test.proof.data.address.toLowerCase(), account.address.toLowerCase());
       assert.equal((await recoverTypedDataAddress({ ...test.typedData, signature: test.proof.signature })).toLowerCase(), account.address.toLowerCase());
       assert.equal(test.typedData.domain.name, 'Bouncer');
+      assert.equal(test.typedData.domain.version, '2');
+      assert.equal(test.proof.data.proofVersion,2);
+      assert.equal(test.typedData.message.Domain,origin);
+      assert.equal(test.typedData.message.Purpose,'Verify wallet ownership');
+      assert.deepEqual(Object.keys(test.typedData.message).sort(),['Purpose','Domain','WalletAddress','Nonce','Expiry','ConsentHash'].sort());
+      for(const field of ['UserID','UserTag','ServerID','ServerName','Privacy']) assert.equal(test.typedData.message[field],undefined);
+      assert.equal(test.typedData.message.ConsentHash,sha256(toHex(JSON.stringify([nonce,JSON.stringify(test.proof.data.privacy)]))));
+      assert.ok(!JSON.stringify(test.typedData).includes(test.proof.data.privacy.epoch));
       assert.equal(test.typedData.message.Nonce, nonce);
       // A second visit reuses the approved wallet but still requires a signature.
       const nextNonce = 'b'.repeat(64);

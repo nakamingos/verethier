@@ -358,13 +358,12 @@ export class MemberService {
       const challenge =
         dto.walletType === 'evm'
           ? {
-              domain: { name: 'Bouncer', version: '1', chainId: dto.chainId ?? 1 },
+              domain: { name: 'Bouncer', version: '2', chainId: dto.chainId ?? 1 },
               primaryType: 'WalletLink',
               types: {
                 WalletLink: [
                   { name: 'Purpose', type: 'string' },
                   { name: 'Domain', type: 'string' },
-                  { name: 'UserID', type: 'string' },
                   { name: 'Address', type: 'address' },
                   { name: 'Nonce', type: 'string' },
                   { name: 'Expiry', type: 'uint256' },
@@ -373,17 +372,16 @@ export class MemberService {
               message: {
                 Purpose: 'Link wallet to Bouncer',
                 Domain: this.auth.origin,
-                UserID: session.user.id,
                 Address: address,
                 Nonce: nonce,
                 Expiry: expiry,
               },
             }
-          : dto.walletType === 'solana' ? solanaMessage({ origin: this.auth.origin, purpose: 'wallet_link', address, userId: session.user.id, nonce, expiry }) : [
+          : dto.walletType === 'solana' ? solanaMessage({ origin: this.auth.origin, purpose: 'wallet_link', address, nonce, expiry }) : [
               'Bouncer saved-wallet link',
               '',
               `Domain: ${this.auth.origin}`,
-              `Discord user: ${session.user.id}`,
+              'Network: Bitcoin mainnet',
               `Address: ${address}`,
               `Nonce: ${nonce}`,
               `Expires at: ${new Date(expiry * 1000).toISOString()}`,
@@ -537,7 +535,10 @@ export class MemberService {
         'This pending action is no longer available.',
       );
     if (flow.purpose === 'wallet_link') {
-      if (new Date(flow.expires_at).getTime() <= Date.now())
+      const legacyIdentity = flow.wallet_type === 'evm'
+        ? flow.challenge?.domain?.version !== '2'
+        : /^Discord (?:user|server|channel):/m.test(String(flow.challenge));
+      if (legacyIdentity || new Date(flow.expires_at).getTime() <= Date.now())
         return this.linkChallenge(session, {
           address: flow.address,
           walletType: flow.wallet_type,

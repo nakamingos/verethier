@@ -32,7 +32,9 @@ describe('Stamps Bitcoin signature support',()=>{
   const nonce=await nonces.createNonce('member','guild','message','channel');
   const challenge=await signatures.createChallenge('member','guild',nonce,address);
   expect(challenge.address).toBe(address);
-  expect(challenge.message).toContain('Stamps');
+  expect(challenge.message).toContain('Network: Bitcoin mainnet');
+  expect(challenge.message).toContain(address);
+  expect(challenge.message).not.toMatch(/Discord (?:user|server|channel):/);
   const signature=Signer.sign(key,address,challenge.message);
   const data:any={userId:'member',discordId:'guild',nonce,address,expiry:challenge.expiry,walletType:'bitcoin'};
   expect((await signatures.verify(data,signature)).address).toBe(address);

@@ -59,7 +59,8 @@ describe("Solana nonce-bound verification", () => {
     return { data, signature, proof };
   }
   it("accepts an exact real signature once and consumes it before linking", async () => {
-    const { data, signature } = await challenge();
+    const { data, signature, proof } = await challenge();
+    expect(proof.message).not.toMatch(/Discord (?:user|server|channel):/);
     expect((await service.verify(data, signature)).address).toBe(address);
     await expect(service.verify(data, signature)).rejects.toThrow("nonce");
   });

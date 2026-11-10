@@ -17,6 +17,7 @@ import { BitcoinWalletProvider, BitcoinWalletService } from '@/services/bitcoin-
 import { DecodedData } from '@/models/app.interface';
 
 import { env } from 'src/env/env';
+import { sha256, toHex } from 'viem';
 import type { GetAccountReturnType } from '@wagmi/core';
 
 interface State {
@@ -217,38 +218,32 @@ export class VerifyComponent {
       // Create message to sign
       const domain = {
         name: 'Bouncer',
-        version: '1',
+        version: '2',
         chainId: this.state$.value.walletType === 'evm' ? await this.waitForWallet(() => this.walletSvc.getSigningChainId(), data.expiry) : 1,
       };
 
       const types = {
         Verification: [
-          { name: 'UserID', type: 'string' },
-          { name: 'UserTag', type: 'string' },
-          { name: 'ServerID', type: 'string' },
-          { name: 'ServerName', type: 'string' },
+          { name: 'Purpose', type: 'string' },
+          { name: 'Domain', type: 'string' },
+          { name: 'WalletAddress', type: 'address' },
           { name: 'Nonce', type: 'string' },
           { name: 'Expiry', type: 'uint256' },
         ]
       };
 
       const message = {
-        UserID: data.userId,
-        UserTag: data.userTag,
-        ServerID: data.discordId,
-        ServerName: data.discordName,
+        Purpose: 'Verify wallet ownership',
+        Domain: data.signingOrigin || window.location.origin,
+        WalletAddress: evmAddress,
         Nonce: data.nonce,
         Expiry: data.expiry,
       };
 
-      if (evmAddress) {
-        types.Verification.push({ name: 'WalletAddress', type: 'address' });
-        (message as any).WalletAddress = evmAddress;
-      }
       const choice = this.privacyChoice ? { epoch: this.privacyChoice.epoch, share: this.privacyChoice.share, exports: this.privacyChoice.exports, notice: this.privacyChoice.notice } : undefined;
       if (choice) {
-        types.Verification.push({ name: 'Privacy', type: 'string' });
-        (message as any).Privacy = JSON.stringify(choice);
+        types.Verification.push({ name: 'ConsentHash', type: 'bytes32' });
+        (message as any).ConsentHash = sha256(toHex(JSON.stringify([data.nonce, JSON.stringify(choice)])));
       }
       const typedData = {
         types,
@@ -258,7 +253,7 @@ export class VerifyComponent {
       };
 
       let proof: { signature: string; address: string };
-      let verificationData = { ...data, ...(this.state$.value.walletType === 'evm' ? { chainId: domain.chainId } : {}), ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
+      let verificationData = { ...data, ...(this.state$.value.walletType === 'evm' ? { chainId: domain.chainId, proofVersion: 2 as const } : {}), ...(choice ? { privacy: choice } : {}), walletType: this.state$.value.walletType };
       if (verificationData.walletType === 'solana') {
         const address = await this.waitForWallet(() => this.solanaWalletSvc.syncConnectedAccount(), data.expiry);
         const challenge = await firstValueFrom(this.http.post<{address:string;message:string;expiry:number}>(env.apiUrl+'/solana-challenge',{userId:data.userId,discordId:data.discordId,nonce:data.nonce,address,...(choice?{privacy:choice}:{})}));
