@@ -57,6 +57,7 @@ export class VerifyComponent {
   privacyChoice: any = null;
   routeData$!: Observable<DecodedData | null>;
   private evmAccount?: GetAccountReturnType;
+  private disconnecting = false;
   private errorSource: 'connection' | 'verification' | null = null;
 
   state$: BehaviorSubject<State> = new BehaviorSubject<State>({
@@ -124,7 +125,7 @@ export class VerifyComponent {
         this.evmAccount = account;
         if (this.state$.value.walletType !== 'evm') return;
         this.setState({
-          walletConnecting: account.isConnecting || account.isReconnecting,
+          walletConnecting: this.disconnecting || account.isConnecting || account.isReconnecting,
           walletConnected: account.isConnected && !account.isReconnecting,
           connectedAddress: account.isConnected ? account.address || null : null,
         });
@@ -191,7 +192,7 @@ export class VerifyComponent {
    * @returns A Promise that resolves to void.
    */
   async verify(data: DecodedData): Promise<void> {
-    if (!this.state$.value.walletConnected || this.state$.value.messageSigning
+    if (!this.state$.value.walletConnected || this.state$.value.walletConnecting || this.state$.value.messageSigning
       || this.state$.value.verificationSubmitting || this.state$.value.messageVerified) return;
 
     // Check if verification has expired
@@ -423,6 +424,25 @@ export class VerifyComponent {
       connectedAddress: account?.isConnected ? account.address || null : null,
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
+  }
+
+  async disconnect(): Promise<void> {
+    const state = this.state$.value;
+    if (state.walletType !== 'evm' || !state.walletConnected || state.walletConnecting
+      || state.messageSigning || state.verificationSubmitting || state.messageVerified) return;
+    this.disconnecting = true;
+    this.setState({ walletConnecting: true, errorMessage: null });
+    try {
+      await this.walletSvc.disconnectWeb3();
+      this.evmAccount = undefined;
+      this.setState({ walletConnected: false, connectedAddress: null,
+        messageSigned: false, successMessage: null });
+    } catch {
+      this.setState({ errorMessage: 'Could not disconnect your wallet. Please try again.' }, 'connection');
+    } finally {
+      this.disconnecting = false;
+      this.setState({ walletConnecting: false });
+    }
   }
 
   async connect(): Promise<void> {

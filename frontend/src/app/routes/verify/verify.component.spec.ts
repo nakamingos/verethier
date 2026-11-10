@@ -104,6 +104,37 @@ describe('Verification page wallet choice', () => {
     expect(ethereum.connect).toHaveBeenCalledTimes(1);
   });
 
+  it('disconnects the EVM session from the button next to Change wallet and clears the cached account', async () => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm','bitcoin']);
+    const buttons=Array.from(fixture.nativeElement.querySelectorAll('.step-2 button')) as HTMLButtonElement[];
+    const change=buttons.findIndex(button=>button.textContent?.trim()==='Change wallet');
+    expect(buttons[change+1].textContent?.trim()).toBe('Disconnect wallet');
+    buttons[change+1].click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(ethereum.disconnectWeb3).toHaveBeenCalledTimes(1);
+    expect(ethereum.connect).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({walletConnected:false,connectedAddress:null}));
+    fixture.componentInstance.selectWallet('bitcoin');
+    fixture.componentInstance.selectWallet('evm');
+    expect(fixture.componentInstance.state$.value.walletConnected).toBeFalse();
+  });
+  it('keeps wallet actions busy until disconnection completes and preserves the connection on failure', async () => {
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    const fixture=page(['evm']);
+    let reject!: (error:Error)=>void;
+    ethereum.disconnectWeb3.and.returnValue(new Promise<void>((_resolve,failed)=>{reject=failed;}));
+    const pending=fixture.componentInstance.disconnect();
+    ethereum.connectedState$.next({isConnecting:false,isConnected:true,address:'0x'+'1'.repeat(40)});
+    await fixture.componentInstance.disconnect();
+    fixture.detectChanges();
+    expect(ethereum.disconnectWeb3).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.state$.value.walletConnecting).toBeTrue();
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.step-2 button')).every((button:any)=>button.disabled)).toBeTrue();
+    reject(new Error('provider failed'));await pending;
+    expect(fixture.componentInstance.state$.value).toEqual(jasmine.objectContaining({walletConnecting:false,walletConnected:true,errorMessage:'Could not disconnect your wallet. Please try again.'}));
+  });
+
   it('restores the Ethereum account after switching back from Bitcoin without disconnecting it', () => {
     const fixture = page(['evm', 'bitcoin']);
     const evmAddress = '0x' + '2'.repeat(40);

@@ -253,6 +253,7 @@
               (click)="verify(data)"
               [disabled]="
                 !state.walletConnected ||
+                state.walletConnecting ||
                 state.messageSigning ||
                 state.verificationSubmitting ||
                 state.messageVerified
@@ -291,6 +292,17 @@
                 "
               >
                 Change wallet
+              </button>
+              <button
+                type="button"
+                (click)="disconnect()"
+                [disabled]="
+                  state.walletConnecting ||
+                  state.messageSigning ||
+                  state.verificationSubmitting
+                "
+              >
+                Disconnect wallet
               </button>
             }
           </div>
