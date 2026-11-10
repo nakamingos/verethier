@@ -393,6 +393,57 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     expect(guild.members.fetch).toHaveBeenCalledWith({ user, force: true });
     expect(db.rpc).not.toHaveBeenCalled();
   });
+  it('hides deleted roles from earned history, counts and channel choices while preserving existing historical roles and live renames', async () => {
+    const assignments = [
+      {server_id:server,role_id:'current',role_name:'Old current',status:'active'},
+      {server_id:server,role_id:'previous',role_name:'Old previous',status:'revoked'},
+      {server_id:server,role_id:'historical',role_name:'Legacy name',status:'revoked'},
+      {server_id:server,role_id:'deleted-active',role_name:'Deleted active',status:'active'},
+      {server_id:server,role_id:'deleted-revoked',role_name:'Deleted revoked',status:'revoked'},
+    ];
+    const original = JSON.parse(JSON.stringify(assignments));
+    rules.getEarnedRoleAssignments.mockResolvedValue(assignments);
+    rules.getRoleMappings.mockResolvedValue([
+      {id:1,channel_id:channel,role_id:'deleted-active',additional_roles:[{id:'current',name:'Old current'}],slug:'nakamingos',min_items:1},
+      {id:2,channel_id:channel,role_id:'previous',slug:'nakamingos',min_items:1},
+      {id:3,channel_id:'obsolete-channel',role_id:'deleted-revoked',slug:'nakamingos',min_items:1},
+    ]);
+    guild.channels.fetch.mockResolvedValue(new Map([channel,'obsolete-channel'].map(id=>[id,{id,name:id,permissionsFor:()=>({has:()=>true})}])));
+    const existing = new Map([
+      ['current',{name:'Renamed current'}],['previous',{name:'Renamed previous'}],['historical',{name:'Existing historical'}],
+    ]);
+    guild.roles.fetch.mockResolvedValueOnce(existing).mockResolvedValueOnce(new Map());
+    db.from.mockImplementation(table=>query(table==='user_wallets'?[{address:account.address}]:table==='verifier_server_settings'?{verification_channel_id:'obsolete-channel'}:table==='verifier_member_flows'?null:[]));
+    const first=await service.overview(session);
+    expect(first.counts).toEqual({wallets:1,communities:1,roles:1});
+    expect(first.communities[0].roles).toEqual([
+      {id:'current',name:'Renamed current',status:'active'},
+      {id:'previous',name:'Renamed previous',status:'previously earned'},
+      {id:'historical',name:'Existing historical',status:'previously earned'},
+    ]);
+    expect(first.communities[0].channels.map(c=>c.id)).toEqual([channel]);
+    expect(first.communities[0].channels[0].rules.map(r=>r.roleId)).toEqual(['current','previous']);
+    expect(first.communities[0].defaultChannel).toBe(channel);
+    expect(JSON.stringify(first)).not.toContain('deleted-');
+    const refreshed=await service.overview(session);
+    expect(refreshed.communities[0].roles).toEqual([]);
+    expect(refreshed.communities[0].channels).toEqual([]);
+    expect(refreshed.counts.roles).toBe(0);
+    expect(assignments).toEqual(original);
+    expect(db.rpc).not.toHaveBeenCalled();
+    expect(guild.roles.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('marks the community unavailable when current Discord roles cannot be fetched instead of presenting stale role history', async () => {
+    db.from.mockImplementation(table=>query(table==='user_wallets'?[{address:account.address}]:table==='verifier_member_flows'?null:[]));
+    rules.getEarnedRoleAssignments.mockResolvedValue([{server_id:server,role_id:'deleted',role_name:'Old snapshot',status:'active'}]);
+    guild.channels.fetch.mockResolvedValue(new Map());
+    guild.roles.fetch.mockRejectedValueOnce(new Error('Discord unavailable'));
+    const overview=await service.overview(session);
+    expect(overview.communitiesUnavailable).toBe(true);
+    expect(overview.wallets).toHaveLength(1);
+    expect(overview.communities).toEqual([]);
+    expect(JSON.stringify(overview)).not.toContain('Old snapshot');
+  });
   it('does not return a stale OAuth membership, and keeps wallets usable during a Discord outage', async () => {
     db.from.mockImplementation((table) =>
       query(

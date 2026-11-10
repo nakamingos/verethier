@@ -102,7 +102,7 @@ export class MemberService {
     ]);
     const defaultChannel = this.checked(settings)?.verification_channel_id;
     const visible = expandRuleRoles(rules).filter((rule) =>
-      channels
+      rolesById.has(rule.role_id) && channels
         .get(rule.channel_id)
         ?.permissionsFor(member)
         ?.has(PermissionFlagsBits.ViewChannel),
@@ -150,7 +150,9 @@ export class MemberService {
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { numeric: true }),
       );
-    const earned = assignments.filter((row) => row.server_id === server);
+    // Preserve historical assignments, but expose only roles that still exist
+    // in this guild's freshly fetched Discord role list.
+    const earned = assignments.filter((row) => row.server_id === server && rolesById.has(row.role_id));
     const roles = [...new Set(earned.map((row) => row.role_id))].map((id) => {
       const records = earned.filter((row) => row.role_id === id);
       return {
