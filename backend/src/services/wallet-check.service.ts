@@ -1,4 +1,4 @@
-import { checkFamily } from '@/utils/check-priority.util';
+import { checkFamily, ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { DbService } from './db.service';
@@ -134,6 +134,7 @@ export class WalletCheckService {
           const rules = (await run.rules.get(candidate.server)).filter(rule =>
             walletCheckNetwork(rule) === candidate.network && walletMatchesRule(rule, candidate.proof.address));
           if (!rules.length) return;
+          if (rules.some(rule => !ruleMatchesWalletScope(rule, context.verificationCheckFamilies))) return;
           // A filtered bulk run must not contact excluded providers, including
           // other protocols sharing this wallet's blockchain dormancy scope.
           if (context.bulkCheckFamilies && rules.some(rule => !context.bulkCheckFamilies.has(checkFamily(rule)))) return;

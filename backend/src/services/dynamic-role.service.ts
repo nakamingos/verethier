@@ -1,3 +1,4 @@
+import { ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { ordnetCompatible } from '@/utils/ordinal-rule.util';
 import { ruleRoles } from '@/utils/rule-roles.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
@@ -122,7 +123,15 @@ export class DynamicRoleService {
 
   /** Restriction changes only reconcile previously earned roles in the administrator's server. */
   async reverifyUserInServer(userId: string, serverId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
-    const assignments = await this.dbSvc.getEarnedRoleAssignments({ userId, serverId });
+    let assignments = await this.dbSvc.getEarnedRoleAssignments({ userId, serverId });
+    if (context?.verificationCheckFamilies) {
+      const rules = await this.dbSvc.getRoleMappings(serverId);
+      assignments = assignments.filter(assignment => {
+        const definitions = rules.filter(rule => ruleRoles(rule).some(role => role.id === assignment.role_id));
+        // An incomplete cross-family check cannot prove this role should be removed.
+        return definitions.length > 0 && definitions.every(rule => ruleMatchesWalletScope(rule, context.verificationCheckFamilies));
+      });
+    }
     return this.reverifyAssignments(assignments, undefined, context);
   }
 

@@ -1,3 +1,4 @@
+import { interactiveWalletFamilies, ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { CONSTANTS } from '@/constants';
 import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { BouncerLogService } from './bouncer-log.service';
@@ -62,7 +63,8 @@ export class VerifyService {
     let finish: (() => void) | undefined;
     try {
       walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
-      finish = this.ordinalRequests?.beginVerification();
+      if ((walletVerification.activity?.walletType || payload.walletType) === 'bitcoin')
+        finish = this.ordinalRequests?.beginVerification();
       const result = await this.completeVerification(payload, walletVerification);
       if (walletVerification.activity) {
         try { await this.dbSvc.recordWalletVerification(payload.userId, walletVerification.address, walletVerification.activity); }
@@ -93,8 +95,10 @@ export class VerifyService {
     walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>,
   ) {
     const { address } = walletVerification;
-    const ownershipContext: NftCheckContext = { checks: new Map(), provenAddresses: new Map([[payload.userId, address]]) };
-    
+    const walletType = walletVerification.activity?.walletType || payload.walletType || 'evm';
+    const ownershipContext: NftCheckContext = { checks: new Map(), provenAddresses: new Map([[payload.userId, address]]),
+      verificationCheckFamilies: interactiveWalletFamilies(walletType) };
+    Logger.log(`Verification scope: user=${payload.userId}; wallet=${walletType}; families=${[...ownershipContext.verificationCheckFamilies].join(',')}`);
     try {
       return await this.completeVerificationWithContext(payload, walletVerification, ownershipContext);
     } finally {
@@ -122,9 +126,9 @@ export class VerifyService {
       Logger.debug(`Channel-based verification for channelId: ${channelId}`);
       
       // Get ALL rules that apply to this channel
-      const rules = await this.timed(payload.userId, 'rules', () => this.verificationSvc.getRulesForChannel(
+      const rules = (await this.timed(payload.userId, 'rules', () => this.verificationSvc.getRulesForChannel(
         payload.discordId, channelId
-      ));
+      ))).filter(rule => ruleMatchesWalletScope(rule, ownershipContext.verificationCheckFamilies));
       
       if (!rules || rules.length === 0) {
         Logger.warn(`No rules found for channelId: ${channelId}`);
@@ -194,7 +198,8 @@ export class VerifyService {
     Logger.debug(`Unified verification path for address: ${address}`);
     
     // Get all rules for the current guild using the unified verification service
-    const rules = await this.timed(payload.userId, 'rules', () => this.verificationSvc.getAllRulesForServer(payload.discordId));
+    const rules = (await this.timed(payload.userId, 'rules', () => this.verificationSvc.getAllRulesForServer(payload.discordId)))
+      .filter(rule => ruleMatchesWalletScope(rule, ownershipContext.verificationCheckFamilies));
     
     if (!rules || rules.length === 0) {
       const errorMsg = 'No verification rules found for this server';
@@ -248,9 +253,10 @@ export class VerifyService {
   }
 
   private async reconcileEarned(payload: DecodedData, context: NftCheckContext): Promise<void> {
-    // A fresh manual proof also checks earned roles. Shared ownership reads avoid
-    // repeating provider work; alternative rules and all saved wallets still apply.
-    try { await this.earnedRoles?.reverifyUserInServer(payload.userId, payload.discordId, context); }
+    // Reconcile only complete role definitions within the selected family.
+    // Cross-family alternatives/combined requirements remain for scheduled checks.
+    try { await this.timed(payload.userId, 'earned-role reconciliation', async () =>
+      this.earnedRoles?.reverifyUserInServer(payload.userId, payload.discordId, context)); }
     catch { Logger.warn('Earned-role reconciliation unavailable; existing roles retained for retry.'); }
   }
 

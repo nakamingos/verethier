@@ -1,4 +1,4 @@
-import { checkFamily } from '@/utils/check-priority.util';
+import { checkFamily, ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { WalletCheckService } from './wallet-check.service';
 import { StampsOwnershipService } from './stamps-ownership.service';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
@@ -29,6 +29,7 @@ export class AssetOwnershipService {
   }
 
   async matchingAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+    if (!ruleMatchesWalletScope(rule, context.verificationCheckFamilies)) throw new Error('Rule is outside the selected wallet family.');
     if(context.bulkCheckFamilies && !context.bulkCheckFamilies.has(checkFamily(rule))) throw new Error('Rule is outside the selected networks.');
     if(this.walletChecks)addresses=await this.walletChecks.allowed(rule,addresses,context);
     if (rule.asset_type === 'stamp') {
@@ -59,6 +60,7 @@ export class AssetOwnershipService {
 
   async count(rule: VerifierRole, addresses: string[], context?: NftCheckContext): Promise<bigint> {
     const run:NftCheckContext=context||{checks:new Map()};
+    if (!ruleMatchesWalletScope(rule, run.verificationCheckFamilies)) throw new Error('Rule is outside the selected wallet family.');
     if(run.bulkCheckFamilies && !run.bulkCheckFamilies.has(checkFamily(rule))) throw new Error('Rule is outside the selected networks.');
     const active=this.walletChecks?await this.walletChecks.allowed(rule,addresses,run):addresses;
     const count=await this.countInternal(rule,active,run);

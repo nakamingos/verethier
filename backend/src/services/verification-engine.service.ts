@@ -1,5 +1,5 @@
 import { EthscriptionDataUnavailableError } from '@/utils/ethscription-data-error.util';
-import { checkPriority } from '@/utils/check-priority.util';
+import { checkPriority, ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
@@ -179,9 +179,10 @@ export class VerificationEngine {
     const ruleEntries = await Promise.all([...new Set(ruleIds)].map(async id => [id, loadedRules
       ? loadedRules.find(rule => rule.id.toString() === id.toString())
       : await this.getRuleById(id)] as const));
-    const entries = loadedRules
+    const allEntries = loadedRules
       ? expandRuleRoles(loadedRules.filter(r => ruleIds.some(id => String(id) === String(r.id)))).map(r => [r.id, r] as const)
       : ruleEntries.flatMap<readonly [string | number, VerifierRole]>(([id, rule]) => rule ? expandRuleRoles([rule]).map(r => [id, r] as const) : [[id, rule] as const]);
+    const entries = allEntries.filter(([,rule]) => !rule || ruleMatchesWalletScope(rule, context.verificationCheckFamilies));
     const rules = entries.map(([, rule]) => rule).filter(Boolean);
     // Scheduled contexts span many members. A numeric role for one member must
     // not force every later member onto a numbered (potentially paid) lookup.
@@ -455,10 +456,13 @@ export class VerificationEngine {
   }
 
   private async evaluateRoleRules(userId: string, rules: VerifierRole[], context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    if (!rules.length) return { status: 'failed', results: [] };
+    const allRules = rules;
+    rules = rules.filter(rule => ruleMatchesWalletScope(rule, context?.verificationCheckFamilies));
+    const partial = rules.length < allRules.length;
+    if (!rules.length) return { status: partial ? 'unavailable' : 'failed', results: [] };
     const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
     const proven = context?.provenAddresses?.get(userId);
-    if (!addresses.length && !proven) return { status: 'failed', results: [] };
+    if (!addresses.length && !proven) return { status: partial ? 'unavailable' : 'failed', results: [] };
     let checked: BulkVerificationResult;
     if (context?.bulkGrantOnly) {
       const tiers = [...new Set(rules.map(checkPriority))].sort((a,b) => a-b);
@@ -474,7 +478,7 @@ export class VerificationEngine {
     }
     return {
       status: checked.results.some(result => result.isValid) ? 'passed'
-        : checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',
+        : partial || checked.results.some(result => result.status === 'unavailable' || result.error) ? 'unavailable' : 'failed',
       results: checked.results,
     };
   }

@@ -23,6 +23,8 @@ const ABI = parseAbi([
 ]);
 
 export interface NftCheckContext {
+  /** Selected family for interactive proofs; absent on full scheduled checks. */
+  verificationCheckFamilies?: ReadonlySet<string>;
   walletCheck?: WalletCheckRun;
   /** Provider families explicitly selected for a grants-only bulk run. */
   bulkCheckFamilies?: ReadonlySet<string>;

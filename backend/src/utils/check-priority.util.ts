@@ -12,3 +12,12 @@ export function checkPriority(rule: Partial<VerifierRole>): number {
 export function checkFamily(rule: Partial<VerifierRole>): string {
   return CHECK_PRIORITY[checkPriority(rule)];
 }
+
+/** Interactive tabs select a wallet family, not every saved wallet in the account. */
+export function interactiveWalletFamilies(walletType: 'evm' | 'bitcoin' | 'solana'): ReadonlySet<string> {
+  return new Set(walletType === 'bitcoin' ? ['stamps','ordinals']
+    : walletType === 'solana' ? ['solana'] : ['ethereum','robinhood','base','ethscriptions']);
+}
+export function ruleMatchesWalletScope(rule: Partial<VerifierRole>, families?: ReadonlySet<string>): boolean {
+  return !families || families.has(checkFamily(rule));
+}

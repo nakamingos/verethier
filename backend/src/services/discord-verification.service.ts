@@ -1,3 +1,4 @@
+import { ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { BouncerLogService } from './bouncer-log.service';
@@ -323,7 +324,7 @@ export class DiscordVerificationService {
     rules: Array<{ slug?: string | null; asset_type?: string }>
   ): Promise<Record<string, CollectionDisplayName>> {
     const uniqueSlugs = Array.from(new Set(
-      rules.filter(rule => rule.asset_type !== 'ordinal').flatMap(rule => this.parseRuleSlugs(rule.slug))
+      rules.filter(rule => !rule.asset_type || rule.asset_type === 'ethscription').flatMap(rule => this.parseRuleSlugs(rule.slug))
     ));
 
     if (uniqueSlugs.length === 0) {
@@ -731,7 +732,8 @@ export class DiscordVerificationService {
       
       // Get rule details for all assigned roles to show requirements
       const channelId = storedInteraction.channelId;
-      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId));
+      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId))
+        .filter(rule => ruleMatchesWalletScope(rule, ownershipContext?.verificationCheckFamilies));
       const collectionNames = await this.getCollectionNamesForRules(allRules);
       
       // Add new roles section if any
@@ -1073,7 +1075,8 @@ export class DiscordVerificationService {
       }
       
       // Recommendations follow the same channel scope as verification.
-      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId));
+      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId))
+        .filter(rule => ruleMatchesWalletScope(rule, ownershipContext?.verificationCheckFamilies));
       
       // Filter out rules for roles they already have or were just assigned in this verification
       const unassignedRules = allRules.filter(rule => !excludedRoleIds.has(rule.role_id));

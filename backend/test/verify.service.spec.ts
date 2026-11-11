@@ -172,6 +172,34 @@ describe('VerifyService', () => {
     expect(mockDiscordVerificationService.addUserRole.mock.calls[0][6].portalVerification).toEqual({userId:'u',guildId:'g',nonce:'n'});
     expect(mockDiscordVerificationService.sendVerificationComplete).not.toHaveBeenCalled();
   });
+  it.each([
+    ['evm',['ethereum','robinhood','base','ethscriptions'],[1,2,3,4]],
+    ['bitcoin',['stamps','ordinals'],[5,6]],
+    ['solana',['solana'],[7,8]],
+  ])('limits %s proof checks, reconciliation and recommendations to that family', async (walletType,families,ids) => {
+    const definitions=[
+      {id:1,asset_type:'nft',chain_id:1},{id:2,asset_type:'erc20',chain_id:4663},
+      {id:3,asset_type:'nft',chain_id:8453},{id:4,asset_type:'ethscription'},
+      {id:5,asset_type:'stamp'},{id:6,asset_type:'ordinal'},
+      {id:7,asset_type:'solana_nft'},{id:8,asset_type:'solana_token'},
+    ].map(rule=>({...rule,role_id:'role-'+rule.id}));
+    mockWalletService.verifySignature.mockResolvedValueOnce({address:'proven',walletOwnershipTransferred:false,nonceContext:{channelId:'channel'},activity:{walletType,source:'discord'}});
+    mockVerificationService.getRulesForChannel.mockResolvedValueOnce(definitions);
+    mockVerificationService.verifyUserBulk.mockImplementationOnce(async (_user,_ids,_address,_context,rules)=>({validRules:rules,invalidRules:[],matchingAssetCounts:new Map()}));
+    const reconcile=jest.fn().mockResolvedValue({verified:0,revoked:0,errors:0});
+    (service as any).earnedRoles={reverifyUserInServer:reconcile};
+    await service.verifySignatureFlow({userId:'user',discordId:'server',nonce:'nonce',walletType} as any,'sig');
+    const checked=mockVerificationService.verifyUserBulk.mock.calls[0];
+    expect(checked[1]).toEqual(ids);
+    expect([...checked[3].verificationCheckFamilies]).toEqual(families);
+    expect(checked[4].map(rule=>rule.id)).toEqual(ids);
+    expect(reconcile).toHaveBeenCalledWith('user','server',checked[3]);
+    expect(mockDiscordVerificationService.sendVerificationComplete.mock.calls[0][4]).toBe(checked[3]);
+    if(walletType==='bitcoin') {
+      expect(mockOrdinalRequests.beginVerification).toHaveBeenCalledTimes(1);
+      expect(finishVerification).toHaveBeenCalledTimes(1);
+    } else expect(mockOrdinalRequests.beginVerification).not.toHaveBeenCalled();
+  });
   it('handles multi-rule path', async () => {
     // Mock empty nonce data to trigger multi-rule path
     mockNonceService.getNonceData.mockResolvedValue({ messageId: null, channelId: null });
@@ -262,8 +290,8 @@ describe('VerifyService', () => {
     expect(mockNonceService.getNonceData).toHaveBeenCalledWith('user123', 'nonce123');
     expect(mockNonceService.invalidateNonce).toHaveBeenCalledWith('nonce123');
     expect(mockVerificationService.getRulesForChannel).toHaveBeenCalledWith('guild123', 'ch-456');
-    expect(mockOrdinalRequests.beginVerification).toHaveBeenCalledTimes(1);
-    expect(finishVerification).toHaveBeenCalledTimes(1);
+    expect(mockOrdinalRequests.beginVerification).not.toHaveBeenCalled();
+    expect(finishVerification).not.toHaveBeenCalled();
     const ownershipContext = mockVerificationService.verifyUserBulk.mock.calls[0][3];
     expect(ownershipContext.checks).toBeInstanceOf(Map);
     expect(mockVerificationService.verifyUserBulk).toHaveBeenCalledWith('user123', [1], '0xabc', ownershipContext, mockRules);
@@ -352,7 +380,7 @@ describe('VerifyService', () => {
       .rejects.toThrow('No verification rules found for this channel');
     
     expect(mockDiscordVerificationService.throwError).toHaveBeenCalledWith('nonce123', 'No verification rules found for this channel');
-    expect(finishVerification).toHaveBeenCalledTimes(1);
+    expect(finishVerification).not.toHaveBeenCalled();
   });
 
   it('handles message-based verification when user does not meet criteria', async () => {
@@ -605,7 +633,7 @@ describe('VerifyService', () => {
     mockWalletService.verifySignature.mockResolvedValue({ address: '0xabc', walletOwnershipTransferred: false });
     const rules = [
       { id: 1, role_id: 'shared', asset_type: 'ethscription', min_items: 10 },
-      { id: 2, role_id: 'shared', asset_type: 'ordinal', min_items: 10 },
+      { id: 2, role_id: 'shared', asset_type: 'ethscription', min_items: 10 },
       { id: 3, role_id: 'other', asset_type: 'ethscription', min_items: 1 },
     ];
     const checks = rules.map(rule => ({ rule, ruleId: rule.id, isValid: true }));
@@ -629,6 +657,6 @@ describe('VerifyService', () => {
     expect(displayed.map(role => role.ruleId)).toEqual(['1', '2', '3']);
     expect(result.assignedRoles).toEqual(['shared', 'other']);
     expect(result.message).toContain('1 new roles assigned, 1 existing roles');
-    expect(mockVerificationService.verifyUserBulk.mock.calls[0][4]).toBe(rules);
+    expect(mockVerificationService.verifyUserBulk.mock.calls[0][4]).toEqual(rules);
   });
 });
