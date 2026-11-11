@@ -213,14 +213,25 @@ const server = "111111111111111111",
       await page
         .getByRole("button", { name: "Communities", exact: true })
         .click();
-      const sharing = () => page.getByLabel("Let this community's admins see which wallets belong to me.");
-      const exports = () => page.getByLabel("Include my wallets in this community's downloadable exports.");
+      const sharing = () => page.getByLabel("Let community admins see my wallets and Discord account.");
+      const exports = () => page.getByLabel("Let community admins download my wallet addresses.");
       assert.equal(await sharing().isChecked(), true, 'New member sharing starts checked');
       assert.equal(await exports().isChecked(), true, 'New member exports start checked');
       assert.equal(writes.filter(w => w.p === `/member/privacy/${server}`).length, 0,
         'Rendering checked drafts does not save permissions');
+      const disclosure = () => page.locator('app-privacy-choices details');
+      assert.equal(await disclosure().getAttribute('open'), null, 'Privacy starts collapsed');
+      await page.screenshot({ path: path.join(artifacts, `privacy-collapsed-${width}.png`), fullPage: true });
+      await disclosure().locator('summary').focus();
+      await page.keyboard.press('Enter');
+      await sharing().waitFor({ state: 'visible' });
+      assert.notEqual(await disclosure().getAttribute('open'), null, 'Privacy opens with keyboard');
+      await page.screenshot({ path: path.join(artifacts, `privacy-expanded-${width}.png`), fullPage: true });
       await sharing().uncheck();
       await exports().uncheck();
+      await disclosure().locator('summary').click();
+      assert.equal(await sharing().isChecked(), false, 'Collapsing preserves sharing choice');
+      assert.equal(await exports().isChecked(), false, 'Collapsing preserves download choice');
       await page.getByRole('button', { name: 'Save privacy choices', exact: true }).click();
       await page.getByText('Privacy choices saved.', { exact: false }).waitFor();
       await page.reload();
@@ -232,6 +243,7 @@ const server = "111111111111111111",
       await sharing().waitFor({ state: 'attached' });
       assert.equal(await sharing().isChecked(), false, 'Verification preserves saved opt-out');
       assert.equal(await exports().isChecked(), false);
+      assert.equal(await disclosure().getAttribute('open'), null, 'Verification privacy starts collapsed');
       privacy = { ...privacy, has_saved_choice: false };
       await page.reload();
       await sharing().waitFor({ state: 'attached' });
@@ -246,14 +258,15 @@ const server = "111111111111111111",
       privacy = { ...privacy, sharing_enabled: true };
       await page.goto('https://bouncer.test/member');
       await page.getByRole('button', { name: 'Communities', exact: true }).click();
+      await page.locator('app-privacy-choices summary').click();
       await page
         .getByLabel(
-          "Let this community's admins see which wallets belong to me.",
+          "Let community admins see my wallets and Discord account.",
         )
         .check();
       await page
         .getByLabel(
-          "Include my wallets in this community's downloadable exports.",
+          "Let community admins download my wallet addresses.",
         )
         .check();
       await page
