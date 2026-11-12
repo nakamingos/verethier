@@ -1070,7 +1070,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     if (this.busy || this.chosenRoles.length >= 20) return;
     const value = 'new-' + crypto.randomUUID();
     this.chosenRoles.push({value,name:''}); this.review = false;
-    requestAnimationFrame(() => document.getElementById('role-name-'+value)?.focus());
+    const origin = document.activeElement;
+    requestAnimationFrame(() => {
+      // A delayed frame must not steal focus once typing has moved elsewhere.
+      if (document.activeElement === origin)
+        document.getElementById('role-name-'+value)?.focus({preventScroll:true});
+    });
   }
   get rolesValid() { return this.chosenRoles.length > 0 && this.chosenRoles.length <= 20 && this.chosenRoles.every(role => role.id || role.name?.trim()); }
   roleRequest() {
@@ -1420,11 +1425,16 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.memberMatchIndex =
         (this.memberMatchIndex + step + this.memberMatches.length) %
         this.memberMatches.length;
-      requestAnimationFrame(() =>
-        document
-          .getElementById('member-match-' + this.memberMatchIndex)
-          ?.scrollIntoView({ block: 'nearest' }),
-      );
+      requestAnimationFrame(() => {
+        const menu = document.getElementById('member-matches');
+        const option = document.getElementById('member-match-' + this.memberMatchIndex);
+        if (!menu || !option) return;
+        const top = menu.getBoundingClientRect().top + menu.clientTop;
+        const bottom = top + menu.clientHeight;
+        const rect = option.getBoundingClientRect();
+        if (rect.top < top) menu.scrollTop -= top - rect.top;
+        else if (rect.bottom > bottom) menu.scrollTop += rect.bottom - bottom;
+      });
     } else if (
       event.key === 'Enter' &&
       this.memberMatchesOpen &&

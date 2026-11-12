@@ -37,7 +37,7 @@ $pixel-raised: (
   'ESHHHHHHHHHHSE',
   '.ESSSSSSSSSSE.',
   '..EEEEEEEEEE..',
-  '..DDDDDDDDDD..'
+  '..............'
 );
 $pixel-inset: (
   '.HHHHHHHHHHHH.',
@@ -368,25 +368,23 @@ $pixel-select-arrow: (
   @return url('data:image/svg+xml,#{$svg}');
 }
 
-// Stepped ends for vertical and horizontal scrollbar thumbs.
-@mixin pixel-scrollbar($thumb) {
+// Mini scrollbars adapted from the Music Box handoff and Aseprite sprites.
+// Each cell is 2px; keep a black cell beside the thumb and stepped end gaps.
+$pixel-scroll-thumb: ('OOOOOO', 'OOOOOO', 'OOFFFO', 'OFFFFF', 'OOFFFO', 'OOOOOO');
+$pixel-scroll-thumb-framed: ('OOOOOOO', 'OOOOOOO', 'OOFFFOO', 'OFFFFFO', 'OOFFFOO', 'OOOOOOO');
+$pixel-scroll-thumb-across: ('OOOOOO', 'OOOFOO', 'OOFFFO', 'OOFFFO', 'OOFFFO', 'OOOFOO');
+@mixin pixel-scrollbar($thumb, $hot: #4069c2) {
   --ase-scrollbar-thumb: #{$thumb};
-  --pixel-scrollbar-thumb: #{pixel-grid(
-      (
-        'OOOOOOOO',
-        'O..FF..O',
-        'O.FFFF.O',
-        'OFFFFFFO',
-        'OFFFFFFO',
-        'O.FFFF.O',
-        'O..FF..O',
-        'OOOOOOOO'
-      ),
-      (
-        'F': $thumb,
-        'O': #000,
-      )
-    )};
+  --pixel-scrollbar-thumb: #{pixel-grid($pixel-scroll-thumb, ('O': #000, 'F': $thumb))};
+  --pixel-scrollbar-thumb-hover: #{pixel-grid($pixel-scroll-thumb, ('O': #000, 'F': $hot))};
+  --pixel-scrollbar-framed: #{pixel-grid($pixel-scroll-thumb-framed, ('O': #000, 'F': $thumb))};
+  --pixel-scrollbar-framed-hover: #{pixel-grid($pixel-scroll-thumb-framed, ('O': #000, 'F': $hot))};
+  --pixel-scrollbar-across: #{pixel-grid($pixel-scroll-thumb-across, ('O': #000, 'F': $thumb))};
+  --pixel-scrollbar-across-hover: #{pixel-grid($pixel-scroll-thumb-across, ('O': #000, 'F': $hot))};
+}
+$pixel-option-focus: ('cKKKc', 'KiaiK', 'KaaaK', 'KiaiK', 'cKKKc');
+@mixin pixel-option-focus($ring: #4069c2, $face: #41444a, $corner: #405d9c, $inner: #405786) {
+  --pixel-option-focus: #{pixel-grid($pixel-option-focus, ('c': $corner, 'K': $ring, 'i': $inner, 'a': $face))};
 }
 
 @mixin pixel-tokens(

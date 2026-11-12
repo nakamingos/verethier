@@ -12,6 +12,7 @@
   "
   [attr.aria-required]="required || null"
   [disabled]="disabled"
+  (pointerdown)="triggerPointerDown()"
   (click)="toggle($event)"
   (keydown)="keydown($event)"
   (blur)="touched()"
@@ -30,7 +31,7 @@
   [id]="id"
   [attr.aria-label]="label"
   [attr.aria-multiselectable]="multiple || null"
-  (toggle)="onToggle($event)"
+  (beforetoggle)="onBeforeToggle($event)"
   (mousedown)="$event.preventDefault()"
   (click)="$event.preventDefault()"
 >
@@ -41,7 +42,7 @@
       [attr.aria-selected]="selected(option)"
       [attr.aria-disabled]="optionDisabled(option) || null"
       [class.active]="active === index"
-      (pointermove)="hover(index)"
+      (pointermove)="hover(index, $event)"
       (click)="choose(index)"
     >
       @if (multiple && !option.action) { <span class="pixel-select-check" [class.checked]="selected(option)" aria-hidden="true"></span> }

@@ -43,6 +43,7 @@
   scrollbar-gutter: stable;
   --ase-bg: #41444a;
   @include pixel-scrollbar(#41444a);
+  @include pixel-option-focus();
   --ase-face: #2c2c30;
   --ase-text: #c0c0c0;
   --ase-dim: #999b9f;
@@ -122,6 +123,7 @@
   );
   --ase-bg: #7d929e;
   @include pixel-scrollbar(#7c919d);
+  @include pixel-option-focus(#fff, #c6c6c6, #958174, #adcade);
   --ase-face: #d3cbbe;
   --ase-text: #000;
   --ase-dim: #000;
@@ -154,6 +156,13 @@
 * {
   @include scrollbars();
 }
+
+// The page scrollbar has no adjoining black container border, so centre its
+// thumb in the handoff's seven-cell track instead of relying on that border.
+:root::-webkit-scrollbar { width: 14px; }
+:root::-webkit-scrollbar-thumb:vertical { border-image-source: var(--pixel-scrollbar-framed); }
+:root::-webkit-scrollbar-thumb:vertical:hover,
+:root::-webkit-scrollbar-thumb:vertical:active { border-image-source: var(--pixel-scrollbar-framed-hover); }
 
 body {
   font-feature-settings:
@@ -208,14 +217,14 @@ a.button {
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  min-height: 3.4rem;
-  padding: 0.45rem 1.2rem 0.45rem;
+  min-height: 32px;
+  padding: 3px 1.2rem;
   border: 1px solid var(--ase-border);
   @include pixel-surface(var(--pixel-face));
   color: var(--ase-text);
   font: inherit;
   font-size: 1.6rem;
-  line-height: 1.4;
+  line-height: 1.25;
   cursor: pointer;
   text-decoration: none;
   white-space: normal;
@@ -283,7 +292,7 @@ textarea {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 3.4rem;
+  min-height: 30px;
   color: var(--ase-text);
   font: inherit;
   line-height: 1.4;
@@ -319,8 +328,8 @@ button.pixel-select-trigger:hover {
   gap: 0;
   justify-content: stretch;
   width: 100%;
-  height: 3.4rem;
-  min-height: 3.4rem;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
   border: 0;
   border-image: none;
@@ -345,7 +354,7 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   display: flex;
   align-items: center;
   min-width: 0;
-  padding: 4px 4rem 0 0.8rem;
+  padding: 0 34px 0 8px;
   border: 1px solid transparent;
   border-image: var(--pixel-select-field) 10 0 10 10 fill / 10px 0 10px 10px;
 }
@@ -360,31 +369,32 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   inset: 0 0 0 auto;
   display: grid;
   place-items: center;
-  width: 3.4rem;
+  width: 32px;
   height: 100%;
-  padding-top: 0;
+  padding: 0 0 2px;
   border: 1px solid transparent;
   border-image: var(--pixel-select-button) 6 6 8 6 fill / 6px 6px 8px 6px;
 }
 .pixel-select-arrow::after {
   content: '';
-  width: 22px;
-  height: 20px;
+  width: 18px;
+  height: 16px;
+  image-rendering: pixelated;
   background: var(--pixel-select-arrow) center / contain no-repeat;
 }
 .pixel-select-trigger {
-  cursor: default;
+  cursor: pointer;
 }
 .pixel-select-trigger:not(:disabled) .pixel-select-arrow {
   cursor: pointer;
 }
 @media (hover: hover) and (pointer: fine) {
-  .pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover {
+  .pixel-select-trigger:not(:disabled):hover .pixel-select-arrow {
     border-image-source: var(--pixel-server-button-hover);
   }
 }
 @media (hover: hover) and (pointer: fine) {
-  .pixel-select-trigger:not(:disabled) .pixel-select-arrow:hover::after {
+  .pixel-select-trigger:not(:disabled):hover .pixel-select-arrow::after {
     background-image: var(--pixel-select-arrow-hover);
   }
 }
@@ -402,8 +412,8 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
   color: var(--ase-select-text);
   font: inherit;
   font-size: 1.8rem;
-  line-height: 1.25;
-  max-height: min(32rem, calc(100dvh - 16px));
+  line-height: 22px;
+  max-height: none;
   overflow: auto;
   overscroll-behavior: contain;
   box-shadow: none;
@@ -411,8 +421,8 @@ button.pixel-select-trigger:focus-visible:not([aria-expanded='true'])
 .pixel-select-menu [role='option'] {
   display: flex;
   align-items: center;
-  padding: 0 0.8rem;
-  min-height: 2.4rem;
+  padding: 0 4px;
+  min-height: 22px;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
@@ -540,7 +550,7 @@ form > label {
 }
 .brand-header .button {
   font-size: 1.6rem;
-  min-height: 3.4rem;
+  min-height: 32px;
 }
 .brand-header .header-auth {
   min-width: 0;
@@ -785,11 +795,11 @@ app-root:has(app-admin) .app-footer {
   display: flex;
   justify-content: flex-start;
   width: 100%;
-  min-height: 3.4rem;
+  min-height: 32px;
   font-size: 1.6rem;
   // Share the bottom outline/shadow with the next button's top outline.
   margin-bottom: -4px;
-  padding: 0.45rem 1.2rem 0.45rem;
+  padding: 3px 1.2rem;
   border-image-source: var(--pixel-server-button);
   border-image-slice: 6 6 8 6 fill;
   border-image-width: 6px 6px 8px 6px;
@@ -1737,5 +1747,58 @@ button:disabled:hover,
   .brand-header .header-account {
     flex: 0 0 100%;
     justify-content: flex-end;
+  }
+}
+
+// Shared control refinements adapted from the Music Box handoff.
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']),
+select {
+  height: 30px;
+  min-height: 30px;
+  border-width: 0;
+  padding: 1px 6px 0 8px;
+  line-height: 29px;
+}
+.search-field > input { padding-left: 34px; }
+.pixel-select-text {
+  position: relative;
+  top: 2px;
+  line-height: 24px;
+}
+:where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])) {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 32px;
+  height: auto;
+  padding: 2px 0 0;
+  border: 4px solid transparent;
+  border-left-width: 2px;
+  margin: 4px -6px;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])):not(:has(input:disabled)):hover {
+    background: var(--ase-hover);
+  }
+}
+:where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])):has(input:focus) {
+  background: none;
+  border-image: var(--pixel-option-focus) 4 fill / 4px;
+}
+:where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])):has(input:disabled) {
+  opacity: .5;
+  cursor: not-allowed;
+}
+:where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])) input[type='checkbox']:focus {
+  outline: none;
+}
+@media (forced-colors: active) {
+  :where(label.checkbox, label.checkbox-label, label:has(> input[type='checkbox'])):has(input:focus) {
+    border-image: none;
+    outline: 2px solid Highlight;
+  }
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']), select {
+    border: 1px solid CanvasText;
   }
 }

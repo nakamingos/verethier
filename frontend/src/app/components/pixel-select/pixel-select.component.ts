@@ -52,6 +52,8 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
   active = -1;
   private search = '';
   private searchTime = 0;
+  private pointerPosition?: { x: number; y: number };
+  private triggerPressWasOpen = false;
   private change: (value: string | string[] | null) => void = () => {};
   touched: () => void = () => {};
 
@@ -88,18 +90,18 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     if (!this.options[this.active] || this.optionDisabled(this.options[this.active]))
       this.active = this.options.findIndex((option) => !this.optionDisabled(option));
   }
+  triggerPointerDown() {
+    // Auto-popover light dismissal happens before click. Remember the state
+    // at press time so a second click closes instead of reopening the list.
+    this.triggerPressWasOpen = this.isOpen;
+  }
   toggle(event: MouseEvent) {
-    // Keep keyboard/assistive activation; pointer clicks open only on the arrow.
-    if (
-      event.detail > 0 &&
-      !(
-        event.target instanceof Element &&
-        event.target.closest('.pixel-select-arrow')
-      )
-    ) {
-      event.preventDefault();
+    if (event.detail > 0 && this.triggerPressWasOpen) {
+      this.triggerPressWasOpen = false;
+      this.close();
       return;
     }
+    this.triggerPressWasOpen = false;
     if (this.isOpen) this.close();
     else this.open();
   }
@@ -111,6 +113,7 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     );
     if (this.active < 0)
       this.active = this.options.findIndex((option) => !this.optionDisabled(option));
+    this.pointerPosition = undefined;
     this.isOpen = true;
     this.view.detectChanges();
     this.menu.nativeElement.showPopover();
@@ -124,10 +127,11 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     this.search = '';
     if (focus) this.trigger.nativeElement.focus({ preventScroll: true });
   }
-  onToggle(event: Event) {
+  onBeforeToggle(event: Event) {
     if ((event as ToggleEvent).newState === 'closed') {
       this.isOpen = false;
       this.search = '';
+      this.view.markForCheck();
     }
   }
   choose(index: number, focus = true) {
@@ -149,7 +153,11 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     }
     this.touched();
   }
-  hover(index: number) {
+  hover(index: number, event: PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    const previous = this.pointerPosition;
+    this.pointerPosition = { x: event.clientX, y: event.clientY };
+    if (previous?.x === event.clientX && previous.y === event.clientY) return;
     if (this.options[index] && !this.optionDisabled(this.options[index])) this.active = index;
   }
   private reveal() {
@@ -266,10 +274,10 @@ export class PixelSelectComponent implements ControlValueAccessor, OnChanges {
     menu.style.maxHeight = 'none';
     const below = innerHeight - rect.bottom - margin - gap;
     const above = rect.top - margin - gap;
-    const height = Math.min(menu.getBoundingClientRect().height, 320);
+    const height = Math.ceil(menu.getBoundingClientRect().height);
     const up = below < height && above > below;
-    const available = Math.max(0, up ? above : below);
-    menu.style.maxHeight = `${Math.min(320, available)}px`;
+    const available = Math.max(0, Math.floor(up ? above : below));
+    menu.style.maxHeight = height <= available ? 'none' : `${available}px`;
     menu.style.left = `${Math.max(margin, Math.min(rect.left, innerWidth - rect.width - margin))}px`;
     menu.style.top = `${up ? rect.top - Math.min(height, available) - gap : rect.bottom + gap}px`;
     menu.scrollTop = scrollTop;

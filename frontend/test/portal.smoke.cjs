@@ -52,6 +52,7 @@ const base = {
       '/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',
     headless: true,
     args: ['--no-sandbox'],
+    ignoreDefaultArgs: ['--hide-scrollbars'],
   });
   try {
     const widths = process.env.PORTAL_SMOKE_WIDTHS ? process.env.PORTAL_SMOKE_WIDTHS.split(',').map(Number) : [1280, 768, 600, 393, 320];
@@ -687,33 +688,20 @@ const base = {
         exact: true,
       });
       await assetPicker.locator('.pixel-select-value').click();
-      assert.equal(
-        await assetPicker.getAttribute('aria-expanded'),
-        'false',
-        'clicking the value area does not open the menu',
-      );
+      await page.getByRole('listbox', { name: 'Asset type', exact: true }).waitFor();
+      assert.equal(await assetPicker.getAttribute('aria-expanded'), 'true', 'whole field opens dropdown');
+      await assetPicker.locator('.pixel-select-value').click();
+      assert.equal(await assetPicker.getAttribute('aria-expanded'), 'false', 'second field click closes without reopening');
+      await page.mouse.move(0, 0);
       const arrowControl = assetPicker.locator('.pixel-select-arrow');
-      const normalArrowFrame = await arrowControl.evaluate(
-        (el) => getComputedStyle(el).borderImageSource,
-      );
+      const normalArrowFrame = await arrowControl.evaluate(el => getComputedStyle(el).borderImageSource);
       await assetPicker.locator('.pixel-select-value').hover();
-      assert.equal(
-        await arrowControl.evaluate(
-          (el) => getComputedStyle(el).borderImageSource,
-        ),
+      (width > 800 ? assert.notEqual : assert.equal)(
+        await arrowControl.evaluate(el => getComputedStyle(el).borderImageSource),
         normalArrowFrame,
-        'hovering the value leaves arrow colors unchanged',
+        'whole-field hover changes the arrow only on mouse devices',
       );
       await arrowControl.hover();
-      (width > 800 ? assert.notEqual : assert.equal)(
-        await arrowControl.evaluate(
-          (el) => getComputedStyle(el).borderImageSource,
-        ),
-        normalArrowFrame,
-        width > 800
-          ? 'mouse hover changes arrow colors'
-          : 'touch devices do not retain hover colors',
-      );
 
       const closedPicker = await assetPicker.boundingBox();
       const addRuleBox = await page
@@ -803,10 +791,11 @@ const base = {
       const searchBox = await page
         .getByPlaceholder('Role or collection…')
         .boundingBox();
+      assert.notEqual(await page.getByPlaceholder('Role or collection…').evaluate(el=>getComputedStyle(el).borderImageSource), 'none', 'compact fields retain the pixel frame');
       assert.equal(
         searchBox.height,
-        addRuleBox.height,
-        'text fields match control height without reducing the font',
+        30,
+        'text fields use the 30px inset frame without reducing the font',
       );
 
       await page.mouse.down();
@@ -835,7 +824,7 @@ const base = {
       const optionBox = await page.getByRole('option').first().boundingBox();
       assert.equal(
         optionBox.height,
-        24,
+        22,
         'single-line menu options have compact vertical spacing',
       );
       const themeFrame = await page.locator('.theme-toggle').boundingBox();
@@ -1096,10 +1085,9 @@ const base = {
         await assetPicker.locator('.pixel-select-value').tap();
         assert.equal(
           await assetPicker.getAttribute('aria-expanded'),
-          'false',
-          'touching the value does not open the dropdown',
+          'true',
+          'touching the value opens the dropdown',
         );
-        await assetPicker.locator('.pixel-select-arrow').tap();
         await page
           .getByRole('option', { name: 'Ethscriptions', exact: true })
           .tap();
@@ -1572,6 +1560,21 @@ const base = {
         'keyboard keeps the focused option visible in a long menu: ' +
           JSON.stringify({ longMenu, lastRole }),
       );
+      const firstOption = page.getByRole('listbox').getByRole('option').first();
+      await firstOption.dispatchEvent('pointermove', { pointerType: 'mouse', clientX: 40, clientY: 40 });
+      await rolePicker.press('End');
+      const keyboardActive = await rolePicker.getAttribute('aria-activedescendant');
+      await firstOption.dispatchEvent('pointermove', { pointerType: 'mouse', clientX: 40, clientY: 40 });
+      assert.equal(await rolePicker.getAttribute('aria-activedescendant'), keyboardActive, 'stationary pointer cannot replace keyboard selection');
+      if (width === 1280) {
+        await rolePicker.press('Escape');
+        await rolePicker.evaluate(el => window.scrollBy(0, el.getBoundingClientRect().top - 80));
+        await rolePicker.click();
+        const roomyMenu = await page.getByRole('listbox').boundingBox();
+        const menuMetrics = await page.getByRole('listbox').evaluate(el=>({full:el.scrollHeight,viewport:innerHeight,top:el.getBoundingClientRect().top}));
+        if (menuMetrics.full > 320 && menuMetrics.viewport-menuMetrics.top > 340)
+          assert.ok(roomyMenu.height > 320, 'dropdown uses available space beyond the former height cap');
+      }
       await rolePicker.press('Home');
       await rolePicker.press('Escape');
       await chooseOption(page, rolePicker, 'Comrade');
@@ -1752,6 +1755,9 @@ const base = {
       await page.getByLabel('New role name').fill('Yonderling');
       await page.getByLabel('Collection slug:', { exact: true }).fill('yonder');
       await page.getByLabel('Minimum items:', { exact: true }).fill('1');
+      await page.getByLabel('Minimum items:', { exact: true }).press('Tab');
+      assert.equal(await page.getByLabel('New role name').inputValue(), 'Yonderling', 'delayed autofocus cannot redirect collection text into the role name');
+      assert.equal(await page.getByLabel('Collection slug:', { exact: true }).inputValue(), 'yonder');
       await page.getByRole('button', { name: 'Review changes' }).click();
       await page.getByRole('button', { name: 'Save rule' }).click();
       await page
@@ -2041,7 +2047,10 @@ const base = {
       await page.getByRole('listbox', { name: 'Server members' }).waitFor();
       assert.equal(await page.getByRole('option').count(), 2);
       assert.ok(requests.some((r) => r.path.endsWith('/members')));
+      const memberSearchScroll = await page.evaluate(()=>scrollY);
       await page.getByLabel('Member or wallet').press('ArrowDown');
+      await page.waitForTimeout(30);
+      assert.equal(await page.evaluate(()=>scrollY), memberSearchScroll, 'member suggestion navigation scrolls only the list');
       await page.getByLabel('Member or wallet').press('Enter');
       await page
         .getByRole('heading', { name: 'Collector', exact: true })

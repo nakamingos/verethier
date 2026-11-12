@@ -1,0 +1,349 @@
+// -----------------------------------------------------------------------------
+// Additions and changes to Verethier's pixel styling, from Crawlers Music Box.
+// Written in Verethier's own conventions: pixel-grid() from _pixel-frames.scss
+// (each grid cell is drawn as 2 CSS px, so border-image slices are 2 × cells),
+// 20px Pizzascript, Aseprite dark-theme colours.
+//
+// The checkbox box art is deliberately NOT included (keep Verethier's own);
+// everything around it is (§12). See README.md for what each block does and why.
+// -----------------------------------------------------------------------------
+@use 'sass:list';
+
+// --- 1. Scrollbar: Aseprite's mini scrollbar (replaces the diamond thumb) -----
+// A black track 6 cells wide that sits against a black inner frame line, and a
+// thumb 5 cells wide with cut corners and a 1-cell black gap on the side away
+// from the frame. The top end keeps 2 black cells above the thumb and the
+// bottom end 1 (Aseprite itself uses 1 and 0; one extra on each end was asked for).
+// Rows: top end, the middle row that stretches, bottom end.
+$pixel-scroll-thumb: ('OOOOOO', 'OOOOOO', 'OOFFFO', 'OFFFFF', 'OOFFFO', 'OOOOOO');
+$pixel-scroll-thumb-across: ('OOOOOO', 'OOOFOO', 'OOFFFO', 'OOFFFO', 'OOFFFO', 'OOOFOO');
+// For a container whose frame has no black inner line next to the scrollbar:
+// 7 cells of black with the thumb centred, so it still reads as Aseprite's.
+$pixel-scroll-thumb-framed: ('OOOOOOO', 'OOOOOOO', 'OOFFFOO', 'OFFFFFO', 'OOFFFOO', 'OOOOOOO');
+
+@mixin aseprite-scrollbars($thumb: #41444a, $hot: #4069c2) {
+  scrollbar-width: thin;
+  scrollbar-color: $thumb #000;
+  @supports selector(::-webkit-scrollbar) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  &::-webkit-scrollbar { width: 12px; height: 12px; }
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner { background: #000; }
+  &::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  // At least 24 cells long, as Aseprite keeps it.
+  &::-webkit-scrollbar-thumb {
+    min-height: 48px;
+    background: transparent;
+    border-radius: 0;
+    border: solid transparent;
+    border-width: 6px 0 4px;
+    border-image: pixel-grid($pixel-scroll-thumb, ('O': #000, 'F': $thumb)) 6 0 4 fill / 6px 0 4px;
+    image-rendering: pixelated;
+  }
+  // Aseprite turns the thumb blue while the mouse is on it.
+  &::-webkit-scrollbar-thumb:hover,
+  &::-webkit-scrollbar-thumb:active {
+    border-image-source: pixel-grid($pixel-scroll-thumb, ('O': #000, 'F': $hot));
+  }
+  &::-webkit-scrollbar-thumb:horizontal {
+    min-width: 48px;
+    min-height: 0;
+    border-width: 0 4px 0 6px;
+    border-image: pixel-grid($pixel-scroll-thumb-across, ('O': #000, 'F': $thumb)) 0 4 0 6 fill / 0 4px 0 6px;
+  }
+  &::-webkit-scrollbar-thumb:horizontal:hover,
+  &::-webkit-scrollbar-thumb:horizontal:active {
+    border-image-source: pixel-grid($pixel-scroll-thumb-across, ('O': #000, 'F': $hot));
+  }
+}
+// Add on top of aseprite-scrollbars for a container without a black inner line.
+@mixin aseprite-scrollbars-framed($thumb: #41444a, $hot: #4069c2) {
+  &::-webkit-scrollbar { width: 14px; }
+  &::-webkit-scrollbar-thumb { border-image-source: pixel-grid($pixel-scroll-thumb-framed, ('O': #000, 'F': $thumb)); }
+  &::-webkit-scrollbar-thumb:hover,
+  &::-webkit-scrollbar-thumb:active { border-image-source: pixel-grid($pixel-scroll-thumb-framed, ('O': #000, 'F': $hot)); }
+}
+
+// --- 2. Raised button without its drop shadow -------------------------------
+// Verethier's $pixel-raised with the last row ('..DDDDDDDDDD..', #0006) made
+// transparent. Use with the same slices as before (8 8 12 8 / 8px 8px 12px 8px).
+$pixel-raised-flat: (
+  '..EEEEEEEEEE..',
+  '.EFHHHHHHHHFE.',
+  'EFHFFFFFFFFHFE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHFFFFFFFFFFHE',
+  'EHHFFFFFFFFHHE',
+  'ESHHHHHHHHHHSE',
+  '.ESSSSSSSSSSE.',
+  '..EEEEEEEEEE..',
+  '..............'
+);
+// Colours as used: rest  E #000, F #2c2c30, H #434347, S #212124
+//                  hover E #000, F #535557, H #666869, S #3e4041
+// The text colour does not change on hover.
+
+// --- 3. Slider: Aseprite's slider (new; Verethier has none) ------------------
+// Frame at rest (with a 2-cell shade beneath), the double ring while focused,
+// and the bevels of the filled and empty parts.
+$pixel-slider: ('.E.', 'E.E', 'EFE', 'SES', '.S.');
+$pixel-slider-active: ('FEEEEEF', 'EcaaacE', 'EaFEFaE', 'EaE.EaE', 'EaFEFaE', 'EcaaacE', 'FEEEEEF');
+$pixel-slider-full: ('ab', 'b.', 'ab');
+$pixel-slider-empty: ('ac', '.a', 'ac');
+
+@mixin aseprite-slider {
+  // Markup: <div class="slider" style="--value: 40%"><div class="bar"><i class="full"></i><i class="empty"></i></div>
+  //         <output>40%</output><input type="range"></div>
+  position: relative;
+  height: 32px;
+  margin: 0 0 4px;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: solid transparent;
+    border-width: 2px 2px 6px;
+    border-image: pixel-grid($pixel-slider, ('E': #000, 'F': #202125, 'S': #141416)) 2 2 6 / 2px 2px 6px stretch;
+    image-rendering: pixelated;
+    pointer-events: none;
+  }
+  .bar, output { position: absolute; left: 4px; right: 4px; top: 4px; bottom: 8px; pointer-events: none; }
+  .bar { display: flex; }
+  i { display: block; box-sizing: border-box; border: solid transparent; image-rendering: pixelated; }
+  .full {
+    width: var(--value);
+    min-width: 2px;
+    background: #41444a;
+    border-width: 2px 0 2px 2px;
+    border-image: pixel-grid($pixel-slider-full, ('a': #41444a, 'b': #575b61)) 2 0 2 2 / 2px 0 2px 2px stretch;
+  }
+  .empty {
+    flex: 1;
+    background: #575b61;
+    border-width: 2px 2px 2px 0;
+    border-image: pixel-grid($pixel-slider-empty, ('a': #41444a, 'c': #292b30)) 2 2 2 0 / 2px 2px 2px 0 stretch;
+  }
+  output { display: grid; place-items: center; color: #c0c0c0; line-height: 12px; padding-top: 2px; }
+  // The real range input sits on top, invisible, so it keeps native behaviour.
+  input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  // "Active" = focused (clicked into), not merely hovered.
+  &:focus-within::before {
+    inset: 0;
+    border-width: 6px;
+    border-image: pixel-grid($pixel-slider-active, ('E': #000, 'F': #202125, 'c': #292b30, 'a': #41444a)) 6 / 6px stretch;
+  }
+  &:focus-within :is(.bar, output) { left: 6px; right: 6px; top: 6px; bottom: 6px; }
+}
+
+// --- 4. Window frame, title bar and title buttons (new) ----------------------
+$pixel-window: ('EEEEEEE', 'Ecf.fcE', 'EcfffcE', 'EcccccE', 'EhhhhhE', 'EhhhhhE', 'EEEEEEE');
+$pixel-title: ('aba', 'b.b');
+// 5×5 glyphs on the title buttons (D = glyph, F = background).
+$glyph-help: ('FDDDF', 'DFFFD', 'FFDDF', 'FFFFF', 'FFDFF');
+$glyph-close: ('DFFFD', 'FDFDF', 'FFDFF', 'FDFDF', 'DFFFD');
+
+@function title-button($glyph) {
+  $rows: ('.EEEEEEE.', 'EFCCCCCFE');
+  @each $row in $glyph { $rows: list.append($rows, 'EC#{$row}CE'); }
+  $rows: list.join($rows, ('EFCCCCCFE', 'EHHHHHHHE', 'HEEEEEEEH', '.HHHHHHH.'));
+  @return pixel-grid($rows, ('E': #000, 'F': #2f3136, 'C': #41444a, 'H': #202125, 'D': #c0c0c0));
+}
+
+@mixin aseprite-window {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: solid transparent;
+  border-width: 2px 6px 10px;
+  border-image: pixel-grid($pixel-window, ('E': #000, 'c': #41444a, 'f': #2f3136, 'h': #202125)) 2 6 10 / 2px 6px 10px stretch;
+  background: #2c2c30;
+  image-rendering: pixelated;
+  .titlebar {
+    display: flex;
+    align-items: flex-start;
+    gap: 2px;
+    flex: none;
+    height: 26px;
+    margin: 0 -4px;
+    padding: 2px 2px 0 6px;
+    border: solid transparent;
+    border-width: 2px 2px 0;
+    border-image: pixel-grid($pixel-title, ('a': #74777a, 'b': #575b61)) 2 2 0 / 2px 2px 0 stretch;
+    background: #41444a;
+    background-clip: border-box;
+  }
+  .titlebar span { flex: 1; min-width: 0; padding-top: 4px; line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #c0c0c0; }
+  // No hover state on these, as in Aseprite.
+  .titlebar button { flex: none; width: 18px; height: 22px; padding: 0; border: 0; border-image: none; background: title-button($glyph-help) 0 0 / 18px 22px no-repeat; image-rendering: pixelated; }
+  .titlebar button:hover { border-image: none; }
+  .titlebar .close { background-image: title-button($glyph-close); }
+  // The content area under the title bar.
+  .views { flex: 1 1 auto; min-height: 0; border-top: 2px solid #2f3136; }
+}
+
+// --- 5. Dropdown (pixel-select) adjustments ----------------------------------
+// Same frames as Verethier. Differences: the whole field opens it (pointer
+// cursor everywhere, arrow hover art when hovering anywhere on the field),
+// exact 32px height on the 2px grid, text placement, list font and rows, and no
+// height cap. Behaviour changes are in README.md §5.
+.pixel-select-trigger,
+.pixel-select-trigger:hover {
+  height: 32px;
+  min-height: 32px;
+  line-height: 12px;
+  cursor: pointer;
+}
+.pixel-select-value { padding: 0 34px 0 8px; }
+.pixel-select-text { line-height: 24px; position: relative; top: 2px; }
+.pixel-select-arrow { width: 32px; padding-bottom: 2px; }
+.pixel-select-arrow::after { width: 18px; height: 16px; background-size: 18px 16px; image-rendering: pixelated; }
+@media (hover: hover) and (pointer: fine) {
+  .pixel-select-trigger:not(:disabled):hover .pixel-select-arrow { border-image-source: var(--pixel-server-button-hover); }
+  .pixel-select-trigger:not(:disabled):hover .pixel-select-arrow::after { background-image: var(--pixel-select-arrow-hover); }
+}
+.pixel-select-menu {
+  max-height: none; // set in script only when the list can't fit (README §5)
+  font: 20px/18px Pizzascript, monospace;
+  letter-spacing: 0;
+  image-rendering: pixelated;
+}
+// One row every 9 cells.
+.pixel-select-menu [role='option'] { padding: 0 4px; min-height: 18px; }
+
+// --- 6. Text entry adjustments + Aseprite block caret -------------------------
+// Same frames as Verethier ($pixel-entry / $pixel-entry-focused). Exactly 15
+// cells tall with the text right under the inset shadow; the browser's caret is
+// hidden and a 2-cell block caret is drawn instead (script in README §6).
+input:not([type]) {
+  height: 30px;
+  min-height: 30px;
+  padding: 1px 6px 0 8px;
+  line-height: 29px;
+  border: 0;
+  caret-color: transparent;
+}
+.entry-row { position: relative; }
+.caret {
+  position: absolute;
+  width: 4px;
+  height: 18px;
+  background: #c0c0c0;
+  pointer-events: none;
+  animation: caret-blink 1s steps(1) infinite;
+}
+@keyframes caret-blink { 50% { opacity: 0; } }
+
+// --- 7. Section heading with dashed rules (new) -------------------------------
+h2.section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 32px;
+  color: #6e9adb;
+  &::before, &::after { content: ''; height: 2px; background: repeating-linear-gradient(to right, #202125 0 4px, transparent 4px 6px); }
+  &::before { flex: 0 0 4px; }
+  &::after { flex: 1; }
+}
+
+// --- 8. Links: no underline, gold on hover ------------------------------------
+a.ase-link { color: #6e9adb; text-decoration: none; }
+a.ase-link:hover { color: #e1b85f; text-decoration: none; }
+
+// --- 9. Corner "open" button with a + glyph (new) -----------------------------
+$glyph-plus: ('...D...', '...D...', '...D...', 'DDDDDDD', '...D...', '...D...', '...D...');
+.corner-button {
+  // A raised button 21 × 22 cells (its art's last row is clear): the 7-cell
+  // glyph has 6 cells on every side.
+  width: 42px;
+  height: 44px;
+  padding: 0;
+  border-width: 8px 8px 12px;
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    width: 14px;
+    height: 14px;
+    background: pixel-grid($glyph-plus, ('D': #c0c0c0)) 0 0 / 14px 14px no-repeat;
+    image-rendering: pixelated;
+  }
+}
+
+// --- 10. Sortable list rows (new) ---------------------------------------------
+// A list in the dropdown menu: a row every 9 cells, the current item in gold,
+// the row being dragged outlined in blue. Each row starts with a checkbox —
+// use Verethier's own checkbox there.
+.sortable-list { touch-action: pan-y; }
+.sortable-list:focus { outline: none; }
+.sortable-list .item { display: flex; align-items: center; gap: 8px; height: 18px; padding: 0 4px 0 2px; line-height: 18px; white-space: nowrap; cursor: grab; }
+.sortable-list .item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-top: 2px; line-height: 16px; }
+.sortable-list .item.off span { color: #999b9f; }
+.sortable-list .item.current { background: #e1b85f; color: #41444a; }
+.sortable-list .item.current.off span { color: #41444a; }
+.sortable-list:focus-visible .item.active { outline: 2px solid #4069c2; outline-offset: -2px; }
+.sortable-list .item.dragging { outline: 2px solid #4069c2; outline-offset: -2px; background: #575b61; }
+.sortable-list .item.current.dragging { background: #e1b85f; }
+.sortable-list.sorting, .sortable-list.sorting .item { cursor: grabbing; }
+
+// --- 12. Checkbox rows: everything except the box art -------------------------
+// Aseprite's ring around the option last used: blue, with soft corners.
+$pixel-focus-row: ('cKKKc', 'KiaiK', 'KaaaK', 'KiaiK', 'cKKKc');
+
+// The box itself: size and reset only. Its background art stays Verethier's.
+.check-row input[type='checkbox'] {
+  appearance: none;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  image-rendering: pixelated;
+  cursor: pointer;
+  &:focus { outline: none; } // the row shows focus instead
+}
+// Option rows: 12 cells tall, one every 16. The negative side margin lets the
+// hover and focus backgrounds reach past the text.
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 24px;
+  padding: 2px 0 0;
+  border: 4px solid transparent;
+  border-left-width: 2px;
+  margin: 4px -6px;
+  line-height: 16px;
+  cursor: pointer;
+  &:hover { background: #575b61; }
+  &:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+  &:has(input:disabled):hover { background: none; }
+  &:has(input:focus) {
+    background: none;
+    border-image: pixel-grid($pixel-focus-row, ('c': #405d9c, 'K': #4069c2, 'i': #405786, 'a': #41444a)) 4 fill / 4px stretch;
+    image-rendering: pixelated;
+  }
+}
+// Two checkboxes on one row.
+.check-pair { display: flex; gap: 8px; > * { flex: 1; min-width: 0; } }
+// A checkbox after a text entry (e.g. "Shuffle" beside the name box).
+.entry-row.with-check { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+// A checkbox before a slider's label: lines its 32px row up with the slider,
+// and dims the slider while the box is unticked.
+.sliders { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; }
+.sliders .check-row { margin: 4px -6px 8px; }
+.sliders .check-row:has(input:not(:checked)) + .slider { opacity: .5; }
