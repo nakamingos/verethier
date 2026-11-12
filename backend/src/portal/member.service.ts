@@ -577,32 +577,6 @@ export class MemberService {
       );
     return { url: `/verify/${flow.nonce}?from=member` };
   }
-  async retry(session: PortalSession, id: string) {
-    const actions = this.checked(
-      await this.db
-        .from('verifier_member_actions')
-        .select('id')
-        .eq('user_id', session.user.id),
-    );
-    if (!actions.length) throw new NotFoundException('Check not found.');
-    const result = await this.db
-      .from('verifier_reconciliation_jobs')
-      .update({
-        status: 'pending',
-        attempts: 0,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('status', 'failed')
-      .in(
-        'member_action_id',
-        actions.map((a) => a.id),
-      )
-      .select('id');
-    if (!this.checked(result).length)
-      throw new NotFoundException('Failed check not found.');
-    return { ok: true };
-  }
   async assertPortalVerification(
     userId: string,
     serverId: string,

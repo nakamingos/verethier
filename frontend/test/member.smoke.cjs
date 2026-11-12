@@ -47,7 +47,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
             community: 'NoMoreLabs',
             channel: 'verify',
             created_at: '2026-10-18T12:00:00Z',
-            jobs: [],
+            jobs: [{ id: 'failed-role-check', community: 'NoMoreLabs', status: 'failed', result: { verified: 25, revoked: 1, errors: 4 } }],
           },
         ],
         pending = null,
@@ -459,6 +459,9 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         .filter({ hasText: 'Verified' })
         .getByText('Discord · NoMoreLabs · #verify', { exact: true })
         .waitFor();
+      await page.getByText(/NoMoreLabs: failed/).waitFor();
+      assert.equal(await page.getByRole('button', { name: /Retry.*check/i }).count(), 0,
+        'Failed wallet activity is informational; members cannot retry ownership jobs');
       await page
         .getByRole('button', { name: 'Add wallet', exact: true })
         .click();

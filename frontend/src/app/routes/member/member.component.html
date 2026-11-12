@@ -356,11 +356,6 @@
                             · Errors: {{ job.result.errors }}
                           }
                         }
-                        @if (job.status === "failed") {
-                          <button (click)="retry(job.id)" [disabled]="busy">
-                            Retry check
-                          </button>
-                        }
                       </p>
                     }
                     @if (
