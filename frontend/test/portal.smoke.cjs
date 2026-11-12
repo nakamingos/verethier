@@ -2,6 +2,18 @@ const { chromium } = require('playwright-core');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+async function assertSearchTextClearsIcon(input) {
+  const geometry = await input.evaluate(el => {
+    const icon = el.parentElement.querySelector('img');
+    const box = el.getBoundingClientRect();
+    return {
+      textLeft: box.left + el.clientLeft + parseFloat(getComputedStyle(el).paddingLeft),
+      iconRight: icon.getBoundingClientRect().right,
+    };
+  });
+  assert.ok(geometry.textLeft >= geometry.iconRight + 4,
+    'Search text and placeholder must clear the icon: ' + JSON.stringify(geometry));
+}
 async function chooseOption(page, control, name) {
   await control.locator('.pixel-select-arrow').click();
   await page
@@ -791,6 +803,7 @@ const base = {
       const searchBox = await page
         .getByPlaceholder('Role or collection…')
         .boundingBox();
+      await assertSearchTextClearsIcon(page.getByPlaceholder('Role or collection…'));
       assert.notEqual(await page.getByPlaceholder('Role or collection…').evaluate(el=>getComputedStyle(el).borderImageSource), 'none', 'compact fields retain the pixel frame');
       assert.equal(
         searchBox.height,
@@ -2043,6 +2056,7 @@ const base = {
         0,
         'navigation does not wait for the old tab request',
       );
+      await assertSearchTextClearsIcon(page.getByLabel('Member or wallet'));
       await page.getByLabel('Member or wallet').fill('COLLECTOR');
       await page.getByRole('listbox', { name: 'Server members' }).waitFor();
       assert.equal(await page.getByRole('option').count(), 2);

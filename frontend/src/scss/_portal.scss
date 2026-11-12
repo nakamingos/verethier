@@ -1751,7 +1751,8 @@ button:disabled:hover,
 }
 
 // Shared control refinements adapted from the Music Box handoff.
-input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']),
+// Keep type exclusions neutral so search fields can reserve space for icons.
+input:where(:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden'])),
 select {
   height: 30px;
   min-height: 30px;
@@ -1759,7 +1760,6 @@ select {
   padding: 1px 6px 0 8px;
   line-height: 29px;
 }
-.search-field > input { padding-left: 34px; }
 .pixel-select-text {
   position: relative;
   top: 2px;
