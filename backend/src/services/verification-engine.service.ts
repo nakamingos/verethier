@@ -105,11 +105,11 @@ export class VerificationEngine {
       const blockedWallets = addressesToCheck.filter(address => !allowedAddresses.includes((/^0x/i.test(address) || (address.length === 62 && /^bc1p/i.test(address))) ? address.toLowerCase() : address));
       
       const count = allowedAddresses.length ? await this.ownershipSvc.count(rule, allowedAddresses, run) : 0n;
-      const assetCount = ['erc20','solana_token'].includes(rule.asset_type) ? tokenAmount(rule, count) : serializeAssetCount(count);
+      const assetCount = ['erc20','solana_token'].includes(rule.asset_type ?? '') ? tokenAmount(rule, count) : serializeAssetCount(count);
 
-      const requiredCount = ['erc20','solana_token'].includes(rule.asset_type) ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
+      const requiredCount = ['erc20','solana_token'].includes(rule.asset_type ?? '') ? tokenMinimum(rule) : BigInt(rule.min_items || 1);
       const isValid = count >= requiredCount;
-      const requiredDisplay = ['erc20','solana_token'].includes(rule.asset_type) ? tokenAmount(rule, requiredCount) : Number(requiredCount);
+      const requiredDisplay = ['erc20','solana_token'].includes(rule.asset_type ?? '') ? tokenAmount(rule, requiredCount) : Number(requiredCount);
       
       Logger.debug(`VerificationEngine: Verification ${isValid ? 'PASSED' : 'FAILED'} - found ${assetCount} assets across ${addressesToCheck.length} wallet(s), needed ${requiredDisplay}`);
       
@@ -125,7 +125,7 @@ export class VerificationEngine {
         ownershipDetails: this.ownershipSvc.checkDetails?.(rule, allowedAddresses, run),
         matchingAssetCount: assetCount,
         verificationDetails: {
-          collection: rule.asset_type === 'stamp' ? stampRuleLabel(rule) : ['erc20','solana_token'].includes(rule.asset_type) ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
+          collection: rule.asset_type === 'stamp' ? stampRuleLabel(rule) : ['erc20','solana_token'].includes(rule.asset_type ?? '') ? tokenRuleScope(rule) : rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : rule.asset_type === 'nft' ? nftRuleLabel(rule) : rule.slug || 'ALL',
           attributeKey: singleTrait(rule).key,
           attributeValue: singleTrait(rule).value,
           ...((ruleTraits(rule)?.conditions.length || 0) > 1 ? {traitFilter: ruleTraits(rule)} : {}),
@@ -181,9 +181,9 @@ export class VerificationEngine {
       : await this.getRuleById(id)] as const));
     const allEntries = loadedRules
       ? expandRuleRoles(loadedRules.filter(r => ruleIds.some(id => String(id) === String(r.id)))).map(r => [r.id, r] as const)
-      : ruleEntries.flatMap<readonly [string | number, VerifierRole]>(([id, rule]) => rule ? expandRuleRoles([rule]).map(r => [id, r] as const) : [[id, rule] as const]);
+      : ruleEntries.flatMap<readonly [string | number, VerifierRole | undefined]>(([id, rule]) => rule ? expandRuleRoles([rule]).map(r => [id, r] as const) : [[id, rule ?? undefined] as const]);
     const entries = allEntries.filter(([,rule]) => !rule || ruleMatchesWalletScope(rule, context.verificationCheckFamilies));
-    const rules = entries.map(([, rule]) => rule).filter(Boolean);
+    const rules = entries.map(([, rule]) => rule).filter((rule): rule is VerifierRole => !!rule);
     // Scheduled contexts span many members. A numeric role for one member must
     // not force every later member onto a numbered (potentially paid) lookup.
     if (context.ordinalMode !== 'scheduled'
@@ -193,11 +193,11 @@ export class VerificationEngine {
     const verificationPromises = entries.map(([ruleId, rule]) => {
       const type = rule?.asset_type || 'ethscription';
       if (!timings.has(type)) timings.set(type, { startedAt: Date.now(), endedAt: 0, rules: 0 });
-      const timing = timings.get(type);
+      const timing = timings.get(type)!;
       timing.rules++;
       const key = String(ruleId);
       if (!ownershipChecks.has(key)) ownershipChecks.set(key, this.verifyUser(userId, ruleId, address, context, rule));
-      return ownershipChecks.get(key).then(result => ({
+      return ownershipChecks.get(key)!.then(result => ({
         ...result,
         // Independent results prevent combined-count qualification for one output
         // from changing another output that shares this ownership proof.
@@ -221,7 +221,7 @@ export class VerificationEngine {
       if (result.isValid && result.rule) {
         validRules.push(result.rule);
         if (result.combinedAssetCount || result.matchingAssetCount) {
-          matchingAssetCounts.set(result.ruleId.toString(), result.combinedAssetCount ?? result.matchingAssetCount);
+          matchingAssetCounts.set(result.ruleId.toString(), (result.combinedAssetCount ?? result.matchingAssetCount)!);
         }
       } else if (result.rule && result.status !== 'unavailable') {
         invalidRules.push(result.rule);
@@ -243,7 +243,7 @@ export class VerificationEngine {
     const groups = new Map<string, VerificationResult[]>();
     for (const result of results) {
       const rule = result.rule;
-      if (!rule || ['erc20','solana_token'].includes(rule.asset_type)) continue;
+      if (!rule || ['erc20','solana_token'].includes(rule.asset_type ?? '')) continue;
       const key = JSON.stringify([rule.server_id, rule.role_id, rule.min_items || 1]);
       groups.set(key, [...(groups.get(key) || []), result]);
     }
@@ -251,7 +251,8 @@ export class VerificationEngine {
       if (group.length < 2 || group.some(result => result.isValid)) continue;
       const domains = new Map<string, VerificationResult[]>();
       for (const result of group) {
-        const domain = collectibleDomain(result.rule);
+        // Groups only hold results that have a rule (see the loop above).
+        const domain = collectibleDomain(result.rule!);
         domains.set(domain, [...(domains.get(domain) || []), result]);
       }
       let total = 0n;
@@ -270,8 +271,8 @@ export class VerificationEngine {
         for (const check of checks) {
           try {
             const addresses = await this.addressesForRun(userId, context, check.rule);
-            const allowed = await this.walletBlocks.allowedAddresses(check.rule.server_id, addresses, context);
-            const assets = await this.ownershipSvc.matchingAssets(rules.find(rule => rule.id.toString() === check.ruleId.toString()) || check.rule, allowed, context);
+            const allowed = await this.walletBlocks.allowedAddresses(check.rule!.server_id, addresses, context);
+            const assets = await this.ownershipSvc.matchingAssets(rules.find(rule => rule.id.toString() === check.ruleId.toString()) || check.rule!, allowed, context);
             for (const [id, copies] of assets) {
               // ERC-1155 copies count, but overlapping rules must not add the same copies twice.
               if (copies > (owned.get(id) || 0n)) owned.set(id, copies);
@@ -287,7 +288,7 @@ export class VerificationEngine {
         }
         for (const count of owned.values()) total += count;
       }
-      const passed = total >= BigInt(group[0].rule.min_items || 1);
+      const passed = total >= BigInt(group[0].rule!.min_items || 1);
       for (const result of group) {
         result.isValid = passed;
         result.status = passed ? 'passed' : unavailable ? 'unavailable' : 'failed';
@@ -306,7 +307,7 @@ export class VerificationEngine {
       if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, 'solana'));
       return reads.get(key);
     }
-    const chainId = rule ? (['ordinal','stamp'].includes(rule.asset_type) ? 0 : rule.chain_id || 1) : undefined;
+    const chainId = rule ? (['ordinal','stamp'].includes(rule.asset_type ?? '') ? 0 : rule.chain_id || 1) : undefined;
     const key = chainId === undefined ? userId : `${userId}:${chainId}`;
     if (!reads.has(key)) reads.set(key, this.userAddressService.getUserAddresses(userId, undefined, chainId));
     return reads.get(key);
@@ -325,7 +326,7 @@ export class VerificationEngine {
 
   /** Role moves grant through the changed channel/count group, not unrelated paths. */
   async evaluateRuleGroup(userId: string, rule: VerifierRole, context?: NftCheckContext): Promise<{ status: 'passed' | 'failed' | 'unavailable'; results: VerificationResult[] }> {
-    const rules = ['erc20','solana_token'].includes(rule.asset_type) ? [rule] : expandRuleRoles(await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
+    const rules = ['erc20','solana_token'].includes(rule.asset_type ?? '') ? [rule] : expandRuleRoles(await this.dbSvc.getRoleMappings(rule.server_id)).filter(candidate =>
       candidate.role_id === rule.role_id && candidate.channel_id === rule.channel_id && !['erc20','solana_token'].includes(candidate.asset_type)
       && (candidate.min_items || 1) === (rule.min_items || 1));
     return this.evaluateRoleRules(userId, rules, context);
@@ -339,7 +340,8 @@ export class VerificationEngine {
     const addresses = context ? await this.addressesForRun(userId, context) : await this.userAddressService.getUserAddresses(userId);
     const proven = context?.provenAddresses?.get(userId);
     if (!addresses.length && !proven) return { status: partial ? 'unavailable' : 'failed', results: [] };
-    let checked: BulkVerificationResult;
+    // Both branches assign it: the tier loop always runs at least once for non-empty rules.
+    let checked!: BulkVerificationResult;
     if (context?.bulkGrantOnly) {
       const tiers = [...new Set(rules.map(checkPriority))].sort((a,b) => a-b);
       for (const tier of tiers) {

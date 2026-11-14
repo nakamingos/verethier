@@ -1,6 +1,3 @@
 # Source files not yet clean under strictNullChecks.
 # Every other file under src/ must stay clean; see scripts/check-strict-null.cjs.
 # Remove a file from this list once it is fixed. Do not add new files.
-src/services/nft-ownership.service.ts
-src/services/ordinals-ownership.service.ts
-src/services/verification-engine.service.ts
