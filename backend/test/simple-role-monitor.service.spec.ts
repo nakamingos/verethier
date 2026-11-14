@@ -172,7 +172,7 @@ describe('SimpleRoleMonitorService', () => {
       discordVerificationService.getGuildMember.mockResolvedValue({
         roles: { cache: new Map([['role1', true]]) },
       });
-      discordVerificationService.removeUserRole.mockResolvedValue(true);
+      discordVerificationService.removeUserRole.mockResolvedValue('removed');
 
       const result = await service.reverifyUser('user1', 'server1');
 
