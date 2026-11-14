@@ -234,7 +234,12 @@ yarn test:watch     # Jest watch mode
 yarn test:coverage  # Coverage report
 yarn test:verbose   # Verbose Jest output
 yarn test:debug     # Verbose, no-cache Jest run
+
+yarn typecheck         # Type-check source and tests
+yarn typecheck:strict  # strictNullChecks for every file not on the to-do list
 ```
+
+Strict null checks are being adopted one file at a time. `strict-null-checks-todo.txt` lists the source files that still have errors under `strictNullChecks`; every other file, including any new one, must stay clean, and CI enforces this. When you fix a listed file, remove it from the list (the check fails until you do, so fixed files stay fixed). Do not add files to the list.
 
 ## Project Layout
 
