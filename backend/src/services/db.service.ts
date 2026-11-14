@@ -173,7 +173,7 @@ export class DbService {
     slug: string,
     attributeKey: string,
     attributeValue: string,
-    minItems: number,
+    minItems: number | null,
     excludeRoleId?: string,
     assetFields?: NftRuleFields
   ): Promise<any> {
@@ -219,7 +219,7 @@ export class DbService {
     roleName: string,
     attrKey: string,
     attrVal: string,
-    minItems: number,
+    minItems: number | null,
     assetFields?: NftRuleFields
   ): Promise<any> {
     // Use meaningful defaults instead of NULLs for better database constraints
@@ -320,7 +320,7 @@ export class DbService {
     slug: string,
     attributeKey: string,
     attributeValue: string,
-    minItems: number,
+    minItems: number | null,
     roleId: string,
     assetFields?: NftRuleFields
   ): Promise<any> {

@@ -1,3 +1,4 @@
+import type { VerificationRule } from '@/models/verification-rule.interface';
 import { StampsOwnershipService } from '../../stamps-ownership.service';
 import { SolanaOwnershipService } from '../../solana-ownership.service';
 import { singleTrait } from '@/utils/trait-filter.util';
@@ -128,7 +129,7 @@ export class AddRuleHandler {
     slug: string;
     attributeKey: string;
     attributeValue: string;
-    minItems: number;
+    minItems: number | null;
     assetFields?: NftRuleFields;
   } | null> {
     const channel = interaction.options.getChannel('channel') as TextChannel;
@@ -145,7 +146,7 @@ export class AddRuleHandler {
       for (const field of fields) input[field] = interaction.options.getString(field) ?? undefined;
       if (input.asset_type === 'stamp') input.stamp_criteria = {
         ...(interaction.options.getString('creator_address') ? {creator:interaction.options.getString('creator_address')} : {}),
-        ...(interaction.options.getString('stamp_ids') ? {stamp_ids:interaction.options.getString('stamp_ids').split(/[\s,]+/).filter(Boolean)} : {})
+        ...(interaction.options.getString('stamp_ids') ? {stamp_ids:interaction.options.getString('stamp_ids')!.split(/[\s,]+/).filter(Boolean)} : {})
       };
       if (input.asset_type === 'solana_nft') {
         const format=interaction.options.getString('formats');
@@ -173,13 +174,13 @@ export class AddRuleHandler {
     slug: string,
     attributeKey: string,
     attributeValue: string,
-    minItems: number,
+    minItems: number | null,
     wasNewlyCreated: boolean = false,
     assetFields?: NftRuleFields
   ): Promise<boolean> {
     // Check for exact duplicate rules first (same role + same criteria)
     const exactDuplicate = await this.dbSvc.checkForExactDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id,
       slug,
       attributeKey,
@@ -211,7 +212,7 @@ export class AddRuleHandler {
 
     // Check for duplicate rules with different roles
     const existingRule = await this.dbSvc.checkForDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id,
       slug,
       attributeKey,
@@ -242,7 +243,7 @@ export class AddRuleHandler {
 
     // Check for duplicate roles (same role with different criteria)
     const allChannelRules = await this.dbSvc.getRulesByChannel(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id
     );
     
@@ -282,13 +283,13 @@ export class AddRuleHandler {
       slug: string;
       attributeKey: string;
       attributeValue: string;
-      minItems: number;
+      minItems: number | null;
       assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
   ): Promise<void> {
     // Get the existing role name for display
-    const existingRole = await this.discordSvc.getRole(interaction.guild.id, existingRule.role_id);
+    const existingRole = await this.discordSvc.getRole(interaction.guild!.id, existingRule.role_id);
     
     // Create rule objects for consistent formatting
     const existingRuleFormatted = {
@@ -324,7 +325,7 @@ export class AddRuleHandler {
         },
         {
           name: 'New Rule (Proposed)',
-          value: AdminFeedback.formatRule(newRuleFormatted, newRuleData.role.name),
+          value: AdminFeedback.formatRule(newRuleFormatted as VerificationRule, newRuleData.role.name),
           inline: true
         }
       ]
@@ -344,7 +345,7 @@ export class AddRuleHandler {
     // Store the new rule data for later use if confirmed
     this.duplicateRuleConfirmationHandler.storeRuleData(chainId, {
       ...newRuleData,
-      serverId: interaction.guild.id,
+      serverId: interaction.guild!.id,
       duplicateType: 'criteria', // Same criteria, different role
       isDuplicateRule: true
     });
@@ -376,7 +377,7 @@ export class AddRuleHandler {
       slug: string;
       attributeKey: string;
       attributeValue: string;
-      minItems: number;
+      minItems: number | null;
       assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
@@ -405,7 +406,7 @@ export class AddRuleHandler {
         },
         {
           name: 'New Rule (Proposed)',
-          value: AdminFeedback.formatRule(newRuleFormatted, newRuleData.role.name),
+          value: AdminFeedback.formatRule(newRuleFormatted as VerificationRule, newRuleData.role.name),
           inline: true
         }
       ]
@@ -456,7 +457,7 @@ export class AddRuleHandler {
       slug: string;
       attributeKey: string;
       attributeValue: string;
-      minItems: number;
+      minItems: number | null;
       assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     }
@@ -568,7 +569,7 @@ export class AddRuleHandler {
       slug: string;
       attributeKey: string;
       attributeValue: string;
-      minItems: number;
+      minItems: number | null;
       assetFields?: NftRuleFields;
       wasNewlyCreated?: boolean;
     },
@@ -581,13 +582,13 @@ export class AddRuleHandler {
     let duplicateType: 'criteria' | 'role' | undefined = undefined;
 
     // Check for existing verification setup
-    const existingRules = await this.dbSvc.getRulesByChannel(interaction.guild.id, channel.id) || [];
+    const existingRules = await this.dbSvc.getRulesByChannel(interaction.guild!.id, channel.id) || [];
     
     let newRule;
     try {
       newRule = await this.dbSvc.addRoleMapping(
-        interaction.guild.id,
-        interaction.guild.name,
+        interaction.guild!.id,
+        interaction.guild!.name,
         channel.id,
         channel.name,
         slug,
@@ -621,7 +622,7 @@ export class AddRuleHandler {
       
       if (isDuplicateConfirmed) {
         // Determine duplicate type to use correct terminology
-        const allChannelRules = await this.dbSvc.getRulesByChannel(interaction.guild.id, channel.id);
+        const allChannelRules = await this.dbSvc.getRulesByChannel(interaction.guild!.id, channel.id);
         existingRoleRules = allChannelRules.filter(rule => rule.role_id === role.id && rule.id !== newRule.id);
         
         if (existingRoleRules.length > 0) {
@@ -685,7 +686,7 @@ export class AddRuleHandler {
       
       const confirmationInfo = {
         ruleId: newRule.id,
-        serverId: interaction.guild.id,
+        serverId: interaction.guild!.id,
         channel,
         role,
         slug,
@@ -724,7 +725,7 @@ export class AddRuleHandler {
     slug: string,
     attributeKey: string,
     attributeValue: string,
-    minItems: number,
+    minItems: number | null,
     isDuplicateConfirmed: boolean = false,
     newRule: any,
     wasNewlyCreated: boolean = false,
@@ -805,7 +806,7 @@ export class AddRuleHandler {
       
       const confirmationInfo = {
         ruleId: newRule.id,
-        serverId: interaction.guild.id,
+        serverId: interaction.guild!.id,
         channel,
         role,
         slug,
@@ -917,7 +918,7 @@ export class AddRuleHandler {
   ): Promise<void> {
     // Re-check for duplicate rules and show the warning again
     const existingRule = await this.dbSvc.checkForDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       ruleData.channel.id,
       ruleData.slug,
       ruleData.attributeKey,

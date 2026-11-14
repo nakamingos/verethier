@@ -25,9 +25,10 @@ export function ruleCriteriaKey(rule: VerifierRole, includeRole = true): string 
   return JSON.stringify(fields.map(key => canonical(key === 'additional_roles' ? (rule.additional_roles || []).map(r => r.id).sort() : key === 'trait_filter' ? traitFilterKey(rule) : rule[key])));
 }
 
-export function compactTokenIds(ids: string[] | null | undefined): string {
+export function compactTokenIds(input: string[] | null | undefined): string {
+  const ids = input || [];
   const ranges: string[] = [];
-  for (let index = 0;index < (ids?.length || 0);index++) {
+  for (let index = 0;index < ids.length;index++) {
     const start = ids[index];
     let end = start;
     while (index + 1 < ids.length && BigInt(ids[index + 1]) === BigInt(end) + 1n) end = ids[++index];
@@ -52,9 +53,9 @@ export function ruleEditFields(rule: VerifierRole): RuleEditField[] {
       key: 'selection', label: criteria.kind === 'ids' ? 'Inscription IDs' : 'Inscription numbers / ranges', list: true,
       value: criteria.kind === 'ids' ? criteria.ids.join(',') : criteria.ranges.map(([a, b]) => a === b ? String(a) : `${a}-${b}`).join(',')
     }, ...(rule.asset_type === 'ordinal' && criteria.kind === 'numbers' ? [{ key: 'collection_slug', label: 'ord.net collection slug (optional)', value: criteria.collection_slug || '', maxLength: 100 }] : []), {key: 'label', label: 'Label (optional)', value: rule.rule_label || '', maxLength: 100}, minimum];
-  if (['erc20','solana_token'].includes(rule.asset_type)) return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
+  if (['erc20','solana_token'].includes(rule.asset_type ?? '')) return [{ key: 'min_balance', label: 'Minimum token balance', value: tokenAmount(rule, tokenMinimum(rule)), required: true, maxLength: 360 }];
   if (rule.asset_type === 'stamp') return [minimum];
-  const traitLimit = ['nft', 'ordinal'].includes(rule.asset_type) ? 100 : 4000;
+  const traitLimit = ['nft', 'ordinal'].includes(rule.asset_type ?? '') ? 100 : 4000;
   const traits: RuleEditField[] = (ruleTraits(rule)?.conditions.length || 0) > 1 ? [
     { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 }, minimum,
   ] : [

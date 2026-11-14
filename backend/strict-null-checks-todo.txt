@@ -7,15 +7,6 @@ src/portal/privacy.service.ts
 src/portal/wallet-export.service.ts
 src/services/data.service.ts
 src/services/db.service.ts
-src/services/discord-commands.service.ts
-src/services/discord-commands/handlers/add-rule.handler.ts
-src/services/discord-commands/handlers/edit-rule.handler.ts
-src/services/discord-commands/handlers/remove-rule.handler.ts
-src/services/discord-commands/interactions/duplicate-rule-confirmation.interaction.ts
-src/services/discord-commands/interactions/removal-undo.interaction.ts
-src/services/discord-commands/interactions/restore-undo.interaction.ts
-src/services/discord-message.service.ts
-src/services/discord.service.ts
 src/services/erc20-ownership.service.ts
 src/services/ethscriptions-ownership.service.ts
 src/services/nft-metadata.service.ts
@@ -23,11 +14,8 @@ src/services/nft-ownership.service.ts
 src/services/ordinals-ownership.service.ts
 src/services/ordnet-api.service.ts
 src/services/ordnet-ownership.service.ts
-src/services/rule-create.util.ts
-src/services/rule-edit.service.ts
 src/services/setup-health.service.ts
 src/services/solana-ownership.service.ts
 src/services/stamps-ownership.service.ts
 src/services/verification-engine.service.ts
 src/services/verify.service.ts
-src/utils/rule-edit.util.ts

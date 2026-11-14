@@ -66,11 +66,11 @@ export class DiscordMessageService {
   }
 
   async getExistingVerificationMessage(channel: GuildTextBasedChannel, exhaustive = false): Promise<Message | null> {
-    return this.findMessage(channel, message => this.isVerificationMessage(message, this.client.user.id), exhaustive);
+    return this.findMessage(channel, message => this.isVerificationMessage(message, this.client!.user!.id), exhaustive);
   }
 
   async controlRoomMessage(channel: GuildTextBasedChannel, nonce: string): Promise<string> {
-    const url = `${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`;
+    const url = `${EnvironmentConfig.requireBaseUrl()}/admin`;
     const existing = await this.getExistingControlRoomMessage(channel);
     if (existing) return existing.id;
     const message = await channel.send({ content: `**Bouncer Control Room**\nManage verification rules and check setup: ${url}\nSign in with Discord. Server owner or Administrator permission is required.`, allowedMentions: { parse: [] }, nonce, enforceNonce: true });
@@ -78,8 +78,8 @@ export class DiscordMessageService {
   }
 
   async getExistingControlRoomMessage(channel: GuildTextBasedChannel): Promise<Message | null> {
-    const url = `${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`;
-    return this.findMessage(channel, message => message.author.id === this.client.user.id && message.content.includes(url), true);
+    const url = `${EnvironmentConfig.requireBaseUrl()}/admin`;
+    return this.findMessage(channel, message => message.author.id === this.client!.user!.id && message.content.includes(url), true);
   }
 
   private async findMessage(channel: GuildTextBasedChannel, matches: (message: Message) => boolean, exhaustive: boolean): Promise<Message | null> {

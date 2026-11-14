@@ -22,11 +22,11 @@ export class RuleEditService {
 
   async prepare(before: VerifierRole, inputs: Record<string, string>): Promise<VerifierRole> {
     const allowed = new Set(ruleEditFields(before).map(field => field.key));
-    if (!before.inscription_criteria && !['erc20','solana_token','stamp'].includes(before.asset_type)) allowed.add('trait_filter');
+    if (!before.inscription_criteria && !['erc20','solana_token','stamp'].includes(before.asset_type ?? '')) allowed.add('trait_filter');
     if (Object.keys(inputs).some(key => !allowed.has(key))) throw new Error('This field cannot be edited for this rule.');
     const candidate = { ...before };
-    if (['erc20','solana_token'].includes(before.asset_type)) {
-      candidate.min_balance = parseTokenBalance(inputs.min_balance, before.token_decimals);
+    if (['erc20','solana_token'].includes(before.asset_type ?? '')) {
+      candidate.min_balance = parseTokenBalance(inputs.min_balance, before.token_decimals!);
       if (before.asset_type === 'solana_token' && BigInt(candidate.min_balance) >= (1n << 64n)) throw new Error('Minimum exceeds Solana token supply limits.');
       return candidate;
     }
@@ -70,7 +70,7 @@ export class RuleEditService {
     if (before.asset_type === 'solana_nft') return candidate;
     if (before.asset_type === 'nft') {
       const trait = nftTrait(candidate);
-      const prepared = await this.nfts.prepareRule(before.contract_address, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id);
+      const prepared = await this.nfts.prepareRule(before.contract_address!, inputs.token_ids?.trim() || null, before.collection_name, before.chain_id ?? undefined);
       if (prepared.token_standard !== before.token_standard) throw new Error('The NFT contract standard changed. Recreate this rule after checking the contract.');
       candidate.token_ids = prepared.token_ids;
       candidate.attribute_key = trait.key; candidate.attribute_value = trait.value;
@@ -94,12 +94,12 @@ export class RuleEditService {
     }
     const filter = ruleTraits(candidate);
     if (candidate.trait_filter !== undefined && filter) {
-      const conditions = [];
+      const conditions: { key: string; value: string }[] = [];
       for (const condition of filter.conditions) {
         const checked = await validateEthscriptionCriteria(this.data, candidate.slug, condition.key, condition.value);
         if (!checked.isValid) throw new Error(checked.message);
-        candidate.slug = checked.criteria.slug;
-        conditions.push({ key: checked.criteria.attributeKey, value: checked.criteria.attributeValue });
+        candidate.slug = checked.criteria!.slug;
+        conditions.push({ key: checked.criteria!.attributeKey, value: checked.criteria!.attributeValue });
       }
       candidate.trait_filter = normalizeTraitFilter({ operator: filter.operator, conditions });
     }

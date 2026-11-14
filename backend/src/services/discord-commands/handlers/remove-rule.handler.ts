@@ -144,15 +144,15 @@ export class RemoveRuleHandler {
     rulesToRemove: Array<{ id: number; data: any }>;
     notFoundIds: number[];
   }> {
-    this.logger.debug(`Finding rules to remove: [${ruleIds.join(', ')}] for server ${interaction.guild.id}`);
+    this.logger.debug(`Finding rules to remove: [${ruleIds.join(', ')}] for server ${interaction.guild!.id}`);
     
     // Get all rules for the server
-    const allRules = await this.dbSvc.getRoleMappings(interaction.guild.id);
+    const allRules = await this.dbSvc.getRoleMappings(interaction.guild!.id);
     this.logger.debug(`Found ${allRules?.length || 0} total rules for server`);
     
     // Find rules to remove and validate they exist
-    const rulesToRemove = [];
-    const notFoundIds = [];
+    const rulesToRemove: any[] = [];
+    const notFoundIds: number[] = [];
     
     for (const ruleId of ruleIds) {
       const ruleToRemove = allRules.find(rule => rule.id === ruleId);
@@ -179,14 +179,14 @@ export class RemoveRuleHandler {
     successful: Array<{ id: number; data: any; success: true }>;
     failed: Array<{ id: number; data: any; success: false; error: string }>;
   }> {
-    const deletionResults = [];
+    const deletionResults: any[] = [];
     
     this.logger.debug(`Attempting to delete ${rulesToRemove.length} rules:`, rulesToRemove.map(r => `Rule ${r.id} (Channel: ${r.data.channel_name})`));
     
     for (const { id, data } of rulesToRemove) {
       try {
-        this.logger.debug(`Deleting rule ${id} from server ${interaction.guild.id}, rule belongs to server ${data.server_id}`);
-        await this.dbSvc.deleteRoleMapping(String(id), interaction.guild.id);
+        this.logger.debug(`Deleting rule ${id} from server ${interaction.guild!.id}, rule belongs to server ${data.server_id}`);
+        await this.dbSvc.deleteRoleMapping(String(id), interaction.guild!.id);
         deletionResults.push({ id, data, success: true });
         this.logger.debug(`Successfully deleted rule ${id}`);
       } catch (error) {
@@ -323,7 +323,7 @@ export class RemoveRuleHandler {
       description.trim()
     );
 
-    const components = [];
+    const components: any[] = [];
     if (successful.length > 0) {
       // Create Undo button for successful removals
       const undoButton = this.createUndoRemovalButton(interaction.id, 'removal');

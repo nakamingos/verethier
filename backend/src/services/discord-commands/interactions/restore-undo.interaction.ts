@@ -174,7 +174,7 @@ export class RestoreUndoInteractionHandler {
    * Handles bulk undo restore for multiple rules
    */
   private async handleBulkUndoRestore(interaction: any, restoredRules: any[]): Promise<void> {
-    const removalResults = [];
+    const removalResults: any[] = [];
     
     for (const restoredRule of restoredRules) {
       try {
@@ -370,7 +370,7 @@ export class RestoreUndoInteractionHandler {
       description.trim()
     );
 
-    const components = [];
+    const components: any[] = [];
     if (successful.length > 0) {
       // Create Undo button for successful removals using the chain ID
       const chainId = interaction.customId.replace('undo_restore_', '');
