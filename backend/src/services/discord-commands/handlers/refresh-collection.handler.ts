@@ -13,6 +13,7 @@ export class RefreshCollectionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const slug = ordinalCollectionId(interaction.options.getString('collection_slug', true));
+      if (!interaction.guildId) throw new Error('Run this command in a server.');
       const rules = await this.db.getRoleMappings(interaction.guildId);
       if (!rules.some(rule => rule.asset_type === 'ordinal' && rule.slug === slug)) {
         throw new Error('This server has no Ordinals collection rule for that slug.');

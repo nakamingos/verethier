@@ -82,7 +82,7 @@ export class WalletService {
     const active = await this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce);
     if (data.expiry !== active.expiry || data.chainId === undefined)
       throw new Error('Invalid wallet verification challenge.');
-    const typedData = minimalEvmVerificationProof({ origin: EnvironmentConfig.BASE_URL,
+    const typedData = minimalEvmVerificationProof({ origin: EnvironmentConfig.requireBaseUrl(),
       chainId:data.chainId,address:data.address,nonce:active.nonce,expiry:active.expiry,
       ...(data.privacy !== undefined ? {privacy:data.privacy} : {}) });
     const proof = await this.evmSignatures.verify(data.address, typedData, signature);

@@ -40,8 +40,9 @@ export class SolanaSignatureService {
       throw new Error("This channel has no Solana rules.");
     const privacy = choice === undefined ? undefined : privacyChoice(choice);
     const normalized = normalizeSolanaAddress(address);
+    if (context.expiry === undefined) throw new Error('Invalid Solana verification challenge.');
     const message = solanaMessage({
-      origin: EnvironmentConfig.BASE_URL,
+      origin: EnvironmentConfig.requireBaseUrl(),
       purpose: "verification",
       address: normalized,
       nonce: context.nonce,
