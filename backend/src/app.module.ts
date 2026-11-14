@@ -26,6 +26,7 @@ import { RuleEditService } from './services/rule-edit.service';
 import { Erc20OwnershipService } from './services/erc20-ownership.service';
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
+import { boundedCacheOptions } from '@/utils/bounded-cache.util';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -96,7 +97,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
 @Module({
   imports: [
     // High-performance caching layer
-    CacheModule.register(),
+    // Autocomplete and other general entries; the previous module default was 100.
+    CacheModule.register(boundedCacheOptions(100)),
     NonceModule,
     
     // Scheduled task management for automated operations
