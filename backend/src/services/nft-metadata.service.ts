@@ -16,9 +16,16 @@ export class NftMetadataService {
 
   constructor(private readonly dbSvc: DbService) {}
 
+  /** NFT rules always carry a network and contract; refuse a malformed one plainly. */
+  private target(rule: NftRuleFields): { chain_id: number; contract_address: string } {
+    if (typeof rule.chain_id !== 'number' || !rule.contract_address) throw new Error(UNAVAILABLE);
+    return { chain_id: rule.chain_id, contract_address: rule.contract_address };
+  }
+
   async checkSetupHealth(rule: NftRuleFields): Promise<void> {
-    const query = new URLSearchParams({ contractAddress: rule.contract_address, withMetadata: 'false', limit: '1' });
-    const data = await this.request(rule.chain_id, `getNFTsForContract?${query}`);
+    const { chain_id, contract_address } = this.target(rule);
+    const query = new URLSearchParams({ contractAddress: contract_address, withMetadata: 'false', limit: '1' });
+    const data = await this.request(chain_id, `getNFTsForContract?${query}`);
     if (!Array.isArray(data?.nfts)) throw new Error(UNAVAILABLE);
   }
 
@@ -39,21 +46,22 @@ export class NftMetadataService {
   }
 
   async ownedIds(rule: NftRuleFields, owner: string): Promise<string[]> {
+    const { chain_id, contract_address } = this.target(rule);
     const ids = new Set<string>();
     const pages = new Set<string>();
     let pageKey: string | undefined;
     let total: number | undefined;
     for (let page = 0; page < 100; page++) {
-      const query = new URLSearchParams({ owner, 'contractAddresses[]': rule.contract_address, withMetadata: 'false', pageSize: String(PAGE_SIZE) });
+      const query = new URLSearchParams({ owner, 'contractAddresses[]': contract_address, withMetadata: 'false', pageSize: String(PAGE_SIZE) });
       if (pageKey) query.set('pageKey', pageKey);
-      const data = await this.request(rule.chain_id, `getNFTsForOwner?${query}`);
+      const data = await this.request(chain_id, `getNFTsForOwner?${query}`);
       if (!Array.isArray(data?.ownedNfts) || !Number.isSafeInteger(data.totalCount) || data.totalCount < 0
         || (total !== undefined && total !== data.totalCount)) throw new Error(UNAVAILABLE);
       total = data.totalCount;
       for (const token of data.ownedNfts) {
         // withMetadata:false returns contractAddress/tokenId, without a tokenType.
         const contract = token?.contractAddress ?? token?.contract?.address;
-        if (typeof contract !== 'string' || contract.toLowerCase() !== rule.contract_address) throw new Error(UNAVAILABLE);
+        if (typeof contract !== 'string' || contract.toLowerCase() !== contract_address) throw new Error(UNAVAILABLE);
         const id = nftTokenId(token.tokenId);
         if (ids.has(id)) throw new Error(UNAVAILABLE);
         ids.add(id);
@@ -70,6 +78,7 @@ export class NftMetadataService {
   }
 
   async attributes(rule: NftRuleFields, ids: string[], readUri?: (id: string) => Promise<string | null>, refresh = false): Promise<Map<string, NftAttributes>> {
+    const { chain_id, contract_address } = this.target(rule);
     const result = new Map<string, NftAttributes>();
     const uniqueIds = [...new Set(ids.map(nftTokenId))];
     for (let offset = 0; offset < uniqueIds.length; offset += 50) {
@@ -85,21 +94,21 @@ export class NftMetadataService {
         for (const { id, attributes } of inline) {
           if (attributes === null) continue;
           result.set(id, attributes);
-          fresh.push({ chain_id: rule.chain_id, contract_address: rule.contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
+          fresh.push({ chain_id: chain_id, contract_address: contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
         }
       }
       const hosted = batch.filter(id => !result.has(id));
       if (fresh.length) await this.dbSvc.cacheNftMetadata(fresh);
       if (!hosted.length) continue;
-      const rows = refresh ? [] : await this.dbSvc.getCachedNftMetadata(rule.chain_id, rule.contract_address, hosted, new Date(Date.now() - CACHE_TTL).toISOString());
+      const rows = refresh ? [] : await this.dbSvc.getCachedNftMetadata(chain_id, contract_address, hosted, new Date(Date.now() - CACHE_TTL).toISOString());
       for (const row of rows) {
-        if (row.chain_id !== rule.chain_id || row.contract_address !== rule.contract_address || !hosted.includes(row.token_id)) continue;
+        if (row.chain_id !== chain_id || row.contract_address !== contract_address || !hosted.includes(row.token_id)) continue;
         try { result.set(row.token_id, parseNftAttributes(row.attributes)); } catch { /* Refresh malformed cache entries. */ }
       }
       const missing = hosted.filter(id => !result.has(id));
       if (!missing.length) continue;
-      const data = await this.request(rule.chain_id, 'getNFTMetadataBatch', {
-        tokens: missing.map(tokenId => ({ contractAddress: rule.contract_address, tokenId, tokenType: rule.token_standard === 'erc721' ? 'ERC721' : 'ERC1155' })),
+      const data = await this.request(chain_id, 'getNFTMetadataBatch', {
+        tokens: missing.map(tokenId => ({ contractAddress: contract_address, tokenId, tokenType: rule.token_standard === 'erc721' ? 'ERC721' : 'ERC1155' })),
         tokenUriTimeoutInMs: 5000,
         refreshCache: true,
       });
@@ -114,7 +123,7 @@ export class NftMetadataService {
         try { attributes = parseNftAttributes(token.raw?.metadata?.attributes); }
         catch { throw new Error(UNAVAILABLE); }
         result.set(id, attributes);
-        providerRows.push({ chain_id: rule.chain_id, contract_address: rule.contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
+        providerRows.push({ chain_id: chain_id, contract_address: contract_address, token_id: id, attributes, fetched_at: new Date().toISOString() });
       }
       await this.dbSvc.cacheNftMetadata(providerRows);
     }
@@ -136,8 +145,9 @@ export class NftMetadataService {
   }
 
   private async readCatalog(rule: NftRuleFields): Promise<NftAttributes> {
-    const query = new URLSearchParams({ contractAddress: rule.contract_address, withMetadata: 'true', limit: String(PAGE_SIZE), tokenUriTimeoutInMs: '5000' });
-    const data = await this.request(rule.chain_id, `getNFTsForContract?${query}`);
+    const { chain_id, contract_address } = this.target(rule);
+    const query = new URLSearchParams({ contractAddress: contract_address, withMetadata: 'true', limit: String(PAGE_SIZE), tokenUriTimeoutInMs: '5000' });
+    const data = await this.request(chain_id, `getNFTsForContract?${query}`);
     if (!Array.isArray(data?.nfts)) throw new Error(UNAVAILABLE);
     const attributes: NftAttributes = [];
     // Suggestions sample the collection; admins may enter traits outside this sample.

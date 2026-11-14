@@ -55,7 +55,7 @@ export class StampsOwnershipService {
     context.stampHealth ||= this.checkSetupHealth();
     await context.stampHealth;
     const selected: Stamp[] | undefined = criteria.stamp_ids ? [] : undefined;
-    if (selected) for (const id of criteria.stamp_ids) {
+    if (selected) for (const id of criteria.stamp_ids!) {
       const stamp = await this.detail(id, context);
       if (!stamp || stamp.id !== id || stamp.divisible || (criteria.creator && stamp.creator !== criteria.creator)) throw new Error(UNAVAILABLE);
       selected.push(stamp);
@@ -65,7 +65,7 @@ export class StampsOwnershipService {
     for (const wallet of addresses) {
       context.stampBalances ||= new Map();
       if (!context.stampBalances.has(wallet)) context.stampBalances.set(wallet, this.balances(wallet));
-      const holdings = await context.stampBalances.get(wallet);
+      const holdings = (await context.stampBalances.get(wallet))!;
       if (height !== undefined && height !== holdings.height) throw new Error(UNAVAILABLE);
       height = holdings.height;
       for (const output of holdings.outputs) {
@@ -99,13 +99,13 @@ export class StampsOwnershipService {
       if (data === null) return null;
       return this.parseStamp(data?.data?.stamp);
     })());
-    return context.stampDetails.get(id);
+    return context.stampDetails.get(id)!;
   }
 
   private async catalog(wallet: string, context: NftCheckContext, holdings: StampHoldings): Promise<Stamp[]> {
     context.stampCatalogs ||= new Map();
     if (!context.stampCatalogs.has(wallet)) context.stampCatalogs.set(wallet, this.readCatalog(wallet, holdings, context));
-    return context.stampCatalogs.get(wallet);
+    return context.stampCatalogs.get(wallet)!;
   }
 
   private async readCatalog(wallet: string, holdings: StampHoldings, context: NftCheckContext): Promise<Stamp[]> {
@@ -171,11 +171,12 @@ export class StampsOwnershipService {
         if (BigInt(amount)>0n) balances.set(row.asset, (balances.get(row.asset) || 0n) + BigInt(amount));
       }
       if (data.next_cursor === null) {
-        if (count !== expected) throw new Error(UNAVAILABLE);
+        // Holdings without an index height cannot be compared across wallets.
+        if (count !== expected || height === undefined) throw new Error(UNAVAILABLE);
         return { balances, divisible, height, outputs };
       }
       if (!data.result.length || !Number.isSafeInteger(data.next_cursor) || data.next_cursor < 0 || cursors.has(data.next_cursor)) throw new Error(UNAVAILABLE);
-      cursor = data.next_cursor; cursors.add(cursor);
+      cursor = data.next_cursor; cursors.add(data.next_cursor);
     }
     throw new Error(UNAVAILABLE);
   }
@@ -195,7 +196,7 @@ export class StampsOwnershipService {
         const response = await fetch(url, { signal: controller.signal, redirect:'error', headers: {Accept:'application/json','Cache-Control':'no-cache'} });
         if (missing && response.status === 404) return null;
         if (!response.ok) throw new Error(UNAVAILABLE);
-        let indexedHeight: number;
+        let indexedHeight: number | undefined;
         if (provider === 'xcp') {
           const height = Number(response.headers.get('x-counterparty-height')), bitcoin = Number(response.headers.get('x-bitcoin-height'));
           if (response.headers.get('x-counterparty-ready')?.toLowerCase() !== 'true' || !Number.isSafeInteger(height) || height < 779652

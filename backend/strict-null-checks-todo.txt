@@ -1,14 +1,6 @@
 # Source files not yet clean under strictNullChecks.
 # Every other file under src/ must stay clean; see scripts/check-strict-null.cjs.
 # Remove a file from this list once it is fixed. Do not add new files.
-src/services/erc20-ownership.service.ts
-src/services/ethscriptions-ownership.service.ts
-src/services/nft-metadata.service.ts
 src/services/nft-ownership.service.ts
 src/services/ordinals-ownership.service.ts
-src/services/ordnet-api.service.ts
-src/services/ordnet-ownership.service.ts
-src/services/solana-ownership.service.ts
-src/services/stamps-ownership.service.ts
 src/services/verification-engine.service.ts
-src/services/verify.service.ts

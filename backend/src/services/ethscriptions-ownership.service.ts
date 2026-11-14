@@ -59,7 +59,7 @@ export class EthscriptionsOwnershipService {
     if (total <= MAX_ITEMS) {
       const numbers = criteria.ranges.flatMap(([start, end]) => Array.from({length: end - start + 1}, (_, index) => start + index));
       const records = await this.numberOwners(numbers, context);
-      if (records.every(Boolean)) return records.filter(item => this.owned(item.record, linked)).map(item => item.id);
+      if (records.every(Boolean)) return records.filter(item => this.owned(item!.record, linked)).map(item => item!.id);
       // A missing number is not a proven empty holding. Preserve the existing
       // complete-inventory path for future numbers or incomplete selections.
     }
@@ -67,7 +67,7 @@ export class EthscriptionsOwnershipService {
     const selected = new Map<string, number>();
     for (const wallet of addresses) {
       if (!context.ethscriptionInventories.has(wallet)) context.ethscriptionInventories.set(wallet, this.readInventory(wallet));
-      for (const [id, record] of await context.ethscriptionInventories.get(wallet)) {
+      for (const [id, record] of (await context.ethscriptionInventories.get(wallet))!) {
         if (selected.has(id) && selected.get(id) !== record.number) throw this.unavailable('inconsistent inventory numbers');
         selected.set(id, record.number);
       }
@@ -76,24 +76,26 @@ export class EthscriptionsOwnershipService {
   }
 
   private owned(record: EthscriptionOwnership, wallets: Set<string>): boolean {
-    return wallets.has(record.owner) || (record.owner === MARKET && wallets.has(record.prevOwner));
+    // A record without an owner belongs to no linked wallet.
+    return (record.owner !== null && wallets.has(record.owner)) || (record.owner === MARKET && record.prevOwner !== null && wallets.has(record.prevOwner));
   }
 
   private async selectionOwners(ids: string[], context: NftCheckContext): Promise<Map<string, EthscriptionOwnership>> {
-    context.ethscriptionOwners ||= new Map();
-    const missing = ids.filter(id => !context.ethscriptionOwners.has(id));
+    const owners = context.ethscriptionOwners ||= new Map();
+    const missing = ids.filter(id => !owners.has(id));
     let tail: Promise<unknown> = Promise.resolve();
     for (let start = 0; start < missing.length; start += PAGE_SIZE) {
       const chunk = missing.slice(start, start + PAGE_SIZE);
       const batch = tail.then(() => this.readOwners(chunk));
       tail = batch;
       for (const id of chunk) {
-        const owner = batch.then(rows => rows.get(id));
+        // readOwners throws unless every requested ID is present.
+        const owner = batch.then(rows => rows.get(id)!);
         owner.catch(() => undefined);
-        context.ethscriptionOwners.set(id, owner);
+        owners.set(id, owner);
       }
     }
-    return new Map(await Promise.all(ids.map(async id => [id, await context.ethscriptionOwners.get(id)] as const)));
+    return new Map(await Promise.all(ids.map(async id => [id, (await owners.get(id))!] as const)));
   }
 
   private async readOwners(ids: string[]): Promise<Map<string, EthscriptionOwnership>> {
@@ -115,8 +117,8 @@ export class EthscriptionsOwnershipService {
   }
 
   private async numberOwners(numbers: number[], context: NftCheckContext): Promise<Array<{id: string; record: EthscriptionOwnership} | null>> {
-    context.ethscriptionNumberOwners ||= new Map();
-    const missing = numbers.filter(number => !context.ethscriptionNumberOwners.has(number));
+    const numberOwners = context.ethscriptionNumberOwners ||= new Map();
+    const missing = numbers.filter(number => !numberOwners.has(number));
     let tail: Promise<unknown> = Promise.resolve();
     for (let start = 0; start < missing.length; start += PAGE_SIZE) {
       const chunk = missing.slice(start, start + PAGE_SIZE);
@@ -125,10 +127,10 @@ export class EthscriptionsOwnershipService {
       for (const number of chunk) {
         const record = batch.then(rows => rows.get(number) || null);
         record.catch(() => undefined);
-        context.ethscriptionNumberOwners.set(number, record);
+        numberOwners.set(number, record);
       }
     }
-    return Promise.all(numbers.map(number => context.ethscriptionNumberOwners.get(number)));
+    return Promise.all(numbers.map(async number => (await numberOwners.get(number)) ?? null));
   }
 
   private async readNumberOwners(numbers: number[]): Promise<Map<number, {id: string; record: EthscriptionOwnership}>> {
