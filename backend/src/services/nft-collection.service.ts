@@ -384,8 +384,9 @@ export class NftCollectionService {
           collection: collection.slug,
           collection_name: collection.name,
           contract_address: selected.contract_address,
-          network: selected.network,
-          token_standard: selected.token_standard,
+          // Only supported contracts reach here, and those have both.
+          network: selected.network!,
+          token_standard: selected.token_standard!,
           token_ids: ordered,
           token_ids_input: input,
           resolved_at: new Date().toISOString(),
@@ -417,7 +418,7 @@ export class NftCollectionService {
       const response = await fetch(`https://api.opensea.io/api/v2/${path}`, {
         headers: {
           Accept: "application/json",
-          "x-api-key": EnvironmentConfig.OPENSEA_API_KEY.trim(),
+          "x-api-key": (EnvironmentConfig.OPENSEA_API_KEY ?? "").trim(),
         },
         signal: AbortSignal.timeout(
           Math.max(1, Math.min(10000, deadline - Date.now())),

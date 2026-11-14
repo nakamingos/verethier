@@ -64,7 +64,7 @@ export class WalletCheckService {
         return new Set(rows.map(row => row.address));
       })());
     }
-    const dormant = await run.states.get(key);
+    const dormant = (await run.states.get(key))!;
     const active = applicable.filter(address => !dormant.has(address));
     // Capture proof before reading holdings. A signature during the read must
     // invalidate the result rather than supplying its replacement timestamp.
@@ -90,7 +90,7 @@ export class WalletCheckService {
     const key = JSON.stringify([...addresses].sort());
     // Only an observation prepared before the ownership read is eligible.
     if (!run.proofs.has(key)) return;
-    const proofs = await run.proofs.get(key);
+    const proofs = (await run.proofs.get(key))!;
     // An aggregate positive result does not identify which wallets contributed.
     // Only background work pays for any necessary per-wallet classification.
     if (count > 0n && addresses.length > 1 && context.ordinalMode !== 'scheduled') return;
@@ -131,20 +131,22 @@ export class WalletCheckService {
           if (!run.rules.has(candidate.server)) {
             run.rules.set(candidate.server, this.mappings.getRoleMappings(candidate.server));
           }
-          const rules = (await run.rules.get(candidate.server)).filter(rule =>
+          const rules = (await run.rules.get(candidate.server))!.filter(rule =>
             walletCheckNetwork(rule) === candidate.network && walletMatchesRule(rule, candidate.proof.address));
           if (!rules.length) return;
           if (rules.some(rule => !ruleMatchesWalletScope(rule, context.verificationCheckFamilies))) return;
           // A filtered bulk run must not contact excluded providers, including
           // other protocols sharing this wallet's blockchain dormancy scope.
-          if (context.bulkCheckFamilies && rules.some(rule => !context.bulkCheckFamilies.has(checkFamily(rule)))) return;
+          const families = context.bulkCheckFamilies;
+          if (families && rules.some(rule => !families.has(checkFamily(rule)))) return;
           for (const rule of rules) {
             const observed = candidate.observed.get(Number(rule.id));
             const reusable = observed && ruleEditVersion(observed.rule) === ruleEditVersion(rule);
             // Interactive verification never starts additional ownership scans
             // to classify emptiness. Scheduled checks can complete coverage.
             if (!reusable && context.ordinalMode !== 'scheduled') return;
-            const count = reusable ? observed.count : await run.count(rule, candidate.proof.address);
+            // run.count is set by observe() before any candidate can be audited.
+            const count = reusable ? observed.count : await run.count!(rule, candidate.proof.address);
             if (count > 0n) return; // One relevant asset keeps checking active.
           }
           if (!fresh()) return; // Slow unrelated work cannot make old zeros dormant.

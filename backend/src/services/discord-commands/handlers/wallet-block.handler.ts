@@ -1,3 +1,4 @@
+import { requireGuildId } from '../utils/guild.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChatInputCommandInteraction,
   EmbedBuilder, escapeMarkdown, MessageFlags, PermissionFlagsBits } from 'discord.js';
@@ -22,8 +23,8 @@ export class WalletBlockHandler {
       const address = normalizeBlockedWallet(interaction.options.getString('address', true));
       const reason = interaction.options.getString('reason');
       const blocking = command === 'block-wallet';
-      if (blocking) await this.blocks.block(interaction.guildId, address, interaction.user.id, reason);
-      else if (!await this.blocks.unblock(interaction.guildId, address)) {
+      if (blocking) await this.blocks.block(requireGuildId(interaction), address, interaction.user.id, reason);
+      else if (!await this.blocks.unblock(requireGuildId(interaction), address)) {
         await interaction.editReply({ embeds: [AdminFeedback.info('Wallet Not Blocked', `\`${address}\` is not blocked in this server.`)], allowedMentions: { parse: [] } });
         return;
       }
@@ -37,7 +38,7 @@ export class WalletBlockHandler {
       let errors = 0;
       try {
         for (const userId of await this.blocks.linkedUsers(address)) {
-          const result = await this.roles.reverifyUserInServer(userId, interaction.guildId);
+          const result = await this.roles.reverifyUserInServer(userId, requireGuildId(interaction));
           checked++;
           errors += result.errors;
         }
@@ -87,11 +88,11 @@ export class WalletBlockHandler {
   }
 
   private async showPage(interaction: ChatInputCommandInteraction | ButtonInteraction, page: number): Promise<void> {
-    let data = await this.blocks.list(interaction.guildId, page, this.PAGE_SIZE);
+    let data = await this.blocks.list(requireGuildId(interaction), page, this.PAGE_SIZE);
     const pages = Math.max(1, Math.ceil(data.total / this.PAGE_SIZE));
     if (page >= pages) {
       page = pages - 1;
-      data = await this.blocks.list(interaction.guildId, page, this.PAGE_SIZE);
+      data = await this.blocks.list(requireGuildId(interaction), page, this.PAGE_SIZE);
     }
     const rows = data.rows.map(row => {
       const timestamp = Math.floor(new Date(row.blocked_at).getTime() / 1000);

@@ -1,3 +1,4 @@
+import { requireGuild } from './guild.util';
 import { ChatInputCommandInteraction, Role } from 'discord.js';
 import { AdminFeedback } from '../../utils/admin-feedback.util';
 import { AppLogger } from '@/utils/app-logger.util';
@@ -24,9 +25,10 @@ export async function findOrCreateRole(
   roleName: string
 ): Promise<{ role: Role; wasNewlyCreated: boolean } | null> {
   const cleanRoleName = normalizeRoleName(roleName);
+  const guild = requireGuild(interaction);
   
   // Try to find existing role (including ones we can't manage)
-  let role = interaction.guild.roles.cache.find(r => 
+  let role = guild.roles.cache.find(r => 
     r.name.toLowerCase() === cleanRoleName.toLowerCase()
   );
 
@@ -52,7 +54,7 @@ export async function findOrCreateRole(
 
   // If role doesn't exist, create it
   // Double-check that no role with this name exists anywhere in the server
-  const existingRoleWithName = interaction.guild.roles.cache.find(r => 
+  const existingRoleWithName = guild.roles.cache.find(r => 
     r.name.toLowerCase() === cleanRoleName.toLowerCase()
   );
   
@@ -69,8 +71,8 @@ export async function findOrCreateRole(
 
   try {
     // Get bot member to determine role position
-    const botMember = interaction.guild.members.me;
-    let position = undefined;
+    const botMember = guild.members.me;
+    let position: number | undefined;
     
     if (botMember) {
       // Create role below bot's highest role
@@ -78,7 +80,7 @@ export async function findOrCreateRole(
       position = Math.max(1, botHighestPosition - 1);
     }
 
-    role = await interaction.guild.roles.create({
+    role = await guild.roles.create({
       name: cleanRoleName,
       color: 'Blue', // Default color
       position: position,
@@ -107,7 +109,7 @@ export async function cleanupNewlyCreatedRole(
   serverId: string
 ): Promise<void> {
   try {
-    const role = interaction.guild.roles.cache.get(roleId);
+    const role = interaction.guild?.roles.cache.get(roleId);
     if (role && role.editable) {
       // Check if role is used by other rules or has members
       // For now, we'll skip the cleanup to avoid accidental deletions

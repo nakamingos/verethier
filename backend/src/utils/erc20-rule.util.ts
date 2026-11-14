@@ -17,15 +17,15 @@ export function parseTokenBalance(input: string, decimals: number): string {
 }
 
 export function tokenMinimum(rule: NftRuleFields): bigint {
-  if (!Number.isInteger(rule.token_decimals) || rule.token_decimals < 0 || rule.token_decimals > 255
+  if (typeof rule.token_decimals !== 'number' || !Number.isInteger(rule.token_decimals) || rule.token_decimals < 0 || rule.token_decimals > 255
     || typeof rule.min_balance !== 'string' || !/^[1-9]\d{0,77}$/.test(rule.min_balance)
     || BigInt(rule.min_balance) > UINT256_MAX) throw new Error('Invalid ERC-20 minimum balance.');
   return BigInt(rule.min_balance);
 }
 
 export function tokenAmount(rule: NftRuleFields, amount: bigint): string {
-  tokenMinimum(rule);
-  return formatUnits(amount, rule.token_decimals);
+  tokenMinimum(rule); // Validates token_decimals.
+  return formatUnits(amount, rule.token_decimals!);
 }
 
 export function tokenRuleLabel(rule: NftRuleFields): string {
@@ -35,7 +35,7 @@ export function tokenRuleLabel(rule: NftRuleFields): string {
 export function tokenRuleScope(rule: NftRuleFields): string {
   if (rule.asset_type === 'solana_token') return `${rule.solana_criteria?.kind === 'token' ? rule.solana_criteria.mint : 'Token'} · Solana`;
   const symbol = rule.token_symbol && rule.token_symbol !== rule.collection_name ? ` (${rule.token_symbol})` : '';
-  return `${tokenRuleLabel(rule)}${symbol} · ${nftNetworkLabel(rule.chain_id)} · ERC-20`;
+  return `${tokenRuleLabel(rule)}${symbol} · ${nftNetworkLabel(rule.chain_id ?? undefined)} · ERC-20`;
 }
 
 export function tokenRuleCriteria(rule: NftRuleFields): string {

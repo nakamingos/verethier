@@ -93,7 +93,7 @@ export class BulkRoleService {
     if(!selected.length) throw new BadRequestException(networks?'No rules match the selected networks.':'Choose an existing rule in this server.');
     await guild.members.fetchMe();
     await guild.roles.fetch();
-    const source=input.audience==='role' ? guild.roles.cache.get(input.source_role_id) : null;
+    const source=input.audience==='role' ? guild.roles.cache.get(input.source_role_id!) : null;
     if(input.audience==='role' && (!source || source.id===guild.id)) throw new BadRequestException('Choose an existing audience role.');
     for(const r of selected) {
       const role=guild.roles.cache.get(r.role_id);
@@ -113,7 +113,7 @@ export class BulkRoleService {
     for(;;) {
       const page=await guild.members.list({limit:1000,...(after?{after}:{})});
       for(const member of page.values()) {
-        if(member.user.bot || (source ? !member.roles.cache.has(source.id) : !verified.has(member.id))) continue;
+        if(member.user.bot || (source ? !member.roles.cache.has(source.id) : !verified!.has(member.id))) continue;
         members.push({id:member.id,name:member.displayName || member.user.username});
         if(members.length>10000) throw new BadRequestException('This audience exceeds 10,000 members. Select a role to narrow it.');
       }
@@ -326,7 +326,7 @@ export class BulkRoleService {
         const outcome=planned ? await planned : {value:{checked:await evaluate(roleId,initial.context),checkedAt:Date.now()},error:undefined,stopped:false};
         if(outcome.error) throw outcome.error;
         if(outcome.stopped) throw new BulkStopped('Check stopped');
-        let {checked,checkedAt}=outcome.value;
+        let {checked,checkedAt}=outcome.value!;
         if(checked.status==='unavailable') {result.unavailable.push(roleId);continue;}
         // A non-mutating failure does not need another ownership request just
         // because an earlier role/provider took longer than the freshness window.
@@ -339,8 +339,9 @@ export class BulkRoleService {
           // A sufficient database-only alternative does not depend on Ordinals
           // evidence read for a different qualification path.
           if(proof.length && proof.every(result=>result.rule && (result.rule.asset_type!=='ordinal' || (result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug)))) return new Set<string>(proof
-            .filter(result=>result.rule.asset_type==='ordinal')
-            .map(result=>result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug).filter(Boolean));
+            .filter(result=>result.rule!.asset_type==='ordinal')
+            .map(result=>result.rule!.inscription_criteria?.kind==='numbers' ? result.rule!.inscription_criteria.collection_slug : result.rule!.slug)
+            .filter((slug): slug is string=>Boolean(slug)));
           return roleCollections.get(roleId);
         };
         const fresh=()=>evidence.isFresh(collections()) && Date.now()-checkedAt<60000;

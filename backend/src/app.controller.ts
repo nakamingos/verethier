@@ -26,9 +26,9 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly verifySvc: VerifyService,
-    private readonly bitcoinSvc?: BitcoinSignatureService,
-    private readonly memberSvc?: MemberService,
-    private readonly solanaSvc?: SolanaSignatureService
+    private readonly bitcoinSvc: BitcoinSignatureService,
+    private readonly memberSvc: MemberService,
+    private readonly solanaSvc: SolanaSignatureService
   ) {}
 
   /**

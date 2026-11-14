@@ -33,7 +33,7 @@ describe('Durable portal reconciliation worker', () => {
     };
     const service = new PortalJobsService(db, roles, {
       getBotClient: () => ({}),
-    } as any);
+    } as any, undefined as any);
     return { service, roles, writes, query, db, claims };
   }
   it('passes the persisted ord.net-only policy through automatic role rechecks', async () => {

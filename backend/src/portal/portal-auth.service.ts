@@ -122,7 +122,7 @@ export class PortalAuthService {
     this.setCookie(res, state, true, 10 * 60000);
     const url = new URL('https://discord.com/oauth2/authorize');
     url.search = new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID,
+      client_id: process.env.DISCORD_CLIENT_ID || '',
       redirect_uri: `${this.origin}/api/portal/auth/callback`,
       response_type: 'code',
       scope: 'identify guilds',
@@ -170,8 +170,8 @@ export class PortalAuthService {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: process.env.DISCORD_CLIENT_ID,
-        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        client_id: process.env.DISCORD_CLIENT_ID || '',
+        client_secret: process.env.DISCORD_CLIENT_SECRET || '',
         grant_type: 'authorization_code',
         code,
         redirect_uri: `${this.origin}/api/portal/auth/callback`,
@@ -239,6 +239,9 @@ export class PortalAuthService {
     res.redirect(attempt.return_to === '/member' ? '/member' : '/admin');
   }
 
+  /** With `required` (the default) this throws instead of returning null. */
+  async session(req: Request, required?: true): Promise<PortalSession>;
+  async session(req: Request, required: boolean): Promise<PortalSession | null>;
   async session(req: Request, required = true): Promise<PortalSession | null> {
     const token = this.cookie(req);
     if (!validToken(token)) {
