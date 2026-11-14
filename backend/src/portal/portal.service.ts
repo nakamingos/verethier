@@ -12,7 +12,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -86,12 +85,12 @@ export class PortalService {
     private readonly ethscriptions: EthscriptionsOwnershipService,
     private readonly tokens: Erc20OwnershipService,
     private readonly metadata: NftMetadataService,
-    @Optional() private readonly setup?: ServerSetupService,
-    @Optional() private readonly privacy?: PrivacyService,
-    @Optional() private readonly nftCollections?: NftCollectionService,
-    @Optional() private readonly solana?: SolanaOwnershipService,
-    @Optional() private readonly stamps?: StampsOwnershipService,
-    @Optional() private readonly walletChecks?: WalletCheckService,
+    private readonly setup?: ServerSetupService,
+    private readonly privacy?: PrivacyService,
+    private readonly nftCollections?: NftCollectionService,
+    private readonly solana?: SolanaOwnershipService,
+    private readonly stamps?: StampsOwnershipService,
+    private readonly walletChecks?: WalletCheckService,
   ) {}
 
   client() {

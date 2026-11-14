@@ -1,3 +1,5 @@
+import { BouncerLogService } from '../src/services/bouncer-log.service';
+import { ServerSetupService } from '../src/services/server-setup.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscordService } from '../src/services/discord.service';
 import { DiscordMessageService } from '../src/services/discord-message.service';
@@ -155,6 +157,8 @@ describe('DiscordService - Enhanced Tests', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: BouncerLogService, useValue: undefined },
+        { provide: ServerSetupService, useValue: undefined },
         DiscordService,
         { provide: NonceService, useValue: mockNonceService },
         { provide: DbService, useValue: mockDbService },
@@ -177,6 +181,27 @@ describe('DiscordService - Enhanced Tests', () => {
     
     // Set up client for tests that need it
     (service as any).client = mockClient;
+  });
+
+  describe('shutdown', () => {
+    it('closes the Discord connection once and forgets the client', async () => {
+      const destroy = jest.fn().mockResolvedValue(undefined);
+      (service as any).client = { destroy, isReady: () => true };
+      await service.onModuleDestroy();
+      await service.onModuleDestroy();
+      expect(destroy).toHaveBeenCalledTimes(1);
+      expect(service.getBotClient()).toBeNull();
+    });
+
+    it('does nothing when the bot was never started', async () => {
+      (service as any).client = null;
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+    });
+
+    it('does not let a failed disconnect block shutdown', async () => {
+      (service as any).client = { destroy: jest.fn().mockRejectedValue(new Error('socket closed')) };
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+    });
   });
 
   describe('Initialization', () => {

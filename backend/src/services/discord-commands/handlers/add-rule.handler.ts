@@ -3,7 +3,7 @@ import { SolanaOwnershipService } from '../../solana-ownership.service';
 import { singleTrait } from '@/utils/trait-filter.util';
 import { prepareRuleCriteria } from '../../rule-create.util';
 import { Erc20OwnershipService } from '../../erc20-ownership.service';
-import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { 
   ChatInputCommandInteraction, 
   TextChannel, 
@@ -58,11 +58,11 @@ export class AddRuleHandler {
     private readonly nftSvc: NftOwnershipService,
     private readonly ruleConfirmationHandler: RuleConfirmationInteractionHandler,
     private readonly duplicateRuleConfirmationHandler: DuplicateRuleConfirmationInteractionHandler,
-    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
-    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
-    @Optional() private readonly tokensSvc?: Erc20OwnershipService,
-    @Optional() private readonly solanaSvc?: SolanaOwnershipService,
-    @Optional() private readonly stampsSvc?: StampsOwnershipService
+    private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
+    private readonly tokensSvc?: Erc20OwnershipService,
+    private readonly solanaSvc?: SolanaOwnershipService,
+    private readonly stampsSvc?: StampsOwnershipService
   ) {}
 
   /**

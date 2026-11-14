@@ -1,3 +1,6 @@
+import { SolanaSignatureService } from '../src/services/solana-signature.service';
+import { PrivacyService } from '../src/portal/privacy.service';
+import { BitcoinSignatureService } from '../src/services/bitcoin-signature.service';
 import { EvmSignatureService } from '../src/services/evm-signature.service';
 import { WalletBlockService } from '../src/services/wallet-block.service';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -65,6 +68,10 @@ describe('WalletService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SolanaSignatureService, useValue: undefined },
+        { provide: EvmSignatureService, useValue: undefined },
+        { provide: PrivacyService, useValue: undefined },
+        { provide: BitcoinSignatureService, useValue: undefined },
         { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         WalletService,
         { provide: NonceService, useValue: mockNonceService },

@@ -1,12 +1,12 @@
 import { BouncerLogService } from './bouncer-log.service';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Guild, GuildMember } from 'discord.js';
 
 @Injectable()
 export class RoleActionService {
   constructor(@Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
-    @Optional() private readonly activityLog?: BouncerLogService) {}
+    private readonly activityLog?: BouncerLogService) {}
 
   async blockedBy(member: GuildMember, role: string): Promise<boolean> {
     const { data, error } = await this.db

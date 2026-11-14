@@ -14,8 +14,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
-  Optional,
-} from '@nestjs/common';
+  } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes, randomUUID } from 'crypto';
 import { PermissionFlagsBits } from 'discord.js';
@@ -39,9 +38,9 @@ export class MemberService {
     private readonly nonces: NonceService,
     private readonly bitcoin: BitcoinSignatureService,
     private readonly auth: PortalAuthService,
-    @Optional() private readonly privacy?: PrivacyService,
-    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
-    @Optional() private readonly walletChecks?: WalletCheckService,
+    private readonly privacy?: PrivacyService,
+    private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
+    private readonly walletChecks?: WalletCheckService,
   ) {}
 
   private checked<T extends { error: any; data: any }>(result: T): T['data'] {

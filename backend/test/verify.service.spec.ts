@@ -1,3 +1,5 @@
+import { BouncerLogService } from '../src/services/bouncer-log.service';
+import { DynamicRoleService } from '../src/services/dynamic-role.service';
 import { RoleExcludedError } from '../src/utils/role-excluded-error.util';
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -99,6 +101,8 @@ describe('VerifyService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: BouncerLogService, useValue: undefined },
+        { provide: DynamicRoleService, useValue: undefined },
         VerifyService,
         { provide: WalletService, useValue: mockWalletService },
         { provide: NonceService, useValue: mockNonceService },

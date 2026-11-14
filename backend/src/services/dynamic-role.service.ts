@@ -1,7 +1,7 @@
 import { ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { ordnetCompatible } from '@/utils/ordinal-rule.util';
 import { ruleRoles } from '@/utils/rule-roles.util';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DbService } from './db.service';
 import { VerificationEngine } from './verification-engine.service';
@@ -48,7 +48,7 @@ export class DynamicRoleService {
     private readonly dbSvc: DbService,
     private readonly verificationEngine: VerificationEngine,
     private readonly discordVerificationSvc: DiscordVerificationService,
-    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    private readonly ordinalsSvc?: OrdinalsOwnershipService,
   ) {
     Logger.log(`🔄 DynamicRoleService initialized with CRON schedule: ${EnvironmentConfig.DYNAMIC_ROLE_CRON}`);
   }

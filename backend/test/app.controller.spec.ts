@@ -1,3 +1,6 @@
+import { SolanaSignatureService } from '../src/services/solana-signature.service';
+import { MemberService } from '../src/portal/member.service';
+import { BitcoinSignatureService } from '../src/services/bitcoin-signature.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { AppController } from '../src/app.controller';
@@ -36,6 +39,9 @@ describe('AppController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
+        { provide: SolanaSignatureService, useValue: undefined },
+        { provide: MemberService, useValue: undefined },
+        { provide: BitcoinSignatureService, useValue: undefined },
         {
           provide: AppService,
           useValue: mockAppService,

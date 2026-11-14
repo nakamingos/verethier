@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RoleActionService } from '@/services/role-action.service';
 import { Interval } from '@nestjs/schedule';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -19,7 +19,7 @@ export class PortalJobsService {
     @Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
     private readonly roles: DynamicRoleService,
     private readonly discord: DiscordService,
-    @Optional() private readonly roleActions?: RoleActionService,
+    private readonly roleActions?: RoleActionService,
   ) {}
   @Interval(10000)
   async run() {

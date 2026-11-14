@@ -1,3 +1,5 @@
+import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
+import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
 import { validateEthscriptionCriteria } from '../src/services/discord-commands/utils/rule-validation.util';
 import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
@@ -117,6 +119,8 @@ describe('AddRuleHandler', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: StampsOwnershipService, useValue: undefined },
+        { provide: SolanaOwnershipService, useValue: undefined },
         AddRuleHandler,
         { provide: Erc20OwnershipService, useValue: mockTokenService },
         { provide: NftOwnershipService, useValue: mockNftService },

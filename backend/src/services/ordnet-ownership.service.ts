@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { OrdinalCollectionSnapshot } from '@/models/ordinal-collection.interface';
 import { NftCheckContext } from './nft-ownership.service';
@@ -23,7 +23,7 @@ type CollectionScan = {
 export class OrdnetOwnershipService {
   private readonly traitSuggestions = new Map<string, { expires: number; traits: Promise<TraitSuggestions> }>();
   private readonly scans = new Map<string, CollectionScan>();
-  constructor(private readonly api: OrdnetApiService, @Optional() private readonly requests?: OrdinalsRequestScheduler) {}
+  constructor(private readonly api: OrdnetApiService, private readonly requests?: OrdinalsRequestScheduler) {}
 
   async suggestions(slug: string, key?: string): Promise<string[]> {
     const id = ordinalCollectionId(slug);

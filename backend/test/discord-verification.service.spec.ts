@@ -1,3 +1,12 @@
+import { BouncerLogService } from '../src/services/bouncer-log.service';
+import { PrivacyService } from '../src/portal/privacy.service';
+import { RoleActionService } from '../src/services/role-action.service';
+import { WalletCheckService } from '../src/services/wallet-check.service';
+import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
+import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
+import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
+import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
+import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { WalletBlockService } from '../src/services/wallet-block.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
@@ -157,6 +166,15 @@ describe('DiscordVerificationService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: BouncerLogService, useValue: undefined },
+        { provide: PrivacyService, useValue: undefined },
+        { provide: RoleActionService, useValue: undefined },
+        { provide: WalletCheckService, useValue: undefined },
+        { provide: StampsOwnershipService, useValue: undefined },
+        { provide: SolanaOwnershipService, useValue: undefined },
+        { provide: Erc20OwnershipService, useValue: undefined },
+        { provide: EthscriptionsOwnershipService, useValue: undefined },
+        { provide: OrdinalsOwnershipService, useValue: undefined },
         { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         AssetOwnershipService,
         { provide: NftOwnershipService, useValue: { count: jest.fn() } },

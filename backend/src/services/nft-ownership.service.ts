@@ -1,5 +1,5 @@
 import type { WalletCheckRun } from './wallet-check.service';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Address, BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError, PublicClient, createPublicClient, http, parseAbi } from 'viem';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields } from '@/models/verifier-role.interface';
@@ -76,7 +76,7 @@ export interface NftCheckContext {
 export class NftOwnershipService {
   private readonly clients = new Map<number, Pick<PublicClient, 'readContract' | 'getChainId' | 'getBlockNumber'>>();
 
-  constructor(@Optional() private readonly metadataSvc?: NftMetadataService) {}
+  constructor(private readonly metadataSvc?: NftMetadataService) {}
 
   async checkSetupHealth(chainId: number): Promise<void> {
     const client = this.getClient(chainId);
