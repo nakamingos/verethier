@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (types, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: backend/yarn.lock
+      - run: yarn install --frozen-lockfile
+      - name: Type check (source and tests)
+        run: yarn typecheck
+      # Uses backend/.env.test. Specs under test/live_test skip themselves
+      # because no local Supabase is running here.
+      - name: Unit tests
+        run: yarn test
+      - name: Build
+        run: yarn build
+
+  frontend:
+    name: Frontend (build, tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - run: yarn install --frozen-lockfile
+      - name: Production build
+        run: yarn build
+      # Ubuntu 24.04 runners block Chrome's sandbox unless this is relaxed.
+      - name: Allow Chrome sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Unit tests
+        run: yarn ng test --watch=false --no-progress --browsers=ChromeHeadless
+
+  audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Reports known advisories without failing the run. Make this blocking
+    # once the framework upgrade has cleared the existing findings.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: yarn audit (high and critical)
+        working-directory: ${{ matrix.project }}
+        run: yarn audit --level high --groups dependencies
