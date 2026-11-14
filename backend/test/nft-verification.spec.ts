@@ -290,7 +290,7 @@ describe('NFT rules and role decisions', () => {
   it('does not revoke or advance successful verification after an RPC failure', async () => {
     const assignment = { id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role', rule_id: null };
     db.getEarnedRoleAssignments.mockResolvedValue([assignment]);
-    const discord = { removeUserRole: jest.fn() };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn() };
     const dynamic = new DynamicRoleService(db, engine, discord as any);
     count.mockRejectedValue(new Error('RPC timeout'));
     expect(await dynamic.reverifyUser('user')).toEqual({ verified: 0, revoked: 0 });
@@ -301,7 +301,7 @@ describe('NFT rules and role decisions', () => {
   it('retains roles when verified wallets cannot be read from the database', async () => {
     db.getEarnedRoleAssignments.mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'server', role_id: 'role' }]);
     addresses.getUserAddresses.mockRejectedValue(new Error('Database unavailable'));
-    const discord = { removeUserRole: jest.fn() };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn() };
     const dynamic = new DynamicRoleService(db, engine, discord as any);
     expect(await dynamic.reverifyUser('user')).toEqual({ verified: 0, revoked: 0 });
     expect(discord.removeUserRole).not.toHaveBeenCalled();
@@ -315,7 +315,6 @@ describe('NFT rules and role decisions', () => {
     db.getUserRoleHistory.mockResolvedValue([]);
     count.mockImplementation(async checkedRule => checkedRule.id === 1 ? BigInt(0) : BigInt(2));
     const discord = { getGuildMember: jest.fn().mockResolvedValue({ roles: { cache: new Map() } }), addUserRole: jest.fn().mockResolvedValue({ wasAlreadyAssigned: false }), removeUserRole: jest.fn() };
-    db.logUserRole = jest.fn();
     const monitor = new SimpleRoleMonitorService(db, discord as any, engine, addresses);
     const result = await monitor.reverifyUser('user', 'server');
     expect(result.errors).toEqual([]);

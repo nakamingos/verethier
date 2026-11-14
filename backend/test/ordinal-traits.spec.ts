@@ -176,7 +176,7 @@ describe('Ordinals live traits and outage fallback', () => {
     const database: any = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: base.role_id }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(database, new AssetOwnershipService({} as any, {} as any, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
-    const discord = { removeUserRole: jest.fn() };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn() };
     await new DynamicRoleService(database, engine, discord as any).performScheduledReverification();
     expect(discord.removeUserRole).not.toHaveBeenCalled(); expect(database.updateLastVerified).not.toHaveBeenCalled();
     expect(database.saveRoleCheckDetails).toHaveBeenCalledWith('assignment', expect.objectContaining({ last_check_status: 'unavailable' }));

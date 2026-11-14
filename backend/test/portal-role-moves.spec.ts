@@ -30,7 +30,7 @@ describe('Explicit administrator role moves', () => {
           results: [{ isValid: true, ruleId: 7, matchingAssetCount: 10 }],
         }),
     };
-    discord = { addUserRoleDynamic: jest.fn().mockResolvedValue(true) };
+    discord = { isMember:jest.fn().mockResolvedValue(true), addUserRoleDynamic: jest.fn().mockResolvedValue(true) };
     service = new DynamicRoleService(db, engine, discord);
   });
   it('freshly checks only affected holders and records entitlement before granting', async () => {
@@ -40,7 +40,7 @@ describe('Explicit administrator role moves', () => {
       '7',
       ['member', 'member'],
     );
-    expect(result).toEqual({ verified: 1, revoked: 0, errors: 0 });
+    expect(result).toEqual({ verified: 1, revoked: 0, left: 0, errors: 0 });
     expect(engine.evaluateRuleGroup).toHaveBeenCalledTimes(1);
     expect(db.trackRoleAssignment).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -97,7 +97,7 @@ describe('Explicit administrator role moves', () => {
       await service.reverifyRoleChangeInServer('server', 'new-role', '7', [
         'member',
       ]),
-    ).toEqual({ verified: 0, revoked: 0, errors: 0 });
+    ).toEqual({ verified: 0, revoked: 0, left: 0, errors: 0 });
     expect(engine.evaluateRuleGroup).not.toHaveBeenCalled();
   });
   it('reconciles existing target-role holders through their full alternatives', async () => {

@@ -181,36 +181,6 @@ describe('DataService', () => {
     expect(query.select).toContain('attributes_new(values)');
   });
 
-  it('keeps category-only rules on the attribute-filtered path during batch checks', async () => {
-    const query = queueInventory({
-      data: [
-        {
-          hashId: '1',
-          slug: 'test-collection',
-          attributes_new: { values: { Background: 'Blue' } },
-        },
-        {
-          hashId: '2',
-          slug: 'test-collection',
-          attributes_new: { values: { Eyes: 'Laser' } },
-        },
-      ],
-      error: null,
-    });
-
-    const result = await service.batchCheckAssetOwnership('0xabc123', [
-      {
-        slug: 'test-collection',
-        attributeKey: 'Background',
-        attributeValue: 'ALL',
-        minItems: 1,
-      },
-    ]);
-
-    expect(result.get(0)).toBe(1);
-    expect(query.select).toContain('attributes_new(values)');
-  });
-
   it('shares one fresh inventory across parallel rules, stacked wallets, and later recommendations', async () => {
     const context = { checks: new Map() };
     const query = queueInventory({ data: [
@@ -321,6 +291,24 @@ describe('DataService', () => {
     expect(first.in[1]).toHaveLength(50);
     expect(second.in[1]).toHaveLength(5);
     expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',55,context)).toBe(55);
+  });
+
+  it('reads every page of collection slugs instead of stopping at the API row limit', async () => {
+    const first = Array.from({ length: 1000 }, (_, i) => ({ slug: `collection-${i}` }));
+    const page1 = queueQuery({ data: first, error: null });
+    const page2 = queueQuery({ data: [{ slug: 'collection-1000' }, { slug: null }], error: null });
+    const slugs = await service.getAllSlugs();
+    expect(page1.range).toEqual([0, 999]);
+    expect(page2.range).toEqual([1000, 1999]);
+    expect(slugs).toHaveLength(1002);
+    expect(slugs[0]).toBe('all-collections');
+    expect(slugs).toContain('collection-1000');
+  });
+
+  it('fails rather than returning a partial collection list', async () => {
+    queueQuery({ data: Array.from({ length: 1000 }, (_, i) => ({ slug: `c-${i}` })), error: null });
+    queueQuery({ data: null, error: { message: 'timeout' } });
+    await expect(service.getAllSlugs()).rejects.toThrow('timeout');
   });
 
 });

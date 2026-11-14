@@ -5,6 +5,23 @@ import { AppLogger } from '@/utils/app-logger.util';
 dotenv.config();
 
 /**
+ * BASE_URL as a bare origin (no trailing slash or path), so CORS matching and
+ * the links built from it are exact. Invalid values are kept as given so
+ * validate() can report them.
+ */
+export function normalizeBaseUrl(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return raw;
+    return url.origin;
+  } catch {
+    return raw;
+  }
+}
+
+/**
  * Centralized environment configuration
  * Validates and caches environment variables to prevent repeated access
  */
@@ -41,9 +58,11 @@ export class EnvironmentConfig {
   public static readonly ORDNET_PAYMENT_WIF = process.env.ORDNET_PAYMENT_WIF;
   
   // Application Configuration
-  public static readonly BASE_URL = process.env.BASE_URL;
+  public static readonly BASE_URL = normalizeBaseUrl(process.env.BASE_URL);
   public static readonly NODE_ENV = process.env.NODE_ENV;
   public static readonly NONCE_EXPIRY = Number(process.env.NONCE_EXPIRY) || 300000; // 5 minutes default
+  // Header the hosting edge overwrites with the caller's IP, used for rate limits (Railway: x-real-ip).
+  public static readonly CLIENT_IP_HEADER = process.env.CLIENT_IP_HEADER;
   
   // Dynamic Role Management Configuration
   public static readonly DYNAMIC_ROLE_CRON = (() => {
@@ -83,39 +102,16 @@ export class EnvironmentConfig {
       throw new Error(`Missing required environment variables: ${missing.map(v => v.name).join(', ')}`);
     }
 
+    // Verification links, wallet-proof origins and CORS all derive from BASE_URL.
+    if (this.NODE_ENV === 'production' && !/^https:\/\/[^/]+$/.test(this.BASE_URL || '')) {
+      throw new Error('BASE_URL must be the frontend\'s https:// origin, for example https://bouncer.example.com');
+    }
+
     // Warn about optional Discord variables if Discord is enabled (only in development)
     if (this.DISCORD_ENABLED && (!this.DISCORD_BOT_TOKEN || !this.DISCORD_CLIENT_ID)) {
       if (this.NODE_ENV === 'development') {
         AppLogger.warn('Discord is enabled but DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID is missing', 'EnvironmentConfig');
       }
     }
-  }
-
-  /**
-   * Get sanitized configuration info for debugging (development only)
-   * Masks sensitive values in production
-   */
-  public static getConfigInfo(): Record<string, any> {
-    if (this.NODE_ENV === 'production') {
-      return {
-        message: 'Configuration details are not available in production for security reasons'
-      };
-    }
-
-    return {
-      DISCORD_ENABLED: this.DISCORD_ENABLED,
-      NODE_ENV: this.NODE_ENV,
-      BASE_URL: this.BASE_URL,
-      NONCE_EXPIRY: this.NONCE_EXPIRY,
-      DYNAMIC_ROLE_CRON: this.DYNAMIC_ROLE_CRON,
-      IS_TEST: this.IS_TEST,
-      // Never expose actual credentials
-      hasDiscordToken: !!this.DISCORD_BOT_TOKEN,
-      hasDiscordClientId: !!this.DISCORD_CLIENT_ID,
-      hasDataSupabaseUrl: !!this.DATA_SUPABASE_URL,
-      hasDataSupabaseKey: !!this.DATA_SUPABASE_ANON_KEY,
-      hasDbSupabaseUrl: !!this.DB_SUPABASE_URL,
-      hasDbSupabaseKey: !!this.DB_SUPABASE_KEY,
-    };
   }
 }

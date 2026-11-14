@@ -62,9 +62,9 @@ describe('Server role actions', () => {
       {user_id:'member',server_id:'server',role_id:'unrelated',status:'active'},
     ]),saveRoleCheckDetails:jest.fn(),updateLastVerified:jest.fn(),updateRoleAssignmentStatus:jest.fn()};
     const engine:any={evaluateRole:jest.fn().mockResolvedValue({status:'passed',results:[]}),finishWalletChecks:jest.fn()};
-    const discord:any={addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
+    const discord:any={isMember:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
     const service=new DynamicRoleService(db,engine,discord);
-    expect(await service.reverifyUserRolesInServer('member','server',['affected'])).toEqual({verified:1,revoked:0,errors:0});
+    expect(await service.reverifyUserRolesInServer('member','server',['affected'])).toEqual({verified:1,revoked:0,left:0,errors:0});
     expect(db.getEarnedRoleAssignments).toHaveBeenCalledWith({userId:'member',serverId:'server'});
     expect(engine.evaluateRole).toHaveBeenCalledTimes(1);
     expect(engine.evaluateRole).toHaveBeenCalledWith('member','server','affected',expect.objectContaining({ordinalMode:'scheduled'}));
@@ -173,7 +173,7 @@ describe('Server role actions', () => {
     const service = new DynamicRoleService(
       db,
       {} as any,
-      { addUserRoleDynamic: jest.fn().mockResolvedValue('suppressed') } as any,
+      { isMember:jest.fn().mockResolvedValue(true), addUserRoleDynamic: jest.fn().mockResolvedValue('suppressed') } as any,
     );
     await (service as any).restoreRole(
       {

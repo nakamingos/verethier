@@ -91,7 +91,7 @@ describe('VerificationService - Integration Tests', () => {
     expect(dataService).toBeDefined();
   });
 
-  describe('verifyUser (delegated to VerificationEngine)', () => {
+  describe('VerificationEngine.verifyUser', () => {
     it('should delegate to VerificationEngine and return result', async () => {
       if (!isSupabaseHealthy) {
         console.log('⏭️ Skipping test: Supabase not available');
@@ -102,7 +102,7 @@ describe('VerificationService - Integration Tests', () => {
       await testDb.createTestServer('test_server_delegate');
       const rule = await testDb.createTestRule('test_server_delegate');
 
-      const result = await verificationService.verifyUser(
+      const result = await verificationEngine.verifyUser(
         'test_user_delegate',
         rule.id.toString(),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
@@ -125,14 +125,14 @@ describe('VerificationService - Integration Tests', () => {
       const rule = await testDb.createTestRule('test_server_id_types');
 
       // Test with string ID
-      const result1 = await verificationService.verifyUser(
+      const result1 = await verificationEngine.verifyUser(
         'test_user_str',
         rule.id.toString(),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 
       // Test with number ID
-      const result2 = await verificationService.verifyUser(
+      const result2 = await verificationEngine.verifyUser(
         'test_user_num',
         rule.id,
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
@@ -205,7 +205,7 @@ describe('VerificationService - Integration Tests', () => {
     });
   });
 
-  describe('verifyUserForServer', () => {
+  describe('server-wide verification via getAllRulesForServer + verifyUserBulk', () => {
     it('should verify user against all server rules', async () => {
       if (!isSupabaseHealthy) {
         console.log('⏭️ Skipping test: Supabase not available');
@@ -233,9 +233,10 @@ describe('VerificationService - Integration Tests', () => {
         .select()
         .single();
 
-      const result = await verificationService.verifyUserForServer(
+      const serverRules = await verificationService.getAllRulesForServer('test_server_for_server');
+      const result = await verificationService.verifyUserBulk(
         'test_user_for_server',
-        'test_server_for_server',
+        serverRules.map(r => r.id),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 
@@ -260,9 +261,10 @@ describe('VerificationService - Integration Tests', () => {
       // Create server but no rules
       await testDb.createTestServer('test_server_no_rules');
 
-      const result = await verificationService.verifyUserForServer(
+      const serverRules = await verificationService.getAllRulesForServer('test_server_no_rules');
+      const result = await verificationService.verifyUserBulk(
         'test_user_no_rules',
-        'test_server_no_rules',
+        serverRules.map(r => r.id),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 
@@ -282,7 +284,7 @@ describe('VerificationService - Integration Tests', () => {
       await testDb.createTestServer('test_server_invalid');
       const rule = await testDb.createTestRule('test_server_invalid');
 
-      const result = await verificationService.verifyUser(
+      const result = await verificationEngine.verifyUser(
         'test_user_invalid',
         rule.id.toString(),
         'invalid_address'
@@ -298,7 +300,7 @@ describe('VerificationService - Integration Tests', () => {
         return;
       }
 
-      const result = await verificationService.verifyUser(
+      const result = await verificationEngine.verifyUser(
         'test_user_nonexistent',
         'nonexistent_rule_id',
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
@@ -314,7 +316,7 @@ describe('VerificationService - Integration Tests', () => {
         return;
       }
 
-      const result = await verificationService.verifyUser('', '', '');
+      const result = await verificationEngine.verifyUser('', '', '');
 
       expect(result.isValid).toBe(false);
       expect(result.error).toBeDefined();
@@ -333,7 +335,7 @@ describe('VerificationService - Integration Tests', () => {
       const rule = await testDb.createTestRule('test_server_orchestration');
 
       // Verify that the service can successfully coordinate
-      const result = await verificationService.verifyUser(
+      const result = await verificationEngine.verifyUser(
         'test_user_orchestration',
         rule.id.toString(),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'

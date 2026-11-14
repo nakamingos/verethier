@@ -287,39 +287,6 @@ describe('VerificationEngine', () => {
     });
   });
 
-  describe('verifyUserForServer', () => {
-    it('should verify user against all server rules', async () => {
-      const serverRules = [
-        { id: 'rule1', server_id: 'server123' },
-        { id: 'rule2', server_id: 'server123' }
-      ];
-
-      mockDbService.getRoleMappings.mockResolvedValue(serverRules);
-      mockDbService.getRuleById
-        .mockResolvedValueOnce(mockRule)
-        .mockResolvedValueOnce(mockModernRule);
-      
-      mockDataService.checkAssetOwnershipWithCriteria
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(3);
-
-      const result = await service.verifyUserForServer('user123', 'server123', '0x1212121212121212121212121212121212121212');
-
-      expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('server123');
-      expect(result.totalRules).toBe(2);
-      expect(result.validRules).toHaveLength(2);
-    });
-
-    it('should handle server with no rules', async () => {
-      mockDbService.getRoleMappings.mockResolvedValue([]);
-
-      const result = await service.verifyUserForServer('user123', 'server123', '0x1212121212121212121212121212121212121212');
-
-      expect(result.totalRules).toBe(0);
-      expect(result.validRules).toHaveLength(0);
-    });
-  });
-
   describe('verification logic', () => {
     it('should pass verification with any assets', async () => {
       mockDbService.getRuleById.mockResolvedValue(mockRule);

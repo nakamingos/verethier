@@ -436,13 +436,6 @@ export class MemberComponent {
       }
     });
   }
-  async retry(id: string) {
-    await this.run(async () => {
-      await this.api('/jobs/' + id + '/retry', {});
-      await this.refresh();
-      this.notice = 'Role check queued again.';
-    });
-  }
   async refreshAccount() {
     await this.run(() => this.refresh());
   }

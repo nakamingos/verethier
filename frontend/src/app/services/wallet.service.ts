@@ -1,6 +1,6 @@
 import { Inject, Injectable, InjectionToken, NgZone, OnDestroy } from '@angular/core';
 
-import { Address, PublicClient, createPublicClient, defineChain, getAddress, http } from 'viem';
+import { Address, defineChain, getAddress, http } from 'viem';
 import { base, mainnet } from 'viem/chains';
 
 import { createAppKit } from '@reown/appkit';
@@ -15,7 +15,6 @@ import {
 
 import { BehaviorSubject, Observable } from 'rxjs';
 
-import { env } from '@/../env/env';
 import { evmWalletMetadata, projectId } from './evm-wallet.config';
 import { bouncerBaseAccountConnector } from './base-account.connector';
 
@@ -44,7 +43,7 @@ export const EVM_WALLET_CONNECTION = new InjectionToken<EvmWalletConnection>('EV
       projectId,
       connectors: [bouncerBaseAccountConnector(metadata)],
       transports: {
-        [1]: http(env.rpcHttpProvider),
+        [1]: http(),
         [8453]: http(),
         [4663]: http(),
       },
@@ -107,7 +106,6 @@ export class WalletService implements OnDestroy {
   readonly connectedState$: Observable<GetAccountReturnType>;
   private readonly connectionErrors = new BehaviorSubject<string | null>(null);
   readonly connectionErrors$ = this.connectionErrors.asObservable();
-  readonly client: PublicClient;
   readonly config: Config;
   readonly modal: ReturnType<typeof createAppKit>;
   private readonly unsubscribeEvents: () => void;
@@ -116,7 +114,6 @@ export class WalletService implements OnDestroy {
   constructor(private ngZone: NgZone, @Inject(EVM_WALLET_CONNECTION) connection: EvmWalletConnection) {
     this.config = connection.config;
     this.modal = connection.modal;
-    this.client = createPublicClient({ chain: mainnet, transport: http(env.rpcHttpProvider) });
 
     this.connectedState$ = new Observable((observer) => {
       const refresh = () => this.ngZone.run(() => observer.next(getAccount(this.config)));

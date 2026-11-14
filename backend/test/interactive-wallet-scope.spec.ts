@@ -62,9 +62,9 @@ describe('Interactive wallet-family isolation',()=>{
     db.getEarnedRoleAssignments=jest.fn().mockResolvedValue(['evm','bitcoin','solana','mixed','orphan'].map(role_id=>({id:role_id,user_id:'member',server_id:'server',role_id,status:'active'})));
     db.saveRoleCheckDetails=jest.fn();db.updateRoleAssignmentStatus=jest.fn();
     const engine:any={evaluateRole:jest.fn().mockResolvedValue({status:'failed',results:[]}),finishWalletChecks:jest.fn()};
-    const discord:any={removeUserRole:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn()};
+    const discord:any={isMember:jest.fn().mockResolvedValue(true),removeUserRole:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn()};
     const service=new DynamicRoleService(db,engine,discord);
-    expect(await service.reverifyUserInServer('member','server',{checks:new Map(),verificationCheckFamilies:interactiveWalletFamilies('evm')})).toEqual({verified:0,revoked:1,errors:0});
+    expect(await service.reverifyUserInServer('member','server',{checks:new Map(),verificationCheckFamilies:interactiveWalletFamilies('evm')})).toEqual({verified:0,revoked:1,left:0,errors:0});
     expect(engine.evaluateRole).toHaveBeenCalledTimes(1);
     expect(engine.evaluateRole.mock.calls[0][2]).toBe('evm');
     expect(db.updateRoleAssignmentStatus).toHaveBeenCalledWith('evm','revoked');

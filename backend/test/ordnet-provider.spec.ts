@@ -175,7 +175,7 @@ describe('ord.net ownership provider',()=>{
     const db:any={getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments:jest.fn().mockResolvedValue([{id:'assignment',user_id:'user',server_id:'guild',role_id:'holder'}]),
       getRoleMappings:jest.fn().mockResolvedValue([rule]),saveRoleCheckDetails:jest.fn(),updateLastVerified:jest.fn(),updateRoleAssignmentStatus:jest.fn()};
     const engine=new VerificationEngine(db,new AssetOwnershipService({} as any,{} as any,new OrdinalsOwnershipService(service)),{getUserAddresses:jest.fn().mockResolvedValue([wallet])} as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
-    const discord:any={removeUserRole:jest.fn()};
+    const discord:any={isMember:jest.fn().mockResolvedValue(true),removeUserRole:jest.fn()};
     await new DynamicRoleService(db,engine,discord).performScheduledReverification();
     expect(discord.removeUserRole).not.toHaveBeenCalled();expect(db.updateLastVerified).not.toHaveBeenCalled();
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith('assignment',expect.objectContaining({last_check_status:'unavailable'}));

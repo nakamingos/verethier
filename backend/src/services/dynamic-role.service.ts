@@ -23,6 +23,9 @@ import { OrdinalsOwnershipService } from './ordinals-ownership.service';
  * - Graceful handling of Discord API rate limits
  * - Detailed logging and metrics for monitoring
  */
+/** `left` counts members skipped because Discord confirms they left the server. */
+type ReconcileCounts = { verified: number; revoked: number; left: number; errors: number };
+
 class OwnershipCheckUnavailableError extends Error {
   constructor() { super('Ownership check unavailable; retaining existing role.'); }
 }
@@ -56,6 +59,7 @@ export class DynamicRoleService {
       
       let verifiedCount = 0;
       let revokedCount = 0;
+      let leftCount = 0;
       let errorCount = 0;
       const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
       const discordContext: RoleSyncContext = new Map();
@@ -76,17 +80,14 @@ export class DynamicRoleService {
           }
           
           try {
-            const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
-            
-            if (stillQualifies) {
-              await this.restoreRole(assignment, discordContext);
+            const outcome = await this.reconcileAssignment(assignment, context, discordContext);
+            if (outcome === 'verified') {
               verifiedCount++;
               Logger.debug(`✅ User ${assignment.user_id} still qualifies for role ${assignment.role_id}`);
-            } else {
-              await this.revokeRole(assignment, discordContext);
+            } else if (outcome === 'revoked') {
               revokedCount++;
               Logger.log(`🚫 Revoked role ${assignment.role_name || assignment.role_id} from user ${assignment.user_name || assignment.user_id}`);
-            }
+            } else leftCount++;
           } catch (error) {
             if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error verifying assignment ${assignment.id}:`, error.message);
             errorCount++;
@@ -100,7 +101,7 @@ export class DynamicRoleService {
       }
 
       await this.verificationEngine.finishWalletChecks?.(context);
-      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors`);
+      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors, ${leftCount} skipped (no longer in server)`);
       
     } catch (error) {
       Logger.error('Failed to perform scheduled re-verification:', error);
@@ -122,7 +123,7 @@ export class DynamicRoleService {
   }
 
   /** Restriction changes only reconcile previously earned roles in the administrator's server. */
-  async reverifyUserInServer(userId: string, serverId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyUserInServer(userId: string, serverId: string, context?: NftCheckContext): Promise<ReconcileCounts> {
     let assignments = await this.dbSvc.getEarnedRoleAssignments({ userId, serverId });
     if (context?.verificationCheckFamilies) {
       const rules = await this.dbSvc.getRoleMappings(serverId);
@@ -136,17 +137,17 @@ export class DynamicRoleService {
   }
 
   /** Role-action edits affect only the prior/new removal targets, never every earned role. */
-  async reverifyUserRolesInServer(userId: string, serverId: string, roleIds: string[]): Promise<{ verified: number; revoked: number; errors: number }> {
+  async reverifyUserRolesInServer(userId: string, serverId: string, roleIds: string[]): Promise<ReconcileCounts> {
     const roles = new Set(roleIds);
-    if (!roles.size) return { verified: 0, revoked: 0, errors: 0 };
+    if (!roles.size) return { verified: 0, revoked: 0, left: 0, errors: 0 };
     const assignments = (await this.dbSvc.getEarnedRoleAssignments({ userId, serverId }))
       .filter(assignment => roles.has(assignment.role_id));
     return this.reverifyAssignments(assignments, 'scheduled');
   }
 
-  async reverifyRoleInServer(serverId: string, roleId: string, context?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number; skipped?: string }> {
+  async reverifyRoleInServer(serverId: string, roleId: string, context?: NftCheckContext): Promise<ReconcileCounts & { skipped?: string }> {
     if (!await this.automaticRoleAllowed(serverId, roleId, context))
-      return { verified: 0, revoked: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
+      return { verified: 0, revoked: 0, left: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
     // An assignment's rule_id is only its representative rule. Recheck every
     // previous holder of this role, including holders who matched another rule.
     const assignments = await this.dbSvc.getEarnedRoleAssignments({ serverId, roleId });
@@ -156,14 +157,14 @@ export class DynamicRoleService {
   }
 
   /** An explicit admin role change may move earlier qualifiers to a new role. */
-  async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[], suppliedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number; skipped?: string }> {
+  async reverifyRoleChangeInServer(serverId: string, roleId: string, ruleId: string, memberIds: string[], suppliedContext?: NftCheckContext): Promise<ReconcileCounts & { skipped?: string }> {
     if (!await this.automaticRoleAllowed(serverId, roleId, suppliedContext))
-      return { verified: 0, revoked: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
+      return { verified: 0, revoked: 0, left: 0, errors: 0, skipped: 'Automatic Ordinals recheck requires ord.net-compatible rules. Run an explicit role check instead.' };
     const canonical = await this.dbSvc.getRuleForServer(ruleId, serverId);
     const target = canonical && ruleRoles(canonical).find(r => r.id === roleId);
     const rule = target ? { ...canonical, role_id: target.id, role_name: target.name, additional_roles: [] } : null;
     // A newer edit carries this audience forward in its own durable job.
-    if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, errors: 0 };
+    if (!rule || rule.role_id !== roleId) return { verified: 0, revoked: 0, left: 0, errors: 0 };
     const rules = await this.dbSvc.getRoleMappings(serverId);
     const context: NftCheckContext = suppliedContext || { checks: new Map(), ordinalMode: 'scheduled',
       ordinalNeedsNumbers: rules.some(candidate => candidate.asset_type === 'ordinal' && candidate.inscription_criteria?.kind === 'numbers' && !candidate.inscription_criteria.collection_slug) };
@@ -174,6 +175,9 @@ export class DynamicRoleService {
     for (const userId of new Set(memberIds)) {
       if (alreadyChecked.has(userId)) continue;
       try {
+        // A member who left cannot receive the role; skip ownership reads and
+        // never record a new entitlement for them.
+        if (!await this.discordVerificationSvc.isMember(userId, serverId, discordContext)) { result.left++; continue; }
         const checked = await this.verificationEngine.evaluateRuleGroup(userId, rule, context);
         if (checked.status === 'unavailable') { result.errors++; continue; }
         if (checked.status !== 'passed') continue;
@@ -206,9 +210,10 @@ export class DynamicRoleService {
     return rules.filter(rule => rule.server_id === serverId && ruleRoles(rule).some(role => role.id === roleId)).every(ordnetCompatible);
   }
 
-  private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled', sharedContext?: NftCheckContext): Promise<{ verified: number; revoked: number; errors: number }> {
+  private async reverifyAssignments(assignments: any[], ordinalMode?: 'scheduled', sharedContext?: NftCheckContext): Promise<ReconcileCounts> {
     let verified = 0;
     let revoked = 0;
+    let left = 0;
     let errors = 0;
     let unavailable = 0;
     const context: NftCheckContext = sharedContext || { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
@@ -216,15 +221,10 @@ export class DynamicRoleService {
 
     for (const assignment of assignments) {
       try {
-        const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
-        
-        if (stillQualifies) {
-          await this.restoreRole(assignment, discordContext);
-          verified++;
-        } else {
-          await this.revokeRole(assignment, discordContext);
-          revoked++;
-        }
+        const outcome = await this.reconcileAssignment(assignment, context, discordContext);
+        if (outcome === 'verified') verified++;
+        else if (outcome === 'revoked') revoked++;
+        else left++;
       } catch (error) {
         errors++;
         if (error instanceof OwnershipCheckUnavailableError) unavailable++;
@@ -234,34 +234,22 @@ export class DynamicRoleService {
 
     if (unavailable) Logger.warn(`Role reconciliation incomplete: ${unavailable} assignment(s) unavailable; existing roles retained.`);
     if(!sharedContext)await this.verificationEngine.finishWalletChecks?.(context);
-    return { verified, revoked, errors };
+    return { verified, revoked, left, errors };
   }
 
   /**
-   * Re-verify all users for a specific rule (when rule criteria changes)
+   * Recheck one earned assignment. A member who has left the server is skipped
+   * before any ownership read: Discord already removed their roles, and the
+   * earned record is kept so a later check restores the role if they rejoin.
    */
-  async reverifyRule(ruleId: string): Promise<void> {
-    Logger.log(`🔍 Re-verifying all assignments for rule ${ruleId}`);
-    
-    const ruleAssignments = await this.getRuleEarnedAssignments(ruleId);
-    const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
-    const discordContext: RoleSyncContext = new Map();
-    
-    for (const assignment of ruleAssignments) {
-      try {
-        const stillQualifies = await this.verifyUserStillQualifies(assignment, context);
-        
-        if (stillQualifies) {
-          await this.restoreRole(assignment, discordContext);
-        } else {
-          await this.revokeRole(assignment, discordContext);
-          Logger.log(`Revoked role from user ${assignment.user_id} due to rule change`);
-        }
-      } catch (error) {
-        if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error re-verifying rule assignment:`, error.message);
-      }
+  private async reconcileAssignment(assignment: any, context: NftCheckContext, discordContext: RoleSyncContext): Promise<'verified' | 'revoked' | 'left'> {
+    if (!await this.discordVerificationSvc.isMember(assignment.user_id, assignment.server_id, discordContext)) return 'left';
+    if (await this.verifyUserStillQualifies(assignment, context)) {
+      await this.restoreRole(assignment, discordContext);
+      return 'verified';
     }
-    await this.verificationEngine.finishWalletChecks?.(context);
+    await this.revokeRole(assignment, discordContext);
+    return 'revoked';
   }
 
   /**
@@ -329,25 +317,4 @@ export class DynamicRoleService {
   private async getUserEarnedAssignments(userId: string): Promise<any[]> {
     return this.dbSvc.getEarnedRoleAssignments({ userId });
   }
-
-  /**
-   * Get previously earned assignments for a specific rule
-   */
-  private async getRuleEarnedAssignments(ruleId: string): Promise<any[]> {
-    return this.dbSvc.getEarnedRoleAssignments({ ruleId });
-  }
-
-  /**
-   * Get comprehensive stats about role assignments
-   */
-  async getRoleAssignmentStats(): Promise<any> {
-    return {
-      totalActive: await this.dbSvc.countActiveAssignments(),
-      totalRevoked: await this.dbSvc.countRevokedAssignments(),
-      expiringSoon: await this.dbSvc.countExpiringSoonAssignments(),
-      lastReverificationRun: await this.dbSvc.getLastReverificationTime(),
-    };
-  }
-
-
 }

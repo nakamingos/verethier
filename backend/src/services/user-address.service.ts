@@ -27,13 +27,6 @@ interface AddAddressResult {
   reconciliationQueued?: boolean;
 }
 
-interface UserAddressSummary {
-  user_id: string;
-  addresses: string[];
-  total_addresses: number;
-  last_verified_at?: string;
-}
-
 @Injectable()
 export class UserAddressService {
   private readonly logger = new Logger(UserAddressService.name);
@@ -78,311 +71,27 @@ export class UserAddressService {
    * Add or claim an address for a user after successful verification.
    *
    * If the address is already linked to a different user, ownership is moved
-   * to the newly verified user instead of being rejected.
+   * to the newly verified user instead of being rejected. The link, any
+   * transfer and the audit record are written in one database transaction.
    */
-  async addUserAddress(userId: string, address: string, userName?: string | null, walletType: WalletType = 'evm', activity?: WalletVerificationActivity): Promise<AddAddressResult> {
+  async addUserAddress(userId: string, address: string, userName: string | null | undefined, walletType: WalletType, activity: WalletVerificationActivity): Promise<AddAddressResult> {
     try {
-      const normalizedAddress = normalizeWalletAddress(address, walletType);
-      if (activity) {
-        const { data, error } = await this.supabase.rpc('verifier_link_verified_wallet', {
-          p_user: userId,
-          p_address: normalizedAddress,
-          p_type: walletType,
-          p_name: userName || null,
-          p_request: randomUUID(),
-          p_source: activity.source,
-          p_server: activity.serverId,
-          p_channel: activity.channelId || null,
-          p_chain: activity.evmChainId ?? null,
-        });
-        if (error || !data?.success) return { success: false, error: 'Could not save wallet verification.' };
-        return data;
-      }
-      // Log user address operations only in development
-      if (process.env.NODE_ENV === 'development') {
-        this.logger.debug('Saving a wallet link.');
-      }
-
-      const existingWalletsResult = await this.findWalletsByAddress(normalizedAddress);
-      if (!existingWalletsResult.success) {
-        return existingWalletsResult;
-      }
-
-      const existingWallets = existingWalletsResult.wallets || [];
-      const existingWalletForUser = existingWallets.find(wallet => wallet.user_id === userId);
-      const existingWalletForOtherUser = existingWallets.find(wallet => wallet.user_id !== userId);
-
-      if (existingWalletForUser) {
-        return this.updateExistingWallet(existingWalletForUser, userName);
-      }
-
-      if (existingWalletForOtherUser) {
-        return this.transferWallet(existingWalletForOtherUser, userId, userName);
-      }
-
-      // Insert new address
-      const { data: newWallet, error: insertError } = await this.supabase
-        .from('user_wallets')
-        .insert({
-          user_id: userId,
-          address: normalizedAddress,
-          wallet_type: walletType,
-          user_name: userName || null,
-          created_at: new Date().toISOString(),
-          last_verified_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        if (this.isUserWalletUniqueViolation(insertError)) {
-          return this.resolveInsertConflict(userId, normalizedAddress, userName);
-        }
-
-        this.logger.error(`Error inserting new address:`, insertError);
-        return { success: false, error: insertError.message };
-      }
-
-      this.logger.log('Wallet link saved.');
-      return { 
-        success: true, 
-        wallet: newWallet, 
-        isNewAddress: true 
-      };
-
+      const { data, error } = await this.supabase.rpc('verifier_link_verified_wallet', {
+        p_user: userId,
+        p_address: normalizeWalletAddress(address, walletType),
+        p_type: walletType,
+        p_name: userName || null,
+        p_request: randomUUID(),
+        p_source: activity.source,
+        p_server: activity.serverId,
+        p_channel: activity.channelId || null,
+        p_chain: activity.evmChainId ?? null,
+      });
+      if (error || !data?.success) return { success: false, error: 'Could not save wallet verification.' };
+      return data;
     } catch (error) {
       this.logger.error(`Exception adding address for user ${userId}:`, error);
-      return { success: false, error: error.message };
+      return { success: false, error: 'Could not save wallet verification.' };
     }
   }
-
-  /**
-   * Remove an address from a user's wallet collection
-   */
-  async removeUserAddress(userId: string, address: string): Promise<boolean> {
-    try {
-      const normalizedAddress = (/^0x/i.test(address) || /^bc1/i.test(address)) ? address.toLowerCase() : address;
-      // Log address removal only in development  
-      if (process.env.NODE_ENV === 'development') {
-        this.logger.debug('Removing a saved wallet link.');
-      }
-
-      const { error } = await this.supabase
-        .from('user_wallets')
-        .delete()
-        .eq('user_id', userId)
-        .eq('address', normalizedAddress);
-
-      if (error) {
-        this.logger.error(`Error removing address:`, error);
-        return false;
-      }
-
-      this.logger.log('Wallet link removed.');
-      return true;
-
-    } catch (error) {
-      this.logger.error(`Exception removing address for user ${userId}:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Get summary of all user addresses with counts
-   */
-  async getUserAddressSummary(userId: string): Promise<UserAddressSummary | null> {
-    try {
-      this.logger.debug(`Getting address summary for user: ${userId}`);
-
-      const { data, error } = await this.supabase
-        .from('user_wallets')
-        .select('address, last_verified_at')
-        .eq('user_id', userId)
-        .order('last_verified_at', { ascending: false });
-
-      if (error) {
-        this.logger.error(`Error fetching address summary:`, error);
-        return null;
-      }
-
-      if (!data || data.length === 0) {
-        return {
-          user_id: userId,
-          addresses: [],
-          total_addresses: 0
-        };
-      }
-
-      return {
-        user_id: userId,
-        addresses: data.map(row => row.address),
-        total_addresses: data.length,
-        last_verified_at: data[0]?.last_verified_at
-      };
-
-    } catch (error) {
-      this.logger.error(`Exception getting address summary for user ${userId}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Check if a user has any addresses
-   */
-  async userHasAddresses(userId: string): Promise<boolean> {
-    try {
-      const addresses = await this.getUserAddresses(userId);
-      return addresses.length > 0;
-    } catch (error) {
-      this.logger.error(`Exception checking if user has addresses:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Get all users who have a specific address
-   */
-  async getUsersWithAddress(address: string): Promise<string[]> {
-    try {
-      const normalizedAddress = (/^0x/i.test(address) || /^bc1/i.test(address)) ? address.toLowerCase() : address;
-      this.logger.debug(`Finding users with address: ${normalizedAddress}`);
-
-      const { data, error } = await this.supabase
-        .from('user_wallets')
-        .select('user_id')
-        .eq('address', normalizedAddress);
-
-      if (error) {
-        this.logger.error(`Error finding users with address:`, error);
-        return [];
-      }
-
-      const userIds = data?.map(row => row.user_id) || [];
-      this.logger.debug(`Found ${userIds.length} users with address ${normalizedAddress}`);
-      
-      return userIds;
-    } catch (error) {
-      this.logger.error(`Exception finding users with address:`, error);
-      return [];
-    }
-  }
-
-  private async findWalletsByAddress(address: string): Promise<AddAddressResult & { wallets?: UserWallet[] }> {
-    const { data, error } = await this.supabase
-      .from('user_wallets')
-      .select('*')
-      .eq('address', address)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      this.logger.error(`Error checking wallet ownership for ${address}:`, error);
-      return { success: false, error: error.message };
-    }
-
-    return {
-      success: true,
-      wallets: data || []
-    };
-  }
-
-  private async updateExistingWallet(existingWallet: UserWallet, userName?: string | null): Promise<AddAddressResult> {
-    const { data: updated, error: updateError } = await this.supabase
-      .from('user_wallets')
-      .update({
-        last_verified_at: new Date().toISOString(),
-        user_name: userName !== undefined ? userName : existingWallet.user_name
-      })
-      .eq('id', existingWallet.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      this.logger.error(`Error updating existing address:`, updateError);
-      return { success: false, error: updateError.message };
-    }
-
-    this.logger.debug(`Updated existing address verification time and username`);
-    return {
-      success: true,
-      wallet: updated,
-      isNewAddress: false
-    };
-  }
-
-  private async transferWallet(
-    existingWallet: UserWallet,
-    newUserId: string,
-    userName?: string | null
-  ): Promise<AddAddressResult> {
-    const { data: updated, error: updateError } = await this.supabase
-      .from('user_wallets')
-      .update({
-        user_id: newUserId,
-        user_name: userName !== undefined ? userName : existingWallet.user_name,
-        last_verified_at: new Date().toISOString()
-      })
-      .eq('id', existingWallet.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      this.logger.error(
-        'Wallet transfer failed:',
-        updateError
-      );
-      return { success: false, error: updateError.message };
-    }
-
-    this.logger.log(
-      'Wallet transfer saved.'
-    );
-
-    return {
-      success: true,
-      wallet: updated,
-      isNewAddress: false,
-      wasTransferred: true,
-      previousUserId: existingWallet.user_id,
-      previousUserName: existingWallet.user_name,
-    };
-  }
-
-  private async resolveInsertConflict(userId: string, address: string, userName?: string | null): Promise<AddAddressResult> {
-    const existingWalletsResult = await this.findWalletsByAddress(address);
-    if (!existingWalletsResult.success) {
-      return existingWalletsResult;
-    }
-
-    const existingWallets = existingWalletsResult.wallets || [];
-    const existingWalletForUser = existingWallets.find(wallet => wallet.user_id === userId);
-
-    if (existingWalletForUser) {
-      return this.updateExistingWallet(existingWalletForUser, userName);
-    }
-
-    if (existingWallets.length > 0) {
-      return this.transferWallet(existingWallets[0], userId, userName);
-    }
-
-    this.logger.error(
-      'Wallet link conflict could not be resolved on re-read.'
-    );
-    return {
-      success: false,
-      error: 'Failed to store wallet address due to a conflicting wallet record.'
-    };
-  }
-
-  private isUserWalletUniqueViolation(error: unknown): boolean {
-    if (!error || typeof error !== 'object') {
-      return false;
-    }
-
-    const code = 'code' in error && typeof error.code === 'string' ? error.code : '';
-    const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
-
-    return code === '23505' || message.includes('duplicate key value violates unique constraint');
-  }
-
-
 }

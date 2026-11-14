@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Param,
   Post,
   Query,
   Req,
@@ -82,11 +81,5 @@ export class MemberController {
     @Body() dto: MemberResumeDto,
   ) {
     return this.member.resume(await this.session(req), dto.flow);
-  }
-  @Post('jobs/:id/retry') async retry(
-    @Req() req: Request,
-    @Param('id') id: string,
-  ) {
-    return this.member.retry(await this.session(req), id);
   }
 }

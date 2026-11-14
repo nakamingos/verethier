@@ -1,4 +1,5 @@
 import { consentCommitment } from '../src/utils/consent-proof.util';
+import { minimalEvmVerificationProof } from "../src/utils/wallet-proof.util";
 import { DiscordVerificationService } from "../src/services/discord-verification.service";
 import {
   PrivacyService,
@@ -282,6 +283,8 @@ describe("Signed privacy choices", () => {
     ("0x" + "11".repeat(32)) as `0x${string}`,
   );
   const data = {
+    proofVersion: 2 as const,
+    chainId: 1,
     address: account.address,
     userId: other,
     userTag: "Member",
@@ -296,6 +299,7 @@ describe("Signed privacy choices", () => {
   function evm() {
     const nonce = {
         validateNonce: jest.fn().mockResolvedValue(true),
+        getActiveNonce: jest.fn().mockResolvedValue({ nonce: data.nonce, expiry: data.expiry }),
         consumeNonce: jest.fn().mockResolvedValue({}),
       },
       links = {
@@ -314,30 +318,16 @@ describe("Signed privacy choices", () => {
     return { nonce, links, privacy, service };
   }
   async function signature() {
-    return account.signTypedData({
-      domain: { name: "Bouncer", version: "1", chainId: 1 },
-      primaryType: "Verification",
-      types: {
-        Verification: [
-          { name: "UserID", type: "string" },
-          { name: "UserTag", type: "string" },
-          { name: "ServerID", type: "string" },
-          { name: "ServerName", type: "string" },
-          { name: "Nonce", type: "string" },
-          { name: "Expiry", type: "uint256" },
-          { name: "Privacy", type: "string" },
-        ],
-      },
-      message: {
-        UserID: data.userId,
-        UserTag: data.userTag,
-        ServerID: data.discordId,
-        ServerName: data.discordName,
-        Nonce: data.nonce,
-        Expiry: BigInt(data.expiry),
-        Privacy: privacyProof(choice),
-      },
-    });
+    return account.signTypedData(
+      minimalEvmVerificationProof({
+        origin: EnvironmentConfig.BASE_URL,
+        chainId: 1,
+        address: data.address,
+        nonce: data.nonce,
+        expiry: data.expiry,
+        privacy: choice,
+      }) as any,
+    );
   }
   it("saves a cryptographically verified EVM choice after nonce consumption and before the new wallet proof", async () => {
     const { nonce, links, privacy, service } = evm();

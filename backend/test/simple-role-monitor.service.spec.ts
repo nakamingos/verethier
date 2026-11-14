@@ -22,13 +22,10 @@ describe('SimpleRoleMonitorService', () => {
       getUserRoleHistory: jest.fn(),
       getServerUniqueUsers: jest.fn(),
       checkEnhancedTrackingExists: jest.fn(),
-      getRoleAssignmentStats: jest.fn(),
       getRoleMappings: jest.fn(),
       getRuleById: jest.fn().mockImplementation(async id => (await mockDbService.getRoleMappings()).find(rule => rule.id === id)),
       saveRoleCheckDetails: jest.fn(),
       updateLastVerified: jest.fn(),
-      addServerToUser: jest.fn(),
-      logUserRole: jest.fn(),
     };
 
     const mockDataService = {
@@ -212,7 +209,6 @@ describe('SimpleRoleMonitorService', () => {
         roleName: 'Test Role',
         wasAlreadyAssigned: false
       });
-      dbService.logUserRole.mockResolvedValue(undefined);
 
       const result = await service.reverifyUser('user1', 'server1');
 

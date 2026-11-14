@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import {
   Address,
   BaseError,
@@ -37,10 +37,11 @@ export class EvmSignatureService {
   private client(chainId: number) {
     const network = getNftNetwork(chainId);
     const url = EnvironmentConfig[network.rpcVariable];
-    if (!url)
-      throw new Error(
-        `${network.name} smart-wallet verification is not configured. Set ${network.rpcVariable} on the backend.`,
-      );
+    if (!url) {
+      // Configuration detail is for the operator log only; members see a plain refusal.
+      Logger.error(`${network.name} smart-wallet verification needs ${network.rpcVariable}.`, 'EvmSignatureService');
+      throw new Error(`Smart-wallet verification is not available on ${network.name} right now.`);
+    }
     if (!this.clients.has(chainId))
       this.clients.set(
         chainId,

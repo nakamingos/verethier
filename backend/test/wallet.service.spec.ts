@@ -9,6 +9,8 @@ import { DiscordService } from '../src/services/discord.service';
 import { DecodedData } from '../src/models/app.interface';
 import { recoverTypedDataAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { EnvironmentConfig } from '../src/config/environment.config';
+import { minimalEvmVerificationProof } from '../src/utils/wallet-proof.util';
 
 // Mock viem functions
 jest.mock('viem', () => ({
@@ -20,6 +22,7 @@ const mockRecoverTypedDataAddress = recoverTypedDataAddress as jest.MockedFuncti
 
 const mockNonceService = {
   validateNonce: jest.fn(),
+  getActiveNonce: jest.fn(),
   consumeNonce: jest.fn(),
   isNonceUsed: jest.fn(),
   markNonceAsUsed: jest.fn(),
@@ -38,6 +41,8 @@ const mockDynamicRoleService = {
 };
 
 const baseData: DecodedData = {
+  proofVersion: 2,
+  chainId: 1,
   address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   userId: 'u',
   userTag: 'tag',
@@ -48,6 +53,11 @@ const baseData: DecodedData = {
   nonce: 'n',
   expiry: Math.floor(Date.now() / 1000) + 1000,
 };
+
+// The v2 proof is rebuilt from the server-held nonce, so tests register the
+// matching nonce expiry before verifying a payload.
+const activeNonce = (data: DecodedData) =>
+  mockNonceService.getActiveNonce.mockResolvedValue({ nonce: data.nonce, expiry: data.expiry });
 
 describe('WalletService', () => {
   let service: WalletService;
@@ -66,6 +76,8 @@ describe('WalletService', () => {
 
     service = module.get<WalletService>(WalletService);
     jest.clearAllMocks();
+    jest.replaceProperty(EnvironmentConfig, 'BASE_URL', 'https://verify.example.test');
+    activeNonce(baseData);
     jest.spyOn((service as any).evmSignatures, 'client').mockReturnValue({ getChainId: async () => 1, getCode: async () => '0x' });
     mockNonceService.consumeNonce.mockResolvedValue({});
     mockUserAddressService.addUserAddress.mockResolvedValue({ success: true, isNewAddress: true });
@@ -88,7 +100,7 @@ describe('WalletService', () => {
       mockNonceService.validateNonce.mockResolvedValue(true);
       const verify = jest.spyOn((service as any).evmSignatures,'verify').mockResolvedValue({chainId:8453});
       const result = await service.verifySignature({...baseData,chainId:8453},'0x11');
-      expect(verify).toHaveBeenCalledWith(baseData.address,expect.objectContaining({domain:{name:'Bouncer',version:'1',chainId:8453},message:expect.objectContaining({WalletAddress:baseData.address})}),'0x11');
+      expect(verify).toHaveBeenCalledWith(baseData.address,expect.objectContaining({domain:{name:'Bouncer',version:'2',chainId:8453},message:expect.objectContaining({Domain:'https://verify.example.test',Nonce:'n'})}),'0x11');
       expect(result.activity).toMatchObject({evmChainId:8453});
       expect(mockUserAddressService.addUserAddress.mock.calls[0][4]).toMatchObject({evmChainId:8453});
     });
@@ -168,47 +180,43 @@ describe('WalletService', () => {
       expect(mockNonceService.validateNonce).toHaveBeenCalledWith('u', 'd', 'n');
     });
 
-    it('uses correct EIP-712 typed data structure', async () => {
+    it('verifies the v2 EIP-712 proof rebuilt from the server-held nonce', async () => {
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-      
+
       await service.verifySignature(baseData, '0x11');
-      
-      // Verify that the unified EIP-712 structure is used (without legacy fields)
+
       expect(mockRecoverTypedDataAddress).toHaveBeenCalledWith({
-        domain: {
-          name: 'Bouncer',
-          version: '1',
-          chainId: 1,
-        },
-        types: {
-          Verification: [
-            { name: 'UserID', type: 'string' },
-            { name: 'UserTag', type: 'string' },
-            { name: 'ServerID', type: 'string' },
-            { name: 'ServerName', type: 'string' },
-            { name: 'Nonce', type: 'string' },
-            { name: 'Expiry', type: 'uint256' },
-          ]
-        },
-        primaryType: 'Verification',
-        message: {
-          UserID: 'u',
-          UserTag: 'tag',
-          ServerID: 'd',
-          ServerName: 'dn',
-          Nonce: 'n',
-          Expiry: baseData.expiry,
-        },
+        ...minimalEvmVerificationProof({
+          origin: 'https://verify.example.test', chainId: 1, address: baseData.address,
+          nonce: 'n', expiry: baseData.expiry,
+        }),
         signature: '0x11',
       });
     });
 
-    it.each(['Bouncer', 'verethier', 'unrelated-app'])('checks a real signature from the %s domain', async name => {
+    it('rejects a payload without the v2 proof version before any signature or nonce work', async () => {
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      const verify = jest.spyOn((service as any).evmSignatures, 'verify');
+      const { proofVersion, ...legacy } = baseData;
+      await expect(service.verifySignature(legacy as DecodedData, '0x11')).rejects.toThrow('Invalid wallet proof version.');
+      expect(verify).not.toHaveBeenCalled();
+      expect(mockNonceService.consumeNonce).not.toHaveBeenCalled();
+      expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+    });
+
+    it('rejects a payload whose expiry differs from the server-held nonce', async () => {
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      await expect(service.verifySignature({ ...baseData, expiry: baseData.expiry + 1 }, '0x11'))
+        .rejects.toThrow('Invalid wallet verification challenge.');
+      expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+    });
+
+    it('rejects a real legacy v1 signature that omits the origin and wallet address', async () => {
       const account = privateKeyToAccount(('0x' + '1'.repeat(64)) as `0x${string}`);
       const data = { ...baseData, address: account.address };
       const signature = await account.signTypedData({
-        domain: { name, version: '1', chainId: 1 },
+        domain: { name: 'Bouncer', version: '1', chainId: 1 },
         types: { Verification: [
           { name: 'UserID', type: 'string' }, { name: 'UserTag', type: 'string' },
           { name: 'ServerID', type: 'string' }, { name: 'ServerName', type: 'string' },
@@ -221,18 +229,34 @@ describe('WalletService', () => {
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockImplementation(jest.requireActual('viem').recoverTypedDataAddress);
 
-      if (name === 'unrelated-app') {
-        await expect(service.verifySignature(data, signature)).rejects.toThrow('Invalid wallet signature');
-        expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
-      } else {
+      await expect(service.verifySignature(data, signature)).rejects.toThrow('Invalid wallet signature');
+      expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
+    });
+
+    it.each(['Bouncer', 'verethier'])('accepts a real v2 signature only under the Bouncer domain (%s)', async name => {
+      const account = privateKeyToAccount(('0x' + '1'.repeat(64)) as `0x${string}`);
+      const data = { ...baseData, address: account.address };
+      const typedData = minimalEvmVerificationProof({
+        origin: 'https://verify.example.test', chainId: 1, address: data.address, nonce: data.nonce, expiry: data.expiry,
+      });
+      const signature = await account.signTypedData({ ...typedData, domain: { ...typedData.domain, name } } as any);
+      mockNonceService.validateNonce.mockResolvedValue(true);
+      mockRecoverTypedDataAddress.mockImplementation(jest.requireActual('viem').recoverTypedDataAddress);
+
+      if (name === 'Bouncer') {
         await expect(service.verifySignature(data, signature)).resolves.toMatchObject({
           address: account.address.toLowerCase(), walletOwnershipTransferred: false,
         });
+      } else {
+        await expect(service.verifySignature(data, signature)).rejects.toThrow('Invalid wallet signature');
+        expect(mockUserAddressService.addUserAddress).not.toHaveBeenCalled();
       }
     });
 
     it('handles verification with minimal data', async () => {
       const minimalData: DecodedData = {
+        proofVersion: 2,
+        chainId: 1,
         address: '0x1111111111111111111111111111111111111111',
         userId: 'user1',
         userTag: '',
@@ -243,6 +267,7 @@ describe('WalletService', () => {
         nonce: 'nonce1',
         expiry: Math.floor(Date.now() / 1000) + 3600,
       };
+      activeNonce(minimalData);
 
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockResolvedValue('0x1111111111111111111111111111111111111111');
@@ -258,6 +283,8 @@ describe('WalletService', () => {
 
     it('handles verification with complete data', async () => {
       const completeData: DecodedData = {
+        proofVersion: 2,
+        chainId: 1,
         address: '0x4444444444444444444444444444444444444444',
         userId: 'user2',
         userTag: 'User#1234',
@@ -268,6 +295,7 @@ describe('WalletService', () => {
         nonce: 'nonce2',
         expiry: Math.floor(Date.now() / 1000) + 7200,
       };
+      activeNonce(completeData);
 
       mockNonceService.validateNonce.mockResolvedValue(true);
       mockRecoverTypedDataAddress.mockResolvedValue('0x4444444444444444444444444444444444444444');

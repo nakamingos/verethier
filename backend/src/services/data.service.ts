@@ -51,108 +51,21 @@ export class DataService {
     );
   }
   
-  /**
-   * Checks basic asset ownership for an address.
-   * Includes assets in marketplace escrow (owned by market but previously owned by address).
-   * 
-   * @param address - The wallet address to check ownership for
-   * @returns Promise<number> - Count of assets owned by the address
-   */
-  async checkAssetOwnership(address: string): Promise<any> {
-    address = address.toLowerCase();
-    const marketAddress = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a'.toLowerCase();
-
-    let query = supabase
-      .from('ethscriptions')
-      .select('hashId, owner, prevOwner')
-      .or(`owner.eq.${address},and(owner.eq.${marketAddress},prevOwner.eq.${address})`);
-
-    const { data, error } = await query;
-      
-    if (error) {
-      throw new Error(error.message);
-    }
-    return data.length;
-  }
-
-  /**
-   * Gets unique slugs of assets owned by an address.
-   * 
-   * @param address - The wallet address to check
-   * @returns Promise<string[]> - Array of unique slug names owned
-   */
-  async getOwnedSlugs(address: string): Promise<string[]> {
-    const { data, error } = await supabase
-      .from('ethscriptions')
-      .select('slug')
-      .eq('owner', address.toLowerCase());
-    if (error) throw new Error(error.message);
-    return Array.from(new Set((data || []).map(r => r.slug)));
-  }
-
-  /**
-   * Gets detailed asset information including metadata attributes.
-   * Combines ethscriptions data with metadata for comprehensive asset details.
-   * 
-   * @param address - The wallet address to get assets for
-   * @returns Promise<AssetWithAttrs[]> - Array of assets with their attributes
-   */
-  async getDetailedAssets(address: string): Promise<AssetWithAttrs[]> {
-    // Step 1: Get ethscriptions owned by the address
-    const { data: ethscriptions, error } = await supabase
-      .from('ethscriptions')
-      .select('hashId, slug, sha')
-      .eq('owner', address.toLowerCase());
-
-    if (error) {
-      throw new Error(`Failed to fetch ethscriptions: ${error.message}`);
-    }
-
-    if (!ethscriptions || ethscriptions.length === 0) {
-      return [];
-    }
-
-    // Step 2: Get attributes for these ethscriptions using their sha values (optimized)
-    const ethscriptionShas: string[] = [];
-    ethscriptions.forEach(e => {
-      if (e.sha) ethscriptionShas.push(e.sha);
-    });
-    const { data: attributes, error: attrError } = await supabase
-      .from('attributes_new')
-      .select('sha, values')
-      .in('sha', ethscriptionShas);
-
-    if (attrError) {
-      throw new Error(`Failed to fetch attributes: ${attrError.message}`);
-    }
-
-    // Step 3: Combine the data
-    return ethscriptions.map(ethscription => {
-      const attr = attributes?.find(a => a.sha === ethscription.sha);
-      return {
-        slug: ethscription.slug,
-        attributes: (attr?.values as Record<string, string | number>) || {},
-      };
-    });
-  }
-
   async getAllSlugs(): Promise<string[]> {
-    const { data, error } = await supabase
-      .from('collections')
-      .select('slug');
-    if (error) throw new Error(error.message);
-    
-    // More efficient unique slug extraction
-    const uniqueSlugs: string[] = [];
-    const seenSlugs = new Set<string>();
-    
-    data?.forEach(r => {
-      if (r.slug && !seenSlugs.has(r.slug)) {
-        seenSlugs.add(r.slug);
-        uniqueSlugs.push(r.slug);
-      }
-    });
-    
+    // Rule validation treats a missing slug as an unknown collection, so read
+    // every page; a single request stops at the API's row limit (1,000).
+    const pageSize = 1000;
+    const uniqueSlugs = new Set<string>();
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from('collections')
+        .select('slug')
+        .order('slug', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error || !Array.isArray(data)) throw new Error(error?.message || 'Collections could not be read.');
+      for (const row of data) if (row.slug) uniqueSlugs.add(row.slug);
+      if (data.length < pageSize) break;
+    }
     return ['all-collections', ...uniqueSlugs];
   }
 
@@ -610,114 +523,6 @@ export class DataService {
   }
 
   /**
-   * Batch check asset ownership for multiple criteria - optimized for performance
-   * @param address - Wallet address to check
-   * @param criteriaList - Array of criteria objects with slug, attributeKey, attributeValue, minItems
-   * @returns Map of criteria indexes to matching asset counts
-   */
-  async batchCheckAssetOwnership(
-    address: string,
-    criteriaList: Array<{
-      slug?: string;
-      attributeKey?: string;
-      attributeValue?: string;
-      minItems?: number;
-    }>
-  ): Promise<Map<number, number>> {
-    if (criteriaList.length === 0) {
-      return new Map();
-    }
-
-    const normalizedAddress = address.toLowerCase();
-    const marketAddress = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
-    const results = new Map<number, number>();
-
-    Logger.log(`🚀 BATCH CHECK - Checking ${criteriaList.length} criteria for address: ${normalizedAddress}`);
-
-    // Separate criteria into simple and attribute-filtered groups
-    const simpleCriteria: Array<{ index: number; criteria: any }> = [];
-    const attributeCriteria: Array<{ index: number; criteria: any }> = [];
-
-    criteriaList.forEach((criteria, index) => {
-      const hasAttributeFilter = this.hasAttributeCriteria(criteria.attributeKey, criteria.attributeValue);
-      if (!hasAttributeFilter) {
-        simpleCriteria.push({ index, criteria });
-      } else {
-        attributeCriteria.push({ index, criteria });
-      }
-    });
-
-    // Process simple criteria in batch
-    if (simpleCriteria.length > 0) {
-      // Extract unique slugs efficiently
-      const slugSet = new Set<string>();
-      simpleCriteria.forEach(({ criteria }) => {
-        if (criteria.slug && criteria.slug !== 'ALL' && criteria.slug !== 'all-collections') {
-          slugSet.add(criteria.slug);
-        }
-      });
-      const slugs = Array.from(slugSet);
-      
-      if (slugs.length === 0) {
-        // No slug filtering - get all assets
-        const { data, error } = await supabase
-          .from('ethscriptions')
-          .select('hashId, slug')
-          .or(`owner.eq.${normalizedAddress},and(owner.eq.${marketAddress},prevOwner.eq.${normalizedAddress})`);
-
-        if (error) throw new Error(error.message);
-
-        simpleCriteria.forEach(({ index, criteria }) => {
-          const count = data?.length || 0;
-          results.set(index, count >= (criteria.minItems || 1) ? count : 0);
-        });
-      } else {
-        // Batch query for all relevant slugs
-        const { data, error } = await supabase
-          .from('ethscriptions')
-          .select('hashId, slug')
-          .or(`owner.eq.${normalizedAddress},and(owner.eq.${marketAddress},prevOwner.eq.${normalizedAddress})`)
-          .in('slug', slugs);
-
-        if (error) throw new Error(error.message);
-
-        // Group by slug for efficient counting
-        const assetsBySlug = new Map<string, number>();
-        data?.forEach(asset => {
-          assetsBySlug.set(asset.slug, (assetsBySlug.get(asset.slug) || 0) + 1);
-        });
-
-        simpleCriteria.forEach(({ index, criteria }) => {
-          const count = assetsBySlug.get(criteria.slug!) || 0;
-          results.set(index, count >= (criteria.minItems || 1) ? count : 0);
-        });
-      }
-    }
-
-    // Process attribute criteria individually (these require complex filtering)
-    if (attributeCriteria.length > 0) {
-      const attributePromises = attributeCriteria.map(async ({ index, criteria }) => {
-        const count = await this.checkAssetOwnershipWithCriteria(
-          address,
-          criteria.slug,
-          criteria.attributeKey,
-          criteria.attributeValue,
-          criteria.minItems
-        );
-        return { index, count };
-      });
-
-      const attributeResults = await Promise.all(attributePromises);
-      attributeResults.forEach(({ index, count }) => {
-        results.set(index, count);
-      });
-    }
-
-    Logger.log(`🚀 BATCH CHECK - Completed ${criteriaList.length} checks with ${results.size} results`);
-    return results;
-  }
-
-  /**
    * Filter ethscriptions by attribute key/value with optimized logic
    * @private
    */
@@ -732,8 +537,3 @@ export class DataService {
     });
   }
 }
-
-export type AssetWithAttrs = {
-  slug: string;
-  attributes: Record<string, string | number>;
-};
