@@ -181,36 +181,6 @@ describe('DataService', () => {
     expect(query.select).toContain('attributes_new(values)');
   });
 
-  it('keeps category-only rules on the attribute-filtered path during batch checks', async () => {
-    const query = queueInventory({
-      data: [
-        {
-          hashId: '1',
-          slug: 'test-collection',
-          attributes_new: { values: { Background: 'Blue' } },
-        },
-        {
-          hashId: '2',
-          slug: 'test-collection',
-          attributes_new: { values: { Eyes: 'Laser' } },
-        },
-      ],
-      error: null,
-    });
-
-    const result = await service.batchCheckAssetOwnership('0xabc123', [
-      {
-        slug: 'test-collection',
-        attributeKey: 'Background',
-        attributeValue: 'ALL',
-        minItems: 1,
-      },
-    ]);
-
-    expect(result.get(0)).toBe(1);
-    expect(query.select).toContain('attributes_new(values)');
-  });
-
   it('shares one fresh inventory across parallel rules, stacked wallets, and later recommendations', async () => {
     const context = { checks: new Map() };
     const query = queueInventory({ data: [

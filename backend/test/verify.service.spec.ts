@@ -38,14 +38,10 @@ const mockDiscordVerificationService = {
   sendVerificationComplete: jest.fn(),
 };
 const mockDataService = { 
-  getDetailedAssets: jest.fn(),
-  checkAssetOwnership: jest.fn().mockResolvedValue(1),
   checkAssetOwnershipWithCriteria: jest.fn().mockResolvedValue(1)
 };
 const mockDbService = {
   recordWalletVerification:jest.fn().mockResolvedValue(undefined),
-  getServerRole: jest.fn(),
-  logUserRole: jest.fn(),
   getRoleMappings: jest.fn(),
   findRuleByMessageId: jest.fn().mockResolvedValue({ 
     id: 1, 

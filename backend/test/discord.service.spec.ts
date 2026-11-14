@@ -70,10 +70,8 @@ const mockDbService = {
   deleteRoleMapping: jest.fn(),
   getRoleMappings: jest.fn(),
   getKnownOrdinalCollectionSlugs: jest.fn(),
-  ruleExists: jest.fn(),
   insertRoleMapping: jest.fn(),
   findRuleByMessageId: jest.fn(),
-  getServerRole: jest.fn(),
 };
 
 const mockNonceService = {

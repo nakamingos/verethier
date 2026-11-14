@@ -106,15 +106,12 @@ describe('DbService (Unit Tests)', () => {
     });
 
     it('should have all expected methods', () => {
-      expect(typeof service.addUpdateServer).toBe('function');
-      expect(typeof service.getServerRole).toBe('function');
       expect(typeof service.addRoleMapping).toBe('function');
       expect(typeof service.getRoleMappings).toBe('function');
       expect(typeof service.deleteRoleMapping).toBe('function');
       expect(typeof service.getAllRulesForServer).toBe('function');
       expect(typeof service.getRuleById).toBe('function');
       expect(typeof service.trackRoleAssignment).toBe('function');
-      expect(typeof service.updateRoleVerification).toBe('function');
     });
   });
 
@@ -133,76 +130,6 @@ describe('DbService (Unit Tests)', () => {
       await expect(service.cacheNftMetadata([])).resolves.toBeUndefined();
       expect(warning).toHaveBeenCalledTimes(2);
       warning.mockRestore();
-    });
-  });
-
-  describe('addUpdateServer', () => {
-    it('should successfully add/update a server', async () => {
-      const mockResult = {
-        data: { id: '123', name: 'Test Server', role_id: 'role123' },
-        error: null
-      };
-      
-      mockSupabaseClient.upsert.mockResolvedValue(mockResult);
-
-      const result = await service.addUpdateServer('123', 'Test Server', 'role123');
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('verifier_servers');
-      expect(mockSupabaseClient.upsert).toHaveBeenCalledWith({
-        id: '123',
-        name: 'Test Server',
-        role_id: 'role123'
-      });
-      expect(result).toEqual(mockResult.data);
-    });
-
-    it('should throw error on database error', async () => {
-      const mockError = new Error('Database error');
-      mockSupabaseClient.upsert.mockResolvedValue({
-        data: null,
-        error: mockError
-      });
-
-      await expect(service.addUpdateServer('123', 'Test Server', 'role123')).rejects.toThrow('Database error');
-    });
-  });
-
-  describe('getServerRole', () => {
-    it('should successfully retrieve a server role', async () => {
-      const mockResult = {
-        data: [{ role_id: 'role123' }],
-        error: null
-      };
-      mockSupabaseClient.eq.mockResolvedValue(mockResult);
-
-      const result = await service.getServerRole('123');
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('verifier_servers');
-      expect(mockSupabaseClient.select).toHaveBeenCalledWith('role_id');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', '123');
-      expect(result).toBe('role123');
-    });
-
-    it('should return undefined when server not found', async () => {
-      const mockResult = {
-        data: [],
-        error: null
-      };
-      mockSupabaseClient.eq.mockResolvedValue(mockResult);
-
-      const result = await service.getServerRole('nonexistent');
-
-      expect(result).toBeUndefined();
-    });
-
-    it('should throw error on database error', async () => {
-      const mockError = new Error('Database error');
-      mockSupabaseClient.eq.mockResolvedValue({
-        data: null,
-        error: mockError
-      });
-
-      await expect(service.getServerRole('123')).rejects.toThrow('Database error');
     });
   });
 
@@ -343,46 +270,6 @@ describe('DbService (Unit Tests)', () => {
     });
   });
 
-  describe('updateRoleVerification', () => {
-    it('should call the correct Supabase methods for valid verification', async () => {
-      const mockResult = {
-        data: { id: 'assignment123' },
-        error: null
-      };
-      mockSupabaseClient.single.mockResolvedValue(mockResult);
-
-      await service.updateRoleVerification('assignment123', true);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('verifier_user_roles');
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        status: 'active',
-        verified_at: expect.any(String),
-        last_checked: expect.any(String),
-        updated_at: expect.any(String)
-      });
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'assignment123');
-      expect(mockSupabaseClient.select).toHaveBeenCalled();
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
-    });
-
-    it('should set status to revoked for invalid verification', async () => {
-      const mockResult = {
-        data: { id: 'assignment123' },
-        error: null
-      };
-      mockSupabaseClient.single.mockResolvedValue(mockResult);
-
-      await service.updateRoleVerification('assignment123', false);
-
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        status: 'revoked',
-        verified_at: expect.any(String),
-        last_checked: expect.any(String),
-        updated_at: expect.any(String)
-      });
-    });
-  });
-
   describe('Dependency Injection', () => {
     it('should properly inject the Supabase client', () => {
       // This test verifies that the service was created successfully with the injected client
@@ -391,7 +278,7 @@ describe('DbService (Unit Tests)', () => {
       
       // Verify that calling a method attempts to use the injected client
       mockSupabaseClient.eq.mockResolvedValue({ data: [], error: null });
-      service.getServerRole('test');
+      service.getRoleMappings('test');
       
       expect(mockSupabaseClient.from).toHaveBeenCalled();
     });
@@ -400,18 +287,18 @@ describe('DbService (Unit Tests)', () => {
   describe('Error Handling', () => {
     it('should handle Supabase errors gracefully', async () => {
       const mockError = new Error('Database connection failed');
-      mockSupabaseClient.upsert.mockResolvedValue({
+      mockSupabaseClient.eq.mockResolvedValue({
         data: null,
         error: mockError
       });
 
-      await expect(service.addUpdateServer('123', 'Test', 'role123')).rejects.toThrow('Database connection failed');
+      await expect(service.getRoleMappings('123')).rejects.toThrow('Database connection failed');
     });
 
     it('should handle method call exceptions', async () => {
       mockSupabaseClient.eq.mockRejectedValue(new Error('Network timeout'));
 
-      await expect(service.getServerRole('123')).rejects.toThrow('Network timeout');
+      await expect(service.getRoleMappings('123')).rejects.toThrow('Network timeout');
     });
   });
 

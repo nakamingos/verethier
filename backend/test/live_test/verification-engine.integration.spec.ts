@@ -244,9 +244,10 @@ describe('VerificationEngine - Integration Tests', () => {
         .select()
         .single();
 
-      const result = await verificationEngine.verifyUserForServer(
+      const serverRules = await dbService.getRoleMappings('test_server_all');
+      const result = await verificationEngine.verifyUserBulk(
         'test_user_server',
-        'test_server_all',
+        serverRules.map(r => r.id),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 
@@ -271,9 +272,10 @@ describe('VerificationEngine - Integration Tests', () => {
       // Create server but no rules
       await testDb.createTestServer('test_server_empty');
 
-      const result = await verificationEngine.verifyUserForServer(
+      const serverRules = await dbService.getRoleMappings('test_server_empty');
+      const result = await verificationEngine.verifyUserBulk(
         'test_user_empty',
-        'test_server_empty',
+        serverRules.map(r => r.id),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 
@@ -287,9 +289,10 @@ describe('VerificationEngine - Integration Tests', () => {
         return;
       }
 
-      const result = await verificationEngine.verifyUserForServer(
+      const serverRules = await dbService.getRoleMappings('nonexistent_server');
+      const result = await verificationEngine.verifyUserBulk(
         'test_user_noserver',
-        'nonexistent_server',
+        serverRules.map(r => r.id),
         '0x742d35cc6634c0532925a3b8d3aa3e3cf9fbc4f4'
       );
 

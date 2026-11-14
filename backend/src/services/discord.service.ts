@@ -11,7 +11,6 @@ import { DiscordMessageService } from '@/services/discord-message.service';
 import { DiscordVerificationService } from '@/services/discord-verification.service';
 import { DiscordCommandsService } from '@/services/discord-commands.service';
 import { DataService } from '@/services/data.service';
-import { VerificationService } from '@/services/verification.service';
 import { CacheService } from '@/services/cache.service';
 import { CONSTANTS } from '@/constants';
 import { SETUP_HELP_CONTENT } from '@/content/setup-help.content';
@@ -82,7 +81,6 @@ export class DiscordService implements OnModuleInit {
     private readonly discordVerificationSvc: DiscordVerificationService,
     @Inject(forwardRef(() => DiscordCommandsService))
     private readonly discordCommandsSvc: DiscordCommandsService,
-    private readonly verificationSvc: VerificationService,
     private readonly dataSvc: DataService,
     private readonly cacheSvc: CacheService,
     @Optional() private readonly nftMetadataSvc?: NftMetadataService,

@@ -115,13 +115,13 @@ describe('DataService - Integration Tests', () => {
     });
   });
 
-  describe('checkAssetOwnership', () => {
+  describe('basic ownership counts', () => {
     it('should return number for valid address format', async () => {
       const testAddress = '0x0000000000000000000000000000000000000000';
       
       if (!isExternalDbAvailable) {
         try {
-          await service.checkAssetOwnership(testAddress);
+          await service.checkAssetOwnershipWithCriteria(testAddress);
           fail('Expected error for unavailable database');
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
@@ -129,7 +129,7 @@ describe('DataService - Integration Tests', () => {
         return;
       }
 
-      const result = await service.checkAssetOwnership(testAddress);
+      const result = await service.checkAssetOwnershipWithCriteria(testAddress);
       
       expect(typeof result).toBe('number');
       expect(result).toBeGreaterThanOrEqual(0);
@@ -144,11 +144,11 @@ describe('DataService - Integration Tests', () => {
       const testAddress = '0x1234567890123456789012345678901234567890';
       
       // Test with different cases
-      const resultLower = await service.checkAssetOwnership(testAddress.toLowerCase());
+      const resultLower = await service.checkAssetOwnershipWithCriteria(testAddress.toLowerCase());
       await delay(TEST_DELAY);
-      const resultUpper = await service.checkAssetOwnership(testAddress.toUpperCase());
+      const resultUpper = await service.checkAssetOwnershipWithCriteria(testAddress.toUpperCase());
       await delay(TEST_DELAY);
-      const resultMixed = await service.checkAssetOwnership(testAddress);
+      const resultMixed = await service.checkAssetOwnershipWithCriteria(testAddress);
       
       expect(resultLower).toBe(resultUpper);
       expect(resultLower).toBe(resultMixed);
@@ -166,7 +166,7 @@ describe('DataService - Integration Tests', () => {
 
       for (const addr of malformedAddresses) {
         try {
-          const result = await service.checkAssetOwnership(addr);
+          const result = await service.checkAssetOwnershipWithCriteria(addr);
           
           if (isExternalDbAvailable) {
             // Should either return 0 or throw an error, but not crash
@@ -178,86 +178,6 @@ describe('DataService - Integration Tests', () => {
         }
         
         await delay(50); // Small delay between malformed requests
-      }
-    });
-  });
-
-  describe('getOwnedSlugs', () => {
-    it('should return array for any address', async () => {
-      const testAddress = '0x0000000000000000000000000000000000000000';
-      
-      if (!isExternalDbAvailable) {
-        try {
-          await service.getOwnedSlugs(testAddress);
-          fail('Expected error for unavailable database');
-        } catch (error) {
-          expect(error).toBeInstanceOf(Error);
-        }
-        return;
-      }
-
-      const result = await service.getOwnedSlugs(testAddress);
-      
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should return unique slugs only', async () => {
-      if (!isExternalDbAvailable) {
-        console.log('📝 Skipping unique slugs test - external database unavailable');
-        return;
-      }
-
-      const testAddress = '0x1111111111111111111111111111111111111111';
-      
-      const result = await service.getOwnedSlugs(testAddress);
-      
-      // Check uniqueness
-      const uniqueResult = Array.from(new Set(result));
-      expect(result.length).toBe(uniqueResult.length);
-    });
-  });
-
-  describe('getDetailedAssets', () => {
-    it('should return properly formatted asset array', async () => {
-      const testAddress = '0x0000000000000000000000000000000000000000';
-      
-      if (!isExternalDbAvailable) {
-        try {
-          await service.getDetailedAssets(testAddress);
-          fail('Expected error for unavailable database');
-        } catch (error) {
-          expect(error).toBeInstanceOf(Error);
-        }
-        return;
-      }
-
-      const result = await service.getDetailedAssets(testAddress);
-      
-      expect(Array.isArray(result)).toBe(true);
-      
-      // If there are results, verify structure
-      if (result.length > 0) {
-        result.forEach(asset => {
-          expect(asset).toHaveProperty('slug');
-          expect(asset).toHaveProperty('attributes');
-          expect(typeof asset.slug).toBe('string');
-          expect(typeof asset.attributes).toBe('object');
-        });
-      }
-    });
-
-    it('should handle database errors gracefully', async () => {
-      // Test with invalid address format that might cause DB error
-      try {
-        await service.getDetailedAssets('invalid');
-        
-        if (isExternalDbAvailable) {
-          fail('Expected error for invalid address');
-        }
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toContain('Failed to fetch');
       }
     });
   });
@@ -385,7 +305,7 @@ describe('DataService - Integration Tests', () => {
         ];
         
         for (const addr of problematicInputs) {
-          const result = await service.checkAssetOwnership(addr);
+          const result = await service.checkAssetOwnershipWithCriteria(addr);
           expect(typeof result).toBe('number');
           await delay(TEST_DELAY);
         }
@@ -393,7 +313,7 @@ describe('DataService - Integration Tests', () => {
         console.log('📝 Testing error handling for unavailable database');
         
         try {
-          await service.checkAssetOwnership('0x0000000000000000000000000000000000000000');
+          await service.checkAssetOwnershipWithCriteria('0x0000000000000000000000000000000000000000');
           fail('Expected error for unavailable database');
         } catch (error) {
           expect(error).toBeInstanceOf(Error);
@@ -412,20 +332,12 @@ describe('DataService - Integration Tests', () => {
       
       // Call each method multiple times to verify consistency
       for (let i = 0; i < 2; i++) {
-        const slugs = await service.getOwnedSlugs(testAddress);
-        await delay(TEST_DELAY);
-        
-        const detailed = await service.getDetailedAssets(testAddress);
-        await delay(TEST_DELAY);
-        
-        const ownership = await service.checkAssetOwnership(testAddress);
+        const slugs = await service.getAllSlugs();
         await delay(TEST_DELAY);
         
         const criteria = await service.checkAssetOwnershipWithCriteria(testAddress);
         
         expect(Array.isArray(slugs)).toBe(true);
-        expect(Array.isArray(detailed)).toBe(true);
-        expect(typeof ownership).toBe('number');
         expect(typeof criteria).toBe('number');
         
         await delay(TEST_DELAY);
@@ -442,55 +354,11 @@ describe('DataService - Integration Tests', () => {
       // The service should be constructible
       expect(service).toBeDefined();
       expect(service.getAllSlugs).toBeInstanceOf(Function);
-      expect(service.checkAssetOwnership).toBeInstanceOf(Function);
-      expect(service.getOwnedSlugs).toBeInstanceOf(Function);
-      expect(service.getDetailedAssets).toBeInstanceOf(Function);
       expect(service.checkAssetOwnershipWithCriteria).toBeInstanceOf(Function);
     });
   });
 
   describe('enhanced error handling and edge cases', () => {
-    it('should handle getDetailedAssets error scenarios', async () => {
-      if (!isExternalDbAvailable) {
-        console.log('📝 Skipping detailed assets error test - external database unavailable');
-        return;
-      }
-
-      // Test with various problematic addresses
-      const testCases = [
-        '0x' + '0'.repeat(40), // All zeros
-        '0xInvalidAddress123', // Invalid format but long enough
-        '', // Empty string
-      ];
-
-      for (const addr of testCases) {
-        try {
-          const result = await service.getDetailedAssets(addr);
-          // Should return array (even if empty) for valid queries
-          expect(Array.isArray(result)).toBe(true);
-        } catch (error) {
-          // Errors are acceptable for malformed inputs
-          expect(error).toBeInstanceOf(Error);
-        }
-        await delay(TEST_DELAY);
-      }
-    });
-
-    it('should exercise getDetailedAssets with no ethscriptions found', async () => {
-      if (!isExternalDbAvailable) {
-        console.log('📝 Skipping empty ethscriptions test - external database unavailable');
-        return;
-      }
-
-      // Use an address very unlikely to have any ethscriptions
-      const emptyAddress = '0x' + '1'.repeat(40);
-      const result = await service.getDetailedAssets(emptyAddress);
-      
-      expect(Array.isArray(result)).toBe(true);
-      // Should return empty array for address with no assets
-      expect(result.length).toBe(0);
-    });
-
     it('should handle complex attribute filtering scenarios', async () => {
       if (!isExternalDbAvailable) {
         console.log('📝 Skipping complex filtering test - external database unavailable');
@@ -623,21 +491,11 @@ describe('DataService - Integration Tests', () => {
       }
 
       // Test addresses that might have marketplace escrow scenarios
-      const marketAddress = '0xd3418772623be1a3cc6b6d45cb46420cedd9154a';
       const testAddress = '0x1234567890123456789012345678901234567890';
       
-      // Check ownership (should include marketplace escrow)
-      const ownershipCount = await service.checkAssetOwnership(testAddress);
-      expect(typeof ownershipCount).toBe('number');
-      await delay(TEST_DELAY);
-      
-      // Check with criteria (should also include marketplace escrow)
+      // Basic ownership includes marketplace escrow
       const criteriaCount = await service.checkAssetOwnershipWithCriteria(testAddress);
       expect(typeof criteriaCount).toBe('number');
-      await delay(TEST_DELAY);
-      
-      // Both should return the same count for basic ownership
-      expect(ownershipCount).toBe(criteriaCount);
     });
 
     it('should handle attribute filtering edge cases and exercise private filterByAttributes method', async () => {
@@ -734,29 +592,6 @@ describe('DataService - Integration Tests', () => {
         'Red'
       );
       await delay(TEST_DELAY);
-    });
-
-    it('should validate response data structure for getDetailedAssets', async () => {
-      if (!isExternalDbAvailable) {
-        console.log('📝 Skipping detailed assets structure test - external database unavailable');
-        return;
-      }
-
-      const testAddress = '0x0000000000000000000000000000000000000000';
-      const assets = await service.getDetailedAssets(testAddress);
-      
-      expect(Array.isArray(assets)).toBe(true);
-      
-      // If we have assets, validate their structure
-      if (assets.length > 0) {
-        assets.forEach(asset => {
-          expect(asset).toHaveProperty('slug');
-          expect(asset).toHaveProperty('attributes');
-          expect(typeof asset.slug).toBe('string');
-          expect(typeof asset.attributes).toBe('object');
-          expect(asset.attributes).not.toBeNull();
-        });
-      }
     });
 
     it('should handle extreme minItems values', async () => {

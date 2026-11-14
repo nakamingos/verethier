@@ -1,7 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { CONSTANTS } from '@/constants';
-import { DbResult, ServerRecord, RoleRecord } from '@/models/db.interface';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
 import { NftMetadataRow } from '@/utils/nft-trait.util';
 import { OrdinalTraitSnapshot, OrdinalAttributeRow } from '@/models/ordinal-collection.interface';
@@ -14,24 +13,17 @@ import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
  * 
  * This service provides data access layer for the verification system using Supabase.
  * It handles:
- * - Server and user management
  * - Verification rule CRUD operations
- * - Role management and migration
- * - Asset verification tracking
- * 
- * Database Schema:
- * - verifier_servers: Discord server information
- * - verifier_users: User verification data
- * - verifier_roles: Verification rules configuration
- * - verification_queue: Pending verifications
- * 
+ * - Earned role assignments and their check history
+ * - Wallet activity and metadata caches
+ *
+ * Main tables:
+ * - verifier_rules: Verification rules configuration
+ * - verifier_user_roles: Earned role assignments
+ *
  * @example
  * ```typescript
- * // Add or update a server
- * await dbService.addUpdateServer('123456789', 'My Server', 'role123');
- * 
- * // Get verification rules
- * const rules = await dbService.getVerificationRules('123456789', 'channel123');
+ * const rules = await dbService.getRulesByChannel('123456789', 'channel123');
  * ```
  */
 @Injectable()
@@ -144,99 +136,6 @@ export class DbService {
     const { error } = await query.or(`ordinal_trait_snapshot.is.null,ordinal_trait_snapshot->>criteria_hash.neq.${snapshot.criteria_hash},ordinal_trait_snapshot->>fetched_at.lte.${snapshot.fetched_at}`);
     if (error) throw new Error('Ordinals trait snapshot could not be saved.');
   }
-
-  /**
-   * Adds or updates a Discord server in the database.
-   * 
-   * Uses upsert operation to either create new server record or update existing one.
-   * This is typically called when the bot joins a new server or when server
-   * configuration changes.
-   * 
-   * @param serverId - Discord server (guild) ID
-   * @param serverName - Human-readable server name
-   * @param roleId - Default role ID for this server
-   * @returns Promise resolving to the server record or null on error
-   * @throws Error if database operation fails
-   */
-  async addUpdateServer(
-    serverId: string, 
-    serverName: string,
-    roleId: string
-  ): Promise<DbResult<ServerRecord> | null> {
-
-    const { data, error } = await this.supabase
-      .from('verifier_servers')
-      .upsert({
-        id: serverId,
-        name: serverName,
-        role_id: roleId
-      });
-
-    if (error) throw error;
-    return data;
-  }
-  
-  /**
-   * Retrieves user data for a specific Discord user.
-   * 
-   * Returns user verification history and associated server data.
-   * Used for user verification status checks and history tracking.
-   * 
-   * @param userId - Discord user ID
-   * @returns Promise resolving to user data object or null if not found
-   * @throws Error if database query fails
-   */
-  async getUserServers(userId: string): Promise<any> {
-    const { data, error } = await this.supabase
-      .from('verifier_users')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (error) throw error;
-    return data[0];
-  }
-
-  async addServerToUser(
-    userId: string, 
-    serverId: string, 
-    role: string
-  ) {
-  
-    // Step 1: Retrieve the current user data with the servers JSONB object
-    let { data: userData, error: fetchError } = await this.supabase
-      .from('verifier_users')
-      .select('servers')
-      .eq('user_id', userId);
-  
-    if (fetchError) throw fetchError;
-  
-    const servers = userData[0]?.servers || {};
-    servers[serverId] = role;
-  
-    const { data, error } = await this.supabase
-      .from('verifier_users')
-      .upsert({
-        user_id: userId,
-        servers: servers
-      }, {
-        onConflict: 'user_id'
-      });
-  
-    if (error) throw error;
-    return data;
-  }  
-
-  async getServerRole(serverId: string): Promise<any> {
-    const { data, error } = await this.supabase
-      .from('verifier_servers')
-      .select('role_id')
-      .eq('id', serverId);
-
-    if (error) throw error;
-    return data[0]?.role_id;
-  }
-
-  // New methods for v2:
 
   private filterRuleAsset(query: any, slug: string, assetFields?: NftRuleFields): any {
     if (assetFields?.asset_type === 'stamp') return query.eq('asset_type','stamp').eq('stamp_criteria',JSON.stringify(assetFields.stamp_criteria));
@@ -390,34 +289,6 @@ export class DbService {
     if (error) throw error;
   }
 
-  async logUserRole(
-    userId: string, 
-    serverId: string, 
-    roleId: string,
-    userName?: string,
-    serverName?: string,
-    roleName?: string
-  ): Promise<void> {
-    const { error } = await this.supabase
-      .from('verifier_user_roles')
-      .insert({
-        user_id: userId,
-        server_id: serverId,
-        role_id: roleId,
-        verified_at: new Date().toISOString(),
-        user_name: userName || null,
-        server_name: serverName || null,
-        role_name: roleName || null
-      });
-
-    if (error) {
-      Logger.error('Error logging user role:', error);
-      throw error;
-    }
-
-    // Role assignment logged successfully
-  }
-
   // Get all verification rules for a server (unified approach)
   async getAllRulesForServer(serverId: string): Promise<any[]> {
     const { data: rules, error } = await this.supabase
@@ -426,127 +297,6 @@ export class DbService {
       .eq('server_id', serverId);
     if (error) throw error;
     return rules || [];
-  }
-
-  // Method maintained for backwards compatibility - now uses unified approach
-  async getAllRulesWithCompat(serverId: string): Promise<any[]> {
-    return await this.getAllRulesForServer(serverId);
-  }
-
-  // Methods maintained for backwards compatibility but simplified
-  // Note: These methods now work with the unified verifier_rules table only
-  async removeAllRoles(serverId: string): Promise<{ removed: Array<{ role_id: string, name: string }> }> {
-    // In the unified system, roles are identified by special slug/attributes
-    const { data: roles, error } = await this.supabase
-      .from('verifier_rules')
-      .select('role_id, role_name')
-      .eq('server_id', serverId)
-      .eq('slug', 'simple_collection');
-    
-    if (error) throw error;
-    if (!roles || roles.length === 0) {
-      return { removed: [] };
-    }
-
-    // Remove rules
-    await this.supabase
-      .from('verifier_rules')
-      .delete()
-      .eq('server_id', serverId)
-      .eq('slug', 'simple_collection');
-
-    return { 
-      removed: roles.map(rule => ({ 
-        role_id: rule.role_id, 
-        name: rule.role_name || 'Role' 
-      }))
-    };
-  }
-
-  // Get all rules for a server (now using unified table)
-  async getRoles(serverId: string): Promise<DbResult<RoleRecord[]>> {
-    const { data, error } = await this.supabase
-      .from('verifier_rules')
-      .select('role_id, role_name')
-      .eq('server_id', serverId)
-      .eq('slug', 'simple_collection');
-    
-    // Transform to match expected format
-    const transformedData = data?.map(rule => ({
-      role_id: rule.role_id,
-      name: rule.role_name || 'Role'
-    })) || [];
-
-    return { data: transformedData, error };
-  }
-
-  // Check if a rule already exists for server, channel, role, and slug
-  async ruleExists(serverId: string, channelId: string, roleId: string, slug: string): Promise<boolean> {
-    const { data, error } = await this.supabase
-      .from('verifier_rules')
-      .select('id')
-      .eq('server_id', serverId)
-      .eq('channel_id', channelId)
-      .eq('role_id', roleId)
-      .eq('slug', slug);
-    if (error) throw error;
-    return !!(data && data.length > 0);
-  }
-
-  /**
-   * Finds the first rule with a non-null message_id for a given guild and channel.
-   */
-  async findRuleWithMessage(guildId: string, channelId: string): Promise<VerifierRole | null> {
-    const { data, error } = await this.supabase
-      .from('verifier_rules')
-      .select('*')
-      .eq('server_id', guildId)
-      .eq('channel_id', channelId)
-      .not('message_id', 'is', null)
-      .limit(1);
-    if (error) throw error;
-    return data && data.length > 0 ? data[0] as VerifierRole : null;
-  }
-
-  /**
-   * Updates the message_id for a specific rule.
-   */
-  async updateRuleMessageId(ruleId: number, messageId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('verifier_rules')
-      .update({ message_id: messageId })
-      .eq('id', ruleId);
-    if (error) throw error;
-  }
-
-  /**
-   * Finds a rule by message_id for a given guild and channel.
-   */
-  async findRuleByMessageId(guildId: string, channelId: string, messageId: string): Promise<VerifierRole | null> {
-    const { data, error } = await this.supabase
-      .from('verifier_rules')
-      .select('*')
-      .eq('server_id', guildId)
-      .eq('channel_id', channelId)
-      .eq('message_id', messageId)
-      .limit(1);
-    if (error) throw error;
-    return data && data.length > 0 ? data[0] as VerifierRole : null;
-  }
-
-  /**
-   * Finds ALL rules by message_id for a given guild and channel.
-   * This supports multiple roles being assigned for the same verification criteria.
-   */
-  async findRulesByMessageId(guildId: string, channelId: string, messageId: string): Promise<VerifierRole[]> {
-    const { data, error } = await this.supabase
-      .from('verifier_rules')
-      .select('*')
-      .eq('server_id', guildId)
-      .eq('channel_id', channelId)
-      .eq('message_id', messageId);
-    if (error) throw error;
-    return (data || []) as VerifierRole[];
   }
 
   /**
@@ -562,40 +312,6 @@ export class DbService {
       .or(`channel_id.eq.${channelId},channel_id.eq.ALL`);
     if (error) throw error;
     return data || [];
-  }
-
-  async findConflictingRule(
-    serverId: string,
-    channelId: string,
-    roleId: string,
-    slug: string,
-    attrKey: string,
-    attrVal: string,
-    minItems: number
-  ): Promise<any> {
-    // Use the same defaults as addRoleMapping for consistent conflict detection
-    const finalSlug = slug || 'ALL';
-    const finalAttrKey = attrKey || 'ALL';
-    const finalAttrVal = attrVal || 'ALL';
-    const finalMinItems = minItems != null ? minItems : 1;
-
-    let query = this.supabase
-      .from('verifier_rules')
-      .select('*')
-      .eq('server_id', serverId)
-      .eq('channel_id', channelId)
-      .eq('role_id', roleId)
-      .eq('slug', finalSlug)
-
-      .eq('min_items', finalMinItems);
-    const traits = ruleTraits({attribute_key:finalAttrKey,attribute_value:finalAttrVal});
-    query = traits ? query.eq('trait_key',traitFilterKey({trait_filter:traits})) : query.is('trait_key',null);
-    const {data,error}=await query.single();
-    
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-      throw error;
-    }
-    return data;
   }
 
   async checkForExactDuplicateRule(
@@ -643,29 +359,6 @@ export class DbService {
    * Dynamic Role Management Methods
    * These methods support the DynamicRoleService for automatic role verification
    */
-
-  /**
-   * Get all active role assignments that need verification
-   */
-  async getActiveRoleAssignments(): Promise<any[]> {
-    try {
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*')
-        .eq('status', 'active')
-        .order('last_checked', { ascending: true });
-
-      if (error) {
-        this.logger.error('Error fetching active role assignments:', error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      this.logger.error('Error fetching active role assignments:', error);
-      throw error;
-    }
-  }
 
   /** Assignment history is the allowlist for automatic role restoration. */
   async getEarnedRoleAssignments(filters: { userId?: string; ruleId?: string; serverId?: string; roleId?: string } = {}): Promise<any[]> {
@@ -778,146 +471,6 @@ export class DbService {
       }
     } catch (error) {
       this.logger.error(`Error updating last verified for assignment ${assignmentId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get active assignments for a specific user
-   */
-  async getUserActiveAssignments(userId: string): Promise<any[]> {
-    try {
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('status', 'active');
-
-      if (error) {
-        this.logger.error(`Error fetching active assignments for user ${userId}:`, error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      this.logger.error(`Error fetching active assignments for user ${userId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get active assignments for a specific rule
-   */
-  async getRuleActiveAssignments(ruleId: string): Promise<any[]> {
-    try {
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*')
-        .eq('rule_id', ruleId)
-        .eq('status', 'active');
-
-      if (error) {
-        this.logger.error(`Error fetching active assignments for rule ${ruleId}:`, error);
-        throw error;
-      }
-
-      return data || [];
-    } catch (error) {
-      this.logger.error(`Error fetching active assignments for rule ${ruleId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Count active assignments
-   */
-  async countActiveAssignments(): Promise<number> {
-    try {
-      const { count, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*', { count: 'exact' })
-        .eq('status', 'active');
-
-      if (error) {
-        this.logger.error('Error counting active assignments:', error);
-        throw error;
-      }
-
-      return count || 0;
-    } catch (error) {
-      this.logger.error('Error counting active assignments:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Count revoked assignments
-   */
-  async countRevokedAssignments(): Promise<number> {
-    try {
-      const { count, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*', { count: 'exact' })
-        .eq('status', 'revoked');
-
-      if (error) {
-        this.logger.error('Error counting revoked assignments:', error);
-        throw error;
-      }
-
-      return count || 0;
-    } catch (error) {
-      this.logger.error('Error counting revoked assignments:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Count assignments expiring soon
-   */
-  async countExpiringSoonAssignments(): Promise<number> {
-    try {
-      const soonDate = new Date();
-      soonDate.setHours(soonDate.getHours() + 24); // Next 24 hours
-
-      const { count, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('*', { count: 'exact' })
-        .eq('status', 'active')
-        .lte('expires_at', soonDate.toISOString());
-
-      if (error) {
-        this.logger.error('Error counting expiring assignments:', error);
-        throw error;
-      }
-
-      return count || 0;
-    } catch (error) {
-      this.logger.error('Error counting expiring assignments:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get last reverification time (placeholder - could be stored in a settings table)
-   */
-  async getLastReverificationTime(): Promise<string | null> {
-    try {
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .select('updated_at')
-        .eq('status', 'active')
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        this.logger.error('Error getting last reverification time:', error);
-        throw error;
-      }
-
-      return data?.[0]?.updated_at || null;
-    } catch (error) {
-      this.logger.error('Error getting last reverification time:', error);
       throw error;
     }
   }
@@ -1070,35 +623,6 @@ export class DbService {
       return data || [];
     } catch (error) {
       this.logger.error(`Error fetching user role history for ${userId} in server ${serverId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update role verification status
-   */
-  async updateRoleVerification(assignmentId: string, isValid: boolean): Promise<any> {
-    try {
-      const { data, error } = await this.supabase
-        .from('verifier_user_roles')
-        .update({
-          status: isValid ? 'active' : 'revoked',
-          verified_at: new Date().toISOString(),
-          last_checked: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', assignmentId)
-        .select()
-        .single();
-
-      if (error) {
-        this.logger.error(`Error updating role verification for assignment ${assignmentId}:`, error);
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      this.logger.error(`Error updating role verification for assignment ${assignmentId}:`, error);
       throw error;
     }
   }

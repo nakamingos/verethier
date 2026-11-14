@@ -17,10 +17,8 @@ const loggerSpy = jest.spyOn(Logger, 'error').mockImplementation(() => {});
 const loggerDebugSpy = jest.spyOn(Logger, 'debug').mockImplementation(() => {});
 
 const mockDbService = {
-  getServerRole: jest.fn(),
   findRuleByMessageId: jest.fn(),
   getRulesByChannel: jest.fn(),
-  addServerToUser: jest.fn(),
   trackRoleAssignment: jest.fn(),
   getRoleMappings: jest.fn().mockResolvedValue([
     {

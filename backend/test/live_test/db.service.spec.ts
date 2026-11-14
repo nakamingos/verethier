@@ -68,43 +68,6 @@ describe('DbService - Integration Tests', () => {
     expect(service).toBeDefined();
   });
 
-  describe('addUpdateServer', () => {
-    it('should create a new server', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      const result = await service.addUpdateServer(
-        'test_server_new', 
-        'Test Server New', 
-        'test_role_new'
-      );
-
-      expect(result).toBeDefined();
-      // Note: Supabase upsert might return null on success
-    });
-
-    it('should update existing server', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      // First create a server
-      await service.addUpdateServer('test_server_update', 'Original Name', 'role_1');
-      
-      // Then update it
-      const result = await service.addUpdateServer(
-        'test_server_update', 
-        'Updated Name', 
-        'role_2'
-      );
-
-      expect(result).toBeDefined();
-    });
-  });
-
   describe('addRoleMapping', () => {
     beforeEach(async () => {
       if (!isSupabaseHealthy) {
@@ -201,48 +164,6 @@ describe('DbService - Integration Tests', () => {
     });
   });
 
-  describe('ruleExists', () => {
-    beforeEach(async () => {
-      if (!isSupabaseHealthy) {
-        return; // Skip setup if Supabase isn't healthy
-      }
-      await testDb.createTestServer('test_server_exists');
-      await testDb.createTestRule('test_server_exists');
-    });
-
-    it('should return true when rule exists', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      const result = await service.ruleExists(
-        'test_server_exists',
-        'test_channel_123',
-        'test_role_123',
-        'test-collection'
-      );
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false when rule does not exist', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      const result = await service.ruleExists(
-        'test_server_exists',
-        'nonexistent_channel',
-        'nonexistent_role',
-        'nonexistent-collection'
-      );
-
-      expect(result).toBe(false);
-    });
-  });
-
   describe('deleteRoleMapping', () => {
     it('should delete role mapping', async () => {
       if (!isSupabaseHealthy) {
@@ -260,79 +181,8 @@ describe('DbService - Integration Tests', () => {
       ).resolves.not.toThrow();
 
       // Verify it's deleted
-      const exists = await service.ruleExists(
-        'test_server_delete',
-        'test_channel_123',
-        'test_role_123',
-        'test-collection'
-      );
-      expect(exists).toBe(false);
-    });
-  });
-
-  describe('getUserServers', () => {
-    it('should handle non-existent user', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      const result = await service.getUserServers('test_user_nonexistent');
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('logUserRole', () => {
-    it('should log user role assignment (now with updated DB schema)', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-      
-      await expect(
-        service.logUserRole(
-          'test_user_123',
-          'test_server_log',
-          'test_role_log',
-          'test_address_123'
-        )
-      ).resolves.not.toThrow();
-    });
-
-    it('should log user role with names', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      await service.logUserRole(
-        'test_user_123',
-        'test_server_456', 
-        'test_role_789',
-        'TestUser',
-        'TestServer',
-        'TestRole'
-      );
-      
-      // The method should complete without throwing an error
-      expect(true).toBe(true);
-    });
-
-    it('should log user role without names (backward compatibility)', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      await service.logUserRole(
-        'test_user_456',
-        'test_server_789', 
-        'test_role_123',
-        '0xabcdef1234567890'
-      );
-      
-      // The method should complete without throwing an error
-      expect(true).toBe(true);
+      const remaining = await service.getRoleMappings('test_server_delete');
+      expect(remaining.some(r => r.id === rule.id)).toBe(false);
     });
   });
 
@@ -343,25 +193,11 @@ describe('DbService - Integration Tests', () => {
         return;
       }
       
-      expect(typeof service.addUpdateServer).toBe('function');
-      expect(typeof service.getUserServers).toBe('function');
-      expect(typeof service.addServerToUser).toBe('function');
-      expect(typeof service.getServerRole).toBe('function');
       expect(typeof service.addRoleMapping).toBe('function');
       expect(typeof service.getRoleMappings).toBe('function');
       expect(typeof service.deleteRoleMapping).toBe('function');
-      expect(typeof service.logUserRole).toBe('function');
       expect(typeof service.getAllRulesForServer).toBe('function');
-      expect(typeof service.getAllRulesWithCompat).toBe('function');
-      expect(typeof service.removeAllRoles).toBe('function');
-      expect(typeof service.getRoles).toBe('function');
-      expect(typeof service.ruleExists).toBe('function');
-      expect(typeof service.findRuleWithMessage).toBe('function');
-      expect(typeof service.updateRuleMessageId).toBe('function');
-      expect(typeof service.findRuleByMessageId).toBe('function');
-      expect(typeof service.findRulesByMessageId).toBe('function');
       expect(typeof service.getRulesByChannel).toBe('function');
-      expect(typeof service.findConflictingRule).toBe('function');
       expect(typeof service.checkForDuplicateRule).toBe('function');
       expect(typeof service.checkForExactDuplicateRule).toBe('function');
     });
@@ -544,7 +380,6 @@ describe('DbService - Integration Tests', () => {
       }
 
       const serverId = 'test_server_all_rules';
-      await service.addUpdateServer(serverId, 'All Rules Server', 'role_all');
 
       // Add multiple rules
       await service.addRoleMapping(
@@ -564,110 +399,6 @@ describe('DbService - Integration Tests', () => {
       expect(rules.every(rule => rule.server_id === serverId)).toBe(true);
     });
 
-    it('should get all rules with compatibility method', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_compat_rules';
-      await service.addUpdateServer(serverId, 'Compat Rules Server', 'role_test');
-
-      const rule = await service.addRoleMapping(
-        serverId, 'Compat Rules Server', 'channel_test', 'Test Channel',
-        'test-collection', 'role_test', 'Test Role', 'ALL', 'ALL', 1
-      );
-
-      const rules = await service.getAllRulesWithCompat(serverId);
-
-      expect(Array.isArray(rules)).toBe(true);
-      expect(rules.length).toBeGreaterThan(0);
-      expect(rules.some(r => r.id === rule.id)).toBe(true);
-    });
-
-    it('should find conflicting rule', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_conflict';
-      const channelId = 'channel_conflict';
-      const roleId = 'role_conflict';
-
-      await service.addUpdateServer(serverId, 'Conflict Server', roleId);
-
-      // Add a rule first
-      await service.addRoleMapping(
-        serverId, 'Conflict Server', channelId, 'Conflict Channel',
-        'conflict-collection', roleId, 'Conflict Role', 'trait', 'legendary', 1
-      );
-
-      // Try to find conflicting rule with same criteria
-      const conflict = await service.findConflictingRule(
-        serverId, channelId, roleId, 'conflict-collection', 'trait', 'legendary', 1
-      );
-
-      expect(conflict).toBeDefined();
-      expect(conflict.server_id).toBe(serverId);
-      expect(conflict.channel_id).toBe(channelId);
-      expect(conflict.role_id).toBe(roleId);
-    });
-
-    it('should not find conflict for non-matching criteria', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const conflict = await service.findConflictingRule(
-        'nonexistent_server', 'nonexistent_channel', 'nonexistent_role',
-        'nonexistent-collection', 'nonexistent_trait', 'nonexistent_value', 999
-      );
-
-      expect(conflict).toBeNull();
-    });
-  });
-
-  describe('User Management Methods', () => {
-    it('should add server to user successfully', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const userId = 'user_add_server_test';
-      const serverId = 'test_server_add_user';
-
-      // First create the server
-      await service.addUpdateServer(serverId, 'Add User Server', 'role_add_user');
-
-      // Add server to user (requires userId, serverId, role)
-      const result = await service.addServerToUser(userId, serverId, 'role_add_user');
-
-      expect(result).toBeDefined();
-      // The method typically returns void or undefined on success
-    });
-
-    it('should handle adding duplicate server to user', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const userId = 'user_duplicate_server';
-      const serverId = 'test_server_duplicate';
-
-      await service.addUpdateServer(serverId, 'Duplicate Server', 'role_duplicate');
-
-      // Add server first time
-      await service.addServerToUser(userId, serverId, 'role_duplicate');
-
-      // Add same server again - should not throw error
-      await expect(
-        service.addServerToUser(userId, serverId, 'role_duplicate')
-      ).resolves.not.toThrow();
-    });
   });
 
   describe('Channel Rule Methods', () => {
@@ -680,7 +411,6 @@ describe('DbService - Integration Tests', () => {
       const serverId = 'test_server_channel_rules';
       const channelId = 'channel_rules_test';
 
-      await service.addUpdateServer(serverId, 'Channel Rules Server', 'role_channel');
 
       // Add multiple rules to the same channel
       await service.addRoleMapping(
@@ -716,167 +446,6 @@ describe('DbService - Integration Tests', () => {
       const result = await service.getRulesByChannel('nonexistent_server', 'nonexistent_channel');
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBe(0);
-    });
-
-    it('should find rules by message ID', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_message_rules';
-      const messageId = 'message_123456789';
-
-      await service.addUpdateServer(serverId, 'Message Rules Server', 'role_message');
-
-      // Create a rule and update its message ID
-      const rule = await service.addRoleMapping(
-        serverId, 'Message Rules Server', 'channel_message', 'Message Channel',
-        'message-collection', 'role_message', 'Message Role', 'trait', 'uncommon', 1
-      );
-
-      // Update the rule with a message ID
-      await service.updateRuleMessageId(rule.id.toString(), messageId);
-
-      const foundRules = await service.findRulesByMessageId(serverId, 'channel_message', messageId);
-
-      expect(Array.isArray(foundRules)).toBe(true);
-      expect(foundRules.length).toBeGreaterThan(0);
-      // Note: message_id property may not be available in VerifierRole interface
-      expect(foundRules[0].id).toBe(rule.id);
-    });
-
-    it('should return empty array for non-existent message ID', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const result = await service.findRulesByMessageId('nonexistent_server', 'nonexistent_channel', 'nonexistent_message_999999');
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBe(0);
-    });
-
-    it('should find single rule by message ID', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_single_message';
-      const messageId = 'single_message_987654321';
-
-      await service.addUpdateServer(serverId, 'Single Message Server', 'role_single');
-
-      const rule = await service.addRoleMapping(
-        serverId, 'Single Message Server', 'channel_single', 'Single Channel',
-        'single-collection', 'role_single', 'Single Role', 'trait', 'mythic', 1
-      );
-
-      await service.updateRuleMessageId(rule.id.toString(), messageId);
-
-      const foundRule = await service.findRuleByMessageId(serverId, 'channel_single', messageId);
-
-      expect(foundRule).toBeDefined();
-      // Note: message_id property may not be available in VerifierRole interface
-      expect(foundRule.id).toBe(rule.id);
-    });
-
-    it('should return null for findRuleByMessageId with non-existent message', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const result = await service.findRuleByMessageId('nonexistent_server', 'nonexistent_channel', 'nonexistent_single_message_999');
-      expect(result).toBeNull();
-    });
-
-    it('should update rule message ID successfully', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_update_message';
-      const newMessageId = 'updated_message_555';
-
-      await service.addUpdateServer(serverId, 'Update Message Server', 'role_update');
-
-      const rule = await service.addRoleMapping(
-        serverId, 'Update Message Server', 'channel_update', 'Update Channel',
-        'update-collection', 'role_update', 'Update Role', 'trait', 'unique', 1
-      );
-
-      await expect(
-        service.updateRuleMessageId(rule.id.toString(), newMessageId)
-      ).resolves.not.toThrow();
-
-      // Try to find the rule by the new message ID
-      const foundRule = await service.findRuleByMessageId(serverId, 'channel_update', newMessageId);
-      expect(foundRule).toBeDefined();
-      expect(foundRule.id).toBe(rule.id);
-    });
-
-    it('should find rule with message', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_find_with_message';
-      const channelId = 'channel_find_with_message';
-
-      await service.addUpdateServer(serverId, 'Find With Message Server', 'role_find');
-
-      const rule = await service.addRoleMapping(
-        serverId, 'Find With Message Server', channelId, 'Find With Message Channel',
-        'find-collection', 'role_find', 'Find Role', 'trait', 'special', 1
-      );
-
-      const foundRule = await service.findRuleWithMessage(serverId, channelId);
-
-      expect(foundRule).toBeDefined();
-      expect(foundRule.server_id).toBe(serverId);
-      expect(foundRule.channel_id).toBe(channelId);
-    });
-  });
-
-  describe('Advanced Conflict Detection Edge Cases', () => {
-    it('should handle complex conflict scenarios with mixed data types', async () => {
-      if (!isSupabaseHealthy) {
-        console.log('⏭️ Skipping test: Supabase not available');
-        return;
-      }
-
-      const serverId = 'test_server_mixed_types';
-      const channelId = 'channel_mixed_types';
-      const roleId = 'role_mixed_types';
-
-      await service.addUpdateServer(serverId, 'Mixed Types Server', roleId);
-
-      // Create rules with numeric strings
-      await service.addRoleMapping(
-        serverId, 'Mixed Types Server', channelId, 'Mixed Types Channel',
-        'numeric-collection', roleId, 'Mixed Types Role', '123', '456', 1
-      );
-
-      // Test conflict detection with same numeric strings
-      const conflict1 = await service.findConflictingRule(
-        serverId, channelId, roleId, 'numeric-collection', '123', '456', 1
-      );
-      expect(conflict1).toBeDefined();
-
-      // Create rules with boolean-like strings
-      await service.addRoleMapping(
-        serverId, 'Mixed Types Server', channelId + '_bool', 'Mixed Types Channel',
-        'boolean-collection', roleId, 'Mixed Types Role', 'true', 'false', 1
-      );
-
-      const conflict2 = await service.findConflictingRule(
-        serverId, channelId + '_bool', roleId, 'boolean-collection', 'true', 'false', 1
-      );
-      expect(conflict2).toBeDefined();
     });
   });
 });

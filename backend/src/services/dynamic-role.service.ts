@@ -253,27 +253,6 @@ export class DynamicRoleService {
   }
 
   /**
-   * Re-verify all users for a specific rule (when rule criteria changes)
-   */
-  async reverifyRule(ruleId: string): Promise<void> {
-    Logger.log(`🔍 Re-verifying all assignments for rule ${ruleId}`);
-    
-    const ruleAssignments = await this.getRuleEarnedAssignments(ruleId);
-    const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
-    const discordContext: RoleSyncContext = new Map();
-    
-    for (const assignment of ruleAssignments) {
-      try {
-        if (await this.reconcileAssignment(assignment, context, discordContext) === 'revoked')
-          Logger.log(`Revoked role from user ${assignment.user_id} due to rule change`);
-      } catch (error) {
-        if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error re-verifying rule assignment:`, error.message);
-      }
-    }
-    await this.verificationEngine.finishWalletChecks?.(context);
-  }
-
-  /**
    * Get previously earned role assignments that need verification
    */
   private async getEarnedRoleAssignments(): Promise<any[]> {
@@ -338,25 +317,4 @@ export class DynamicRoleService {
   private async getUserEarnedAssignments(userId: string): Promise<any[]> {
     return this.dbSvc.getEarnedRoleAssignments({ userId });
   }
-
-  /**
-   * Get previously earned assignments for a specific rule
-   */
-  private async getRuleEarnedAssignments(ruleId: string): Promise<any[]> {
-    return this.dbSvc.getEarnedRoleAssignments({ ruleId });
-  }
-
-  /**
-   * Get comprehensive stats about role assignments
-   */
-  async getRoleAssignmentStats(): Promise<any> {
-    return {
-      totalActive: await this.dbSvc.countActiveAssignments(),
-      totalRevoked: await this.dbSvc.countRevokedAssignments(),
-      expiringSoon: await this.dbSvc.countExpiringSoonAssignments(),
-      lastReverificationRun: await this.dbSvc.getLastReverificationTime(),
-    };
-  }
-
-
 }

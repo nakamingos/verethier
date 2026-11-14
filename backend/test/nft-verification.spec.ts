@@ -315,7 +315,6 @@ describe('NFT rules and role decisions', () => {
     db.getUserRoleHistory.mockResolvedValue([]);
     count.mockImplementation(async checkedRule => checkedRule.id === 1 ? BigInt(0) : BigInt(2));
     const discord = { getGuildMember: jest.fn().mockResolvedValue({ roles: { cache: new Map() } }), addUserRole: jest.fn().mockResolvedValue({ wasAlreadyAssigned: false }), removeUserRole: jest.fn() };
-    db.logUserRole = jest.fn();
     const monitor = new SimpleRoleMonitorService(db, discord as any, engine, addresses);
     const result = await monitor.reverifyUser('user', 'server');
     expect(result.errors).toEqual([]);

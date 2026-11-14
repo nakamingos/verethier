@@ -100,15 +100,15 @@ describe('Canonical trait storage without legacy columns', () => {
       JSON.stringify(trait_filter),
     );
   });
-  it('finds simple conflicts using the generated semantic key', async () => {
-    await db.findConflictingRule(
+  it('finds duplicate simple rules using the generated semantic key', async () => {
+    await db.checkForExactDuplicateRule(
       'server',
       'verify',
-      'holder',
       'comrades',
       'Hat',
       'Crown',
       1,
+      'holder',
     );
     expect(q.eq).toHaveBeenCalledWith('trait_key', expect.any(String));
   });
