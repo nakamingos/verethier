@@ -367,7 +367,7 @@ export class DatabaseSetup {
 
   private async insertLegacyUsersDirectly(): Promise<void> {
     try {
-      const legacyUsers = [
+      const legacyUsers: Array<{ id: string; user_id: string; servers: Record<string, string>; address: string }> = [
         {
           id: '155',
           user_id: '891152460104757299',

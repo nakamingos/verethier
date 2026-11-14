@@ -155,6 +155,12 @@ describe('DataService - Integration Tests', () => {
     });
 
     it('should handle malformed addresses gracefully', async () => {
+      if (!isExternalDbAvailable) {
+        // Each failed read now retries for several seconds; nothing to learn offline.
+        console.log('📝 Skipping malformed address test - external database unavailable');
+        return;
+      }
+
       const malformedAddresses = [
         'not-an-address',
         '0x123', // too short
