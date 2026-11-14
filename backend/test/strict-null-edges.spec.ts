@@ -36,3 +36,35 @@ describe('edge cases made explicit by strict null checks', () => {
     expect(JSON.stringify(interaction.editReply.mock.calls.at(-1))).toContain('Run this command in a server.');
   });
 });
+
+import { requireGuild, requireGuildId, OUTSIDE_SERVER } from '../src/services/discord-commands/utils/guild.util';
+import { PortalJobsService } from '../src/portal/portal-jobs.service';
+
+describe('server-only Discord commands', () => {
+  it('refuses with one clear message outside a server', () => {
+    expect(() => requireGuildId({ guildId: null })).toThrow(OUTSIDE_SERVER);
+    expect(() => requireGuild({ guild: null })).toThrow(OUTSIDE_SERVER);
+    expect(requireGuildId({ guildId: '123' })).toBe('123');
+  });
+});
+
+describe('portal role-action job when Discord disconnects mid-pass', () => {
+  it('records the job for retry instead of crashing', async () => {
+    const flag = jest.replaceProperty(EnvironmentConfig, 'IS_TEST', false);
+    try {
+      const writes: any[] = [];
+      const query: any = { eq: jest.fn().mockReturnThis(), then: (resolve: any) => Promise.resolve(resolve({ error: null })) };
+      let claimed = false;
+      const db: any = {
+        rpc: jest.fn(async () => ({ data: claimed ? [] : (claimed = true, [{ id: 'job', server_id: 's', user_id: 'u', role_action_role_id: 'r', attempts: 1 }]), error: null })),
+        from: jest.fn(() => ({ update: (value: any) => { writes.push(value); return query; } })),
+      };
+      let connected = true;
+      const discord: any = { getBotClient: () => (connected ? (connected = false, {}) : null) };
+      const roleActions: any = { enforce: jest.fn() };
+      await new PortalJobsService(db, {} as any, discord, roleActions).run();
+      expect(roleActions.enforce).not.toHaveBeenCalled();
+      expect(writes[0]).toMatchObject({ status: 'pending', locked_by: null });
+    } finally { flag.restore(); }
+  });
+});

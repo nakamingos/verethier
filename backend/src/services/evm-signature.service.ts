@@ -50,7 +50,7 @@ export class EvmSignatureService {
           transport: http(url, { timeout: 10000, retryCount: 0 }),
         }),
       );
-    return this.clients.get(chainId);
+    return this.clients.get(chainId)!;
   }
 
   async verify(

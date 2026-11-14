@@ -372,7 +372,7 @@ export class DiscordVerificationService {
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
-    if (['erc20','solana_token'].includes(rule.asset_type)) {
+    if (['erc20','solana_token'].includes(rule.asset_type ?? '')) {
       const minimum = tokenAmount(rule, tokenMinimum(rule));
       const scope = tokenRuleScope(rule);
       return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
@@ -646,7 +646,7 @@ export class DiscordVerificationService {
         userId,
         serverId: guildId,
         roleId,
-        ruleId: ruleId || null,
+        ruleId: ruleId || undefined,
         userName: member.displayName || member.user.username,
         serverName: guild.name,
         roleName: role.name,
@@ -1091,7 +1091,7 @@ export class DiscordVerificationService {
 
       const context: NftCheckContext = ownershipContext || { checks: new Map() };
       const addressReads = context.userAddresses ||= new Map();
-      const remainingRules = [];
+      const remainingRules: any[] = [];
       for (const rule of unassignedRules) {
         try {
           const solana = isSolanaRule(rule);
@@ -1355,7 +1355,7 @@ export class DiscordVerificationService {
   ): string | null {
     if (
       matchedRules.length <= 1 ||
-      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(rule.asset_type) && this.isCollectionOnlyRule(rule))
+      !matchedRules.every(({ rule }) => !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(rule.asset_type ?? '') && this.isCollectionOnlyRule(rule))
     ) {
       return null;
     }

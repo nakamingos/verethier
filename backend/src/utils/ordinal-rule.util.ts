@@ -33,9 +33,9 @@ export function ordinalTraitHash(rule: Partial<VerifierRole>): string {
   const trait = ordinalTrait(rule);
   const filter = ruleTraits(rule);
   // Retain existing one-trait snapshot hashes during the backfill.
-  if ((filter?.conditions.length || 0) > 1) return createHash('sha256').update(JSON.stringify(['ordinal-trait-v2', ordinalCollectionId(rule.slug), traitFilterKey(rule)])).digest('hex');
+  if ((filter?.conditions.length || 0) > 1) return createHash('sha256').update(JSON.stringify(['ordinal-trait-v2', ordinalCollectionId(rule.slug ?? ''), traitFilterKey(rule)])).digest('hex');
   return createHash('sha256').update(JSON.stringify([
-    'ordinal-trait-v1', ordinalCollectionId(rule.slug), trait.enabled, trait.key.toLowerCase(),
+    'ordinal-trait-v1', ordinalCollectionId(rule.slug ?? ''), trait.enabled, trait.key.toLowerCase(),
     trait.value === 'ALL' ? null : trait.value.toLowerCase(),
   ])).digest('hex');
 }
@@ -46,7 +46,7 @@ export function matchesOrdinalTrait(traits: Array<{ type: string; value: string 
 }
 
 export function buildOrdinalTraitSnapshot(rule: Partial<VerifierRole>, collection: OrdinalCollectionSnapshot): OrdinalTraitSnapshot {
-  if (collection.slug !== ordinalCollectionId(rule.slug)) throw new Error('Ordinals verification is temporarily unavailable. Please try again.');
+  if (collection.slug !== ordinalCollectionId(rule.slug ?? '')) throw new Error('Ordinals verification is temporarily unavailable. Please try again.');
   const ids: string[] = [];
   for (const [id, item] of collection.items) {
     if (item.traits === null) throw new Error('Ordinals trait verification is temporarily unavailable. Please try again.');

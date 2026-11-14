@@ -35,12 +35,12 @@ export function planRuleConsolidation(
 ): RuleConsolidation[] {
   const groups = new Map<string, VerifierRole[]>();
   for (const r of rules) {
-    if (['erc20','solana_token','stamp'].includes(r.asset_type) || r.inscription_criteria) continue;
+    if (['erc20','solana_token','stamp'].includes(r.asset_type ?? '') || r.inscription_criteria) continue;
     const f = ruleTraits(r);
     if (f?.operator === 'AND' && f.conditions.length > 1) continue;
     const key = JSON.stringify(scopeFields.map((k) => r[k] ?? null));
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(r);
+    groups.get(key)!.push(r);
   }
   const plans: RuleConsolidation[] = [];
   for (const group of groups.values()) {
@@ -77,14 +77,15 @@ export function planRuleConsolidation(
             : null;
         });
         if (snapshots.every(Boolean)) {
+          const complete = snapshots as NonNullable<(typeof snapshots)[number]>[];
           const ids = [
-            ...new Set(snapshots.flatMap((s) => s.inscription_ids)),
+            ...new Set(complete.flatMap((s) => s.inscription_ids)),
           ].sort();
           if (ids.length <= 20000)
             after.ordinal_trait_snapshot = {
               inscription_ids: ids,
               criteria_hash: ordinalTraitHash(after),
-              fetched_at: snapshots.map((s) => s.fetched_at).sort()[0],
+              fetched_at: complete.map((s) => s.fetched_at).sort()[0],
             };
         }
       }

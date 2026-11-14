@@ -14,12 +14,13 @@ export class BitcoinSignatureService {
 
   async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }> {
     const context = userId !== undefined || guildId !== undefined
-      ? await this.nonceSvc.getActiveNonce(userId, guildId, nonce)
+      ? await this.nonceSvc.getActiveNonce(userId ?? '', guildId ?? '', nonce)
       : await this.nonceSvc.getActiveNonceByToken(nonce);
     const rules = context.channelId
       ? await this.dbSvc.getRulesByChannel(context.guildId, context.channelId)
       : await this.dbSvc.getRoleMappings(context.guildId);
     if (!rules.length) throw new Error('No verification rules found for this channel.');
+    if (context.expiry === undefined) throw new Error('This verification link has expired. Please request a new one in Discord.');
     const walletTypes: WalletType[] = [];
     if (rules.some(rule => !['ordinal','stamp','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
     if (rules.some(rule => ['ordinal','stamp'].includes(rule.asset_type))) walletTypes.push('bitcoin');
@@ -31,7 +32,7 @@ export class BitcoinSignatureService {
       expiry: context.expiry,
       ...(context.verificationData ? { data: {
         ...context.verificationData,
-        signingOrigin: walletProofOrigin(EnvironmentConfig.BASE_URL),
+        signingOrigin: walletProofOrigin(EnvironmentConfig.requireBaseUrl()),
         address: '',
         userId: context.userId,
         discordId: context.guildId,
@@ -48,7 +49,7 @@ export class BitcoinSignatureService {
     const normalizedAddress = bitcoinStamps ? normalizeBitcoinProofAddress(address) : normalizeBitcoinAddress(address);
     let domain: string;
     try {
-      const url = new URL(EnvironmentConfig.BASE_URL);
+      const url = new URL(EnvironmentConfig.BASE_URL ?? '');
       if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
       domain = url.origin;
     } catch { throw new Error('Bitcoin verification is not configured. Set BASE_URL on the backend.'); }

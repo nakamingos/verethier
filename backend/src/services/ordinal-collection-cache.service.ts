@@ -23,7 +23,7 @@ export class OrdinalCollectionCacheService {
     const id = ordinalCollectionId(slug);
     context.ordinalCatalogs ||= new Map();
     if (!context.ordinalCatalogs.has(id)) context.ordinalCatalogs.set(id, context.freshExport ? this.refresh(id, ordinalRequestWork(context)) : this.read(id, ordinalRequestWork(context)));
-    return context.ordinalCatalogs.get(id);
+    return context.ordinalCatalogs.get(id)!;
   }
 
   private async read(id: string, work: OrdinalRequestWork): Promise<OrdinalCollectionSnapshot> {
@@ -42,7 +42,7 @@ export class OrdinalCollectionCacheService {
         .catch(() => null).finally(() => this.loads.delete(id));
       this.loads.set(id, promise);
     }
-    return this.loads.get(id);
+    return this.loads.get(id)!;
   }
 
   private remember(catalog: OrdinalCollectionSnapshot): void {
@@ -127,7 +127,7 @@ export class OrdinalCollectionCacheService {
 
   async refreshScheduled(context: NftCheckContext): Promise<void> {
     const rules = await this.db.getOrdinalCatalogRules();
-    const slugs = [...new Set(rules.map(rule => rule.slug).filter(Boolean))];
+    const slugs = [...new Set(rules.map(rule => rule.slug).filter((slug): slug is string => Boolean(slug)))];
     context.ordinalCatalogs ||= new Map();
     for (const slug of slugs) {
       try {

@@ -135,7 +135,7 @@ export class ServerSetupService {
           });
       }
       if (!grouped.has(rule.channel_id)) grouped.set(rule.channel_id, []);
-      grouped.get(rule.channel_id).push(rule.id);
+      grouped.get(rule.channel_id)!.push(rule.id);
     }
     if (
       settings.verification_channel_id &&
@@ -164,7 +164,7 @@ export class ServerSetupService {
     await Promise.all(
       Array.from({ length: Math.min(3, entries.length) }, async () => {
         while (entries.length) {
-          const [id, ruleIds] = entries.shift();
+          const [id, ruleIds] = entries.shift()!;
           const channel = channels.get(id);
           const result = {
             channel_id: id,
@@ -324,7 +324,7 @@ export class ServerSetupService {
       } else {
         this.createPermissions(bot);
         const name = input[`${kind}_channel_name`]?.trim();
-        if (!channelName(name))
+        if (!name || !channelName(name))
           throw new BadRequestException(
             'Use 1–100 lowercase letters, numbers, underscores or hyphens for new channel names.',
           );

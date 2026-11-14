@@ -1,3 +1,4 @@
+import { requireGuild } from '../utils/guild.util';
 import { ruleRoles } from '@/utils/rule-roles.util';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
@@ -48,10 +49,11 @@ export class ListRulesHandler {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const assetType = interaction.options.getString('asset_type') as RuleAssetType | null;
       
-      this.logger.log(`Fetching rules for server: ${interaction.guild.id}`);
+      const guild = requireGuild(interaction);
+      this.logger.log(`Fetching rules for server: ${guild.id}`);
       
       // Get all verification rules for the server
-      const allRules = await this.dbSvc.getRoleMappings(interaction.guild.id);
+      const allRules = await this.dbSvc.getRoleMappings(guild.id);
       
       this.logger.log(`Found ${allRules?.length || 0} total rules`);
       
@@ -164,7 +166,7 @@ export class ListRulesHandler {
     const description = this.formatRulesListForPage(rulesForPage, startIndex);
 
     // Create navigation buttons
-    const buttons = [];
+    const buttons: ButtonBuilder[] = [];
     
     // Previous button (disabled on first page)
     buttons.push(

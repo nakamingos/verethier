@@ -19,7 +19,7 @@ export class PortalJobsService {
     @Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
     private readonly roles: DynamicRoleService,
     private readonly discord: DiscordService,
-    private readonly roleActions?: RoleActionService,
+    private readonly roleActions: RoleActionService,
   ) {}
   @Interval(10000)
   async run() {
@@ -43,9 +43,16 @@ export class PortalJobsService {
     }
   }
 
+  /** The bot can disconnect between ticks; treat that as a failed job, not a crash. */
+  private botClient() {
+    const client = this.discord.getBotClient();
+    if (!client) throw new Error('Discord is not connected.');
+    return client;
+  }
+
   private async runNext(): Promise<'finished' | 'empty' | 'failed'> {
     let job: any;
-    let heartbeat: ReturnType<typeof setInterval>;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       const claimed = await this.db.rpc('verifier_portal_claim_job', {
         p_worker: this.worker,
@@ -87,11 +94,11 @@ export class PortalJobsService {
         if (action.error) throw new Error('action');
         ruleSave = ['create', 'edit', 'delete', 'reverse'].includes(action.data?.kind);
       }
-      const context: NftCheckContext = ruleSave
+      const context: NftCheckContext | undefined = ruleSave
         ? { checks: new Map(), ordinalMode: 'scheduled', ordinalProviderPolicy: 'ordnet-only' } : undefined;
       const result = job.role_action_role_id
         ? await this.roleActions.enforce(
-            await this.discord.getBotClient().guilds.fetch(job.server_id),
+            await this.botClient().guilds.fetch(job.server_id),
             job.user_id,
             job.role_action_role_id,
           )
