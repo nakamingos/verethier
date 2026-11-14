@@ -1,5 +1,5 @@
 import { RuleInputError } from '@/utils/rule-input-error';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftRuleFields, VerifierRole } from '@/models/verifier-role.interface';
@@ -27,10 +27,10 @@ export class OrdinalsOwnershipService {
   private readonly collections = new Map<string, { expires: number; data: { id: string; name: string } }>();
   private readonly collectionLookups = new Map<string, { data: Promise<{ id: string; name: string }>; work: OrdinalRequestWork }>();
 
-  constructor(@Optional() private readonly ordnet?: OrdnetOwnershipService, @Optional() private readonly db?: DbService,
-    @Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler(),
-    @Optional() private readonly catalog?: OrdinalCollectionCacheService,
-    @Optional() private readonly inventories?: OrdinalWalletInventoryService) {}
+  constructor(private readonly ordnet?: OrdnetOwnershipService, private readonly db?: DbService,
+    private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler(),
+    private readonly catalog?: OrdinalCollectionCacheService,
+    private readonly inventories?: OrdinalWalletInventoryService) {}
 
   async refreshScheduledCatalogs(context: NftCheckContext): Promise<void> {
     if (this.catalog && this.provider() === 'ordnet') await this.catalog.refreshScheduled(context);

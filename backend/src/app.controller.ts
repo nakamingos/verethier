@@ -1,5 +1,5 @@
 import { SolanaSignatureService } from './services/solana-signature.service';
-import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger, Optional } from '@nestjs/common';
+import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger } from '@nestjs/common';
 
 import { AppService } from './app.service';
 import { CONSTANTS } from './constants';
@@ -26,9 +26,9 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly verifySvc: VerifyService,
-    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
-    @Optional() private readonly memberSvc?: MemberService,
-    @Optional() private readonly solanaSvc?: SolanaSignatureService
+    private readonly bitcoinSvc?: BitcoinSignatureService,
+    private readonly memberSvc?: MemberService,
+    private readonly solanaSvc?: SolanaSignatureService
   ) {}
 
   /**

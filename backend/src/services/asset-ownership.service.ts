@@ -6,7 +6,7 @@ import { SolanaOwnershipService } from './solana-ownership.service';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import { IncompleteEthscriptionTraitsError } from '@/utils/ethscription-traits.util';
 import { Erc20OwnershipService } from './erc20-ownership.service';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { DataService } from './data.service';
 import { NftCheckContext, NftOwnershipService } from './nft-ownership.service';
@@ -17,12 +17,12 @@ import { EthscriptionsOwnershipService } from './ethscriptions-ownership.service
 @Injectable()
 export class AssetOwnershipService {
   constructor(private readonly dataSvc: DataService, private readonly nftSvc: NftOwnershipService,
-    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
-    @Optional() private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
-    @Optional() private readonly tokensSvc?: Erc20OwnershipService,
-    @Optional() private readonly solanaSvc?: SolanaOwnershipService,
-    @Optional() private readonly stampsSvc?: StampsOwnershipService,
-    @Optional() private readonly walletChecks?: WalletCheckService) {}
+    private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
+    private readonly tokensSvc?: Erc20OwnershipService,
+    private readonly solanaSvc?: SolanaOwnershipService,
+    private readonly stampsSvc?: StampsOwnershipService,
+    private readonly walletChecks?: WalletCheckService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);

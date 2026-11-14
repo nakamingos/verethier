@@ -2,7 +2,7 @@ import { VERIFICATION_REQUEST_UNAVAILABLE } from '@/utils/verification-request-e
 import { BouncerLogService } from './bouncer-log.service';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { resolveEthscriptionSlug } from './discord-commands/utils/rule-validation.util';
-import { Inject, Injectable, Logger, forwardRef, OnModuleInit, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, CacheType, ChannelType, ChatInputCommandInteraction, Client, EmbedBuilder, Events, GatewayIntentBits, GuildTextBasedChannel, InteractionResponse, MessageFlags, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, AutocompleteInteraction } from 'discord.js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NonceService } from '@/services/nonce.service';
@@ -44,7 +44,7 @@ import { normalizeRoleName } from './discord-commands/utils/role-management.util
  * ```
  */
 @Injectable()
-export class DiscordService implements OnModuleInit {
+export class DiscordService implements OnModuleInit, OnModuleDestroy {
 
   /** The Discord.js client instance, null until initialized */
   private client: Client | null = null;
@@ -83,10 +83,10 @@ export class DiscordService implements OnModuleInit {
     private readonly discordCommandsSvc: DiscordCommandsService,
     private readonly dataSvc: DataService,
     private readonly cacheSvc: CacheService,
-    @Optional() private readonly nftMetadataSvc?: NftMetadataService,
-    @Optional() private readonly ordinalsSvc?: OrdinalsOwnershipService,
-    @Optional() private readonly setupSvc?: ServerSetupService,
-    @Optional() private readonly activityLog?: BouncerLogService,
+    private readonly nftMetadataSvc?: NftMetadataService,
+    private readonly ordinalsSvc?: OrdinalsOwnershipService,
+    private readonly setupSvc?: ServerSetupService,
+    private readonly activityLog?: BouncerLogService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -103,6 +103,22 @@ export class DiscordService implements OnModuleInit {
    * NestJS lifecycle hook - called after all modules have been initialized.
    * This ensures all dependencies are ready before Discord bot initialization.
    */
+  /**
+   * Close the gateway connection when the process is asked to stop (for
+   * example a redeploy), instead of leaving it to time out on Discord's side.
+   */
+  async onModuleDestroy(): Promise<void> {
+    const client = this.client;
+    this.client = null;
+    this.isInitialized = false;
+    if (!client) return;
+    try {
+      await client.destroy();
+    } catch (error) {
+      Logger.warn(`Could not close the Discord connection cleanly: ${error?.message}`);
+    }
+  }
+
   async onModuleInit(): Promise<void> {
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
     

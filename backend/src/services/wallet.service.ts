@@ -2,7 +2,7 @@ import { minimalEvmVerificationProof } from '@/utils/wallet-proof.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { SolanaSignatureService } from './solana-signature.service';
 import { PrivacyService } from '@/portal/privacy.service';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EvmSignatureService } from './evm-signature.service';
 
 import { DynamicRoleService } from '@/services/dynamic-role.service';
@@ -38,10 +38,10 @@ export class WalletService {
     private discordService: DiscordService,
     private dynamicRoleService: DynamicRoleService,
     private readonly walletBlocks: WalletBlockService,
-    @Optional() private readonly bitcoinSvc?: BitcoinSignatureService,
-    @Optional() private readonly privacy?: PrivacyService,
-    @Optional() private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
-    @Optional() private readonly solanaSvc?: SolanaSignatureService
+    private readonly bitcoinSvc?: BitcoinSignatureService,
+    private readonly privacy?: PrivacyService,
+    private readonly evmSignatures: EvmSignatureService = new EvmSignatureService(),
+    private readonly solanaSvc?: SolanaSignatureService
   ) {}
   
   /**

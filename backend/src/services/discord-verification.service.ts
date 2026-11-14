@@ -16,7 +16,7 @@ import { ordinalRuleScope } from '@/utils/ordinal-rule.util';
 import { inscriptionRuleScope } from '@/utils/inscription-rule.util';
 import { boundedEmbedDescription } from '@/utils/discord-embed.util';
 import { EnvironmentConfig } from '@/config/environment.config';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { RoleActionService } from './role-action.service';
 import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, MessageFlags, Guild, GuildMember } from 'discord.js';
 import dotenv from 'dotenv';
@@ -130,9 +130,9 @@ export class DiscordVerificationService {
     private readonly userAddressService: UserAddressService,
     private readonly ownershipSvc: AssetOwnershipService,
     private readonly walletBlocks: WalletBlockService,
-    @Optional() private readonly roleActions?: RoleActionService,
-    @Optional() private readonly privacy?: PrivacyService,
-    @Optional() private readonly activityLog?: BouncerLogService,
+    private readonly roleActions?: RoleActionService,
+    private readonly privacy?: PrivacyService,
+    private readonly activityLog?: BouncerLogService,
   ) {}
 
   private getScopeKey(userId: string, guildId: string, channelId: string): string {

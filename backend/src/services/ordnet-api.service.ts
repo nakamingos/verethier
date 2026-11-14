@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { Signer, Verifier, Address } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -21,7 +21,7 @@ export class OrdnetApiService {
   private authenticationWork?: OrdinalRequestWork;
   private authenticationSources?: Set<OrdinalRequestWork>;
 
-  constructor(@Optional() private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler()) {}
+  constructor(private readonly requests: OrdinalsRequestScheduler = new OrdinalsRequestScheduler()) {}
 
   async get(path: string, work: OrdinalRequestWork = { priority: 'interactive' }): Promise<any> {
     if (!/^\/collection\/[a-z0-9][a-z0-9._-]{0,99}\/inscriptions\?/.test(path)

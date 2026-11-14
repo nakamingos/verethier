@@ -1,4 +1,4 @@
-import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import dotenv from 'dotenv';
 import { EnvironmentConfig } from './config/environment.config';
 import { DiscordService } from './services/discord.service';
@@ -24,7 +24,7 @@ dotenv.config();
  */
 @Injectable()
 export class AppService {
-  constructor(@Optional() private readonly discordSvc?: DiscordService) {}
+  constructor(private readonly discordSvc?: DiscordService) {}
 
   /**
    * Get basic application health and status information

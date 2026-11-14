@@ -5,7 +5,7 @@ import { BouncerLogService } from './bouncer-log.service';
 import { DynamicRoleService } from './dynamic-role.service';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleLabel } from '@/utils/nft-rule.util';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { NonceService }  from './nonce.service';
 import { DiscordVerificationService, RoleSyncContext } from './discord-verification.service';
@@ -39,9 +39,9 @@ export class VerifyService {
     private readonly dataSvc: DataService,
     private readonly dbSvc: DbService,
     private readonly verificationSvc: VerificationService,
-    @Optional() private readonly ordinalRequests?: OrdinalsRequestScheduler,
-    @Optional() private readonly earnedRoles?: DynamicRoleService,
-    @Optional() private readonly activityLog?: BouncerLogService,
+    private readonly ordinalRequests?: OrdinalsRequestScheduler,
+    private readonly earnedRoles?: DynamicRoleService,
+    private readonly activityLog?: BouncerLogService,
   ) {}
 
   /**

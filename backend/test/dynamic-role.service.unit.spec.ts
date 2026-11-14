@@ -1,3 +1,9 @@
+import { WalletCheckService } from '../src/services/wallet-check.service';
+import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
+import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
+import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
+import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
+import { OrdinalsOwnershipService } from '../src/services/ordinals-ownership.service';
 import { WalletBlockService } from '../src/services/wallet-block.service';
 import { VerificationEngine } from '../src/services/verification-engine.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
@@ -93,6 +99,12 @@ describe('DynamicRoleService', () => {
 
     module = await Test.createTestingModule({
       providers: [
+        { provide: WalletCheckService, useValue: undefined },
+        { provide: StampsOwnershipService, useValue: undefined },
+        { provide: SolanaOwnershipService, useValue: undefined },
+        { provide: Erc20OwnershipService, useValue: undefined },
+        { provide: EthscriptionsOwnershipService, useValue: undefined },
+        { provide: OrdinalsOwnershipService, useValue: undefined },
         { provide: WalletBlockService, useValue: { allowedAddresses: async (_serverId, wallets) => wallets, assertAllowed: jest.fn().mockResolvedValue(undefined) } },
         VerificationEngine,
         AssetOwnershipService,

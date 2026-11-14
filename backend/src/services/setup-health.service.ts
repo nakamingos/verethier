@@ -1,7 +1,7 @@
 import { StampsOwnershipService } from './stamps-ownership.service';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { ruleTraits } from '@/utils/trait-filter.util';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { inscriptionCriteria } from '@/utils/inscription-rule.util';
@@ -28,8 +28,8 @@ export class SetupHealthService {
     private readonly metadata: NftMetadataService,
     private readonly ordinals: OrdinalsOwnershipService,
     private readonly ethscriptions: EthscriptionsOwnershipService,
-    @Optional() private readonly solana?: SolanaOwnershipService,
-    @Optional() private readonly stamps?: StampsOwnershipService,
+    private readonly solana?: SolanaOwnershipService,
+    private readonly stamps?: StampsOwnershipService,
   ) {}
 
   async check(rules: VerifierRole[]): Promise<SetupProviderResult[]> {

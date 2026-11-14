@@ -1,6 +1,6 @@
 import { consentCommitment, walletProofOrigin } from '@/utils/wallet-proof.util';
 import { PrivacyService, privacyChoice, privacyProof } from '@/portal/privacy.service';
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Verifier } from 'bip322-js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { DecodedData } from '@/models/app.interface';
@@ -10,7 +10,7 @@ import { NonceData, NonceService } from './nonce.service';
 
 @Injectable()
 export class BitcoinSignatureService {
-  constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService, @Optional() private readonly privacy?: PrivacyService) {}
+  constructor(private readonly nonceSvc: NonceService, private readonly dbSvc: DbService, private readonly privacy?: PrivacyService) {}
 
   async getContext(userId: string | undefined, guildId: string | undefined, nonce: string): Promise<{ walletTypes: WalletType[]; expiry: number; bitcoinStamps?: boolean; data?: DecodedData; privacy?: any }> {
     const context = userId !== undefined || guildId !== undefined

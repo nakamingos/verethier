@@ -4,7 +4,7 @@ import { AuditLogHandler } from './discord-commands/handlers/audit-log.handler';
 import { WalletBlockHandler } from './discord-commands/handlers/wallet-block.handler';
 import { EditRuleHandler } from './discord-commands/handlers/edit-rule.handler';
 import { ModalSubmitInteraction, AutocompleteInteraction } from 'discord.js';
-import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ChannelType, GuildTextBasedChannel, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, Role, Client, ComponentType, ButtonInteraction } from 'discord.js';
 import { DbService } from './db.service';
 import { DiscordMessageService } from './discord-message.service';
@@ -73,7 +73,7 @@ export class DiscordCommandsService {
     private readonly auditLogHandler: AuditLogHandler,
     private readonly walletBlockHandler: WalletBlockHandler,
     private readonly editRuleHandler: EditRuleHandler,
-    @Optional() private readonly refreshCollectionHandler?: RefreshCollectionHandler
+    private readonly refreshCollectionHandler?: RefreshCollectionHandler
   ) {}
 
   async handleEditRule(interaction: ChatInputCommandInteraction): Promise<void> { return this.editRuleHandler.handle(interaction); }

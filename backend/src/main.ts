@@ -46,6 +46,10 @@ async function bootstrap() {
   // Security: Global validation pipe for input validation
   app.useGlobalPipes(new ValidationPipe(validationPipeOptions()));
 
+  // Stop cleanly on SIGTERM (redeploys): finish in-flight requests, then close
+  // the Discord connection.
+  app.enableShutdownHooks();
+
   app.setGlobalPrefix('api');
   
   // Security: Restrict CORS to known origins
