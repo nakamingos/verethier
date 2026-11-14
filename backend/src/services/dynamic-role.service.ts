@@ -27,6 +27,7 @@ import { AsyncSemaphore } from '@/utils/async-semaphore.util';
  */
 /** `left` counts members skipped because Discord confirms they left the server. */
 type ReconcileCounts = { verified: number; revoked: number; left: number; errors: number };
+type ReconcileOutcome = 'verified' | 'suppressed' | 'revoked' | 'unchanged' | 'left';
 
 /** Members checked at once by the scheduled run; one member's roles stay sequential. */
 const SCHEDULED_MEMBER_CONCURRENCY = 3;
@@ -73,6 +74,8 @@ export class DynamicRoleService {
       let revokedCount = 0;
       let leftCount = 0;
       let errorCount = 0;
+      let unchangedCount = 0;
+      let suppressedCount = 0;
       const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
       const discordContext: RoleSyncContext = new Map();
       const serverRules = this.serverRulesLoader();
@@ -94,13 +97,15 @@ export class DynamicRoleService {
         for (const assignment of memberAssignments) {
           try {
             const outcome = await this.reconcileAssignment(assignment, context, discordContext, serverRules);
-            if (outcome === 'verified') {
+            if (outcome === 'verified' || outcome === 'suppressed') {
               verifiedCount++;
+              if (outcome === 'suppressed') suppressedCount++;
               Logger.debug(`✅ User ${assignment.user_id} still qualifies for role ${assignment.role_id}`);
             } else if (outcome === 'revoked') {
               revokedCount++;
               Logger.log(`🚫 Revoked role ${assignment.role_name || assignment.role_id} from user ${assignment.user_name || assignment.user_id}`);
-            } else leftCount++;
+            } else if (outcome === 'unchanged') unchangedCount++;
+            else leftCount++;
           } catch (error) {
             if (!(error instanceof OwnershipCheckUnavailableError)) Logger.error(`Error verifying assignment ${assignment.id}:`, error.message);
             errorCount++;
@@ -109,7 +114,7 @@ export class DynamicRoleService {
       })));
 
       await this.verificationEngine.finishWalletChecks?.(context);
-      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors, ${leftCount} skipped (no longer in server) in ${Math.round((Date.now() - startedAt) / 1000)}s`);
+      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors, ${leftCount} skipped (no longer in server), ${unchangedCount} still not qualifying (already revoked), ${suppressedCount} of the verified held back by role actions, in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       
     } catch (error) {
       Logger.error('Failed to perform scheduled re-verification:', error);
@@ -231,8 +236,10 @@ export class DynamicRoleService {
     for (const assignment of assignments) {
       try {
         const outcome = await this.reconcileAssignment(assignment, context, discordContext, serverRules);
-        if (outcome === 'verified') verified++;
-        else if (outcome === 'revoked') revoked++;
+        // Job results keep their existing meaning: revoked counts every
+        // assignment that does not currently qualify.
+        if (outcome === 'verified' || outcome === 'suppressed') verified++;
+        else if (outcome === 'revoked' || outcome === 'unchanged') revoked++;
         else left++;
       } catch (error) {
         errors++;
@@ -251,14 +258,18 @@ export class DynamicRoleService {
    * before any ownership read: Discord already removed their roles, and the
    * earned record is kept so a later check restores the role if they rejoin.
    */
-  private async reconcileAssignment(assignment: any, context: NftCheckContext, discordContext: RoleSyncContext, serverRules?: ServerRules): Promise<'verified' | 'revoked' | 'left'> {
+  /**
+   * 'revoked' means something changed: the role was removed in Discord or the
+   * assignment moved to revoked. 'unchanged' is a previously revoked assignment
+   * that still does not qualify, which is rechecked every run so a member who
+   * qualifies again gets the role back.
+   */
+  private async reconcileAssignment(assignment: any, context: NftCheckContext, discordContext: RoleSyncContext, serverRules?: ServerRules): Promise<ReconcileOutcome> {
     if (!await this.discordVerificationSvc.isMember(assignment.user_id, assignment.server_id, discordContext)) return 'left';
     if (await this.verifyUserStillQualifies(assignment, context, await serverRules?.(assignment.server_id))) {
-      await this.restoreRole(assignment, discordContext);
-      return 'verified';
+      return await this.restoreRole(assignment, discordContext) === 'suppressed' ? 'suppressed' : 'verified';
     }
-    await this.revokeRole(assignment, discordContext);
-    return 'revoked';
+    return await this.revokeRole(assignment, discordContext) ? 'revoked' : 'unchanged';
   }
 
   /**
@@ -304,18 +315,20 @@ export class DynamicRoleService {
   /**
    * Revoke a role from Discord and update database
    */
-  private async revokeRole(assignment: any, context: RoleSyncContext): Promise<void> {
+  /** Returns whether anything changed in Discord or in the assignment's status. */
+  private async revokeRole(assignment: any, context: RoleSyncContext): Promise<boolean> {
     const removed = await this.discordVerificationSvc.removeUserRole(
       assignment.user_id, assignment.server_id, assignment.role_id, context
     );
     if (!removed) throw new Error('Discord role removal failed; assignment retained for retry.');
-    if (assignment.status !== 'revoked') {
+    const statusChanged = assignment.status !== 'revoked';
+    if (statusChanged) {
       await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'revoked');
     }
-    Logger.log(`Successfully revoked role ${assignment.role_id} from user ${assignment.user_id}`);
+    return removed === 'removed' || statusChanged;
   }
 
-  private async restoreRole(assignment: any, context: RoleSyncContext): Promise<void> {
+  private async restoreRole(assignment: any, context: RoleSyncContext): Promise<'restored' | 'suppressed'> {
     const restored = await this.discordVerificationSvc.addUserRoleDynamic(
       assignment.user_id, assignment.server_id, assignment.role_id, context
     );
@@ -323,12 +336,13 @@ export class DynamicRoleService {
     if (restored === 'suppressed') {
       if (assignment.status !== 'revoked') await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'revoked');
       await this.updateLastVerified(assignment.id);
-      return;
+      return 'suppressed';
     }
     if (assignment.status !== 'active') {
       await this.dbSvc.updateRoleAssignmentStatus(assignment.id, 'active');
     }
     await this.updateLastVerified(assignment.id);
+    return 'restored';
   }
 
   /**

@@ -829,7 +829,11 @@ export class DiscordVerificationService {
    * Remove a Discord role from a user
    * Used for dynamic role revocation when holdings no longer meet criteria
    */
-  async removeUserRole(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<boolean> {
+  /**
+   * Remove a role. 'absent' means the member already lacked it (nothing was
+   * changed in Discord); false means the removal could not be completed.
+   */
+  async removeUserRole(userId: string, serverId: string, roleId: string, context?: RoleSyncContext): Promise<false | 'removed' | 'absent'> {
     if (!this.client) {
       Logger.error('Discord client not initialized');
       return false;
@@ -850,21 +854,21 @@ export class DiscordVerificationService {
 
       // Revoked history can outlive a deleted Discord role. A fresh member
       // without it already satisfies removal; keep the history without retrying.
-      if (!member.roles.cache.has(roleId)) return true;
+      if (!member.roles.cache.has(roleId)) return 'absent';
 
       let role;
       try { role = await guild.roles.fetch(roleId); }
       catch (error) {
-        if (error?.code === 10011) return true; // Discord confirms Unknown Role.
+        if (error?.code === 10011) return 'absent'; // Discord confirms Unknown Role.
         throw error;
       }
-      if (!role) return true;
+      if (!role) return 'absent';
 
       const updated = await member.roles.remove(role, 'Dynamic role verification: holdings no longer meet criteria');
       context?.set(`${serverId}:${userId}`, Promise.resolve(updated));
       await this.activityLog?.record(serverId, userId, 'role_removed', 'background', roleId);
       Logger.log(`✅ Removed role "${role.name}" from user ${userId} in ${guild.name}`);
-      return true;
+      return 'removed';
 
     } catch (error) {
       Logger.error(`Failed to remove role ${roleId} from user ${userId} in guild ${serverId}:`, error);

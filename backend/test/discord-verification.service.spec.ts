@@ -1263,7 +1263,7 @@ describe('DiscordVerificationService', () => {
     it('forces a fresh member fetch rather than trusting the Discord.js cache', async () => {
       const liveMember = memberWithRoles(['role-id']);
       mockFetchedGuild.members.fetch.mockResolvedValue(liveMember);
-      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id')).toBe(true);
+      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id')).toBe('removed');
       expect(mockFetchedGuild.members.fetch).toHaveBeenCalledWith({ user: 'user-id', force: true });
       expect(liveMember.roles.remove).toHaveBeenCalledTimes(1);
     });
@@ -1274,7 +1274,7 @@ describe('DiscordVerificationService', () => {
       mockFetchedGuild.members.fetch.mockResolvedValue(liveMember);
       expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id', context)).toBe(true);
       expect(await service.addUserRoleDynamic('user-id', 'guild-id', 'role-id', context)).toBe(true);
-      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id', context)).toBe(true);
+      expect(await service.removeUserRole('user-id', 'guild-id', 'role-id', context)).toBe('removed');
       expect(mockFetchedGuild.members.fetch).toHaveBeenCalledTimes(1);
       expect(liveMember.roles.add).toHaveBeenCalledTimes(1);
       // A later run must observe Discord again.
@@ -1285,7 +1285,7 @@ describe('DiscordVerificationService', () => {
     it('treats an absent role on a fresh member as an already-complete removal', async () => {
       const member=memberWithRoles([]);mockFetchedGuild.members.fetch.mockResolvedValue(member);
       mockFetchedGuild.roles.fetch.mockClear();
-      expect(await service.removeUserRole('user-id','guild-id','deleted-role')).toBe(true);
+      expect(await service.removeUserRole('user-id','guild-id','deleted-role')).toBe('absent');
       expect(mockFetchedGuild.roles.fetch).not.toHaveBeenCalled();expect(member.roles.remove).not.toHaveBeenCalled();
     });
 
@@ -1293,7 +1293,7 @@ describe('DiscordVerificationService', () => {
       const member=memberWithRoles(['role-id']);mockFetchedGuild.members.fetch.mockResolvedValue(member);
       if(mode==='missing')mockFetchedGuild.roles.fetch.mockResolvedValueOnce(null);
       else mockFetchedGuild.roles.fetch.mockRejectedValueOnce(Object.assign(new Error('Unknown Role'),{code:10011}));
-      expect(await service.removeUserRole('user-id','guild-id','role-id')).toBe(true);
+      expect(await service.removeUserRole('user-id','guild-id','role-id')).toBe('absent');
       expect(member.roles.remove).not.toHaveBeenCalled();
     });
 
