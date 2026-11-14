@@ -106,7 +106,7 @@ export class PrivacyService {
         .select("server_id,sharing_enabled,epoch,updated_at")
         .eq("server_id", server)
         .single(),
-    );
+    )!; // .single() errors on a missing row, and checked() throws on errors.
   }
   async policy(server: string, user: string) {
     const s = await this.server(server);
@@ -118,13 +118,13 @@ export class PrivacyService {
         .eq("user_id", user)
         .maybeSingle(),
     );
-    const current = c?.epoch === s.epoch;
+    const current = c && c.epoch === s.epoch ? c : null;
     return {
       ...s,
       notice: PRIVACY_NOTICE,
       has_saved_choice: !!c,
-      share_since: current && s.sharing_enabled ? c.share_since : null,
-      export_since: current ? c.export_since : null,
+      share_since: current && s.sharing_enabled ? current.share_since : null,
+      export_since: current ? current.export_since : null,
     };
   }
   async choose(server: string, user: string, value: unknown) {
@@ -173,7 +173,7 @@ export class PrivacyService {
         .eq("user_id", user)
         .eq("status", "processing")
         .limit(1),
-    );
+    ) ?? [];
     if (rows.length)
       throw new ConflictException(
         "Account deletion is in progress. Contact nomorelabs@gmail.com before linking or verifying again.",
@@ -217,7 +217,7 @@ export class PrivacyService {
         .eq("user_id", user)
         .in("status", ["pending", "processing"])
         .limit(1),
-    );
+    ) ?? [];
     if (existing.length) return existing[0];
     return this.checked(
       await this.db

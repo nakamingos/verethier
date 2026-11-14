@@ -89,6 +89,12 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     expect(verify).toHaveBeenCalledWith(flow.address,flow.challenge,'0x123456');
     expect(db.rpc).toHaveBeenCalledWith('verifier_member_link_wallet',expect.objectContaining({p_chain:8453}));
   });
+  it('refuses a portal verification whose link has no channel instead of crashing', async () => {
+    nonces.getActiveNonce = jest.fn().mockResolvedValue({ memberPortal: true, channelId: undefined });
+    await expect(service.assertPortalVerification(user, server, 'nonce'))
+      .rejects.toThrow('This verification channel is no longer available to you.');
+    expect(guild.channels.fetch).not.toHaveBeenCalled();
+  });
   it('rejects malformed EVM addresses before saving a challenge', async () => {
     for (const address of ['invalid', '0x123', ' 0x' + '1'.repeat(40)])
       await expect(

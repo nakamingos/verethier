@@ -143,7 +143,7 @@ export class DbService {
       query = query.eq('asset_type',assetFields.asset_type).eq('solana_criteria',JSON.stringify(assetFields.solana_criteria));
       return assetFields.asset_type === 'solana_token' ? query.eq('min_balance',assetFields.min_balance) : query;
     }
-    if (['erc20','solana_token'].includes(assetFields?.asset_type)) return query.eq('asset_type', 'erc20')
+    if (assetFields && ['erc20','solana_token'].includes(assetFields.asset_type ?? '')) return query.eq('asset_type', 'erc20')
       .eq('chain_id', assetFields.chain_id).eq('contract_address', assetFields.contract_address).eq('min_balance', assetFields.min_balance);
     if (assetFields?.inscription_criteria != null) return query.eq('asset_type', assetFields.asset_type)
       .is('slug', null).eq('inscription_criteria', JSON.stringify(assetFields.inscription_criteria));
@@ -155,7 +155,7 @@ export class DbService {
       .eq('contract_address', assetFields.contract_address).eq('token_standard', assetFields.token_standard);
     return assetFields.token_ids === null
       ? query.is('token_ids', null)
-      : query.eq('token_ids', `{${assetFields.token_ids.join(',')}}`);
+      : query.eq('token_ids', `{${(assetFields.token_ids ?? []).join(',')}}`);
   }
 
   async saveRoleCheckDetails(assignmentId: string, details: any): Promise<void> {
@@ -190,7 +190,7 @@ export class DbService {
       .eq('channel_id', channelId);
     const traits = ruleTraits({ ...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal });
     query = traits ? query.eq('trait_key', traitFilterKey({ trait_filter: traits })) : query.is('trait_key', null);
-    query = ['erc20','solana_token'].includes(assetFields?.asset_type) ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
+    query = ['erc20','solana_token'].includes(assetFields?.asset_type ?? '') ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
 
@@ -236,11 +236,11 @@ export class DbService {
         server_name: serverName,
         channel_id: channelId,
         channel_name: channelName,
-        slug: ['nft', 'erc20', 'solana_nft', 'solana_token', 'stamp'].includes(assetFields?.asset_type) || assetFields?.inscription_criteria != null ? null : finalSlug,
+        slug: ['nft', 'erc20', 'solana_nft', 'solana_token', 'stamp'].includes(assetFields?.asset_type ?? '') || assetFields?.inscription_criteria != null ? null : finalSlug,
         role_id: roleId,
         role_name: roleName,
         trait_filter: ruleTraits({...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal}),
-        min_items: ['erc20','solana_token'].includes(assetFields?.asset_type) ? null : finalMinItems,
+        min_items: ['erc20','solana_token'].includes(assetFields?.asset_type ?? '') ? null : finalMinItems,
         ...storedAssetFields
       })
       .select()
@@ -338,7 +338,7 @@ export class DbService {
       .eq('role_id', roleId);
     const traits = ruleTraits({ ...assetFields, attribute_key: finalAttrKey, attribute_value: finalAttrVal });
     query = traits ? query.eq('trait_key', traitFilterKey({ trait_filter: traits })) : query.is('trait_key', null);
-    query = ['erc20','solana_token'].includes(assetFields?.asset_type) ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
+    query = ['erc20','solana_token'].includes(assetFields?.asset_type ?? '') ? query.is('min_items', null) : query.eq('min_items', finalMinItems);
 
     query = this.filterRuleAsset(query, finalSlug, assetFields);
     const { data, error } = await query;
@@ -491,7 +491,7 @@ export class DbService {
   }): Promise<any> {
     try {
       // Calculate expiration date if provided
-      let expiresAt = null;
+      let expiresAt: string | null = null;
       if (assignment.expiresInHours && assignment.expiresInHours > 0) {
         const expiration = new Date();
         expiration.setHours(expiration.getHours() + assignment.expiresInHours);
@@ -735,7 +735,7 @@ export class DbService {
         }
         for (const wallet of wallets) {
           if (!walletsByUser.has(wallet.user_id)) walletsByUser.set(wallet.user_id, []);
-          walletsByUser.get(wallet.user_id).push(wallet);
+          walletsByUser.get(wallet.user_id)!.push(wallet);
         }
       } catch (error) {
         this.logger.warn('Could not load audit wallet links:', error.message);

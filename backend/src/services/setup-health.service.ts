@@ -50,26 +50,26 @@ export class SetupHealthService {
       detail: string,
     ) => {
       if (!probes.has(id)) probes.set(id, { label, rules: [], run, detail });
-      probes.get(id).rules.push(rule);
+      probes.get(id)!.rules.push(rule);
     };
     for (const rule of rules) {
       const traits = !!ruleTraits(rule);
       if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') {
-        add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana.checkSetupHealth(),'Checks capability configuration, provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
+        add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana!.checkSetupHealth(),'Checks capability configuration, provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
       } else if (rule.asset_type === 'stamp') {
-        add('bitcoin:stamps','Bitcoin Stamps / Counterparty',rule,()=>this.stamps.checkSetupHealth(),'Checks mainnet Counterparty readiness and Stampchain indexer health. Wallet balances are checked separately.');
+        add('bitcoin:stamps','Bitcoin Stamps / Counterparty',rule,()=>this.stamps!.checkSetupHealth(),'Checks mainnet Counterparty readiness and Stampchain indexer health. Wallet balances are checked separately.');
       } else if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {
         add(
           `rpc:${rule.chain_id}`,
-          `${nftNetworkLabel(rule.chain_id)} RPC`,
+          `${nftNetworkLabel(rule.chain_id ?? undefined)} RPC`,
           rule,
-          () => this.nfts.checkSetupHealth(rule.chain_id),
+          () => this.nfts.checkSetupHealth(rule.chain_id ?? 1),
           'Checks network identity and reads the latest block.',
         );
         if (traits)
           add(
             `metadata:${rule.chain_id}`,
-            `${nftNetworkLabel(rule.chain_id)} NFT metadata`,
+            `${nftNetworkLabel(rule.chain_id ?? undefined)} NFT metadata`,
             rule,
             () => this.metadata.checkSetupHealth(rule),
             'Checks the metadata API with one collection sample; individual token traits are evaluated during verification.',
@@ -114,11 +114,11 @@ export class SetupHealthService {
     await Promise.all(
       Array.from({ length: Math.min(3, queue.length) }, async () => {
         while (queue.length) {
-          const [id, probe] = queue.shift();
+          const [id, probe] = queue.shift()!;
           let status: SetupProviderResult['status'] = 'not_checked';
           let detail = probe.detail;
           if (probe.run) {
-            let timer: ReturnType<typeof setTimeout>;
+            let timer: ReturnType<typeof setTimeout> | undefined;
             try {
               await Promise.race([
                 probe.run(),

@@ -194,9 +194,9 @@ export class MemberService {
         .order('id', { ascending: false })
         .limit(20),
     ]);
-    const communities = [];
+    const communities: any[] = [];
     let communitiesUnavailable = false;
-    let candidates = [];
+    let candidates: typeof session.guilds = [];
     try {
       const client = this.client();
       candidates = session.guilds.filter((g) => client.guilds.cache.has(g.id));
@@ -219,7 +219,7 @@ export class MemberService {
       }),
     );
     const checking = await this.walletChecks?.statuses(session.user.id) || [];
-    const history = this.checked(actions);
+    const history = this.checked(actions) ?? [];
     const jobs = history.length
       ? this.checked(
           await this.db
@@ -229,15 +229,15 @@ export class MemberService {
               'member_action_id',
               history.map((a) => a.id),
             ),
-        )
+        ) ?? []
       : [];
     return {
       capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED},
-      wallets: this.checked(wallets).map(wallet=>({...wallet,checking:checking.filter(state=>state.address===wallet.address && communities.some(community=>community.id===state.server_id)).map(state=>({...state,server_name:communities.find(community=>community.id===state.server_id)?.name}))})),
+      wallets: (this.checked(wallets) ?? []).map(wallet=>({...wallet,checking:checking.filter(state=>state.address===wallet.address && communities.some(community=>community.id===state.server_id)).map(state=>({...state,server_name:communities.find(community=>community.id===state.server_id)?.name}))})),
       communitiesUnavailable,
       communities,
       counts: {
-        wallets: wallets.data.length,
+        wallets: wallets.data?.length ?? 0,
         communities: communities.length,
         roles: communities.reduce(
           (n, c) => n + c.roles.filter((r) => r.status === 'active').length,
@@ -452,7 +452,7 @@ export class MemberService {
         .eq('user_id', session.user.id)
         .eq('address', address),
     );
-    if (!wallets.length)
+    if (!wallets?.length)
       throw new NotFoundException('This wallet is not linked to your account.');
     const earned = await this.rules.getEarnedRoleAssignments({
       userId: session.user.id,
@@ -519,7 +519,7 @@ export class MemberService {
         server_id: guild.id,
         channel_id: channel.id,
         nonce,
-        expires_at: new Date(context.expiry * 1000).toISOString(),
+        expires_at: new Date((context.expiry ?? 0) * 1000).toISOString(),
       });
     } catch (error) {
       await this.nonces.invalidateNonce(nonce);
@@ -587,7 +587,8 @@ export class MemberService {
       { user: { id: userId } } as PortalSession,
       serverId,
     );
-    const channel = await guild.channels.fetch(context.channelId);
+    // Without a channel ID, fetch() would return every channel instead of one.
+    const channel = context.channelId ? await guild.channels.fetch(context.channelId) : null;
     if (!channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel))
       throw new ForbiddenException(
         'This verification channel is no longer available to you.',
