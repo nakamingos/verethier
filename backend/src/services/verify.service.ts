@@ -59,7 +59,7 @@ export class VerifyService {
     // Verify the wallet signature and extract the signing address
     const startedAt = Date.now();
     const releaseReply = this.discordVerificationSvc.retainVerificationRequest(payload.nonce, payload.userId, payload.discordId);
-    let walletVerification: Awaited<ReturnType<WalletService['verifySignature']>>;
+    let walletVerification: Awaited<ReturnType<WalletService['verifySignature']>> | undefined;
     let finish: (() => void) | undefined;
     try {
       walletVerification = await this.timed(payload.userId, 'wallet signature', () => this.walletSvc.verifySignature(payload, signature));
@@ -98,7 +98,7 @@ export class VerifyService {
     const walletType = walletVerification.activity?.walletType || payload.walletType || 'evm';
     const ownershipContext: NftCheckContext = { checks: new Map(), provenAddresses: new Map([[payload.userId, address]]),
       verificationCheckFamilies: interactiveWalletFamilies(walletType) };
-    Logger.log(`Verification scope: user=${payload.userId}; wallet=${walletType}; families=${[...ownershipContext.verificationCheckFamilies].join(',')}`);
+    Logger.log(`Verification scope: user=${payload.userId}; wallet=${walletType}; families=${[...(ownershipContext.verificationCheckFamilies ?? [])].join(',')}`);
     try {
       return await this.completeVerificationWithContext(payload, walletVerification, ownershipContext);
     } finally {
@@ -266,9 +266,9 @@ export class VerifyService {
       for (const rule of result.validRules) {
         if (!rule.role_id) continue;
         if (!groups.has(rule.role_id)) groups.set(rule.role_id, []);
-        groups.get(rule.role_id).push(rule);
+        groups.get(rule.role_id)!.push(rule);
       }
-      const roleResults = [];
+      const roleResults: any[] = [];
       let excluded = 0;
       let failures = 0;
       const members: RoleSyncContext = new Map();

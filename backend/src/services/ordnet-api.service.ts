@@ -60,8 +60,9 @@ export class OrdnetApiService {
       // Share a renewal across concurrent collection reads. Never retain a failed login.
       this.authentication.then(() => { this.authentication = undefined; }, () => { this.authentication = undefined; });
     }
-    this.authenticationSources.add(work);
-    if (work.priority === 'interactive') this.requests.promote(this.authenticationWork);
+    // Set together with this.authentication above.
+    this.authenticationSources!.add(work);
+    if (work.priority === 'interactive') this.requests.promote(this.authenticationWork!);
     return this.authentication;
   }
 
@@ -77,7 +78,7 @@ export class OrdnetApiService {
       ordinalsAddress = normalizeBitcoinAddress(EnvironmentConfig.ORDNET_ORDINALS_ADDRESS);
       paymentAddress = this.signingAddress(EnvironmentConfig.ORDNET_PAYMENT_ADDRESS);
       // Check that the supplied keys control these addresses before contacting the API.
-      for (const [address, wif] of [[ordinalsAddress, ordinalsWif], [paymentAddress, paymentWif]]) {
+      for (const [address, wif] of [[ordinalsAddress, ordinalsWif], [paymentAddress, paymentWif]] as [string, string][]) {
         if (!/^[KL][1-9A-HJ-NP-Za-km-z]{51}$/.test(wif)
           || !Verifier.verifySignature(address, 'Bouncer ord.net API wallet configuration', Signer.sign(wif, address, 'Bouncer ord.net API wallet configuration'))) throw new Error();
       }
@@ -95,7 +96,7 @@ export class OrdnetApiService {
       challengeIds.add(entry.challengeId);
       signedAddresses.add(address);
       try {
-        const signature = Signer.sign(entry.role === 'ordinals' ? ordinalsWif : paymentWif, address, entry.message);
+        const signature = Signer.sign((entry.role === 'ordinals' ? ordinalsWif : paymentWif)!, address, entry.message);
         if (!Verifier.verifySignature(address, entry.message, signature)) throw new Error();
         return { challengeId: entry.challengeId, address, signature: Buffer.from(signature, 'base64').toString('hex') };
       } catch { throw new Error('Could not sign the ord.net API wallet challenge. Check the configured wallet keys.'); }

@@ -27,7 +27,7 @@ export class Erc20OwnershipService {
     if (!EnvironmentConfig[variable]) throw new Error(`${network.name} token verification is not configured. Set ${variable} on the backend.`);
     if (!this.clients.has(chainId)) this.clients.set(chainId, createPublicClient({ chain: network.chain,
       transport: http(EnvironmentConfig[variable], { timeout: 10000, retryCount: 1, batch: { batchSize: NFT_BATCH_SIZE, wait: 10 } }) }));
-    return this.clients.get(chainId);
+    return this.clients.get(chainId)!;
   }
 
   async prepareRule(contract: string, minimum: string, chainId = 1): Promise<NftRuleFields> {
@@ -66,26 +66,30 @@ export class Erc20OwnershipService {
 
   async count(rule: NftRuleFields, wallets: string[], context?: NftCheckContext): Promise<bigint> {
     tokenMinimum(rule);
+    if (typeof rule.chain_id !== 'number') throw new Error('Invalid ERC-20 network.');
     getNftNetwork(rule.chain_id);
-    if (!ADDRESS.test(rule.contract_address || '') || rule.contract_address.toLowerCase() === ZERO) throw new Error('Invalid ERC-20 contract.');
+    const contract = rule.contract_address || '';
+    if (!ADDRESS.test(contract) || contract.toLowerCase() === ZERO) throw new Error('Invalid ERC-20 contract.');
     const addresses = [...new Set(wallets.map(wallet => wallet.toLowerCase()))].sort() as Address[];
     if (addresses.some(address => !ADDRESS.test(address))) throw new Error('Invalid token wallet address.');
     if (!addresses.length) return 0n;
     const run = context || { checks: new Map() };
-    const key = JSON.stringify(['erc20', rule.chain_id, rule.contract_address.toLowerCase(), addresses]);
+    const key = JSON.stringify(['erc20', rule.chain_id, contract.toLowerCase(), addresses]);
     if (!run.checks.has(key)) run.checks.set(key, this.readBalances(rule, addresses, run));
     return run.checks.get(key);
   }
 
   private async readBalances(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<bigint> {
+    // count() validated the network before calling this.
+    const chain = rule.chain_id as number;
     try {
-      const client = this.getClient(rule.chain_id);
+      const client = this.getClient(chain);
       context.blocks ||= new Map();
-      if (!context.blocks.has(rule.chain_id)) context.blocks.set(rule.chain_id, client.getChainId().then(chainId => {
-        if (chainId !== rule.chain_id) throw new Error('Wrong token RPC network.');
+      if (!context.blocks.has(chain)) context.blocks.set(chain, client.getChainId().then(chainId => {
+        if (chainId !== chain) throw new Error('Wrong token RPC network.');
         return client.getBlockNumber();
       }));
-      const blockNumber = await context.blocks.get(rule.chain_id);
+      const blockNumber = await context.blocks.get(chain);
       let total = 0n;
       for (let index = 0; index < addresses.length; index += NFT_BATCH_SIZE) {
         const balances = await Promise.all(addresses.slice(index, index + NFT_BATCH_SIZE).map(owner =>

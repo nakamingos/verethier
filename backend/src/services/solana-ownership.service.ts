@@ -65,14 +65,14 @@ export class SolanaOwnershipService {
         deadline: Date.now() + 30000,
         reads: new Map(),
       });
-    return { ...this.runs.get(context), deadline: Date.now() + 30000 };
+    return { ...this.runs.get(context)!, deadline: Date.now() + 30000 };
   }
   private cache<T>(run: Run, key: string, load: () => Promise<T>): Promise<T> {
     if (!run.reads.has(key)) run.reads.set(key, load());
-    return run.reads.get(key);
+    return run.reads.get(key)!;
   }
   private async request(
-    url: string,
+    url: string | undefined,
     method: string,
     params: any,
     run: Run,

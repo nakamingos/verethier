@@ -107,7 +107,7 @@ export class OrdnetOwnershipService {
       const load = () => this.collectionScan(id, ordinalRequestWork(context));
       context.ordinalCollections.set(key, context.ordinalCollectionRead ? context.ordinalCollectionRead(id, load) : load());
     }
-    return context.ordinalCollections.get(key);
+    return context.ordinalCollections.get(key)!;
   }
 
   promoteScan(slug: string): void {
@@ -132,10 +132,10 @@ export class OrdnetOwnershipService {
       }
       return scan.result;
     }
-    scan = { work: { priority: work.priority }, items: new Map(), listeners: new Set(onPage ? [onPage] : []), result: undefined };
-    this.scans.set(id, scan);
-    const entry = scan;
-    scan.result = this.readCollection(id, scan).then(collection => {
+    const entry: CollectionScan = { work: { priority: work.priority }, items: new Map(), listeners: new Set(onPage ? [onPage] : []), result: undefined! };
+    scan = entry;
+    this.scans.set(id, entry);
+    entry.result = this.readCollection(id, entry).then(collection => {
       if (this.traitSuggestions.size >= 100) this.traitSuggestions.clear();
       this.traitSuggestions.set(id, {
         expires: Date.now() + TRAIT_MENU_TTL_MS,
@@ -147,7 +147,7 @@ export class OrdnetOwnershipService {
       // A later independent verification starts a fresh scan, including after errors.
       if (this.scans.get(id) === entry) this.scans.delete(id);
     });
-    return scan.result;
+    return entry.result;
   }
 
   private lotReferences(item: any, collection: string, page: number): Array<[string, number]> {
@@ -234,7 +234,7 @@ export class OrdnetOwnershipService {
         || pagination.nextCursor.length > 4096 || cursors.has(pagination.nextCursor)) throw new OrdnetUnavailableError(`collection ${id}: empty continuing page or invalid/repeated cursor`);
       for (const listener of scan.listeners) listener(validatedPage);
       cursor = pagination.nextCursor;
-      cursors.add(cursor);
+      cursors.add(pagination.nextCursor);
     }
     throw new OrdnetUnavailableError(`collection ${id}: exceeded ${MAX_PAGES} pages`);
   }
