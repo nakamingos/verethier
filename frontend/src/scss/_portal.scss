@@ -1318,6 +1318,24 @@ app-root:has(app-admin) .app-footer {
 }
 .wallet-table th:last-child { width:30%; }
 .wallet-table .address a { text-decoration:underline; text-underline-offset:3px; }
+.wallet-address-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.wallet-address-control a {
+  flex: 1 1 20ch;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-address-control .wallet-copy { flex: none; }
+
 .wallet-table .wallet-has-checking > td {
   border-bottom: 0;
   background-image: none;

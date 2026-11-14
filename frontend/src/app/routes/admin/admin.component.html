@@ -1,3 +1,11 @@
+<ng-template #lookupWalletAddress let-address>
+  <span class="wallet-address-control">
+    <a [href]="walletExplorer(address)" target="_blank" rel="noopener noreferrer"
+      [title]="address + ' · Open in explorer'">{{ address }}</a>
+    <button type="button" class="wallet-copy" (click)="copyWalletAddress(address)"
+      [attr.aria-label]="'Copy wallet address ' + address" title="Copy wallet address">Copy</button>
+  </span>
+</ng-template>
 <section class="portal">
   <div class="portal-heading">
     <div class="portal-title">
@@ -1730,13 +1738,7 @@
                             }}:
                           </td>
                           <td class="address">
-                            <a
-                              [href]="walletExplorer(wallet.address)"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              [title]="wallet.address + ' · Open in explorer'"
-                              >{{ walletAddress(wallet.address) }}</a
-                            >
+                            <ng-container *ngTemplateOutlet="lookupWalletAddress; context: { $implicit: wallet.address }" />
                             @if (wallet.blocked) {
                               <span
                                 class="badge wallet-block-status"
@@ -1820,13 +1822,7 @@
                               }}:
                             </td>
                             <td class="address">
-                              <a
-                                [href]="walletExplorer(wallet.address)"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                [title]="wallet.address + ' · Open in explorer'"
-                                >{{ walletAddress(wallet.address) }}</a
-                              ><time [attr.datetime]="wallet.removed_at"
+                              <ng-container *ngTemplateOutlet="lookupWalletAddress; context: { $implicit: wallet.address }" /><time [attr.datetime]="wallet.removed_at"
                                 >{{
                                   wallet.transferred
                                     ? "Transferred"
@@ -1894,8 +1890,7 @@
                         @for (attempt of attempts.items; track attempt.id) {
                           <tr>
                             <td class="address" data-label="Wallet">
-                              <a [href]="walletExplorer(attempt.address)" target="_blank"
-                                rel="noopener noreferrer" [title]="attempt.address">{{ walletAddress(attempt.address) }}</a>
+                              <ng-container *ngTemplateOutlet="lookupWalletAddress; context: { $implicit: attempt.address }" />
                               <span class="muted"> · {{ attempt.wallet_type }}</span>
                             </td>
                             <td data-label="Source">{{ attempt.source === 'portal' ? 'Member portal' : 'Discord' }}</td>

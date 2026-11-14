@@ -34,6 +34,15 @@ export class AdminComponent implements OnInit, OnDestroy {
       ? 'https://etherscan.io/address/' + address
       : (/^(bc1p[ac-hj-np-z02-9]{58}|bc1q[ac-hj-np-z02-9]{38}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/i.test(address)) ? 'https://mempool.space/address/' + address : 'https://solscan.io/account/'+address;
   }
+  async copyWalletAddress(address: string) {
+    try {
+      await navigator.clipboard.writeText(address);
+      this.error = '';
+      this.notice = 'Wallet address copied.';
+    } catch {
+      this.error = 'Could not copy the wallet address. Please try again.';
+    }
+  }
   walletAddress(address: string) {
     return address.slice(0, 8) + '…' + address.slice(-6);
   }

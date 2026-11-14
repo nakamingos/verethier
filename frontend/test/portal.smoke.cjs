@@ -121,6 +121,12 @@ const base = {
         hasTouch: width <= 800,
       });
       const page = await context.newPage();
+      await page.addInitScript(() => {
+        window.__copiedWallets = [];
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+          writeText: async value => { window.__copiedWallets.push(value); },
+        } });
+      });
       if (width <= 800) {
         const emulation = await context.newCDPSession(page);
         const screenshot = page.screenshot.bind(page);
@@ -2100,6 +2106,20 @@ const base = {
         await savedWallets.getByRole('link').first().getAttribute('href'),
         'https://mempool.space/address/' + lookupBitcoin,
       );
+      assert.equal((await savedWallets.getByRole('link').first().textContent()).trim(), lookupBitcoin,
+        'Saved wallets retain the full address for responsive display');
+      const removedAddress = '0x1111111111111111111111111111111111111111';
+      assert.equal((await removedWallets.getByRole('link').first().textContent()).trim(), removedAddress);
+      for (const [table, address] of [[savedWallets, lookupBitcoin], [removedWallets, removedAddress]]) {
+        await table.getByRole('button', { name: 'Copy wallet address ' + address, exact: true }).click();
+        assert.equal(await page.evaluate(() => window.__copiedWallets.at(-1)), address,
+          'Copy uses the complete address, including on narrow screens');
+        await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+      }
+      if (width === 1280) {
+        const fit = await removedWallets.getByRole('link').first().evaluate(el=>({width:el.clientWidth,full:el.scrollWidth}));
+        assert.ok(fit.width >= fit.full, 'Full EVM address fits without truncation when desktop space is available');
+      }
       assert.equal(await removedWallets.getByRole('row').count(), 3);
       assert.equal(
         await removedWallets.getByRole('link').first().getAttribute('href'),
