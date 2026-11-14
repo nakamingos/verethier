@@ -8,6 +8,9 @@ import { DynamicRoleService } from '@/services/dynamic-role.service';
 import { DiscordService } from '@/services/discord.service';
 import { EnvironmentConfig } from '@/config/environment.config';
 
+/** Upper bound on jobs handled in one pass, so a pass always ends. */
+const MAX_JOBS_PER_PASS = 100;
+
 @Injectable()
 export class PortalJobsService {
   private running = false;
@@ -27,6 +30,20 @@ export class PortalJobsService {
     )
       return;
     this.running = true;
+    try {
+      // Drain the queue instead of taking one job per tick. The claim function
+      // still allows one live job per server and delays retries by five
+      // minutes, so a failed job is not picked up again in this pass. Stop on
+      // the first failure so an outage is not hammered.
+      for (let handled = 0; handled < MAX_JOBS_PER_PASS; handled++) {
+        if (await this.runNext() !== 'finished') break;
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async runNext(): Promise<'finished' | 'empty' | 'failed'> {
     let job: any;
     let heartbeat: ReturnType<typeof setInterval>;
     try {
@@ -35,7 +52,7 @@ export class PortalJobsService {
       });
       if (claimed.error) throw new Error('claim');
       job = claimed.data?.[0];
-      if (!job) return;
+      if (!job) return 'empty';
       heartbeat = setInterval(() => {
         void this.db
           .from('verifier_reconciliation_jobs')
@@ -108,6 +125,7 @@ export class PortalJobsService {
         .eq('id', job.id)
         .eq('locked_by', this.worker);
       if (saved.error) throw new Error('save');
+      return 'finished';
     } catch {
       Logger.warn(
         'Portal reconciliation job could not finish; it will be retried.',
@@ -126,9 +144,9 @@ export class PortalJobsService {
           })
           .eq('id', job.id)
           .eq('locked_by', this.worker);
+      return 'failed';
     } finally {
       if (heartbeat) clearInterval(heartbeat);
-      this.running = false;
     }
   }
   @Interval(3600000)

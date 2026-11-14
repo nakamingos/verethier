@@ -9,12 +9,14 @@ describe('Durable portal reconciliation worker', () => {
   afterEach(() => flag.restore());
   function setup(job: any, result: any, action: any = {kind:'edit'}) {
     const writes: any[] = [];
+    const claims = [true];
     const query: any = {
       eq: jest.fn().mockReturnThis(),
       then: (resolve: any) => Promise.resolve(resolve({ error: null })),
     };
     const db: any = {
-      rpc: jest.fn().mockResolvedValue({ data: [job], error: null }),
+      // Each pass claims the job once, then finds the queue empty.
+      rpc: jest.fn(async () => ({ data: claims.shift() ? [job] : [], error: null })),
       from: jest.fn(() => ({
         select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnThis(), maybeSingle: jest.fn().mockResolvedValue({data:action,error:null}) }),
         update: (value: any) => {
@@ -32,7 +34,7 @@ describe('Durable portal reconciliation worker', () => {
     const service = new PortalJobsService(db, roles, {
       getBotClient: () => ({}),
     } as any);
-    return { service, roles, writes, query, db };
+    return { service, roles, writes, query, db, claims };
   }
   it('passes the persisted ord.net-only policy through automatic role rechecks', async () => {
     const { service, roles } = setup({ id:'job',server_id:'server',role_id:'role',attempts:1,ordinal_provider_policy:'ordnet-only' }, {verified:0,revoked:0,errors:0});
@@ -153,5 +155,48 @@ describe('Durable portal reconciliation worker', () => {
     await service.run();
     expect(writes[0].status).toBe('failed');
     expect(JSON.stringify(writes)).not.toContain('private-key');
+  });
+  it('drains every waiting job in one pass and then stops', async () => {
+    const { service, roles, writes, db, claims } = setup(
+      { id: 'job', server_id: 'server', role_id: 'role', attempts: 1 },
+      { verified: 1, revoked: 0, errors: 0 },
+    );
+    claims.push(true, true);
+    await service.run();
+    expect(roles.reverifyRoleInServer).toHaveBeenCalledTimes(3);
+    expect(writes.map(write => write.status)).toEqual(['completed', 'completed', 'completed']);
+    // Three claimed jobs, then one empty claim that ends the pass.
+    expect(db.rpc).toHaveBeenCalledTimes(4);
+  });
+  it('keeps draining after a job is queued for retry, because its checks ran', async () => {
+    const { service, roles, claims } = setup(
+      { id: 'job', server_id: 'server', role_id: 'role', attempts: 1 },
+      { verified: 0, revoked: 0, errors: 1 },
+    );
+    claims.push(true);
+    await service.run();
+    expect(roles.reverifyRoleInServer).toHaveBeenCalledTimes(2);
+  });
+  it('ends the pass when a job cannot finish, leaving the rest for the next tick', async () => {
+    const { service, roles, db, claims } = setup(
+      { id: 'job', server_id: 'server', role_id: 'role', attempts: 1 },
+      null,
+    );
+    claims.push(true, true);
+    roles.reverifyRoleInServer.mockRejectedValue(new Error('outage'));
+    await service.run();
+    expect(roles.reverifyRoleInServer).toHaveBeenCalledTimes(1);
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+    // The worker is free again for the next tick.
+    roles.reverifyRoleInServer.mockResolvedValue({ verified: 1, revoked: 0, errors: 0 });
+    await service.run();
+    expect(roles.reverifyRoleInServer).toHaveBeenCalledTimes(3);
+  });
+  it('ends the pass when claiming fails', async () => {
+    const { service, roles, db } = setup({ id: 'job', server_id: 'server', role_id: 'role', attempts: 1 }, null);
+    db.rpc.mockResolvedValue({ data: null, error: { message: 'down' } });
+    await service.run();
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+    expect(roles.reverifyRoleInServer).not.toHaveBeenCalled();
   });
 });
