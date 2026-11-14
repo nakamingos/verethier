@@ -81,7 +81,7 @@ describe('CacheService', () => {
 
       await service.set('test-key', testData, 300);
 
-      expect(mockCacheManager.set).toHaveBeenCalledWith('test-key', testData, 300);
+      expect(mockCacheManager.set).toHaveBeenCalledWith('test-key', testData, 300_000);
     });
 
     it('should set cache data without TTL', async () => {
@@ -143,7 +143,7 @@ describe('CacheService', () => {
       expect(result).toEqual(fallbackData);
       expect(mockCacheManager.get).toHaveBeenCalledWith('test-key');
       expect(fallbackFn).toHaveBeenCalled();
-      expect(mockCacheManager.set).toHaveBeenCalledWith('test-key', fallbackData, 300);
+      expect(mockCacheManager.set).toHaveBeenCalledWith('test-key', fallbackData, 300_000);
     });
 
     it('should propagate fallback function errors', async () => {
@@ -178,7 +178,7 @@ describe('CacheService', () => {
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'rules:server:server-123',
         rules,
-        300 // 5 minutes
+        300_000 // 5 minutes
       );
     });
 
@@ -218,7 +218,7 @@ describe('CacheService', () => {
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'assets:0x123abc', // Should be lowercase
         assets,
-        120 // 2 minutes
+        120_000 // 2 minutes
       );
     });
 
@@ -246,7 +246,7 @@ describe('CacheService', () => {
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'assets:0x123abc',
         assets,
-        120
+        120_000
       );
     });
   });
@@ -261,7 +261,7 @@ describe('CacheService', () => {
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'slugs:all',
         slugs,
-        3600 // 1 hour
+        3_600_000 // 1 hour
       );
     });
 
@@ -361,12 +361,12 @@ describe('CacheService', () => {
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'rules:server:server-123',
         rules,
-        300
+        300_000
       );
       expect(mockCacheManager.set).toHaveBeenCalledWith(
         'assets:0xuser123',
         assets,
-        120
+        120_000
       );
     });
 
@@ -380,7 +380,15 @@ describe('CacheService', () => {
 
       expect(result).toEqual(['slug1', 'slug2']);
       expect(fallbackFn).toHaveBeenCalled();
-      expect(mockCacheManager.set).toHaveBeenCalledWith('slugs:all', ['slug1', 'slug2'], 3600);
+      expect(mockCacheManager.set).toHaveBeenCalledWith('slugs:all', ['slug1', 'slug2'], 3_600_000);
     });
+  });
+  it('keeps an entry for seconds, not milliseconds, in a real cache store', async () => {
+    const { caching } = require('cache-manager');
+    const real = new CacheService(await caching('memory', { max: 10 }));
+    await real.set('key', 'value', 2);
+    // With the lifetime passed through as 2 ms this entry would already be gone.
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(await real.get('key')).toBe('value');
   });
 });
