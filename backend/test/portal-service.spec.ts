@@ -381,6 +381,44 @@ describe('Portal server boundaries', () => {
     );
     expect(db.rpc).not.toHaveBeenCalled();
   });
+  describe('wallet audit member list reuse', () => {
+    const audit = () => ({ data: { total: 0, items: [] }, error: null });
+    beforeEach(() => {
+      jest.spyOn(service, 'access').mockResolvedValue(guild);
+      db.rpc = jest.fn(async () => audit());
+    });
+    afterEach(() => jest.useRealTimers());
+    it('lists members once while paging, then again after a minute', async () => {
+      jest.useFakeTimers();
+      guild.members.list = jest.fn().mockResolvedValue(new Map([[user, { displayName: 'Member' }]]));
+      const first = await service.walletAudit(session, server, {});
+      const second = await service.walletAudit(session, server, { address: '0x1212121212121212121212121212121212121212' });
+      expect(guild.members.list).toHaveBeenCalledTimes(1);
+      expect(db.rpc).toHaveBeenCalledTimes(2);
+      // Both pages report when the member list was actually read.
+      expect(second.checked_at).toBe(first.checked_at);
+      jest.advanceTimersByTime(60_001);
+      await service.walletAudit(session, server, {});
+      expect(guild.members.list).toHaveBeenCalledTimes(2);
+    });
+    it('shares one member read between simultaneous audits', async () => {
+      guild.members.list = jest.fn().mockResolvedValue(new Map());
+      await Promise.all([service.walletAudit(session, server, {}), service.walletAudit(session, server, {})]);
+      expect(guild.members.list).toHaveBeenCalledTimes(1);
+    });
+    it('does not reuse a failed member read', async () => {
+      guild.members.list = jest.fn().mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValue(new Map());
+      await expect(service.walletAudit(session, server, {})).rejects.toThrow('No partial audit');
+      await expect(service.walletAudit(session, server, {})).resolves.toMatchObject({ total: 0 });
+      expect(guild.members.list).toHaveBeenCalledTimes(2);
+    });
+    it('still checks admin access on every audit page', async () => {
+      guild.members.list = jest.fn().mockResolvedValue(new Map());
+      await service.walletAudit(session, server, {});
+      (service.access as jest.Mock).mockRejectedValue(new Error('Not admin'));
+      await expect(service.walletAudit(session, server, {})).rejects.toThrow('Not admin');
+    });
+  });
   it('checks admin access before reading wallet-audit identities or changing role actions', async () => {
     jest.spyOn(service, 'access').mockRejectedValue(new Error('Not admin'));
     guild.members.list = jest.fn();
