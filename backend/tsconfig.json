@@ -17,6 +17,9 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "ox/*": [
+        "node_modules/ox/_types/*"
       ]
     },
     "strictNullChecks": true
