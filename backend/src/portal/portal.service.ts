@@ -54,7 +54,7 @@ const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
 export const portalRule = (rule: VerifierRole) => {
   const { ordinal_trait_snapshot, ...safe } = rule;
   const fields = ruleEditFields(rule);
-  if (!rule.inscription_criteria && !['erc20','solana_token','stamp'].includes(rule.asset_type)) {
+  if (!rule.inscription_criteria && !['erc20','solana_token','stamp'].includes(rule.asset_type ?? '')) {
     const first = fields.findIndex(f => ['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     const clean = fields.filter(f => !['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     clean.splice(first, 0, { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 });
@@ -102,6 +102,10 @@ export class PortalService {
     return client;
   }
   private readonly accessReads = new Map<string, Promise<GuildMember>>();
+  private requireSetup(): ServerSetupService {
+    if (!this.setup) throw new ServiceUnavailableException('Setup assistance is unavailable.');
+    return this.setup;
+  }
   async readAccess(session: PortalSession, server: string, operation = 'admin_read'): Promise<Guild> {
     if (!this.privacy?.isOperator(session.user.id)) return this.access(session,server);
     if (!snowflake(server)) throw new BadRequestException('Invalid server ID.');
@@ -170,7 +174,7 @@ export class PortalService {
         });
       }
     }
-    const id = client.user.id;
+    const id = client.user!.id;
     const invite = new URL('https://discord.com/oauth2/authorize');
     invite.search = new URLSearchParams({
       client_id: id,
@@ -252,7 +256,7 @@ export class PortalService {
         issues.push(`Rule ${rule.id}: verification channel is missing.`);
       else if (
         !channel
-          .permissionsFor(guild.members.me)
+          .permissionsFor(guild.members.me!)
           ?.has([
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
@@ -319,7 +323,7 @@ export class PortalService {
     await this.readAccess(session, server, 'nft_collection_lookup');
     if (!this.nftCollections) throw new ServiceUnavailableException('Collection lookup is unavailable.');
     const result = network !== undefined || contract !== undefined
-      ? await this.nftCollections.collectionTokens(collection, network, contract)
+      ? await this.nftCollections.collectionTokens(collection, network ?? '', contract ?? '')
       : await this.nftCollections.lookup(collection);
     await this.readAccess(session, server, 'nft_collection_lookup');
     return result;
@@ -400,21 +404,22 @@ export class PortalService {
     };
   }
   async checkSetup(session: PortalSession, server: string) {
-    const report = await this.setup.check(await this.access(session, server));
+    const setup = this.requireSetup();
+    const report = await setup.check(await this.access(session, server));
     await this.access(session, server);
     return report;
   }
   async setupChannels(session: PortalSession, server: string, input: PortalSetupChannelsDto) {
-    return this.setup.previewChannels(await this.access(session, server), session.user.id, input);
+    return this.requireSetup().previewChannels(await this.access(session, server), session.user.id, input);
   }
   async setupRecovery(session: PortalSession, server: string, input: PortalSetupRecoveryDto) {
-    return this.setup.previewRecovery(await this.access(session, server), session.user.id, input.channel_id, input.request_id);
+    return this.requireSetup().previewRecovery(await this.access(session, server), session.user.id, input.channel_id, input.request_id);
   }
   async setupRequest(session: PortalSession, server: string, request: string, apply = false) {
     if (!/^[a-f0-9-]{36}$/i.test(request)) throw new BadRequestException('Invalid setup request.');
     const guild = await this.access(session, server);
-    return apply ? this.setup.apply(guild, session.user.id, request, () => this.access(session, server))
-      : this.setup.get(server, session.user.id, request);
+    return apply ? this.requireSetup().apply(guild, session.user.id, request, () => this.access(session, server))
+      : this.requireSetup().get(server, session.user.id, request);
   }
   async create(session: PortalSession, server: string, input: PortalRuleDto) {
     let guild = await this.access(session, server);
@@ -520,7 +525,7 @@ export class PortalService {
     const role = await this.targetRole(guild, input.role_id, input.role_name, session.user.id);
     candidate.role_id = role.id; candidate.role_name = role.name;
     candidate.additional_roles = await this.additionalRoles(guild, role.id, input.additional_roles, session.user.id);
-    delete candidate.id;
+    delete (candidate as { id?: unknown }).id;
     if (this.edits.duplicates(candidate, await this.rules.getRoleMappings(server)).exact) throw new ConflictException('This exact rule already exists.');
     // Copy only rule fields; no assignment history or role-action policies.
     return this.mutate(session, server, input.request_id, null, candidate);
@@ -654,7 +659,7 @@ export class PortalService {
     request: string,
     before: any,
     after: any,
-    reverts: string = null,
+    reverts: string | null = null,
   ) {
     const { data, error } = await this.db.rpc('verifier_portal_mutate_rule', {
       p_server: server,
@@ -753,7 +758,7 @@ export class PortalService {
             .in('reverts', ids)
         : { data: [], error: null };
       this.dbError(reversed.error);
-      const used = new Set(reversed.data.map((a) => a.reverts));
+      const used = new Set((reversed.data ?? []).map((a) => a.reverts));
       items = items.map((a) => ({
         ...this.safeAction(a),
         reversible:
@@ -818,7 +823,7 @@ export class PortalService {
       .eq('address', address);
     this.dbError(current.error || (!Array.isArray(current.data) ? {} : null));
     ids = new Map<string, 'current' | 'history'>(
-      current.data.map((row) => [row.user_id, 'current']),
+      current.data!.map((row) => [row.user_id, 'current']),
     );
     for (let offset = 0; ; offset += 1000) {
       const history = await this.db
@@ -829,9 +834,10 @@ export class PortalService {
         .order('id', { ascending: true })
         .range(offset, offset + 999);
       this.dbError(history.error || (!Array.isArray(history.data) ? {} : null));
-      for (const row of history.data)
+      // dbError above throws unless data is an array.
+      for (const row of history.data!)
         if (!ids.has(row.user_id)) ids.set(row.user_id, 'history');
-      if (history.data.length < 1000) break;
+      if (history.data!.length < 1000) break;
     }
     }
     const matches: { member: any; wallet_match: 'current' | 'history' }[] = [];
@@ -980,12 +986,12 @@ export class PortalService {
       .select('address,wallet_type,last_verified_at')
       .eq('user_id', id);
     this.dbError(error);
-    const wallets=(savedWallets || []).filter(w=>operator || this.privacy.visible(policy.share_since,w.last_verified_at));
+    const wallets=(savedWallets || []).filter(w=>operator || this.privacy!.visible(policy!.share_since,w.last_verified_at));
     const removedRows = await this.removedWallets(
       id,
       new Set((wallets || []).map((wallet) => wallet.address)),
     );
-    const removedWallets=removedRows.filter(w=>operator || this.privacy.visible(policy.share_since,w.removed_at)).map(w=>({...w,last_verified_at:operator || this.privacy.visible(policy.share_since,w.last_verified_at)?w.last_verified_at:null}));
+    const removedWallets=removedRows.filter(w=>operator || this.privacy!.visible(policy!.share_since,w.removed_at)).map(w=>({...w,last_verified_at:operator || this.privacy!.visible(policy!.share_since,w.last_verified_at)?w.last_verified_at:null}));
     const restrictions = new Map<string, any>();
     const addresses = [
       ...new Set(
@@ -1006,7 +1012,7 @@ export class PortalService {
       blocked: restrictions.has(wallet.address),
       block: restrictions.get(wallet.address) || null,
     });
-    const roles = [];
+    const roles: any[] = [];
     const serverRules = check ? await this.rules.getRoleMappings(server) : [];
     const context = {
       checks: new Map(),
@@ -1041,7 +1047,7 @@ export class PortalService {
       name: member.displayName,
       username: member.user.username,
       avatar: member.displayAvatarURL(),
-      wallets_private: !operator && !policy.share_since,
+      wallets_private: !operator && !policy!.share_since,
       wallets: (wallets || []).map(wallet=>({...withRestriction(wallet),checking:checking.filter(state=>state.address===wallet.address)})),
       removed_wallets: removedWallets.map(withRestriction),
       ...(operator ? { blocked_attempts: await this.blockedAttempts(server, id) } : {}),

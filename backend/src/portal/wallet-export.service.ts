@@ -1,3 +1,4 @@
+import type { VerifierRole } from '@/models/verifier-role.interface';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { isSolanaRule } from '@/utils/solana-rule.util';
 import {
@@ -234,8 +235,8 @@ export class WalletExportService {
             .order("id")
             .range(offset, offset + 999),
         );
-        rows.push(...batch);
-        if (batch.length < 1000) break;
+        rows.push(...(batch ?? []));
+        if (!batch || batch.length < 1000) break;
       }
     return rows;
   }
@@ -276,8 +277,8 @@ export class WalletExportService {
           .order("address")
           .range(offset, offset + 999),
       );
-      for (const r of rows) set.add(r.address);
-      if (rows.length < 1000) return set;
+      for (const r of rows ?? []) set.add(r.address);
+      if (!rows || rows.length < 1000) return set;
     }
   }
   private async eligibleWallets(
@@ -292,9 +293,10 @@ export class WalletExportService {
       (w) =>
         this.family(w, f) &&
         (override ||
-          (this.privacy.visible(p.export_since, w.last_verified_at) &&
+          // p is null only with override, which short-circuits above.
+          (this.privacy.visible(p!.export_since, w.last_verified_at) &&
             (!f.identities ||
-              this.privacy.visible(p.share_since, w.last_verified_at)))),
+              this.privacy.visible(p!.share_since, w.last_verified_at)))),
     );
   }
   @Interval(5000)
@@ -302,7 +304,7 @@ export class WalletExportService {
     if (this.working || EnvironmentConfig.IS_TEST) return;
     this.working = true;
     let job: any;
-    let heartbeat: ReturnType<typeof setInterval>;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       const claimed = this.privacy.checked(
         await this.db.rpc("verifier_privacy_claim_export", {
@@ -405,12 +407,12 @@ export class WalletExportService {
         )
       ).filter((w) => f.exclude_blocked === false || !blocked.has(w.address));
       if (allowed.length) {
-        context.userAddresses.set(
+        context.userAddresses!.set(
           m.id,
           Promise.resolve(all.map((w) => w.address)),
         );
-        context.userAddresses.set(`${m.id}:solana`,Promise.resolve(all.filter(w=>w.wallet_type==='solana').map(w=>w.address)));
-        for (const chainId of [0, 1, 8453, 4663]) context.userAddresses.set(
+        context.userAddresses!.set(`${m.id}:solana`,Promise.resolve(all.filter(w=>w.wallet_type==='solana').map(w=>w.address)));
+        for (const chainId of [0, 1, 8453, 4663]) context.userAddresses!.set(
           `${m.id}:${chainId}`, Promise.resolve(all.filter(w => chainId === 0 ? w.wallet_type === 'bitcoin' : walletOnChain(w, chainId)).map(w => w.address)),
         );
         let scope = allRules.filter(
@@ -440,7 +442,7 @@ export class WalletExportService {
         )
           throw new ServiceUnavailableException("Fresh holdings unavailable.");
         const passing =
-          checked?.results.filter((r) => r.isValid).map((r) => r.rule) || [];
+          checked?.results.filter((r) => r.isValid).map((r) => r.rule).filter((r): r is VerifierRole => !!r) || [];
         const manualRoles = (f.roles || []).filter(
           (id: string) => !allRules.some((r) => r.role_id === id),
         );

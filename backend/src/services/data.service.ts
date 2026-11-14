@@ -189,7 +189,7 @@ export class DataService {
       } else {
         // For specific slug, use pagination to get ALL records to ensure accurate counts
         // This is important for correct rarity calculations and occurrence counts
-        const allData = [];
+        const allData: any[] = [];
         let page = 0;
         const pageSize = 2000; // Balanced page size for performance
         const maxPages = 5; // Allow up to 10k records to capture full collections
@@ -316,7 +316,7 @@ export class DataService {
       }
 
       // Use the same table and pagination logic as getAttributeValues but without rarity filtering
-      const allData = [];
+      const allData: any[] = [];
       let page = 0;
       const pageSize = 2000;
       const maxPages = 5;
@@ -413,7 +413,7 @@ export class DataService {
     // Cache the promise before awaiting it, so parallel rules share one read.
     // A failed read stays failed for this run rather than becoming an empty wallet.
     if (!inventories.has(key)) inventories.set(key, this.readEthscriptionAssets(wallets));
-    const assets = await inventories.get(key);
+    const assets = (await inventories.get(key))!;
     const collection = slug?.trim();
     let scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
       ? assets.filter(asset => asset.slug === collection) : assets;
