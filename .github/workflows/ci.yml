@@ -60,22 +60,32 @@ jobs:
       - name: Unit tests
         run: yarn ng test --watch=false --no-progress --browsers=ChromeHeadless
 
-  audit:
-    name: Dependency audit (advisory)
+  backend-audit:
+    name: Backend dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Reports known advisories without failing the run. Make this blocking
-    # once the framework upgrade has cleared the existing findings.
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [backend, frontend]
+    # The backend has no known advisories; a new high or critical one fails CI.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: yarn audit (high and critical)
-        working-directory: ${{ matrix.project }}
+        working-directory: backend
+        run: yarn audit --level high --groups dependencies
+
+  frontend-audit:
+    name: Frontend dependency audit (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Reports known advisories without failing the run until the frontend
+    # dependencies are upgraded.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: yarn audit (high and critical)
+        working-directory: frontend
         run: yarn audit --level high --groups dependencies
