@@ -4,7 +4,9 @@
   "description": "",
   "author": "",
   "private": true,
-  "engines": { "node": ">=20.19.0" },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -23,13 +25,13 @@
     "ordinals:grant-once": "node scripts/grant-ordinal-roles.cjs"
   },
   "dependencies": {
-    "@noble/curves": "1.9.2",
     "@nestjs/cache-manager": "^2.2.2",
     "@nestjs/common": "^9.0.0",
     "@nestjs/core": "^9.0.0",
     "@nestjs/platform-express": "^9.0.0",
     "@nestjs/schedule": "^6.0.0",
     "@nestjs/throttler": "^6.4.0",
+    "@noble/curves": "1.9.2",
     "@supabase/supabase-js": "^2.43.1",
     "bip322-js": "4.0.0",
     "bitcoinjs-lib": "7.0.2",
