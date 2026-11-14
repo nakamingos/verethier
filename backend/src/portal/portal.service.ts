@@ -16,7 +16,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { ChannelType, Guild, PermissionFlagsBits } from 'discord.js';
+import { ChannelType, Guild, GuildMember, PermissionFlagsBits } from 'discord.js';
 import { DiscordService } from '@/services/discord.service';
 import { DbService } from '@/services/db.service';
 import { DiscordMessageService } from '@/services/discord-message.service';
@@ -68,6 +68,9 @@ export const portalRule = (rule: VerifierRole) => {
     fields,
   };
 };
+/** How long a complete member list is reused across wallet-audit pages. */
+const AUDIT_MEMBER_LIST_MS = 60_000;
+
 @Injectable()
 export class PortalService {
   constructor(
@@ -99,6 +102,7 @@ export class PortalService {
       );
     return client;
   }
+  private readonly accessReads = new Map<string, Promise<GuildMember>>();
   async readAccess(session: PortalSession, server: string, operation = 'admin_read'): Promise<Guild> {
     if (!this.privacy?.isOperator(session.user.id)) return this.access(session,server);
     if (!snowflake(server)) throw new BadRequestException('Invalid server ID.');
@@ -114,10 +118,18 @@ export class PortalService {
       throw new NotFoundException('Bouncer is not installed in this server.');
     let member;
     try {
-      member = await guild.members.fetch({
-        user: session.user.id,
-        force: true,
-      });
+      // A page load sends several requests at once. Calls that overlap share
+      // one fresh Discord read; nothing is kept once it settles, so a later
+      // call (including deliberate re-checks) always reads again.
+      const key = `${guild.id}:${session.user.id}`;
+      let fetching = this.accessReads.get(key);
+      if (!fetching) {
+        fetching = guild.members.fetch({ user: session.user.id, force: true });
+        this.accessReads.set(key, fetching);
+        const clear = () => { if (this.accessReads.get(key) === fetching) this.accessReads.delete(key); };
+        fetching.then(clear, clear);
+      }
+      member = await fetching;
     } catch {
       throw new ForbiddenException(
         'Could not confirm your membership in this server.',
@@ -1153,33 +1165,15 @@ export class PortalService {
       throw new BadRequestException(
         'Choose a wallet before paging its accounts.',
       );
-    const members = new Map<string, any>();
-    let after: string | undefined;
-    // REST pagination works without enabling a new gateway subscription. If
-    // Discord denies the member list, fail rather than report a partial audit.
+    let listed: { members: Map<string, any>; readAt: number };
     try {
-      for (let page = 0; ; page++) {
-        if (page >= 100) throw new Error('Member list limit');
-        const batch = await guild.members.list({
-          limit: 1000,
-          ...(after ? { after } : {}),
-        });
-        const ids = [...batch.keys()];
-        if (ids.some((id) => members.has(id)))
-          throw new Error('Repeated member page');
-        for (const [id, member] of batch) members.set(id, member);
-        if (batch.size < 1000) break;
-        const next = ids
-          .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1))
-          .at(-1);
-        if (next === after) throw new Error('Member page did not advance');
-        after = next;
-      }
+      listed = await this.auditMembers(guild);
     } catch {
       throw new ServiceUnavailableException(
         'Could not read the complete server member list. Check Bouncer’s Server Members access in Discord and try again. No partial audit was returned.',
       );
     }
+    const members = listed.members;
     const { data, error } = await this.db.rpc('verifier_portal_wallet_audit', {
       p_server: server,
       p_operator: this.privacy?.isOperator(session.user.id) || false,
@@ -1201,8 +1195,45 @@ export class PortalService {
       ...data,
       member_id: dto.member_id || null,
       member_name: target?.displayName || null,
-      checked_at: new Date().toISOString(),
+      // Names and in-server status come from the member list, which is
+      // reused for up to a minute while an administrator pages through results.
+      checked_at: new Date(listed.readAt).toISOString(),
     };
+  }
+  private readonly auditMemberReads = new Map<string, Promise<{ members: Map<string, any>; readAt: number }>>();
+  /** The complete member list, shared by audit pages requested within a minute. */
+  private auditMembers(guild: Guild): Promise<{ members: Map<string, any>; readAt: number }> {
+    const cached = this.auditMemberReads.get(guild.id);
+    if (cached) return cached;
+    const read = this.listAllMembers(guild).then(members => ({ members, readAt: Date.now() }));
+    this.auditMemberReads.set(guild.id, read);
+    const clear = () => { if (this.auditMemberReads.get(guild.id) === read) this.auditMemberReads.delete(guild.id); };
+    // A failed or partial read is dropped at once; a complete one expires.
+    read.then(() => setTimeout(clear, AUDIT_MEMBER_LIST_MS).unref?.(), clear);
+    return read;
+  }
+  // REST pagination works without enabling a new gateway subscription. If
+  // Discord denies the member list, fail rather than report a partial audit.
+  private async listAllMembers(guild: Guild): Promise<Map<string, any>> {
+    const members = new Map<string, any>();
+    let after: string | undefined;
+    for (let page = 0; ; page++) {
+      if (page >= 100) throw new Error('Member list limit');
+      const batch = await guild.members.list({
+        limit: 1000,
+        ...(after ? { after } : {}),
+      });
+      const ids = [...batch.keys()];
+      if (ids.some((id) => members.has(id)))
+        throw new Error('Repeated member page');
+      for (const [id, member] of batch) members.set(id, member);
+      if (batch.size < 1000) return members;
+      const next = ids
+        .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1))
+        .at(-1);
+      if (next === after) throw new Error('Member page did not advance');
+      after = next;
+    }
   }
   private async removedWallets(userId: string, current: Set<string>) {
     const removed = new Map<string, any>();

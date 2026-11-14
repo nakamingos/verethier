@@ -51,6 +51,32 @@ describe('Portal server boundaries', () => {
     expect(query.eq).toHaveBeenCalledWith('server_id', server);
     expect(await (service as any).replay(session, server, 'request')).toHaveProperty('rechecks_queued', count);
   });
+  it('shares one Discord read between overlapping access checks and reads again afterwards', async () => {
+    const admin = { id: user, permissions: { has: () => true } };
+    let release: (member: any) => void;
+    guild.members.fetch.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const overlapping = [service.access(session, server), service.access(session, server)];
+    release(admin);
+    await Promise.all(overlapping);
+    expect(guild.members.fetch).toHaveBeenCalledTimes(1);
+    // A later check sees a permission change: nothing was kept.
+    guild.members.fetch.mockResolvedValue({ id: user, permissions: { has: () => false } });
+    await expect(service.access(session, server)).rejects.toThrow('Administrator');
+    expect(guild.members.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('does not keep a failed access read', async () => {
+    guild.members.fetch.mockRejectedValueOnce(new Error('discord down'))
+      .mockResolvedValue({ id: user, permissions: { has: () => true } });
+    await expect(service.access(session, server)).rejects.toThrow('Could not confirm your membership');
+    await expect(service.access(session, server)).resolves.toBe(guild);
+  });
+  it('does not share an access read between different users', async () => {
+    guild.members.fetch.mockImplementation(async ({ user: id }: any) => ({ id, permissions: { has: () => id === user } }));
+    const other = { ...session, user: { id: '444444444444444444' } };
+    const results = await Promise.allSettled([service.access(session, server), service.access(other, server)]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect(guild.members.fetch).toHaveBeenCalledTimes(2);
+  });
   it('does not trust OAuth guild snapshots for server administration', async () => {
     guild.members.fetch.mockResolvedValue({
       id: user,
@@ -354,6 +380,44 @@ describe('Portal server boundaries', () => {
       'No partial audit',
     );
     expect(db.rpc).not.toHaveBeenCalled();
+  });
+  describe('wallet audit member list reuse', () => {
+    const audit = () => ({ data: { total: 0, items: [] }, error: null });
+    beforeEach(() => {
+      jest.spyOn(service, 'access').mockResolvedValue(guild);
+      db.rpc = jest.fn(async () => audit());
+    });
+    afterEach(() => jest.useRealTimers());
+    it('lists members once while paging, then again after a minute', async () => {
+      jest.useFakeTimers();
+      guild.members.list = jest.fn().mockResolvedValue(new Map([[user, { displayName: 'Member' }]]));
+      const first = await service.walletAudit(session, server, {});
+      const second = await service.walletAudit(session, server, { address: '0x1212121212121212121212121212121212121212' });
+      expect(guild.members.list).toHaveBeenCalledTimes(1);
+      expect(db.rpc).toHaveBeenCalledTimes(2);
+      // Both pages report when the member list was actually read.
+      expect(second.checked_at).toBe(first.checked_at);
+      jest.advanceTimersByTime(60_001);
+      await service.walletAudit(session, server, {});
+      expect(guild.members.list).toHaveBeenCalledTimes(2);
+    });
+    it('shares one member read between simultaneous audits', async () => {
+      guild.members.list = jest.fn().mockResolvedValue(new Map());
+      await Promise.all([service.walletAudit(session, server, {}), service.walletAudit(session, server, {})]);
+      expect(guild.members.list).toHaveBeenCalledTimes(1);
+    });
+    it('does not reuse a failed member read', async () => {
+      guild.members.list = jest.fn().mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValue(new Map());
+      await expect(service.walletAudit(session, server, {})).rejects.toThrow('No partial audit');
+      await expect(service.walletAudit(session, server, {})).resolves.toMatchObject({ total: 0 });
+      expect(guild.members.list).toHaveBeenCalledTimes(2);
+    });
+    it('still checks admin access on every audit page', async () => {
+      guild.members.list = jest.fn().mockResolvedValue(new Map());
+      await service.walletAudit(session, server, {});
+      (service.access as jest.Mock).mockRejectedValue(new Error('Not admin'));
+      await expect(service.walletAudit(session, server, {})).rejects.toThrow('Not admin');
+    });
   });
   it('checks admin access before reading wallet-audit identities or changing role actions', async () => {
     jest.spyOn(service, 'access').mockRejectedValue(new Error('Not admin'));
