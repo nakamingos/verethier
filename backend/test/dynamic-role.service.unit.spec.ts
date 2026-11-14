@@ -163,7 +163,8 @@ describe('DynamicRoleService', () => {
       await service.performScheduledReverification();
 
       expect(mockDbService.getEarnedRoleAssignments).toHaveBeenCalled();
-      expect(mockDbService.getRuleById).toHaveBeenCalledTimes(2);
+      // Rules are loaded once for the server, not once per assignment.
+      expect(mockDbService.getRoleMappings).toHaveBeenCalledTimes(1);
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledTimes(2);
       expect(mockDbService.updateLastVerified).toHaveBeenCalledTimes(2);
       expect(loggerSpy).toHaveBeenCalledWith('🔄 Starting scheduled role re-verification');
@@ -212,9 +213,10 @@ describe('DynamicRoleService', () => {
       ];
 
       mockDbService.getEarnedRoleAssignments.mockResolvedValue(mockAssignments);
+      // The first rule read fails; it is not cached, so the next assignment retries it.
       mockDbService.getRuleById
-        .mockResolvedValueOnce(mockRule)
-        .mockRejectedValueOnce(new Error('Database error'));
+        .mockRejectedValueOnce(new Error('Database error'))
+        .mockResolvedValue(mockRule);
       mockDataService.checkAssetOwnershipWithCriteria.mockResolvedValue(3);
       mockDbService.updateLastVerified.mockResolvedValue(undefined);
 
@@ -244,8 +246,7 @@ describe('DynamicRoleService', () => {
       );
     });
 
-    it('should process assignments in batches', async () => {
-      // Create more than 10 assignments to test batching
+    it('should process many assignments for one member', async () => {
       const mockAssignments = Array.from({ length: 15 }, (_, i) => ({
         ...mockActiveAssignment,
         id: `assign${i}`
@@ -258,7 +259,7 @@ describe('DynamicRoleService', () => {
 
       await service.performScheduledReverification();
 
-      expect(mockDbService.getRuleById).toHaveBeenCalledTimes(15);
+      expect(mockDbService.getRoleMappings).toHaveBeenCalledTimes(1);
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledTimes(15);
     });
   });
@@ -505,7 +506,7 @@ describe('DynamicRoleService', () => {
 
       await service.performScheduledReverification();
 
-      expect(mockDbService.getRuleById).toHaveBeenCalledTimes(100);
+      expect(mockDbService.getRoleMappings).toHaveBeenCalledTimes(1);
       expect(mockDataService.checkAssetOwnershipWithCriteria).toHaveBeenCalledTimes(100);
     });
 
