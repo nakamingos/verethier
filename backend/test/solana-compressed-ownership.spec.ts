@@ -230,7 +230,7 @@ describe("Provider-backed compressed NFT ownership", () => {
       current[0].grouping.push(current[0].grouping[0]);
     if (failure === "wrong-id")
       request.mockImplementation(async (...args) =>
-        args[1] === "getAsset" ? asset(1, other) : original(...args),
+        args[1] === "getAsset" ? asset(1, other) : original!(...args),
       );
     await expect(service.count(rule(), [owner])).rejects.toThrow();
   });
@@ -247,7 +247,7 @@ describe("Provider-backed compressed NFT ownership", () => {
       request.mockImplementation(async (...args) => {
         if (failure === "provider-error" && args[1] === "getAsset")
           throw new Error("Unavailable provider");
-        const result = await original(...args);
+        const result = await original!(...args);
         if (failure === "stale-inventory" && args[1] === "getAssetsByOwner")
           result.last_indexed_slot = 99;
         return result;
@@ -298,7 +298,7 @@ describe("Provider-backed compressed NFT ownership", () => {
           return [...current, asset(1, other)];
         if (args[1] === "getAssetBatch" && failure === "duplicate")
           return current;
-        return original(...args);
+        return original!(...args);
       });
       await expect(service.count(rule(), [owner])).rejects.toThrow();
     },

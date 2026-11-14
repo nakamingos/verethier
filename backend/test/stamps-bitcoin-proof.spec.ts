@@ -30,21 +30,21 @@ describe('Stamps Bitcoin signature support',()=>{
  });
  it.each([legacy,native,nested])('verifies fresh single-key Stamps proof for %s',async address=>{
   const nonce=await nonces.createNonce('member','guild','message','channel');
-  const challenge=await signatures.createChallenge('member','guild',nonce,address);
+  const challenge=await signatures.createChallenge('member','guild',nonce,address!);
   expect(challenge.address).toBe(address);
   expect(challenge.message).toContain('Network: Bitcoin mainnet');
   expect(challenge.message).toContain(address);
   expect(challenge.message).not.toMatch(/Discord (?:user|server|channel):/);
-  const signature=Signer.sign(key,address,challenge.message);
+  const signature=Signer.sign(key,address!,challenge.message);
   const data:any={userId:'member',discordId:'guild',nonce,address,expiry:challenge.expiry,walletType:'bitcoin'};
   expect((await signatures.verify(data,signature)).address).toBe(address);
   await expect(signatures.verify(data,signature)).rejects.toThrow();
  });
  it.each([legacy,native,nested])('rejects wrong messages and mismatched addresses for %s',address=>{
-  const signature=Signer.sign(key,address,'Bouncer challenge');
-  expect(()=>signatures.verifyMessage(address,'Another message',signature)).toThrow();
+  const signature=Signer.sign(key,address!,'Bouncer challenge');
+  expect(()=>signatures.verifyMessage(address!,'Another message',signature)).toThrow();
   expect(()=>signatures.verifyMessage('1BoatSLRHtKNngkdXEeobR76b53LETtpyT','Bouncer challenge',signature)).toThrow();
-  expect(()=>signatures.verifyMessage(address,'Bouncer challenge',signature+'AA')).toThrow();
+  expect(()=>signatures.verifyMessage(address!,'Bouncer challenge',signature+'AA')).toThrow();
  });
  it('does not offer EVM wallets for a Stamps-only channel',async()=>{
   const nonce=await nonces.createNonce('member','guild','message','channel');
@@ -53,19 +53,19 @@ describe('Stamps Bitcoin signature support',()=>{
  it.each([legacy,native,nested])('keeps non-Taproot address %s out of Ordinals-only challenges',async address=>{
   db.getRulesByChannel.mockResolvedValue([{asset_type:'ordinal'}]);
   const nonce=await nonces.createNonce('member','guild','message','channel');
-  await expect(signatures.createChallenge('member','guild',nonce,address)).rejects.toThrow('Ordinals address');
-  expect(()=>normalizeBitcoinAddress(address)).toThrow();
+  await expect(signatures.createChallenge('member','guild',nonce,address!)).rejects.toThrow('Ordinals address');
+  expect(()=>normalizeBitcoinAddress(address!)).toThrow();
  });
  it('preserves Base58 case and normalizes only Bech32 addresses',()=>{
-  expect(normalizeBitcoinProofAddress(legacy)).toBe(legacy);
-  expect(normalizeBitcoinProofAddress(nested)).toBe(nested);
-  expect(normalizeBitcoinProofAddress(native.toUpperCase())).toBe(native);
-  expect(normalizeBlockedWallet(legacy)).toBe(legacy);
-  expect(()=>normalizeBitcoinProofAddress(legacy.toLowerCase())).toThrow();
+  expect(normalizeBitcoinProofAddress(legacy!)).toBe(legacy);
+  expect(normalizeBitcoinProofAddress(nested!)).toBe(nested);
+  expect(normalizeBitcoinProofAddress(native!.toUpperCase())).toBe(native);
+  expect(normalizeBlockedWallet(legacy!)).toBe(legacy);
+  expect(()=>normalizeBitcoinProofAddress(legacy!.toLowerCase())).toThrow();
  });
  it('rejects testnet, P2WSH and malformed/checksum-invalid Bitcoin addresses',()=>{
   const script=payments.p2wsh({redeem:{output:new Uint8Array([0x51])}}).address;
   for(const address of [script,'mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn',legacy+'x',' '+native,'bc1q-not-an-address'])
-   expect(()=>normalizeBitcoinProofAddress(address)).toThrow();
+   expect(()=>normalizeBitcoinProofAddress(address!)).toThrow();
  });
 });

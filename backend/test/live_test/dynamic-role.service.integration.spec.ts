@@ -229,7 +229,7 @@ describe('DynamicRoleService - Integration Tests', () => {
         .eq('status', 'active');
 
       expect(activeAssignments).toHaveLength(2);
-      expect(activeAssignments.every(a => a.status === 'active')).toBe(true);
+      expect(activeAssignments!.every(a => a.status === 'active')).toBe(true);
     });
 
     it('should query assignments by user', async () => {
@@ -278,9 +278,9 @@ describe('DynamicRoleService - Integration Tests', () => {
         .eq('status', 'active');
 
       expect(userAssignments).toHaveLength(2);
-      expect(userAssignments.every(a => a.user_id === userId)).toBe(true);
+      expect(userAssignments!.every(a => a.user_id === userId)).toBe(true);
       
-      const serverIds = userAssignments.map(a => a.server_id);
+      const serverIds = userAssignments!.map(a => a.server_id);
       expect(serverIds).toContain('test_server_user1');
       expect(serverIds).toContain('test_server_user2');
     });
@@ -451,7 +451,7 @@ describe('DynamicRoleService - Integration Tests', () => {
         .lt('last_checked', twelveHoursAgo.toISOString());
 
       expect(needsReverification).toHaveLength(1);
-      expect(needsReverification[0].user_id).toBe('test_user_old');
+      expect(needsReverification![0].user_id).toBe('test_user_old');
     });
   });
 });

@@ -34,7 +34,7 @@ describe('verification links and autocomplete cache isolation', () => {
     });
     const original = await nonces.getActiveNonceByToken(nonce);
     await warmAutocomplete();
-    expect(Date.now()).toBeLessThan(original.expiry * 1000);
+    expect(Date.now()).toBeLessThan(original.expiry! * 1000);
     expect(await nonces.getActiveNonceByToken(nonce)).toEqual(original);
     expect(await nonces.validateNonce('member', 'server', nonce)).toBe(true);
   });
@@ -50,7 +50,7 @@ describe('verification links and autocomplete cache isolation', () => {
     expect(await nonces.validateNonce('member', 'different-server', active)).toBe(false);
     await nonces.consumeNonce('member', 'server', active);
     await expect(nonces.consumeNonce('member', 'server', active)).rejects.toThrow('Invalid or expired nonce');
-    jest.spyOn(Date, 'now').mockReturnValue(original.expiry * 1000);
+    jest.spyOn(Date, 'now').mockReturnValue(original.expiry! * 1000);
     expect(await nonces.validateNonce('member', 'server', expiring)).toBe(false);
   });
 

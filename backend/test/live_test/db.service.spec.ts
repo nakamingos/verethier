@@ -41,7 +41,7 @@ describe('DbService - Integration Tests', () => {
       // If service creation fails, Supabase might not be available
       console.warn('⚠️  Could not create DbService. Supabase may not be available.');
       isSupabaseHealthy = false;
-      service = undefined;
+      service = undefined as any;
     }
     
     if (!isSupabaseHealthy) {

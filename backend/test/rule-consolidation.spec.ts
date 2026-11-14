@@ -24,7 +24,7 @@ describe('Safe existing-rule consolidation', () => {
     const plan = planRuleConsolidation(before)[0];
     expect(plan.after.id).toBe(1);
     expect(plan.before.map((r) => r.id)).toEqual([1, 2, 3]);
-    const conditions = before.flatMap((r) => ruleTraits(r).conditions);
+    const conditions = before.flatMap((r) => ruleTraits(r)!.conditions);
     for (let subset = 0; subset < 1 << conditions.length; subset++) {
       const attributes = conditions.filter((_, i) => subset & (1 << i));
       expect(matchesTraits(attributes, plan.after)).toBe(
@@ -84,7 +84,7 @@ describe('Safe existing-rule consolidation', () => {
     expect(
       ruleTraits(
         planRuleConsolidation([rule(1), rule(2, 'hat', 'crown')])[0].after,
-      ).conditions,
+      )!.conditions,
     ).toHaveLength(1);
   });
   it('merges Ordinals cache identities without making older metadata appear fresh', () => {
@@ -101,11 +101,11 @@ describe('Safe existing-rule consolidation', () => {
         }),
     );
     const after = planRuleConsolidation(before)[0].after;
-    expect(after.ordinal_trait_snapshot.inscription_ids).toHaveLength(2);
-    expect(after.ordinal_trait_snapshot.fetched_at).toBe(
+    expect(after.ordinal_trait_snapshot!.inscription_ids).toHaveLength(2);
+    expect(after.ordinal_trait_snapshot!.fetched_at).toBe(
       before[0].ordinal_trait_snapshot.fetched_at,
     );
-    expect(after.ordinal_trait_snapshot.criteria_hash).toBe(
+    expect(after.ordinal_trait_snapshot!.criteria_hash).toBe(
       ordinalTraitHash(after),
     );
   });

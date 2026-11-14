@@ -520,7 +520,7 @@ describe('DataService - Integration Tests', () => {
         { key: 'BackGround', value: 'Ocean' },
       ];
       
-      const results = [];
+      const results: any[] = [];
       for (const variation of caseVariations) {
         try {
           const result = await service.checkAssetOwnershipWithCriteria(

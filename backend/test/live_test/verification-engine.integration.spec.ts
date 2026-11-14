@@ -210,8 +210,8 @@ describe('VerificationEngine - Integration Tests', () => {
       
       expect(validResult).toBeDefined();
       expect(invalidResult).toBeDefined();
-      expect(invalidResult.isValid).toBe(false);
-      expect(invalidResult.error).toContain('not found');
+      expect(invalidResult!.isValid).toBe(false);
+      expect(invalidResult!.error).toContain('not found');
     });
   });
 

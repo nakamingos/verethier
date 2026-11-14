@@ -1,6 +1,6 @@
 import { matchRule } from '../src/services/utils/match-rule.util';
 describe('matchRule', () => {
-  const baseRule = {
+  const baseRule: any = {
     slug: null,
     channel_id: null,
     attribute_key: null,
@@ -13,7 +13,7 @@ describe('matchRule', () => {
   ];
 
   it('matches slug null/empty/ALL', () => {
-    expect(matchRule({ slug: null }, [{ slug: 'foo', attributes: {} }])).toBe(true);
+    expect(matchRule({ slug: null as any }, [{ slug: 'foo', attributes: {} }])).toBe(true);
     expect(matchRule({ slug: '' }, [{ slug: 'foo', attributes: {} }])).toBe(true);
     expect(matchRule({ slug: 'ALL' }, [{ slug: 'foo', attributes: {} }])).toBe(true);
   });
@@ -37,7 +37,7 @@ describe('matchRule', () => {
   });
 
   it('matches wildcard slug (null, empty, and ALL)', () => {
-    expect(matchRule({ ...baseRule, slug: null }, assets)).toBe(true);
+    expect(matchRule({ ...baseRule, slug: null as any }, assets)).toBe(true);
     expect(matchRule({ ...baseRule, slug: '' }, assets)).toBe(true);
     expect(matchRule({ ...baseRule, slug: 'ALL' }, assets)).toBe(true);
   });

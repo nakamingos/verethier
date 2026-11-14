@@ -132,7 +132,7 @@ describe('Canonical trait storage without legacy columns', () => {
       getAttributeKeys: async () => ['Hat'],
       getAllAttributeValues: async () => ['Crown', 'Cap'],
     };
-    const edit = new RuleEditService(data, null, null, null);
+    const edit = new RuleEditService(data, null as any, null as any, null as any);
     const after = await edit.prepare(rule, {
       slug: 'comrades',
       attribute_key: 'Hat',

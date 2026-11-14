@@ -45,7 +45,7 @@ describe('persistent Ordinals collection catalogs', () => {
     const collection = await cache.snapshot(slug, run());
     expect(collection.items.size).toBe(2);
     expect([...collection.items.values()].every(item => item.owner === null)).toBe(true);
-    expect(collection.items.get(id(2)).traits).toHaveLength(2);
+    expect(collection.items.get(id(2))!.traits).toHaveLength(2);
     await new OrdinalCollectionCacheService(db, ordnet, requests).snapshot(slug, run());
     expect(db.getOrdinalCollection).toHaveBeenCalledTimes(2);
     expect(ordnet.snapshot).not.toHaveBeenCalled();
@@ -60,12 +60,12 @@ describe('persistent Ordinals collection catalogs', () => {
       { inscription_id: id(1), values: { Category: 'Cosmic Oven-Lord' } },
       { inscription_id: id(2), values: { Category: ['Pirate', 'Gold Bearer'] } },
     ]);
-    expect(first.items.get(id(1)).owner).toBeNull();
+    expect(first.items.get(id(1))!.owner).toBeNull();
   });
 
   it('serves stored metadata while an overdue background refresh is unfinished', async () => {
     db.getOrdinalCollection.mockResolvedValue(raw(new Date(Date.now() - 7 * 3600000).toISOString()));
-    let finish: (value: any) => void;
+    let finish!: (value: any) => void;
     ordnet.snapshot.mockImplementation(() => new Promise(resolve => finish = resolve));
     const saved = await cache.snapshot(slug, run());
     expect(saved.items.size).toBe(2);
@@ -80,9 +80,9 @@ describe('persistent Ordinals collection catalogs', () => {
     if (problem === 'partial scan') ordnet.snapshot.mockRejectedValue(new Error('cursor failed'));
     else {
       const next = live();
-      if (problem === 'unknown traits') next.items.get(id(1)).traits = null;
+      if (problem === 'unknown traits') next.items.get(id(1))!.traits = null as any;
       if (problem === 'empty scan') next.items.clear();
-      if (problem === 'invalid trait') next.items.get(id(1)).traits = [{ type: 'Category', value: '' }];
+      if (problem === 'invalid trait') next.items.get(id(1))!.traits = [{ type: 'Category', value: '' }];
       if (problem === 'duplicate DB IDs') { db.getOrdinalCollection.mockResolvedValue({ ...raw(), items: [raw().items[0], raw().items[0]] }); ordnet.snapshot.mockRejectedValue(new Error('unavailable')); }
       else ordnet.snapshot.mockResolvedValue(next);
     }
@@ -98,7 +98,7 @@ describe('persistent Ordinals collection catalogs', () => {
   });
 
   it('promotes a cold background scan when an interactive verifier joins', async () => {
-    let finish: (value: any) => void;
+    let finish!: (value: any) => void;
     ordnet.snapshot.mockImplementation(() => new Promise(resolve => finish = resolve));
     const background = cache.refresh(slug);
     const interactive = cache.refresh(slug, { priority: 'interactive' });

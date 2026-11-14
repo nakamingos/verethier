@@ -214,7 +214,7 @@ describe('DiscordService - Enhanced Tests', () => {
       // Reset client to null to test initialization
       (service as any).client = null;
       
-      let readyCallback: Function;
+      let readyCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') {
           readyCallback = callback;
@@ -241,7 +241,7 @@ describe('DiscordService - Enhanced Tests', () => {
       (service as any).client = null;
       
       // First initialization
-      let readyCallback: Function;
+      let readyCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') {
           readyCallback = callback;
@@ -268,7 +268,7 @@ describe('DiscordService - Enhanced Tests', () => {
 
     it('waits for the same in-progress login when initialization is requested twice', async () => {
       (service as any).client = null;
-      let readyCallback: Function;
+      let readyCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') readyCallback = callback;
       });
@@ -286,8 +286,8 @@ describe('DiscordService - Enhanced Tests', () => {
     it('installs working button handlers after a gateway connection taking longer than ten seconds', async () => {
       jest.useFakeTimers();
       (service as any).client = null;
-      let readyCallback: Function;
-      let interactionCallback: Function;
+      let readyCallback!: Function;
+      let interactionCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') readyCallback = callback;
         if (event === 'interactionCreate') interactionCallback = callback;
@@ -320,7 +320,7 @@ describe('DiscordService - Enhanced Tests', () => {
     it('closes a timed-out connection and ignores a late ready event', async () => {
       jest.useFakeTimers();
       (service as any).client = null;
-      let readyCallback: Function;
+      let readyCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') readyCallback = callback;
       });
@@ -339,7 +339,7 @@ describe('DiscordService - Enhanced Tests', () => {
       mockClient.login.mockRejectedValueOnce(new Error('Gateway unavailable'));
       await expect(service.initializeBot()).rejects.toThrow('Gateway unavailable');
       expect(mockClient.destroy).toHaveBeenCalledTimes(1);
-      let readyCallback: Function;
+      let readyCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'ready') readyCallback = callback;
       });
@@ -500,7 +500,7 @@ describe('DiscordService - Enhanced Tests', () => {
     });
 
     it('installs verification handlers before command registration finishes and does not duplicate them', async () => {
-      let finishRegistration: (value: object) => void;
+      let finishRegistration!: (value: object) => void;
       mockRest.put.mockReturnValueOnce(new Promise(resolve => { finishRegistration = resolve; }));
       const pending = service.createSlashCommands();
       expect(mockClient.on).toHaveBeenCalledWith('interactionCreate', expect.any(Function));
@@ -1210,7 +1210,7 @@ describe('DiscordService - Enhanced Tests', () => {
       ['add-ethscription-rule', 'attribute_key', 'handleAttributeKeyAutocomplete'],
       ['add-ethscription-rule', 'attribute_value', 'handleAttributeValueAutocomplete']
     ] as const)('routes %s %s autocomplete without reading asset_type', async (command, focused, handler) => {
-      let interactionCallback: Function;
+      let interactionCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'interactionCreate') interactionCallback = callback;
       });
@@ -1235,7 +1235,7 @@ describe('DiscordService - Enhanced Tests', () => {
     });
 
     it('should handle interaction create events for autocomplete', async () => {
-      let interactionCallback: Function;
+      let interactionCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'interactionCreate') {
           interactionCallback = callback;
@@ -1267,7 +1267,7 @@ describe('DiscordService - Enhanced Tests', () => {
     });
 
     it('should handle interaction create events for chat input commands', async () => {
-      let interactionCallback: Function;
+      let interactionCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'interactionCreate') {
           interactionCallback = callback;
@@ -1294,7 +1294,7 @@ describe('DiscordService - Enhanced Tests', () => {
     });
 
     it('should handle interaction create events for button interactions with unified handler', async () => {
-      let interactionCallback: Function;
+      let interactionCallback!: Function;
       mockClient.on.mockImplementation((event, callback) => {
         if (event === 'interactionCreate') {
           interactionCallback = callback;
@@ -1390,7 +1390,7 @@ describe('DiscordService - Enhanced Tests', () => {
       await service.handleSetup(interaction);expect(mockDiscordCommandsService.handleEditRule).not.toHaveBeenCalled();
     });
     it.each(['modal','button','autocomplete'])('dispatches %s editing interactions independently of verification', async kind => {
-      let callback: Function;
+      let callback!: Function;
       mockClient.on.mockImplementation((event,listener)=>{if(event==='interactionCreate')callback=listener;});
       await service.createSlashCommands();
       const interaction: any={isModalSubmit:()=>kind==='modal',isAutocomplete:()=>kind==='autocomplete',isChatInputCommand:()=>false,
@@ -1406,7 +1406,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockDiscordCommandsService.handleWalletBlock).toHaveBeenCalledWith(interaction);
     });
     it('routes wallet block pages to their own handler', async () => {
-      let callback: Function;
+      let callback!: Function;
       mockClient.on.mockImplementation((event, listener) => { if (event === 'interactionCreate') callback = listener; });
       await service.createSlashCommands();
       const interaction: any = { isAutocomplete: () => false, isChatInputCommand: () => false, isButton: () => true,
@@ -1420,7 +1420,7 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(mockDiscordCommandsService.handleAuditLog).toHaveBeenCalledWith(interaction);
     });
     it('routes audit page buttons independently of verification and rule-list buttons', async () => {
-      let callback: Function;
+      let callback!: Function;
       mockClient.on.mockImplementation((event, listener) => {
         if (event === 'interactionCreate') callback = listener;
       });

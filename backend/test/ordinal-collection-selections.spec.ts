@@ -34,7 +34,7 @@ describe('ord.net collection-scoped inscription numbers',()=>{
 
   it('creates a canonical collection scope without requiring Xverse or expanding the range',async()=>{
     const result=await prepareRuleCriteria({asset_type:'ordinal',slug:' Pizza-Comrades ',inscription_numbers:'100-101',min_items:5},
-      {data:null,nfts:null,ordinals:service});
+      {data:null as any,nfts:null as any,ordinals:service});
     expect(result).toMatchObject({slug:null,minItems:5,assetFields:{inscription_criteria:rule.inscription_criteria}});
     expect(get).toHaveBeenCalledTimes(1);
     expect(inscriptionCriteria({...rule,...result.assetFields})).toEqual(rule.inscription_criteria);
@@ -47,8 +47,8 @@ describe('ord.net collection-scoped inscription numbers',()=>{
   it('rejects an unknown collection and does not enable collection scopes for IDs or Ethscriptions',async()=>{
     get.mockResolvedValue({success:true,data:[]});
     await expect(service.prepareInscriptionRule(null,'100',1,'missing')).rejects.toThrow('not found');
-    await expect(prepareRuleCriteria({asset_type:'ethscription',slug:'pizza-comrades',inscription_numbers:'100'}, {data:null,nfts:null})).rejects.toThrow('Only Ordinals');
-    await expect(prepareRuleCriteria({asset_type:'ordinal',slug:'pizza-comrades',inscription_ids:id(1)}, {data:null,nfts:null,ordinals:service})).rejects.toThrow('Only Ordinals');
+    await expect(prepareRuleCriteria({asset_type:'ethscription',slug:'pizza-comrades',inscription_numbers:'100'}, {data:null as any,nfts:null as any})).rejects.toThrow('Only Ordinals');
+    await expect(prepareRuleCriteria({asset_type:'ordinal',slug:'pizza-comrades',inscription_ids:id(1)}, {data:null as any,nfts:null as any,ordinals:service})).rejects.toThrow('Only Ordinals');
   });
   it('checks fresh owners only for selected numbers, stacks wallets and shares one complete scan across rules and members',async()=>{
     const context=run();
@@ -101,7 +101,7 @@ describe('ord.net collection-scoped inscription numbers',()=>{
   });
   it('counts overlapping collection subsets only once in a combined role',async()=>{
     const second={...rule,id:2,inscription_criteria:{...rule.inscription_criteria,ranges:[[101,500]]}};
-    const ownership=new AssetOwnershipService(undefined,undefined,service);
+    const ownership=new AssetOwnershipService(undefined as any,undefined as any,service);
     const engine=new VerificationEngine({} as any,ownership,{getUserAddresses:async()=>[wallet,other]} as any,
       {allowedAddresses:async(_server,addresses)=>addresses} as any);
     const context=run();
@@ -113,12 +113,12 @@ describe('ord.net collection-scoped inscription numbers',()=>{
     expect(get).toHaveBeenCalledTimes(2);
   });
   it('adds, preserves, edits and removes collection scope in the existing editor and duplicate definition',async()=>{
-    const editor=new RuleEditService(null,null,service,null);
+    const editor=new RuleEditService(null as any,null as any,service,null as any);
     const unscoped={...rule,inscription_criteria:{kind:'numbers',ranges:[[100,101]]}};
     const inputs={selection:'100-101',min_items:'5',collection_slug:'Pizza-Comrades'};
     const added=await editor.prepare(unscoped,inputs);
     expect(added.inscription_criteria).toEqual(rule.inscription_criteria);
-    expect(ruleEditFields(added).find(f=>f.key==='collection_slug').value).toBe('pizza-comrades');
+    expect(ruleEditFields(added).find(f=>f.key==='collection_slug')!.value).toBe('pizza-comrades');
     expect(ruleEditVersion(added)).not.toBe(ruleEditVersion(unscoped));
     expect(ruleCriteriaKey(added)).not.toBe(ruleCriteriaKey(unscoped));
     expect(inscriptionRuleScope(added)).toContain('pizza-comrades');

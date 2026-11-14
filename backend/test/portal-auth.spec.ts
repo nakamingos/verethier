@@ -52,7 +52,7 @@ describe('Portal authentication', () => {
     expect(url.searchParams.get('scope')).toBe('identify guilds');
     expect(query.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        state_hash: createHash('sha256').update(state).digest('hex'),
+        state_hash: createHash('sha256').update(state!).digest('hex'),
         return_to: '/admin',
       }),
     );

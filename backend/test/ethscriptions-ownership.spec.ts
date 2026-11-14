@@ -49,29 +49,29 @@ describe('Global Ethscription ownership', () => {
     request.mockResolvedValue(page([row(1), row(2, market, wallet), row(3, other, wallet)]));
     const context = run();
     const criteria = parseInscriptionCriteria([hash(1), hash(2), hash(3)].join(','), null, 'ethscription');
-    expect(await service.countSelection([wallet], criteria, context)).toBe(2n);
-    expect(await service.countSelection([other], criteria, context)).toBe(1n);
-    expect(await service.countSelection([wallet, other, wallet.toUpperCase()], criteria, context)).toBe(3n);
-    expect(await service.countSelection([wallet], base.inscription_criteria, context)).toBe(1n);
+    expect(await service.countSelection([wallet], criteria!, context)).toBe(2n);
+    expect(await service.countSelection([other], criteria!, context)).toBe(1n);
+    expect(await service.countSelection([wallet, other, wallet.toUpperCase()], criteria!, context)).toBe(3n);
+    expect(await service.countSelection([wallet], base.inscription_criteria!, context)).toBe(1n);
     expect(request).toHaveBeenCalledTimes(1);
     request.mockResolvedValue(page([row(1, other)]));
-    expect(await service.countSelection([wallet], base.inscription_criteria, run())).toBe(0n);
+    expect(await service.countSelection([wallet], base.inscription_criteria!, run())).toBe(0n);
     expect(request).toHaveBeenCalledTimes(2);
   });
   it('uses batches of 50 IDs with no per-member requests', async () => {
     request.mockImplementation(async path => page(new URLSearchParams(path.split('?')[1]).getAll('transaction_hash[]').map(id => ({ ...row(Number(BigInt(id))), transaction_hash: id }))));
     const criteria = parseInscriptionCriteria(Array.from({ length: 51 }, (_, n) => hash(n)).join(','), null, 'ethscription');
     const context = run();
-    expect(await service.countSelection([wallet], criteria, context)).toBe(51n);
-    expect(await service.countSelection([other], criteria, context)).toBe(0n);
+    expect(await service.countSelection([wallet], criteria!, context)).toBe(51n);
+    expect(await service.countSelection([other], criteria!, context)).toBe(0n);
     expect(request).toHaveBeenCalledTimes(2);
   });
   it('checks seven selected numbers in one global request without scanning a large wallet',async()=>{
     const numbers=[6173092,6173101,6173107,6173117,6173119,6173123,6173126];
     request.mockResolvedValue(page(numbers.map((n,index)=>row(n,index===0?wallet:index===1?market:other,index===1?wallet:null))));
     const criteria=parseInscriptionCriteria(null,numbers.join(','),'ethscription'),context=run();
-    expect(await service.countSelection([wallet],criteria,context)).toBe(2n);
-    expect(await service.countSelection([other],criteria,context)).toBe(5n);
+    expect(await service.countSelection([wallet],criteria!,context)).toBe(2n);
+    expect(await service.countSelection([other],criteria!,context)).toBe(5n);
     expect(request).toHaveBeenCalledTimes(1);
     const params=new URLSearchParams(request.mock.calls[0][0].split('?')[1]);
     expect(params.getAll('ethscription_number[]')).toEqual(numbers.map(String));expect(params.has('current_owner')).toBe(false);
@@ -79,14 +79,14 @@ describe('Global Ethscription ownership', () => {
   });
   it('batches numeric selections by 50 and reuses overlapping numbers',async()=>{
     request.mockImplementation(async path=>page(new URLSearchParams(path.split('?')[1]).getAll('ethscription_number[]').map(n=>row(Number(n)))));
-    const context=run();expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-51','ethscription'),context)).toBe(51n);
-    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'50-52','ethscription'),context)).toBe(3n);
+    const context=run();expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-51','ethscription')!,context)).toBe(51n);
+    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'50-52','ethscription')!,context)).toBe(3n);
     expect(request).toHaveBeenCalledTimes(3);
     expect(new URLSearchParams(request.mock.calls[2][0].split('?')[1]).getAll('ethscription_number[]')).toEqual(['52']);
   });
   it('falls back to complete inventories when selected numbers are absent',async()=>{
     request.mockResolvedValueOnce(page()).mockResolvedValueOnce(page()).mockResolvedValueOnce(page());
-    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription'),run())).toBe(0n);
+    expect(await service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription')!,run())).toBe(0n);
     expect(request).toHaveBeenCalledTimes(3);
   });
   it.each(['unexpected-number','duplicate-number','duplicate-id','incomplete','invalid-owner'])('keeps %s selected-number responses unavailable',async problem=>{
@@ -96,7 +96,7 @@ describe('Global Ethscription ownership', () => {
     if(problem==='duplicate-id')records[1].transaction_hash=records[0].transaction_hash;
     if(problem==='invalid-owner')records[1].current_owner='invalid';
     request.mockResolvedValue(page(records,problem==='incomplete','next'));
-    await expect(service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription'),run())).rejects.toThrow('unavailable');
+    await expect(service.countSelection([wallet],parseInscriptionCriteria(null,'1-2','ethscription')!,run())).rejects.toThrow('unavailable');
   });
   it('reads every direct and escrow page once per wallet/run for all numeric rules', async () => {
     request.mockResolvedValueOnce(page([row(10), row(100)], true, 'next'))
@@ -104,8 +104,8 @@ describe('Global Ethscription ownership', () => {
       .mockResolvedValueOnce(page([row(102, market, wallet)]));
     const context = run();
     const criteria = parseInscriptionCriteria(null, '100-102,10000-11000', 'ethscription');
-    expect(await service.countSelection([wallet], criteria, context)).toBe(3n);
-    expect(await service.countSelection([wallet], parseInscriptionCriteria(null, '0-99,10000-11000', 'ethscription'), context)).toBe(1n);
+    expect(await service.countSelection([wallet], criteria!, context)).toBe(3n);
+    expect(await service.countSelection([wallet], parseInscriptionCriteria(null, '0-99,10000-11000', 'ethscription')!, context)).toBe(1n);
     expect(request).toHaveBeenCalledTimes(3);
     expect(request.mock.calls[1][0]).toContain('page_key=next');
     const escrow = new URLSearchParams(request.mock.calls[2][0].split('?')[1]);
@@ -131,7 +131,7 @@ describe('Global Ethscription ownership', () => {
     if (problem === 'unsafe-number') item.ethscription_number = '9007199254740992';
     if (problem === 'escrow-owner-missing') item.current_owner = market;
     request.mockResolvedValue(page(problem === 'missing-hash' ? [] : problem === 'duplicate-hash' ? [item, item] : [item], problem === 'incomplete', 'next'));
-    await expect(service.countSelection([wallet], base.inscription_criteria, run())).rejects.toThrow('unavailable');
+    await expect(service.countSelection([wallet], base.inscription_criteria!, run())).rejects.toThrow('unavailable');
   });
   it.each(['no-pagination', 'bad-number', 'wrong-owner', 'missing-cursor', 'overlap', 'repeated-cursor', 'empty-more', 'wrong-escrow-owner'])('rejects %s inventories instead of returning a false non-match', async problem => {
     const first: any = page([row(1)]);
@@ -170,7 +170,7 @@ describe('Ethscriptions API requests', () => {
   it('retries transient failures and uses the public API without a credential', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(response(429, null)).mockResolvedValueOnce(response(200, page([row(1)])));
     const service = new EthscriptionsOwnershipService();
-    const pending = service.countSelection([wallet], base.inscription_criteria, run());
+    const pending = service.countSelection([wallet], base.inscription_criteria!, run());
     await jest.runAllTimersAsync();
     expect(await pending).toBe(1n);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -178,7 +178,7 @@ describe('Ethscriptions API requests', () => {
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'error', headers: { Accept: 'application/json' } });
   });
   it('distinguishes a local queue deadline from an upstream failure',async()=>{
-    let release:(response:Response)=>void;
+    let release!:(response:Response)=>void;
     const fetchMock=jest.spyOn(global,'fetch').mockImplementationOnce(()=>new Promise(resolve=>release=resolve));
     const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
     const service=new EthscriptionsOwnershipService(),first=service.checkSetupHealth();
@@ -188,7 +188,7 @@ describe('Ethscriptions API requests', () => {
   });
   it('logs sanitized HTTP status while retaining the generic public message',async()=>{
     jest.spyOn(global,'fetch').mockResolvedValue(response(503,null));const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
-    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria,run());
+    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria!,run());
     const assertion=expect(pending).rejects.toThrow('Ethscriptions verification is temporarily unavailable. Please try again.');
     await jest.runAllTimersAsync();await assertion;
     expect(warning).toHaveBeenCalledWith('Ethscriptions provider unavailable: HTTP 503 after 3 attempts','EthscriptionsOwnershipService');
@@ -196,14 +196,14 @@ describe('Ethscriptions API requests', () => {
   });
   it('does not log raw transport exceptions containing addresses or URLs',async()=>{
     jest.spyOn(global,'fetch').mockRejectedValue(new Error('https://private.example/?wallet='+wallet));const warning=jest.spyOn(Logger,'warn').mockImplementation(()=>{});
-    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria,run()),assertion=expect(pending).rejects.toThrow('temporarily unavailable');
+    const pending=new EthscriptionsOwnershipService().countSelection([wallet],base.inscription_criteria!,run()),assertion=expect(pending).rejects.toThrow('temporarily unavailable');
     await jest.runAllTimersAsync();await assertion;
     expect(warning).toHaveBeenCalledWith('Ethscriptions provider unavailable: network request failed','EthscriptionsOwnershipService');
     expect(JSON.stringify(warning.mock.calls)).not.toContain(wallet);expect(JSON.stringify(warning.mock.calls)).not.toContain('private.example');
   });
   it('does not turn rejected requests into zero ownership', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(response(401, null));
-    const pending = new EthscriptionsOwnershipService().countSelection([wallet], base.inscription_criteria, run());
+    const pending = new EthscriptionsOwnershipService().countSelection([wallet], base.inscription_criteria!, run());
     const assertion = expect(pending).rejects.toThrow('unavailable');
     await jest.runAllTimersAsync();
     await assertion;

@@ -55,7 +55,7 @@ describe('Wallet block storage and lookup', () => {
     expect(await blocks.allowedAddresses(guild,[other,wallet],context)).toEqual([other]);
     expect(client.in).toHaveBeenCalledTimes(1);
     expect(await blocks.allowedAddresses('another-server',[wallet])).toEqual([wallet]);
-    denied.get(guild).clear();
+    denied.get(guild)!.clear();
     expect(await blocks.allowedAddresses(guild,[wallet],{checks:new Map()})).toEqual([wallet]);
   });
   it('rejects a fresh signature lookup even without an existing wallet link', async () => {
@@ -116,7 +116,7 @@ describe('Wallet blocks across verification and earned-role reconciliation', () 
     expect(discord.removeUserRole).toHaveBeenCalledWith('member',guild,'holder',expect.any(Map));
     expect(ownership.count).not.toHaveBeenCalled();
     expect((await engine.evaluateRole('member','other-server','holder')).status).toBe('passed');
-    denied.get(guild).clear();assignment.status='revoked';
+    denied.get(guild)!.clear();assignment.status='revoked';
     expect(await roles.reverifyUserInServer('member',guild)).toEqual({verified:1,revoked:0,left:0,errors:0});
     expect(db.updateRoleAssignmentStatus).toHaveBeenLastCalledWith(1,'active');
   });

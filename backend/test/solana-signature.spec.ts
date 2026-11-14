@@ -91,7 +91,7 @@ describe("Solana nonce-bound verification", () => {
   it("rejects a wallet-link signature used for community verification", async () => {
     const { data } = await challenge();
     const message = solanaMessage({
-      origin: EnvironmentConfig.BASE_URL,
+      origin: EnvironmentConfig.BASE_URL!,
       purpose: "wallet_link",
       userId: data.userId,
       address,

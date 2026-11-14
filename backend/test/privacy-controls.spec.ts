@@ -320,7 +320,7 @@ describe("Signed privacy choices", () => {
   async function signature() {
     return account.signTypedData(
       minimalEvmVerificationProof({
-        origin: EnvironmentConfig.BASE_URL,
+        origin: EnvironmentConfig.BASE_URL!,
         chainId: 1,
         address: data.address,
         nonce: data.nonce,

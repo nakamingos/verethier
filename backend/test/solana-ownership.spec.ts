@@ -220,7 +220,7 @@ describe("Solana ownership adapter", () => {
           ],
         };
       }
-      return previous(url, method, params, run);
+      return previous!(url, method, params, run);
     });
     const rule = {
       ...nft,
@@ -268,7 +268,7 @@ describe("Solana ownership adapter", () => {
             },
           ],
         };
-      return previous(url, method, params, run);
+      return previous!(url, method, params, run);
     });
     const rule = {
       ...nft,
@@ -332,7 +332,7 @@ describe("Solana ownership adapter", () => {
     request.mockImplementation(async (url, method, params, run) =>
       method === "getTokenAccountsByOwner"
         ? { context: { slot: 100 }, value: [] }
-        : previous(url, method, params, run),
+        : previous!(url, method, params, run),
     );
     expect(await service.count(nft, [owner])).toBe(0n);
     expect(await service.count({
@@ -347,7 +347,7 @@ describe("Solana ownership adapter", () => {
       inventory([asset()]);
       const previous = request.getMockImplementation();
       request.mockImplementation(async (url, method, params, run) => {
-        if (method !== "getTokenAccountsByOwner") return previous(url, method, params, run);
+        if (method !== "getTokenAccountsByOwner") return previous!(url, method, params, run);
         if (failure === "unavailable-program" && params[1].programId === TOKEN_2022)
           throw new Error("Unavailable token accounts");
         const result = nftAccounts([asset()], params[1].programId);

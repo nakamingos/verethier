@@ -2,7 +2,7 @@ import { Collection } from 'discord.js';
 import { findOrCreateRole } from '../src/services/discord-commands/utils/role-management.util';
 
 describe('Role name handling', () => {
-  function interactionFor(roles = []) {
+  function interactionFor(roles: any[] = []) {
     return {
       guild: {
         roles: {

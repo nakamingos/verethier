@@ -5,7 +5,7 @@ const rules:any[]=CHECK_PRIORITY.map((network,id)=>({id:id+1,server_id:'server',
  chain_id:network==='robinhood'?4663:network==='base'?8453:1,slug:network}));
 function fixture() {
  const engine=new VerificationEngine({getRoleMappings:async()=>rules} as any,{} as any,{getUserAddresses:async()=>['wallet']} as any,{} as any);
- const verify=jest.spyOn(engine,'verifyUserBulk').mockImplementation(async(_user,_ids,_address,included)=>({validRules:[],results:included.map(rule=>({isValid:false,ruleId:rule.id,status:'failed'})),invalidRules:[],matchingAssetCounts:new Map()}) as any);
+ const verify=jest.spyOn(engine,'verifyUserBulk').mockImplementation(async(_user,_ids,_address,included)=>({validRules:[],results:included!.map(rule=>({isValid:false,ruleId:rule.id,status:'failed'})),invalidRules:[],matchingAssetCounts:new Map()}) as any);
  return {engine,verify};
 }
 describe('Network qualification priority',()=>{
@@ -16,15 +16,15 @@ describe('Network qualification priority',()=>{
  });
  it('walks cumulative tiers in order and keeps earlier combined contributions',async()=>{
   const f=fixture();await f.engine.evaluateRole('member','server','role',{checks:new Map(),bulkGrantOnly:true});
-  expect(f.verify.mock.calls.map(call=>call[3].map(rule=>rule.id))).toEqual(rules.map((_rule,index)=>rules.slice(0,index+1).map(rule=>rule.id)));
+  expect(f.verify.mock.calls.map(call=>call[3]!.map(rule=>rule.id))).toEqual(rules.map((_rule,index)=>rules.slice(0,index+1).map(rule=>rule.id)));
  });
  it('stops before later networks once the role qualifies',async()=>{
-  const f=fixture();f.verify.mockImplementation(async(_user,_ids,_address,included)=>({validRules:included.length>=3?[included[2]]:[],results:included.map(rule=>({isValid:included.length>=3,ruleId:rule.id})),invalidRules:[],matchingAssetCounts:new Map()}) as any);
+  const f=fixture();f.verify.mockImplementation(async(_user,_ids,_address,included)=>({validRules:included!.length>=3?[included![2]]:[],results:included!.map(rule=>({isValid:included!.length>=3,ruleId:rule.id})),invalidRules:[],matchingAssetCounts:new Map()}) as any);
   expect((await f.engine.evaluateRole('member','server','role',{checks:new Map(),bulkGrantOnly:true})).status).toBe('passed');
-  expect(f.verify).toHaveBeenCalledTimes(3);expect(f.verify.mock.calls.flatMap(call=>call[3]).some(rule=>rule.asset_type==='ordinal')).toBe(false);
+  expect(f.verify).toHaveBeenCalledTimes(3);expect(f.verify.mock.calls.flatMap(call=>call[3]).some(rule=>rule!.asset_type==='ordinal')).toBe(false);
  });
  it('keeps later alternatives available when an earlier provider fails',async()=>{
-  const f=fixture();f.verify.mockImplementation(async(_user,_ids,_address,included)=>({validRules:included.length===7?[included[6]]:[],results:[{isValid:included.length===7,status:'unavailable'}],invalidRules:[],matchingAssetCounts:new Map()}) as any);
+  const f=fixture();f.verify.mockImplementation(async(_user,_ids,_address,included)=>({validRules:included!.length===7?[included![6]]:[],results:[{isValid:included!.length===7,status:'unavailable'}],invalidRules:[],matchingAssetCounts:new Map()}) as any);
   expect((await f.engine.evaluateRole('member','server','role',{checks:new Map(),bulkGrantOnly:true})).status).toBe('passed');expect(f.verify).toHaveBeenCalledTimes(7);
  });
  it('keeps complete evaluation for role reconciliation',async()=>{

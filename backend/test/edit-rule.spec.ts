@@ -143,7 +143,7 @@ describe('Rule edit validation', () => {
     const { editor: service, ordinals } = editor(); const before = { ...ordinal, ordinal_trait_snapshot: snapshot() };
     const after = await service.prepare(before, { ...inputs(before), attribute_value: 'Rare' });
     expect(ordinals.prepareTraitSnapshot).toHaveBeenCalledWith(expect.objectContaining({ attribute_value: 'Rare' }));
-    expect(after.ordinal_trait_snapshot.criteria_hash).toBe(ordinalTraitHash(after));
+    expect(after.ordinal_trait_snapshot!.criteria_hash).toBe(ordinalTraitHash(after));
     expect(await service.prepare(before, { ...inputs(before), attribute_key: 'ALL', attribute_value: 'ALL' })).toMatchObject({ ordinal_trait_snapshot: null });
   });
   it('avoids collection requests for a minimum-only edit with a fresh snapshot', async () => {
@@ -494,7 +494,7 @@ describe('Rule edit Undo/Redo chains', () => {
 
   it('blocks another change while role reconciliation is running', async () => {
     const h = harness(); await h.start(); await h.preview({ min_items: '2' });
-    let finish: (result: any) => void; let started: () => void;
+    let finish!: (result: any) => void; let started: () => void;
     const checking = new Promise<void>(resolve => { started = resolve; });
     h.roles.reverifyRoleInServer.mockImplementationOnce(() => { started(); return new Promise(resolve => { finish = resolve; }); });
     const button = h.button(); const pending = h.handler.handleButton(button); await checking;

@@ -196,7 +196,7 @@ describe("Solana printed editions", () => {
     request.mockImplementation(async (...args) => {
       if (args[1] === "getMultipleAccounts" && failure === "provider-error")
         throw new Error("Provider unavailable");
-      const response = await original(...args);
+      const response = await original!(...args);
       if (args[1] === "getMultipleAccounts" && failure === "missing-results")
         response.value = [];
       if (args[1] === "getMultipleAccounts" && failure === "stale-slot")

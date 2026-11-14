@@ -121,7 +121,7 @@ describe('VerifyService', () => {
 
 
   it('retains the original Discord reply before async signature work and releases it on completion', async () => {
-    let finish: (value:any)=>void;
+    let finish!: (value:any)=>void;
     const pending = new Promise(resolve=>{finish=resolve;});
     mockWalletService.verifySignature.mockReturnValueOnce(pending);
     const complete = jest.spyOn(service as any,'completeVerification').mockResolvedValue({assignedRoles:['holder']});

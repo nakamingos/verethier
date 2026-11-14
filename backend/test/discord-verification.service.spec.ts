@@ -417,14 +417,14 @@ describe('DiscordVerificationService', () => {
         roles: { cache: { has: (roleId: string) => roleId === 'held' }, add: jest.fn() },
       };
       member.roles.add.mockResolvedValue(member);
-      guild.members.fetch.mockResolvedValueOnce(member as any);
+      guild!.members.fetch.mockResolvedValueOnce(member as any);
       service.tempMessages['test-nonce'] = mockInteraction as any;
       const context = new Map();
       const data = { last_check_status: 'passed', matched_rule_ids: [1] };
       const existing = await service.addUserRole('user-id', 'held', 'guild-id', 'test-nonce', '1', data, context);
       await service.addUserRole('user-id', 'new', 'guild-id', 'test-nonce', '2', data, context);
       expect(existing.wasAlreadyAssigned).toBe(true);
-      expect(guild.members.fetch).toHaveBeenCalledTimes(1);
+      expect(guild!.members.fetch).toHaveBeenCalledTimes(1);
       expect(member.roles.add).toHaveBeenCalledTimes(1);
       expect(mockDbService.trackRoleAssignment).toHaveBeenCalledTimes(2);
       expect(mockDbService.trackRoleAssignment).toHaveBeenCalledWith(expect.objectContaining({ roleId: 'held', verificationData: data }));
@@ -576,7 +576,7 @@ describe('DiscordVerificationService', () => {
       const mockRole = { id: 'role-id', name: 'Test Role' };
       const mockRole2 = { id: 'role-id-2', name: 'Test Role 2' };
       // Add the second role to the mock cache
-      mockClient.guilds.cache.get('guild-id').roles.cache.get.mockImplementation((roleId: string) => {
+      mockClient.guilds.cache.get('guild-id')!.roles.cache.get.mockImplementation((roleId: string) => {
         if (roleId === 'role-id') return mockRole;
         if (roleId === 'role-id-2') return mockRole2;
         return undefined;
@@ -607,7 +607,7 @@ describe('DiscordVerificationService', () => {
       const nonce = 'test-nonce';
       const mockRole = { id: 'role-id', name: 'GIF Goddess' };
       // Mock the role cache
-      mockClient.guilds.cache.get('guild-id').roles.cache.get.mockImplementation((roleId: string) => {
+      mockClient.guilds.cache.get('guild-id')!.roles.cache.get.mockImplementation((roleId: string) => {
         if (roleId === 'role-id') return mockRole;
         return undefined;
       });

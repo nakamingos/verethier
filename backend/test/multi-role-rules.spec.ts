@@ -30,7 +30,7 @@ describe('Shared requirements with independent role outputs', () => {
   });
   it('checks additional roles on scheduled reconciliation and stops managing removed outputs', async () => {
     expect((await engine.evaluateRole('member','server',extra)).status).toBe('passed');
-    expect((await engine.evaluateRole('member','server',extra)).results.map(r=>r.rule.role_id)).toEqual([extra]);
+    expect((await engine.evaluateRole('member','server',extra)).results.map(r=>r.rule!.role_id)).toEqual([extra]);
     rules[0].additional_roles=[];
     expect((await engine.evaluateRole('member','server',extra)).status).toBe('failed');
     rules.push({...rule,id:205,role_id:extra,additional_roles:[]});
@@ -48,8 +48,8 @@ describe('Shared requirements with independent role outputs', () => {
     ownership.count.mockResolvedValue(1n);
     ownership.matchingAssets=jest.fn(async r=>new Map([[r.slug,1n]]));
     const result=await engine.verifyUserBulk('member',[204,205],'wallet',rules);
-    expect(result.results.filter(r=>r.rule.role_id===primary).every(r=>r.isValid)).toBe(true);
-    expect(result.results.filter(r=>r.rule.role_id===extra).every(r=>!r.isValid)).toBe(true);
+    expect(result.results.filter(r=>r.rule!.role_id===primary).every(r=>r.isValid)).toBe(true);
+    expect(result.results.filter(r=>r.rule!.role_id===extra).every(r=>!r.isValid)).toBe(true);
   });
   it('guards role membership changes while ignoring renamed display labels',()=>{
     expect(ruleEditVersion({...rule,additional_roles:[{id:extra,name:'Renamed'}]})).toBe(ruleEditVersion(rule));

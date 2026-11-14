@@ -59,7 +59,7 @@ describe('ord.net ownership provider',()=>{
     expect(get).toHaveBeenCalledTimes(2);
   });
   it('shares one complete in-flight scan between independent member verifications', async () => {
-    let finish: (data: any) => void;
+    let finish!: (data: any) => void;
     get.mockResolvedValueOnce(page([item(1)], 'next')).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     const first = service.count('pizza-comrades', [wallet], context());
     const second = service.count('pizza-comrades', [otherWallet], context());
@@ -102,8 +102,8 @@ describe('ord.net ownership provider',()=>{
   it('reports trait coverage without treating missing metadata as failed quantity verification',async()=>{
     get.mockResolvedValue(page([item(1),{...item(2),traits:undefined}]));
     const run=context();const snapshot=await service.snapshot('pizza-comrades',run);
-    expect(snapshot.items.get(item(1).id).traits).toEqual([{type:'Background',value:'Blue'}]);
-    expect(snapshot.items.get(item(2).id).traits).toBeNull();
+    expect(snapshot.items.get(item(1).id)!.traits).toEqual([{type:'Background',value:'Blue'}]);
+    expect(snapshot.items.get(item(2).id)!.traits).toBeNull();
     await expect(service.count('pizza-comrades',[wallet],run)).resolves.toBe(2n);
     expect(get).toHaveBeenCalledTimes(1);
   });
@@ -201,7 +201,7 @@ describe('ord.net trait suggestions', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('returns the first-page values promptly, then adds rare traits from later pages without duplicate scans', async () => {
-    let finish: (data: any) => void;
+    let finish!: (data: any) => void;
     const later = new Promise(resolve => { finish = resolve; });
     get.mockResolvedValueOnce(page(Array.from({ length: 100 }, (_, index) => category(index, 'Comrade')), 'next +/?'))
       .mockReturnValueOnce(later);
@@ -219,7 +219,7 @@ describe('ord.net trait suggestions', () => {
   it('keeps a slow scan shared and starts cache expiration only after all pages finish', async () => {
     let now = Date.now();
     jest.spyOn(Date, 'now').mockImplementation(() => now);
-    let finish: (data: any) => void;
+    let finish!: (data: any) => void;
     const later = new Promise(resolve => { finish = resolve; });
     get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later)
       .mockResolvedValueOnce(page([category(3, 'Honorary')]));
@@ -260,7 +260,7 @@ describe('ord.net trait suggestions', () => {
   });
 
   it('replays earlier validated traits when autocomplete joins a verification midway through its scan', async () => {
-    let finish: (data: any) => void;
+    let finish!: (data: any) => void;
     get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next'))
       .mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     const verification = service.snapshot('pizza-comrades', context());
@@ -284,7 +284,7 @@ describe('ord.net trait suggestions', () => {
   });
 
   it('shares an autocomplete scan with verification and retains its complete trait menu', async () => {
-    let finish: (data: any) => void;
+    let finish!: (data: any) => void;
     const later = new Promise(resolve => { finish = resolve; });
     get.mockResolvedValueOnce(page([category(1, 'Comrade')], 'next')).mockReturnValueOnce(later);
     await service.suggestions('pizza-comrades', 'Category');
@@ -353,7 +353,7 @@ describe('ord.net API authentication and transport',()=>{
     const api=new OrdnetApiService();const first=api.get(GET_PATH);const second=api.get(GET_PATH);
     await jest.advanceTimersByTimeAsync(6500);
     await Promise.all([first,second]);expect(fetch).toHaveBeenCalledTimes(4);
-    const body=JSON.parse(String(fetch.mock.calls[1][1].body));
+    const body=JSON.parse(String(fetch.mock.calls[1][1]!.body));
     expect(body.authRequestId).toBe(AUTH_ID);
     for(const [index,entry] of body.verifications.entries()) {
       expect(entry.signature).toMatch(/^(?:[0-9a-f]{2})+$/);
@@ -361,14 +361,14 @@ describe('ord.net API authentication and transport',()=>{
     }
     for(const [url,options] of fetch.mock.calls)expect(url).toMatch(/^https:\/\/ord\.net\/api\/v1\//);
     expect(fetch.mock.calls[0][1]).toMatchObject({method:'POST',redirect:'error'});
-    expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+    expect(fetch.mock.calls[0][1]!.headers).not.toHaveProperty('Authorization');
     expect(fetch.mock.calls[2][1]).toMatchObject({method:'GET',redirect:'error',headers:{Authorization:'Bearer session-token'}});
   });
   it('signs the exact live login envelope for both addresses',async()=>{
     const data=liveChallenge();
     const fetch=jest.spyOn(global,'fetch').mockResolvedValueOnce(response(data)).mockResolvedValueOnce(response(session())).mockResolvedValueOnce(response(page()));
     const pending=new OrdnetApiService().get(GET_PATH);await jest.advanceTimersByTimeAsync(4200);await pending;
-    const body=JSON.parse(String(fetch.mock.calls[1][1].body));
+    const body=JSON.parse(String(fetch.mock.calls[1][1]!.body));
     expect(body.verifications).toHaveLength(2);
     for(const [index,entry]of body.verifications.entries()) {
       expect(Verifier.verifySignature(entry.address,data.challenges[index].message,Buffer.from(entry.signature,'hex').toString('base64'))).toBe(true);
@@ -418,13 +418,13 @@ describe('ord.net API authentication and transport',()=>{
     const fetch=jest.spyOn(global,'fetch').mockResolvedValueOnce(response(challenge())).mockResolvedValueOnce(response(session('old')))
       .mockResolvedValueOnce(response({},401)).mockResolvedValueOnce(response(challenge())).mockResolvedValueOnce(response(session('new'))).mockResolvedValueOnce(response(page()));
     const pending=new OrdnetApiService().get(GET_PATH);await jest.advanceTimersByTimeAsync(11000);await pending;
-    expect(fetch).toHaveBeenCalledTimes(6);expect(fetch.mock.calls[5][1].headers).toHaveProperty('Authorization','Bearer new');
+    expect(fetch).toHaveBeenCalledTimes(6);expect(fetch.mock.calls[5][1]!.headers).toHaveProperty('Authorization','Bearer new');
   });
   it('supports manual tokens without asking the wallet to authenticate',async()=>{
     jest.replaceProperty(EnvironmentConfig,'ORDNET_SESSION_TOKEN','manual-token');
     const fetch=jest.spyOn(global,'fetch').mockResolvedValue(response(page()));
     await new OrdnetApiService().get(GET_PATH);
-    expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][1].headers).toHaveProperty('Authorization','Bearer manual-token');
+    expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][1]!.headers).toHaveProperty('Authorization','Bearer manual-token');
   });
   it('makes a rejected manual token actionable without turning it into zero holdings',async()=>{
     jest.replaceProperty(EnvironmentConfig,'ORDNET_SESSION_TOKEN','manual-token');

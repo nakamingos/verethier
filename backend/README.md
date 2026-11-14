@@ -235,11 +235,10 @@ yarn test:coverage  # Coverage report
 yarn test:verbose   # Verbose Jest output
 yarn test:debug     # Verbose, no-cache Jest run
 
-yarn typecheck         # Type-check source and tests
-yarn typecheck:strict  # strictNullChecks for every file not on the to-do list
+yarn typecheck      # Type-check source and tests (strict null checks)
 ```
 
-All backend source under `src/` is checked with `strictNullChecks`: the production build (`tsconfig.build.json`) enables it, and `yarn typecheck:strict` runs the same check in CI. `strict-null-checks-todo.txt` is empty and should stay that way; the check fails for any file listed there that is already clean, so it cannot be used to exempt new code. Tests are not yet covered.
+`strictNullChecks` is on for all backend source and tests (`tsconfig.json`), so the editor, `yarn typecheck`, the build and Jest all reject code that uses a possibly missing value without handling it.
 
 ## Project Layout
 
