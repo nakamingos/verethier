@@ -30,6 +30,8 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Type check (source and tests)
         run: yarn typecheck
+      - name: Strict null checks (files not on the to-do list)
+        run: yarn typecheck:strict
       # Uses backend/.env.test. Specs under test/live_test skip themselves
       # because no local Supabase is running here.
       - name: Unit tests
