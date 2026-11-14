@@ -9,6 +9,8 @@ import { DiscordVerificationService, RoleSyncContext } from './discord-verificat
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NftCheckContext } from './nft-ownership.service';
 import { OrdinalsOwnershipService } from './ordinals-ownership.service';
+import { VerifierRole } from '@/models/verifier-role.interface';
+import { AsyncSemaphore } from '@/utils/async-semaphore.util';
 
 /**
  * DynamicRoleService
@@ -25,6 +27,15 @@ import { OrdinalsOwnershipService } from './ordinals-ownership.service';
  */
 /** `left` counts members skipped because Discord confirms they left the server. */
 type ReconcileCounts = { verified: number; revoked: number; left: number; errors: number };
+
+/** Members checked at once by the scheduled run; one member's roles stay sequential. */
+const SCHEDULED_MEMBER_CONCURRENCY = 3;
+
+/** How long one read of a server's rules is reused within a run. */
+const SERVER_RULES_MAX_AGE_MS = 60_000;
+
+/** Returns a server's rules, reusing a recent read within the same run. */
+type ServerRules = (serverId: string) => Promise<VerifierRole[]>;
 
 class OwnershipCheckUnavailableError extends Error {
   constructor() { super('Ownership check unavailable; retaining existing role.'); }
@@ -53,6 +64,7 @@ export class DynamicRoleService {
     Logger.log('🔄 Starting scheduled role re-verification');
     
     try {
+      const startedAt = Date.now();
       const disabled = await this.dbSvc.getDisabledBackgroundServers();
       const earnedAssignments = (await this.getEarnedRoleAssignments()).filter(assignment => assignment && !disabled.has(assignment.server_id));
       Logger.log(`Found ${earnedAssignments.length} previously earned role assignments to verify`);
@@ -63,24 +75,25 @@ export class DynamicRoleService {
       let errorCount = 0;
       const context: NftCheckContext = { checks: new Map(), ordinalMode: 'scheduled' };
       const discordContext: RoleSyncContext = new Map();
+      const serverRules = this.serverRulesLoader();
 
       try { await this.ordinalsSvc?.refreshScheduledCatalogs(context); }
       catch { Logger.warn('Scheduled Ordinals catalog refresh unavailable; using existing complete catalogs.'); }
 
-      // Process in batches to avoid rate limits
-      const batchSize = 10;
-      for (let i = 0; i < earnedAssignments.length; i += batchSize) {
-        const batch = earnedAssignments.slice(i, i + batchSize);
-        
-        for (const assignment of batch) {
-          // Skip null or undefined assignments
-          if (!assignment) {
-            Logger.debug('Skipping null or undefined assignment');
-            continue;
-          }
-          
+      // One member's roles are checked in order so their Discord role changes
+      // never race; separate members run in parallel up to a small limit.
+      // Ownership reads, wallet lists and member fetches are shared through
+      // the run contexts, and discord.js queues requests within rate limits.
+      const members = new Map<string, any[]>();
+      for (const assignment of earnedAssignments) {
+        const key = `${assignment.server_id}:${assignment.user_id}`;
+        members.set(key, [...(members.get(key) || []), assignment]);
+      }
+      const workers = new AsyncSemaphore(SCHEDULED_MEMBER_CONCURRENCY);
+      await Promise.all([...members.values()].map(memberAssignments => workers.run(async () => {
+        for (const assignment of memberAssignments) {
           try {
-            const outcome = await this.reconcileAssignment(assignment, context, discordContext);
+            const outcome = await this.reconcileAssignment(assignment, context, discordContext, serverRules);
             if (outcome === 'verified') {
               verifiedCount++;
               Logger.debug(`✅ User ${assignment.user_id} still qualifies for role ${assignment.role_id}`);
@@ -93,15 +106,10 @@ export class DynamicRoleService {
             errorCount++;
           }
         }
-        
-        // Rate limiting: small delay between batches
-        if (i + batchSize < earnedAssignments.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      })));
 
       await this.verificationEngine.finishWalletChecks?.(context);
-      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors, ${leftCount} skipped (no longer in server)`);
+      Logger.log(`🏁 Re-verification complete: ${verifiedCount} verified, ${revokedCount} revoked, ${errorCount} errors, ${leftCount} skipped (no longer in server) in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       
     } catch (error) {
       Logger.error('Failed to perform scheduled re-verification:', error);
@@ -218,10 +226,11 @@ export class DynamicRoleService {
     let unavailable = 0;
     const context: NftCheckContext = sharedContext || { checks: new Map(), ...(ordinalMode ? { ordinalMode } : {}) };
     const discordContext: RoleSyncContext = new Map();
+    const serverRules = this.serverRulesLoader();
 
     for (const assignment of assignments) {
       try {
-        const outcome = await this.reconcileAssignment(assignment, context, discordContext);
+        const outcome = await this.reconcileAssignment(assignment, context, discordContext, serverRules);
         if (outcome === 'verified') verified++;
         else if (outcome === 'revoked') revoked++;
         else left++;
@@ -242,14 +251,32 @@ export class DynamicRoleService {
    * before any ownership read: Discord already removed their roles, and the
    * earned record is kept so a later check restores the role if they rejoin.
    */
-  private async reconcileAssignment(assignment: any, context: NftCheckContext, discordContext: RoleSyncContext): Promise<'verified' | 'revoked' | 'left'> {
+  private async reconcileAssignment(assignment: any, context: NftCheckContext, discordContext: RoleSyncContext, serverRules?: ServerRules): Promise<'verified' | 'revoked' | 'left'> {
     if (!await this.discordVerificationSvc.isMember(assignment.user_id, assignment.server_id, discordContext)) return 'left';
-    if (await this.verifyUserStillQualifies(assignment, context)) {
+    if (await this.verifyUserStillQualifies(assignment, context, await serverRules?.(assignment.server_id))) {
       await this.restoreRole(assignment, discordContext);
       return 'verified';
     }
     await this.revokeRole(assignment, discordContext);
     return 'revoked';
+  }
+
+  /**
+   * Rules are read once per server and reused across a run instead of once per
+   * assignment. A read is reused for at most SERVER_RULES_MAX_AGE_MS so a rule
+   * edited during a long run is picked up quickly, and a failed read is not
+   * cached, so the next assignment tries again.
+   */
+  private serverRulesLoader(): ServerRules {
+    const reads = new Map<string, { at: number; rules: Promise<VerifierRole[]> }>();
+    return serverId => {
+      const cached = reads.get(serverId);
+      if (cached && Date.now() - cached.at < SERVER_RULES_MAX_AGE_MS) return cached.rules;
+      const entry = { at: Date.now(), rules: this.dbSvc.getRoleMappings(serverId) };
+      reads.set(serverId, entry);
+      entry.rules.catch(() => { if (reads.get(serverId) === entry) reads.delete(serverId); });
+      return entry.rules;
+    };
   }
 
   /**
@@ -262,8 +289,8 @@ export class DynamicRoleService {
   /**
    * Verify if a user still qualifies for their assigned role
    */
-  private async verifyUserStillQualifies(assignment: any, context?: NftCheckContext): Promise<boolean> {
-    const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id, context);
+  private async verifyUserStillQualifies(assignment: any, context?: NftCheckContext, rules?: VerifierRole[]): Promise<boolean> {
+    const result = await this.verificationEngine.evaluateRole(assignment.user_id, assignment.server_id, assignment.role_id, context, rules);
     await this.dbSvc.saveRoleCheckDetails(assignment.id, {
       ...(assignment.verification_data || {}),
       last_check_status: result.status,
