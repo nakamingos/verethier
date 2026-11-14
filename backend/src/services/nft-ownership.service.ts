@@ -95,7 +95,7 @@ export class NftOwnershipService {
         transport: http(rpcUrl, { timeout: 10000, retryCount: 1, batch: { batchSize: NFT_BATCH_SIZE, wait: 10 } }),
       }));
     }
-    return this.clients.get(chainId);
+    return this.clients.get(chainId)!;
   }
 
   async prepareRule(contract: string, tokenIds?: string | null, label?: string | null, chainId: number = 1): Promise<NftRuleFields> {
@@ -129,7 +129,8 @@ export class NftOwnershipService {
   }
 
   async count(rule: NftRuleFields, wallets: string[], context?: NftCheckContext): Promise<bigint> {
-    if (!rule.chain_id || !rule.contract_address || !['erc721', 'erc1155'].includes(rule.token_standard)) {
+    // Every private reader below is reached through count(), so they rely on this check.
+    if (!rule.chain_id || !rule.contract_address || !['erc721', 'erc1155'].includes(rule.token_standard ?? '')) {
       throw new Error('Invalid NFT verification rule.');
     }
     getNftNetwork(rule.chain_id);
@@ -139,7 +140,7 @@ export class NftOwnershipService {
     const run = context || { checks: new Map<string, Promise<bigint>>() };
     const key = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, rule.token_ids, addresses.slice().sort(), traitFilterKey(rule)]);
     if (!run.checks.has(key)) run.checks.set(key, trait.enabled ? this.readTraitBalances(rule, addresses, run) : this.readBalances(rule, addresses, run));
-    return run.checks.get(key);
+    return run.checks.get(key)!;
   }
 
   async matchingAssets(rule: NftRuleFields, wallets: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
@@ -155,7 +156,7 @@ export class NftOwnershipService {
     context.nftOwnedTokens ||= new Map();
     const scope = JSON.stringify([rule.chain_id, rule.contract_address?.toLowerCase(), rule.token_standard, rule.token_ids, addresses.slice().sort()]);
     if (!context.nftOwnedTokens.has(scope)) context.nftOwnedTokens.set(scope, this.readOwnedTokens(rule, addresses, context));
-    return context.nftOwnedTokens.get(scope);
+    return context.nftOwnedTokens.get(scope)!;
   }
 
   async validateTraits(rule: NftRuleFields): Promise<void> {
@@ -175,12 +176,12 @@ export class NftOwnershipService {
         return client.getBlockNumber();
       }));
     }
-    return context.blocks.get(chainId);
+    return context.blocks.get(chainId)!;
   }
 
   private async owner(rule: NftRuleFields, id: string, blockNumber: bigint): Promise<string | null> {
     try {
-      return (await this.getClient(rule.chain_id).readContract({
+      return (await this.getClient(rule.chain_id!).readContract({
         address: rule.contract_address as Address, abi: ABI, blockNumber, functionName: 'ownerOf', args: [BigInt(id)],
       })).toLowerCase();
     } catch (error) {
@@ -202,21 +203,21 @@ export class NftOwnershipService {
     context.nftMetadata ||= new Map();
     const metadataScope = JSON.stringify([rule.chain_id, rule.contract_address, rule.token_standard, [...owned.keys()].sort()]);
     if (!context.nftMetadata.has(metadataScope)) {
-      context.nftMetadata.set(metadataScope, this.blockNumber(rule.chain_id, context).then(blockNumber =>
-        this.metadataSvc.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber), !!context.freshExport)));
+      context.nftMetadata.set(metadataScope, this.blockNumber(rule.chain_id!, context).then(blockNumber =>
+        this.metadataSvc!.attributes(rule, [...owned.keys()], id => this.metadataUri(rule, id, blockNumber), !!context.freshExport)));
     }
-    const attributes = await context.nftMetadata.get(metadataScope);
+    const attributes = (await context.nftMetadata.get(metadataScope))!;
     const matching = new Map<string, bigint>();
     for (const [id, copies] of owned) {
       if (!attributes.has(id)) throw new Error('NFT trait verification is temporarily unavailable. Please try again.');
-      if (matchesNftTrait(attributes.get(id), rule)) matching.set(id, copies);
+      if (matchesNftTrait(attributes.get(id)!, rule)) matching.set(id, copies);
     }
     return matching;
   }
 
   private async metadataUri(rule: NftRuleFields, id: string, blockNumber: bigint): Promise<string | null> {
     try {
-      return await this.getClient(rule.chain_id).readContract({
+      return await this.getClient(rule.chain_id!).readContract({
         address: rule.contract_address as Address, abi: ABI, blockNumber,
         functionName: rule.token_standard === 'erc721' ? 'tokenURI' : 'uri', args: [BigInt(id)],
       });
@@ -231,12 +232,13 @@ export class NftOwnershipService {
   }
 
   private async readOwnedTokens(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<Map<string, bigint>> {
-    const blockNumber = await this.blockNumber(rule.chain_id, context);
-    const client = this.getClient(rule.chain_id);
+    const blockNumber = await this.blockNumber(rule.chain_id!, context);
+    const client = this.getClient(rule.chain_id!);
     const owned = new Map<string, bigint>();
     if (rule.token_standard === 'erc1155') {
       if (!rule.token_ids?.length) throw new Error('ERC-1155 rules require configured token IDs.');
-      const pairs = addresses.flatMap(address => rule.token_ids.map(id => ({ address, id })));
+      const tokenIds = rule.token_ids;
+      const pairs = addresses.flatMap(address => tokenIds.map(id => ({ address, id })));
       for (let offset = 0; offset < pairs.length; offset += NFT_BATCH_SIZE) {
         const batch = pairs.slice(offset, offset + NFT_BATCH_SIZE);
         const balances = await client.readContract({ address: rule.contract_address as Address, abi: ABI, blockNumber,
@@ -251,10 +253,13 @@ export class NftOwnershipService {
     let ids = rule.token_ids;
     let expected: bigint[] | undefined;
     if (!ids?.length) {
-      expected = await Promise.all(addresses.map(owner => client.readContract({ address: rule.contract_address as Address, abi: ABI,
+      const metadata = this.metadataSvc;
+      if (!metadata) throw new Error('NFT inventory lookup is not configured.');
+      const balances = await Promise.all(addresses.map(owner => client.readContract({ address: rule.contract_address as Address, abi: ABI,
         blockNumber, functionName: 'balanceOf', args: [owner] })));
-      if (expected.every(balance => balance === 0n)) return owned;
-      const inventories = await Promise.all(addresses.map((address, index) => expected[index] === 0n ? [] : this.metadataSvc.ownedIds(rule, address)));
+      expected = balances;
+      if (balances.every(balance => balance === 0n)) return owned;
+      const inventories = await Promise.all(addresses.map((address, index) => balances[index] === 0n ? [] : metadata.ownedIds(rule, address)));
       ids = [...new Set(inventories.flat())];
     }
     const actual = addresses.map(() => 0n);
@@ -274,8 +279,8 @@ export class NftOwnershipService {
   }
 
   private async readBalances(rule: NftRuleFields, addresses: Address[], context: NftCheckContext): Promise<bigint> {
-    const client = this.getClient(rule.chain_id);
-    const blockNumber = await this.blockNumber(rule.chain_id, context);
+    const client = this.getClient(rule.chain_id!);
+    const blockNumber = await this.blockNumber(rule.chain_id!, context);
     const parameters = { address: rule.contract_address as Address, abi: ABI, blockNumber };
     if (rule.token_standard === 'erc721') {
       if (rule.token_ids?.length) {

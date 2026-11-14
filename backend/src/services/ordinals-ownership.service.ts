@@ -32,6 +32,25 @@ export class OrdinalsOwnershipService {
     private readonly catalog?: OrdinalCollectionCacheService,
     private readonly inventories?: OrdinalWalletInventoryService) {}
 
+  // These are always provided by the application; tests may omit the ones they do not use.
+  private requireOrdnet(): OrdnetOwnershipService {
+    if (!this.ordnet) throw new Error(UNAVAILABLE);
+    return this.ordnet;
+  }
+  private requireCatalog(): OrdinalCollectionCacheService {
+    if (!this.catalog) throw new Error(UNAVAILABLE);
+    return this.catalog;
+  }
+  private requireInventories(): OrdinalWalletInventoryService {
+    if (!this.inventories) throw new Error(UNAVAILABLE);
+    return this.inventories;
+  }
+  /** Unknown traits make a trait check unavailable, matching snapshot building. */
+  private traits(item: { traits: Array<{ type: string; value: string }> | null }): Array<{ type: string; value: string }> {
+    if (item.traits === null) throw new Error(UNAVAILABLE);
+    return item.traits;
+  }
+
   async refreshScheduledCatalogs(context: NftCheckContext): Promise<void> {
     if (this.catalog && this.provider() === 'ordnet') await this.catalog.refreshScheduled(context);
   }
@@ -39,20 +58,20 @@ export class OrdinalsOwnershipService {
   async checkSetupHealth(rule: VerifierRole): Promise<void> {
     const criteria = inscriptionCriteria(rule);
     if (this.provider(rule) === 'ordnet') {
-      await this.ordnet.prepareRule(criteria?.kind === 'numbers' ? criteria.collection_slug : rule.slug);
+      await this.requireOrdnet().prepareRule((criteria?.kind === 'numbers' ? criteria.collection_slug : rule.slug) ?? '');
     } else if (rule.slug) {
-      await this.loadCollection(ordinalCollectionId(rule.slug), { priority: 'interactive' });
+      await this.loadCollection(ordinalCollectionId(rule.slug ?? ''), { priority: 'interactive' });
     } else {
       const criteria = inscriptionCriteria(rule);
       if (criteria?.kind !== 'ids') throw new Error('A wallet check is needed for number inventories.');
       await this.readOwners([criteria.ids[0]], { priority: 'interactive' });
     }
-    if (ordinalTrait(rule).enabled && this.provider(rule) !== 'ordnet') await this.ordnet.prepareRule(rule.slug);
+    if (ordinalTrait(rule).enabled && this.provider(rule) !== 'ordnet') await this.requireOrdnet().prepareRule(rule.slug ?? '');
   }
 
   async refreshCollection(slug: string): Promise<{ slug: string; count: number; fetched_at: string }> {
     if (!this.catalog || this.provider() !== 'ordnet') throw new Error('Collection metadata refresh requires ORDINALS_PROVIDER=ordnet.');
-    const catalog = await this.catalog.refresh(slug, { priority: 'background' });
+    const catalog = await this.requireCatalog().refresh(slug, { priority: 'background' });
     return { slug: catalog.slug, count: catalog.items.size, fetched_at: catalog.fetched_at };
   }
 
@@ -76,7 +95,7 @@ export class OrdinalsOwnershipService {
 
   async prepareRule(slug: string): Promise<NftRuleFields & { slug: string }> {
     const id = ordinalCollectionId(slug);
-    const collection = this.provider() === 'ordnet' ? await this.ordnet.prepareRule(id) : await this.getCollection(id);
+    const collection = this.provider() === 'ordnet' ? await this.requireOrdnet().prepareRule(id) : await this.getCollection(id);
     return {
       asset_type: 'ordinal', slug: collection.id, chain_id: null,
       collection_name: collection.name, contract_address: null, token_standard: null, token_ids: null,
@@ -98,7 +117,7 @@ export class OrdinalsOwnershipService {
       try { criteria.collection_slug = ordinalCollectionId(collectionSlug); }
       catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
       this.provider(fields);
-      await this.ordnet.prepareRule(criteria.collection_slug);
+      await this.requireOrdnet().prepareRule(criteria.collection_slug);
       return fields;
     }
     this.provider(fields);
@@ -119,14 +138,14 @@ export class OrdinalsOwnershipService {
   async suggestions(slug: string, key?: string): Promise<string[]> {
     if (!this.ordnet) return [];
     if (this.catalog && this.provider() === 'ordnet') return this.catalog.suggestions(slug, key);
-    return this.ordnet.suggestions(ordinalCollectionId(slug), key);
+    return this.requireOrdnet().suggestions(ordinalCollectionId(slug), key);
   }
 
   private checkKey(rule: VerifierRole, addresses: string[], context?: NftCheckContext): string {
     const criteria = inscriptionCriteria(rule);
     if (criteria) return JSON.stringify(['ordinal', this.provider(rule, context), criteria, addresses, context?.ordinalProviderPolicy || null]);
     const trait = ordinalTrait(rule);
-    return JSON.stringify(['ordinal', this.provider(rule, context), ordinalCollectionId(rule.slug), addresses, context?.ordinalProviderPolicy || null,
+    return JSON.stringify(['ordinal', this.provider(rule, context), ordinalCollectionId(rule.slug ?? ''), addresses, context?.ordinalProviderPolicy || null,
       ...(trait.enabled ? [rule.id, ordinalTraitHash(rule), rule.min_items || 1] : [])]);
   }
 
@@ -137,7 +156,7 @@ export class OrdinalsOwnershipService {
 
   async count(rule: VerifierRole, wallets: string[], context?: NftCheckContext): Promise<bigint> {
     const criteria = inscriptionCriteria(rule);
-    const collectionId = criteria ? null : ordinalCollectionId(rule.slug);
+    const collectionId = criteria ? null : ordinalCollectionId(rule.slug ?? '');
     const trait = ordinalTrait(rule);
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return 0n;
@@ -150,7 +169,8 @@ export class OrdinalsOwnershipService {
     }
     if (!run.checks.has(key)) run.checks.set(key, criteria
       ? this.inventories ? this.readCachedRule(rule, addresses, run, key) : this.readSelection(criteria, addresses, run, key)
-      : this.readRule(rule, collectionId, addresses, run, key, provider, trait.enabled));
+      // Without inscription criteria the collection ID was resolved above.
+      : this.readRule(rule, collectionId!, addresses, run, key, provider, trait.enabled));
     return run.checks.get(key);
   }
 
@@ -164,13 +184,13 @@ export class OrdinalsOwnershipService {
       try {
         // Validate the complete live scan (including traits/unknown owners)
         // before returning IDs for combined-group deduplication.
-        await this.readRule(rule, ordinalCollectionId(rule.slug), addresses, context,
+        await this.readRule(rule, ordinalCollectionId(rule.slug ?? ''), addresses, context,
           this.checkKey(rule, addresses, context), 'ordnet', ordinalTrait(rule).enabled, false);
-        const collection = await this.ordnet.snapshot(rule.slug, context);
+        const collection = await this.requireOrdnet().snapshot(rule.slug ?? '', context);
         const wallets = new Set(addresses);
         const traits = ordinalTrait(rule).enabled;
-        return new Map([...collection.items].filter(([, item]) => wallets.has(item.owner)
-          && (!traits || matchesOrdinalTrait(item.traits, rule))).map(([id]) => [id, 1n]));
+        return new Map([...collection.items].filter(([, item]) => item.owner !== null && wallets.has(item.owner)
+          && (!traits || matchesOrdinalTrait(this.traits(item), rule))).map(([id]) => [id, 1n]));
       } catch (error) {
         if (context.ordinalProviderPolicy === 'ordnet-only' || context.freshExport) throw error;
       }
@@ -179,28 +199,29 @@ export class OrdinalsOwnershipService {
     let catalog: Awaited<ReturnType<OrdinalCollectionCacheService['snapshot']>> | null = null;
     const trait = ordinalTrait(rule);
     if (!criteria) {
-      try { catalog = await this.catalog.snapshot(rule.slug, context); }
+      try { catalog = await this.requireCatalog().snapshot(rule.slug ?? '', context); }
       catch {
         if (context.freshExport) throw new Error(UNAVAILABLE);
         // An outage must not force us to discard a complete, usable trait list.
         const snapshot = trait.enabled ? usableOrdinalTraitSnapshot(rule) : null;
         if (trait.enabled && !snapshot) throw new Error(UNAVAILABLE);
-        const collectionId = ordinalCollectionId(rule.slug);
+        const collectionId = ordinalCollectionId(rule.slug ?? '');
         await this.getCollection(collectionId, ordinalRequestWork(context));
         const ids = await this.walletIds(collectionId, addresses, context);
-        return new Map([...ids].filter(id => !trait.enabled || snapshot.inscription_ids.includes(id)).map(id => [id, 1n]));
+        return new Map([...ids].filter(id => !trait.enabled || snapshot!.inscription_ids.includes(id)).map(id => [id, 1n]));
       }
     }
     const matching = new Map<string, bigint>();
     for (const wallet of addresses) {
-      const inventory = await this.inventories.inventory(wallet, context, criteria?.kind === 'numbers',
+      const inventory = await this.requireInventories().inventory(wallet, context, criteria?.kind === 'numbers',
         (address, work) => this.readInventory(address, work));
       if (criteria?.kind === 'numbers' && inventory.numbers?.size !== inventory.ids.size) throw new Error(UNAVAILABLE);
       for (const id of inventory.ids) {
         const item = catalog?.items.get(id);
         const matches = criteria?.kind === 'ids' ? criteria.ids.includes(id)
-          : criteria?.kind === 'numbers' ? criteria.ranges.some(([start, end]) => inventory.numbers.get(id) >= start && inventory.numbers.get(id) <= end)
-          : item && (!trait.enabled || matchesOrdinalTrait(item.traits, rule));
+          // Number inventories were checked complete just above.
+          : criteria?.kind === 'numbers' ? criteria.ranges.some(([start, end]) => inventory.numbers!.get(id)! >= start && inventory.numbers!.get(id)! <= end)
+          : item && (!trait.enabled || matchesOrdinalTrait(this.traits(item), rule));
         if (matches) matching.set(id, 1n);
       }
     }
@@ -212,15 +233,16 @@ export class OrdinalsOwnershipService {
     if (criteria?.kind !== 'numbers' || !criteria.collection_slug || !this.ordnet) throw new Error(UNAVAILABLE);
     // Use the live, per-run collection scan. The persistent metadata catalog has
     // deliberately discarded owners and must never establish current ownership.
-    const collection = await this.ordnet.snapshot(criteria.collection_slug, context);
+    const collection = await this.requireOrdnet().snapshot(criteria.collection_slug, context);
     if (collection.slug !== criteria.collection_slug) throw new Error(UNAVAILABLE);
     const wallets = new Set(addresses);
     const matching = new Map<string, bigint>();
     const numbers = new Set<number>();
     for (const [id, item] of collection.items) {
-      if (!Number.isSafeInteger(item.number) || numbers.has(item.number)) throw new Error(UNAVAILABLE);
-      numbers.add(item.number);
-      if (!criteria.ranges.some(([start, end]) => item.number >= start && item.number <= end)) continue;
+      const number = item.number;
+      if (typeof number !== 'number' || !Number.isSafeInteger(number) || numbers.has(number)) throw new Error(UNAVAILABLE);
+      numbers.add(number);
+      if (!criteria.ranges.some(([start, end]) => number >= start && number <= end)) continue;
       if (item.owner === null) throw new Error(UNAVAILABLE);
       if (wallets.has(item.owner)) matching.set(id, 1n);
     }
@@ -230,13 +252,13 @@ export class OrdinalsOwnershipService {
 
   private async readCachedRule(rule: VerifierRole, addresses: string[], context: NftCheckContext, key: string): Promise<bigint> {
     const criteria = inscriptionCriteria(rule);
-    const catalog = criteria ? null : await this.catalog.snapshot(rule.slug, context);
+    const catalog = criteria ? null : await this.requireCatalog().snapshot(rule.slug ?? '', context);
     const traits = criteria ? null : ordinalTrait(rule);
     const owned = new Set<string>();
     const numbers = new Map<string, number>();
     const providers = new Set<OrdinalCheckDetails['provider']>();
     for (const wallet of addresses) {
-      const inventory = await this.inventories.inventory(wallet, context, criteria?.kind === 'numbers',
+      const inventory = await this.requireInventories().inventory(wallet, context, criteria?.kind === 'numbers',
         (address, work) => this.readInventory(address, work));
       providers.add(inventory.provider);
       for (const id of inventory.ids) owned.add(id);
@@ -254,8 +276,9 @@ export class OrdinalsOwnershipService {
     }
     let count = 0n;
     for (const id of owned) {
-      const item = catalog.items.get(id);
-      if (item && (!traits.enabled || matchesOrdinalTrait(item.traits, rule))) count++;
+      // Collection rules (no inscription criteria) always load a catalog and traits.
+      const item = catalog!.items.get(id);
+      if (item && (!traits!.enabled || matchesOrdinalTrait(this.traits(item), rule))) count++;
     }
     return count;
   }
@@ -273,7 +296,7 @@ export class OrdinalsOwnershipService {
     // rules. Bounds stay compact even for a sub-100k or larger selection.
     for (const wallet of addresses) {
       if (!context.ordinalInventories.has(wallet)) context.ordinalInventories.set(wallet, this.readInventory(wallet, ordinalRequestWork(context)));
-      for (const [id, number] of await context.ordinalInventories.get(wallet)) {
+      for (const [id, number] of (await context.ordinalInventories.get(wallet))!) {
         if (inscriptions.has(id) && inscriptions.get(id) !== number) throw new Error(UNAVAILABLE);
         inscriptions.set(id, number);
       }
@@ -324,9 +347,9 @@ export class OrdinalsOwnershipService {
     context.ordinalSnapshots ||= new Map();
     const key = JSON.stringify([ordinalTraitHash(rule), liveOwners]);
     if (!context.ordinalSnapshots.has(key)) context.ordinalSnapshots.set(key,
-      (this.catalog && !liveOwners && this.provider() === 'ordnet' ? this.catalog.snapshot(rule.slug, context)
-        : this.ordnet.snapshot(rule.slug, context)).then(collection => buildOrdinalTraitSnapshot(rule, collection)));
-    return context.ordinalSnapshots.get(key);
+      (this.catalog && !liveOwners && this.provider() === 'ordnet' ? this.catalog.snapshot(rule.slug ?? '', context)
+        : this.requireOrdnet().snapshot(rule.slug ?? '', context)).then(collection => buildOrdinalTraitSnapshot(rule, collection)));
+    return context.ordinalSnapshots.get(key)!;
   }
 
   private detail(context: NftCheckContext, key: string, detail: OrdinalCheckDetails) {
@@ -339,7 +362,7 @@ export class OrdinalsOwnershipService {
     if (provider === 'ordnet') {
       this.detail(context, key, { provider: 'ordnet', source: 'live' });
       try {
-        if (!traits) return await this.ordnet.count(collectionId, addresses, context);
+        if (!traits) return await this.requireOrdnet().count(collectionId, addresses, context);
         const snapshot = await this.liveTraitSnapshot(rule, context, true);
         // Refresh only after a complete trait scan. Ownership stays ephemeral.
         rule.ordinal_trait_snapshot = snapshot;
@@ -350,11 +373,11 @@ export class OrdinalsOwnershipService {
             this.db.cacheOrdinalTraitSnapshot(rule, snapshot).catch(() => Logger.warn('Ordinals trait snapshot could not be saved; live verification continues.')));
           await context.ordinalSnapshotWrites.get(writeKey);
         }
-        const collection = await this.ordnet.snapshot(collectionId, context);
+        const collection = await this.requireOrdnet().snapshot(collectionId, context);
         const owners = new Set(addresses);
         let count = 0n;
         for (const id of snapshot.inscription_ids) {
-          const owner = collection.items.get(id).owner;
+          const owner = collection.items.get(id)!.owner;
           if (owner === null) throw new Error(UNAVAILABLE);
           if (owners.has(owner)) count++;
         }
@@ -378,7 +401,7 @@ export class OrdinalsOwnershipService {
     for (const wallet of addresses) {
       const key = JSON.stringify([wallet, collectionId]);
       if (!context.ordinalIds.has(key)) context.ordinalIds.set(key, this.readIds(wallet, collectionId, ordinalRequestWork(context)));
-      for (const id of await context.ordinalIds.get(key)) ids.add(id);
+      for (const id of (await context.ordinalIds.get(key))!) ids.add(id);
     }
     return ids;
   }
@@ -408,9 +431,9 @@ export class OrdinalsOwnershipService {
               try { counts = await summary; } catch { continue; }
               let matches = 0n;
               if (context.ordinalMode === 'scheduled') {
-                for (const id of snapshot.inscription_ids) if (await context.ordinalOwners.get(id) === wallet) matches++;
+                for (const id of snapshot.inscription_ids) if (await context.ordinalOwners!.get(id) === wallet) matches++;
               } else {
-                const ids = await context.ordinalIds.get(JSON.stringify([wallet, collectionId]));
+                const ids = (await context.ordinalIds!.get(JSON.stringify([wallet, collectionId])))!;
                 for (const id of snapshot.inscription_ids) if (ids.has(id)) matches++;
               }
               if (matches > (counts.get(collectionId) || 0n)) throw new XverseConflictError(UNAVAILABLE);
@@ -421,7 +444,7 @@ export class OrdinalsOwnershipService {
                 let ids: Set<string>;
                 try { ids = await knownIds; } catch { continue; }
                 for (const id of snapshot.inscription_ids) {
-                  if (await context.ordinalOwners.get(id) === wallet && !ids.has(id)) throw new XverseConflictError(UNAVAILABLE);
+                  if (await context.ordinalOwners!.get(id) === wallet && !ids.has(id)) throw new XverseConflictError(UNAVAILABLE);
                 }
               }
             }
@@ -445,8 +468,8 @@ export class OrdinalsOwnershipService {
   }
 
   private async savedIdOwners(ids: string[], context: NftCheckContext): Promise<Map<string, string>> {
-    context.ordinalOwners ||= new Map();
-    const missing = ids.filter(id => !context.ordinalOwners.has(id));
+    const owners = context.ordinalOwners ||= new Map();
+    const missing = ids.filter(id => !owners.has(id));
     let tail: Promise<unknown> = Promise.resolve();
     // Publish pending lookups before awaiting to share overlapping concurrent rules.
     for (let start = 0; start < missing.length; start += PAGE_LIMIT) {
@@ -456,12 +479,13 @@ export class OrdinalsOwnershipService {
       const batch = tail.then(() => this.readOwners(chunk, ordinalRequestWork(context)));
       tail = batch;
       for (const id of chunk) {
-        const owner = batch.then(result => result.get(id));
+        // readOwners rejects a response that does not cover every requested ID.
+        const owner = batch.then(result => result.get(id)!);
         owner.catch(() => undefined); // The caller awaits every result below.
-        context.ordinalOwners.set(id, owner);
+        owners.set(id, owner);
       }
     }
-    return new Map(await Promise.all(ids.map(async id => [id, await context.ordinalOwners.get(id)] as const)));
+    return new Map(await Promise.all(ids.map(async id => [id, (await owners.get(id))!] as const)));
   }
 
   private async readOwners(ids: string[], work: OrdinalRequestWork): Promise<Map<string, string>> {
@@ -488,7 +512,7 @@ export class OrdinalsOwnershipService {
       const wallet = addresses[0];
       if (!context.ordinalSummaries.has(wallet)) context.ordinalSummaries.set(wallet, this.readSummary(wallet, ordinalRequestWork(context)));
       try {
-        return (await context.ordinalSummaries.get(wallet)).get(collectionId) || 0n;
+        return (await context.ordinalSummaries.get(wallet))!.get(collectionId) || 0n;
       } catch (error) {
         if (!(error instanceof XverseSummaryError)) throw error;
         // Xverse returns 500 for some empty-wallet summaries. Require a complete
@@ -586,7 +610,8 @@ export class OrdinalsOwnershipService {
         const timeout = setTimeout(() => controller.abort(), 10000);
         try {
           const response = await fetch(API_URL + path, {
-            headers: { 'x-api-key': EnvironmentConfig.XVERSE_API_KEY, Accept: 'application/json' },
+            // Checked non-empty before queueing.
+            headers: { 'x-api-key': EnvironmentConfig.XVERSE_API_KEY ?? '', Accept: 'application/json' },
             signal: controller.signal, redirect: 'error',
           });
           if (setup && response.status === 404) throw new Error('This collection was not found on Xverse. Check its collection slug.');

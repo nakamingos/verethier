@@ -239,7 +239,7 @@ yarn typecheck         # Type-check source and tests
 yarn typecheck:strict  # strictNullChecks for every file not on the to-do list
 ```
 
-Strict null checks are being adopted one file at a time. `strict-null-checks-todo.txt` lists the source files that still have errors under `strictNullChecks`; every other file, including any new one, must stay clean, and CI enforces this. When you fix a listed file, remove it from the list (the check fails until you do, so fixed files stay fixed). Do not add files to the list.
+All backend source under `src/` is checked with `strictNullChecks`: the production build (`tsconfig.build.json`) enables it, and `yarn typecheck:strict` runs the same check in CI. `strict-null-checks-todo.txt` is empty and should stay that way; the check fails for any file listed there that is already clean, so it cannot be used to exempt new code. Tests are not yet covered.
 
 ## Project Layout
 
