@@ -1,7 +1,7 @@
 import { minimalEvmVerificationProof } from '@/utils/wallet-proof.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { SolanaSignatureService } from './solana-signature.service';
-import { PrivacyService, privacyProof } from '@/portal/privacy.service';
+import { PrivacyService } from '@/portal/privacy.service';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EvmSignatureService } from './evm-signature.service';
 
@@ -76,68 +76,16 @@ export class WalletService {
     const expired = expiry < Date.now();
     if (expired) throw new Error('Verification has expired.');
 
-    if (data.proofVersion !== undefined && data.proofVersion !== 2) throw new Error('Invalid wallet proof version.');
-    let typedData: any;
-    if (data.proofVersion === 2) {
-      const context = await this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce);
-      if (data.expiry !== context.expiry || data.chainId === undefined)
-        throw new Error('Invalid wallet verification challenge.');
-      typedData = minimalEvmVerificationProof({ origin: EnvironmentConfig.BASE_URL,
-        chainId:data.chainId,address:data.address,nonce:context.nonce,expiry:context.expiry,
-        ...(data.privacy !== undefined ? {privacy:data.privacy} : {}) });
-    } else {
-      // Existing open pages can finish their short-lived v1 proof. Newly built
-      // signing requests use v2 and never include Discord identity fields.
-      const types = {
-        Verification: [
-          { name: 'UserID', type: 'string' },
-          { name: 'UserTag', type: 'string' },
-          { name: 'ServerID', type: 'string' },
-          { name: 'ServerName', type: 'string' },
-          { name: 'Nonce', type: 'string' },
-          { name: 'Expiry', type: 'uint256' },
-        ]
-      };
-
-      const message = {
-        UserID: data.userId,
-        UserTag: data.userTag,
-        ServerID: data.discordId,
-        ServerName: data.discordName,
-        Nonce: data.nonce,
-        Expiry: data.expiry,
-      };
-
-      if (data.chainId !== undefined) {
-        types.Verification.push({ name: 'WalletAddress', type: 'address' });
-        (message as any).WalletAddress = data.address;
-      }
-      if (data.privacy !== undefined) {
-        types.Verification.push({ name: 'Privacy', type: 'string' });
-        (message as any).Privacy = privacyProof(data.privacy);
-      }
-      typedData = {
-        types,
-        domain: {
-          name: 'Bouncer',
-          version: '1',
-          chainId: data.chainId ?? 1,
-        },
-        message,
-      };
-    }
-
-    let proof: { chainId?: number } | undefined;
-    let failure: Error | undefined;
-    for (const name of data.chainId === undefined ? ['Bouncer', 'verethier'] : ['Bouncer']) {
-      try {
-        proof = await this.evmSignatures.verify(data.address, {
-          ...typedData, domain: { ...typedData.domain, name }, primaryType: 'Verification',
-        }, signature);
-        break;
-      } catch (error) { failure = error; }
-    }
-    if (!proof) throw failure || new Error('Invalid wallet signature.');
+    // Only the v2 proof is accepted. It binds the signing origin and wallet
+    // address, so a signature collected on another site cannot be replayed here.
+    if (data.proofVersion !== 2) throw new Error('Invalid wallet proof version.');
+    const active = await this.nonceSvc.getActiveNonce(data.userId, data.discordId, data.nonce);
+    if (data.expiry !== active.expiry || data.chainId === undefined)
+      throw new Error('Invalid wallet verification challenge.');
+    const typedData = minimalEvmVerificationProof({ origin: EnvironmentConfig.BASE_URL,
+      chainId:data.chainId,address:data.address,nonce:active.nonce,expiry:active.expiry,
+      ...(data.privacy !== undefined ? {privacy:data.privacy} : {}) });
+    const proof = await this.evmSignatures.verify(data.address, typedData, signature);
     const address = data.address.toLowerCase();
     // Check before saving or transferring the wallet link. Keep this outside
     // the optional address-storage catch so a blocked wallet cannot proceed.

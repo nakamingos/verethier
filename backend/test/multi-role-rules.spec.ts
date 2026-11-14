@@ -68,9 +68,9 @@ describe('Shared requirements with independent role outputs', () => {
     db.getRuleForServer=jest.fn().mockResolvedValue(rule);
     db.getEarnedRoleAssignments=jest.fn().mockResolvedValue([]);
     db.trackRoleAssignment=jest.fn();
-    const discord:any={addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
+    const discord:any={isMember:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
     const service=new DynamicRoleService(db,engine,discord);
-    expect(await service.reverifyRoleChangeInServer('server',extra,'204',['member'])).toEqual({verified:1,revoked:0,errors:0});
+    expect(await service.reverifyRoleChangeInServer('server',extra,'204',['member'])).toEqual({verified:1,revoked:0,left:0,errors:0});
     expect(discord.addUserRoleDynamic).toHaveBeenCalledWith('member','server',extra,expect.any(Map));
     expect(db.trackRoleAssignment).toHaveBeenCalledWith(expect.objectContaining({roleId:extra,ruleId:'204'}));
   });

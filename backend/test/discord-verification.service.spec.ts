@@ -1,3 +1,4 @@
+import { EnvironmentConfig } from '../src/config/environment.config';
 import { WalletBlockService } from '../src/services/wallet-block.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
 import { NftOwnershipService } from '../src/services/nft-ownership.service';
@@ -212,9 +213,55 @@ describe('DiscordVerificationService', () => {
       });
     });
 
+    it('releases an abandoned link\'s stored reply after the nonce expires', async () => {
+      jest.useFakeTimers();
+      try {
+        mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'role-id' }]);
+        mockNonceService.createNonce.mockResolvedValue('abandoned-nonce');
+        await service.requestVerification(mockInteraction as any);
+        expect(service.tempMessages['abandoned-nonce']).toBeDefined();
+        jest.advanceTimersByTime(EnvironmentConfig.NONCE_EXPIRY + 59_000);
+        expect(service.tempMessages['abandoned-nonce']).toBeDefined();
+        jest.advanceTimersByTime(2_000);
+        expect(service.tempMessages['abandoned-nonce']).toBeUndefined();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('keeps the stored reply while a submission for that link is still running', async () => {
+      jest.useFakeTimers();
+      try {
+        mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'role-id' }]);
+        mockNonceService.createNonce.mockResolvedValue('busy-nonce');
+        await service.requestVerification(mockInteraction as any);
+        const release = service.retainVerificationRequest('busy-nonce', 'user-id', 'guild-id');
+        jest.advanceTimersByTime(EnvironmentConfig.NONCE_EXPIRY + 61_000);
+        expect(service.tempMessages['busy-nonce']).toBeDefined();
+        release();
+        jest.advanceTimersByTime(61_000);
+        expect(service.tempMessages['busy-nonce']).toBeUndefined();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('still issues a link when only the first rule\'s role was deleted', async () => {
+      mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'deleted-role' }, { role_id: 'role-id' }]);
+      mockNonceService.createNonce.mockResolvedValue('test-nonce');
+      await service.requestVerification(mockInteraction as any);
+      expect(mockNonceService.createNonce).toHaveBeenCalled();
+    });
+
+    it('stops with an administrator hint when no rule role still exists', async () => {
+      mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'deleted-role', additional_roles: [{ id: 'also-deleted', name: 'Gone' }] }]);
+      await service.requestVerification(mockInteraction as any);
+      expect(mockNonceService.createNonce).not.toHaveBeenCalled();
+      expect(mockInteraction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('run Check Setup') });
+    });
+
     it('keeps the button URL within Discord limits with long Unicode names and image URLs', async () => {
       const nonce = 'a'.repeat(64);
-      const originalBaseUrl = process.env.BASE_URL;
       const interaction = {
         ...mockInteraction,
         guild: { ...mockInteraction.guild, name: '🍕'.repeat(100), iconURL: () => 'https://cdn.discordapp.com/icons/' + 'i'.repeat(150) },
@@ -223,12 +270,12 @@ describe('DiscordVerificationService', () => {
       };
       mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'role-id' }]);
       mockNonceService.createNonce.mockResolvedValue(nonce);
-      process.env.BASE_URL = 'https://verethier.nomorelabs.xyz';
+      const baseUrl = jest.replaceProperty(EnvironmentConfig, 'BASE_URL', 'https://verethier.nomorelabs.xyz');
       try {
         await service.requestVerification(interaction as any);
         const reply = interaction.editReply.mock.calls[0][0];
         const url = reply.components[0].toJSON().components[0].url;
-        expect(url).toBe(`${process.env.BASE_URL}/verify/${nonce}`);
+        expect(url).toBe(`https://verethier.nomorelabs.xyz/verify/${nonce}`);
         expect(url.length).toBeLessThanOrEqual(512);
         expect(mockNonceService.createNonce).toHaveBeenCalledWith('user-id', 'guild-id', 'message-id', 'channel-id', {
           userTag: interaction.user.tag,
@@ -237,8 +284,7 @@ describe('DiscordVerificationService', () => {
           discordIcon: interaction.guild.iconURL(),
         });
       } finally {
-        if (originalBaseUrl === undefined) delete process.env.BASE_URL;
-        else process.env.BASE_URL = originalBaseUrl;
+        baseUrl.restore();
       }
     });
 
@@ -329,6 +375,13 @@ describe('DiscordVerificationService', () => {
       expect(()=>service.retainVerificationRequest('old','user-id','another-guild')).toThrow('does not match');
       expect((service as any).activeVerificationRequests.size).toBe(0);
     });
+    it('reports a rule lookup outage as a retry, not as a channel without rules', async () => {
+      mockDbService.getRulesByChannel.mockRejectedValue(new Error('connect ECONNREFUSED db.internal:5432'));
+      await service.requestVerification(mockInteraction as any);
+      expect(mockInteraction.editReply).toHaveBeenCalledWith({ content: 'Could not start verification right now. Please try again shortly.' });
+      expect(mockNonceService.createNonce).not.toHaveBeenCalled();
+    });
+
     it('should handle error when no rules found', async () => {
       mockDbService.getRulesByChannel.mockResolvedValue([]);
 

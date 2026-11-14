@@ -150,7 +150,7 @@ describe('Global Ethscription ownership', () => {
     const db = { getDisabledBackgroundServers: jest.fn().mockResolvedValue(new Set()), getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'special' }]),
       getRoleMappings: jest.fn().mockResolvedValue([rule]), saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db as any, new AssetOwnershipService({} as any, {} as any, undefined, service), { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
-    const discord = { removeUserRole: jest.fn().mockResolvedValue(true) };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn().mockResolvedValue(true) };
     const scheduler = new DynamicRoleService(db as any, engine, discord as any);
     request.mockResolvedValueOnce(page()).mockRejectedValueOnce(new Error('offline'));
     await scheduler.performScheduledReverification();

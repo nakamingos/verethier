@@ -90,9 +90,9 @@ describe('ord.net-first ownership and automatic rule-save policy', () => {
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
     const engine = new VerificationEngine(db, new AssetOwnershipService(undefined, undefined, service),
       { getUserAddresses: async () => [wallet] } as any, { allowedAddresses: async (_server, addresses) => addresses } as any);
-    const discord: any = { removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn() };
+    const discord: any = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn() };
     expect(await new DynamicRoleService(db, engine, discord).reverifyRoleInServer('guild', 'holder', run(true)))
-      .toEqual({ verified: 0, revoked: 0, errors: 1 });
+      .toEqual({ verified: 0, revoked: 0, left: 0, errors: 1 });
     expect(discord.removeUserRole).not.toHaveBeenCalled(); expect(discord.addUserRoleDynamic).not.toHaveBeenCalled();
     expect(db.updateLastVerified).not.toHaveBeenCalled(); expect(inventory.inventory).not.toHaveBeenCalled();
   });

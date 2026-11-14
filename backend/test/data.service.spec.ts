@@ -323,4 +323,22 @@ describe('DataService', () => {
     expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',55,context)).toBe(55);
   });
 
+  it('reads every page of collection slugs instead of stopping at the API row limit', async () => {
+    const first = Array.from({ length: 1000 }, (_, i) => ({ slug: `collection-${i}` }));
+    const page1 = queueQuery({ data: first, error: null });
+    const page2 = queueQuery({ data: [{ slug: 'collection-1000' }, { slug: null }], error: null });
+    const slugs = await service.getAllSlugs();
+    expect(page1.range).toEqual([0, 999]);
+    expect(page2.range).toEqual([1000, 1999]);
+    expect(slugs).toHaveLength(1002);
+    expect(slugs[0]).toBe('all-collections');
+    expect(slugs).toContain('collection-1000');
+  });
+
+  it('fails rather than returning a partial collection list', async () => {
+    queueQuery({ data: Array.from({ length: 1000 }, (_, i) => ({ slug: `c-${i}` })), error: null });
+    queueQuery({ data: null, error: { message: 'timeout' } });
+    await expect(service.getAllSlugs()).rejects.toThrow('timeout');
+  });
+
 });

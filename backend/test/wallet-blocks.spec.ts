@@ -109,15 +109,15 @@ describe('Wallet blocks across verification and earned-role reconciliation', () 
       saveRoleCheckDetails:jest.fn(),updateRoleAssignmentStatus:jest.fn(),updateLastVerified:jest.fn()};
     const ownership={count:jest.fn().mockResolvedValue(1n)};
     const engine=new VerificationEngine(db as any,ownership as any,{getUserAddresses:jest.fn().mockResolvedValue([wallet])} as any,blocks);
-    const discord={removeUserRole:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
+    const discord={isMember:jest.fn().mockResolvedValue(true),removeUserRole:jest.fn().mockResolvedValue(true),addUserRoleDynamic:jest.fn().mockResolvedValue(true)};
     const roles=new DynamicRoleService(db as any,engine,discord as any);
-    expect(await roles.reverifyUserInServer('member',guild)).toEqual({verified:0,revoked:1,errors:0});
+    expect(await roles.reverifyUserInServer('member',guild)).toEqual({verified:0,revoked:1,left:0,errors:0});
     expect(db.getEarnedRoleAssignments).toHaveBeenCalledWith({userId:'member',serverId:guild});
     expect(discord.removeUserRole).toHaveBeenCalledWith('member',guild,'holder',expect.any(Map));
     expect(ownership.count).not.toHaveBeenCalled();
     expect((await engine.evaluateRole('member','other-server','holder')).status).toBe('passed');
     denied.get(guild).clear();assignment.status='revoked';
-    expect(await roles.reverifyUserInServer('member',guild)).toEqual({verified:1,revoked:0,errors:0});
+    expect(await roles.reverifyUserInServer('member',guild)).toEqual({verified:1,revoked:0,left:0,errors:0});
     expect(db.updateRoleAssignmentStatus).toHaveBeenLastCalledWith(1,'active');
   });
   it('preserves existing roles when wallet restrictions cannot be read', async () => {
@@ -125,8 +125,8 @@ describe('Wallet blocks across verification and earned-role reconciliation', () 
     const db={getEarnedRoleAssignments:jest.fn().mockResolvedValue([{id:1,user_id:'member',server_id:guild,role_id:'holder',status:'active'}]),
       getRoleMappings:jest.fn().mockResolvedValue([base]),saveRoleCheckDetails:jest.fn(),updateRoleAssignmentStatus:jest.fn()};
     const count=jest.fn();const engine=new VerificationEngine(db as any,{count} as any,{getUserAddresses:jest.fn().mockResolvedValue([wallet])} as any,blocks);
-    const discord={removeUserRole:jest.fn(),addUserRoleDynamic:jest.fn()};
-    expect(await new DynamicRoleService(db as any,engine,discord as any).reverifyUserInServer('member',guild)).toEqual({verified:0,revoked:0,errors:1});
+    const discord={isMember:jest.fn().mockResolvedValue(true),removeUserRole:jest.fn(),addUserRoleDynamic:jest.fn()};
+    expect(await new DynamicRoleService(db as any,engine,discord as any).reverifyUserInServer('member',guild)).toEqual({verified:0,revoked:0,left:0,errors:1});
     expect(count).not.toHaveBeenCalled();expect(discord.removeUserRole).not.toHaveBeenCalled();expect(discord.addUserRoleDynamic).not.toHaveBeenCalled();
     expect(db.saveRoleCheckDetails).toHaveBeenCalledWith(1,expect.objectContaining({last_check_status:'unavailable'}));
   });

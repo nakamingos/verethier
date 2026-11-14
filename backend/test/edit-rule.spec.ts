@@ -580,24 +580,24 @@ describe('Edited roles retain alternative rules and reconcile only earned histor
     const ownership = { count: jest.fn(count) };
     const engine = new VerificationEngine(db as any, ownership as any, { getUserAddresses: jest.fn().mockResolvedValue(['wallet']) } as any,
       { allowedAddresses: jest.fn().mockImplementation(async (_server, addresses) => addresses) } as any);
-    const discord = { addUserRoleDynamic: jest.fn().mockResolvedValue(true), removeUserRole: jest.fn().mockResolvedValue(true) };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), addUserRoleDynamic: jest.fn().mockResolvedValue(true), removeUserRole: jest.fn().mockResolvedValue(true) };
     return { db, ownership, discord, roles: new DynamicRoleService(db as any, engine, discord as any) };
   }
   it('restores a previous holder who passes another rule even if the edited rule fails', async () => {
-    const h = reconciliation(async () => 1n); expect(await h.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 1, revoked: 0, errors: 0 });
+    const h = reconciliation(async () => 1n); expect(await h.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 1, revoked: 0, left: 0, errors: 0 });
     expect(h.db.getEarnedRoleAssignments).toHaveBeenCalledWith({ serverId: 'guild', roleId: 'holder' });
     expect(h.discord.addUserRoleDynamic).toHaveBeenCalledWith('earned-member', 'guild', 'holder', expect.any(Map));
     expect(h.db.saveRoleCheckDetails).toHaveBeenCalledWith(1, expect.objectContaining({ matched_rule_ids: [174] }));
     expect(h.ownership.count.mock.calls[0][2].ordinalMode).toBe('scheduled');
     h.db.getEarnedRoleAssignments.mockResolvedValue([]); h.discord.addUserRoleDynamic.mockClear();
-    expect(await h.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 0, errors: 0 });
+    expect(await h.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 0, left: 0, errors: 0 });
     expect(h.discord.addUserRoleDynamic).not.toHaveBeenCalled();
   });
   it('preserves the role when checks are unavailable and removes it only on confirmed failure', async () => {
     const unavailable = reconciliation(async () => { throw new Error('provider down'); });
-    expect(await unavailable.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 0, errors: 1 });
+    expect(await unavailable.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 0, left: 0, errors: 1 });
     expect(unavailable.discord.removeUserRole).not.toHaveBeenCalled(); expect(unavailable.db.updateRoleAssignmentStatus).not.toHaveBeenCalled();
-    const failed = reconciliation(async () => 0n); expect(await failed.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 1, errors: 0 });
+    const failed = reconciliation(async () => 0n); expect(await failed.roles.reverifyRoleInServer('guild', 'holder')).toEqual({ verified: 0, revoked: 1, left: 0, errors: 0 });
     expect(failed.discord.removeUserRole).toHaveBeenCalledWith('earned-member', 'guild', 'holder', expect.any(Map));
   });
 });

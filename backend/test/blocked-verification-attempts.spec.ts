@@ -5,9 +5,10 @@ import { PrivacyService } from '../src/portal/privacy.service';
 import { EnvironmentConfig } from '../src/config/environment.config';
 const address = '0x' + 'a'.repeat(40);
 const server = '111111111111111111', user = '222222222222222222';
-const data = { userId: user, userTag: 'Member', discordId: server, discordName: 'Guild', address, nonce: 'private-proof-token', expiry: Math.floor(Date.now() / 1000) + 300, avatar: '', discordIcon: '' };
+const data = { proofVersion: 2 as const, chainId: 1, userId: user, userTag: 'Member', discordId: server, discordName: 'Guild', address, nonce: 'private-proof-token', expiry: Math.floor(Date.now() / 1000) + 300, avatar: '', discordIcon: '' };
 function walletFixture() {
-    const context = { memberPortal: true, channelId: 'trusted-channel' };
+    jest.replaceProperty(EnvironmentConfig, 'BASE_URL', 'https://verify.example.test');
+    const context = { memberPortal: true, channelId: 'trusted-channel', nonce: data.nonce, expiry: data.expiry };
     const nonces = { validateNonce: jest.fn().mockResolvedValue(true), getActiveNonce: jest.fn().mockResolvedValue(context), consumeNonce: jest.fn().mockResolvedValue(context) };
     const blocks = { assertAllowed: jest.fn().mockRejectedValue(new Error(WALLET_BLOCKED)), recordBlockedVerification: jest.fn().mockResolvedValue(undefined) };
     const addresses = { addUserAddress: jest.fn().mockResolvedValue({ success: true }) };
@@ -33,7 +34,7 @@ describe('Signed blocked verification activity', () => {
     });
     it('records Discord context without trusting client-supplied source fields', async () => {
         const f = walletFixture();
-        f.nonces.getActiveNonce.mockResolvedValue({ channelId: 'discord-channel' });
+        f.nonces.getActiveNonce.mockResolvedValue({ channelId: 'discord-channel', nonce: data.nonce, expiry: data.expiry });
         await expect(f.wallet.verifySignature({ ...data, source: 'portal', channelId: 'spoofed' } as any, 'signature')).rejects.toThrow(WALLET_BLOCKED);
         expect(f.blocks.recordBlockedVerification).toHaveBeenCalledWith(expect.objectContaining({ source: 'discord', channelId: 'discord-channel' }));
     });
@@ -55,7 +56,8 @@ describe('Signed blocked verification activity', () => {
         if (failure === 'storage')
             f.blocks.recordBlockedVerification.mockRejectedValue(new Error('storage down'));
         else
-            f.nonces.getActiveNonce.mockRejectedValue(new Error('expired context'));
+            // The proof check reads the nonce first; only the later audit-context read fails.
+            f.nonces.getActiveNonce.mockResolvedValueOnce(f.context).mockRejectedValue(new Error('expired context'));
         await expect(f.wallet.verifySignature(data, 'signature')).rejects.toThrow(WALLET_BLOCKED);
         expect(f.addresses.addUserAddress).not.toHaveBeenCalled();
         expect(f.nonces.consumeNonce).not.toHaveBeenCalled();

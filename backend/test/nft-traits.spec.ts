@@ -239,7 +239,7 @@ describe('NFT trait ownership', () => {
     metadata.attributes.mockResolvedValue(new Map([['1', red], ['2', red]]));
     expect(await engine.verifyUser('user', 1, wallet)).toMatchObject({ status: 'passed', matchingAssetCount: 2 });
     metadata.attributes.mockRejectedValue(new Error('NFT trait verification is temporarily unavailable. Please try again.'));
-    const discord = { removeUserRole: jest.fn() };
+    const discord = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn() };
     const dynamic = new DynamicRoleService(db as any, engine, discord as any);
     expect(await dynamic.reverifyUser('user')).toEqual({ verified: 0, revoked: 0 });
     expect(discord.removeUserRole).not.toHaveBeenCalled();

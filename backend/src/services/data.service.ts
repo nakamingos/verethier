@@ -137,22 +137,20 @@ export class DataService {
   }
 
   async getAllSlugs(): Promise<string[]> {
-    const { data, error } = await supabase
-      .from('collections')
-      .select('slug');
-    if (error) throw new Error(error.message);
-    
-    // More efficient unique slug extraction
-    const uniqueSlugs: string[] = [];
-    const seenSlugs = new Set<string>();
-    
-    data?.forEach(r => {
-      if (r.slug && !seenSlugs.has(r.slug)) {
-        seenSlugs.add(r.slug);
-        uniqueSlugs.push(r.slug);
-      }
-    });
-    
+    // Rule validation treats a missing slug as an unknown collection, so read
+    // every page; a single request stops at the API's row limit (1,000).
+    const pageSize = 1000;
+    const uniqueSlugs = new Set<string>();
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from('collections')
+        .select('slug')
+        .order('slug', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error || !Array.isArray(data)) throw new Error(error?.message || 'Collections could not be read.');
+      for (const row of data) if (row.slug) uniqueSlugs.add(row.slug);
+      if (data.length < pageSize) break;
+    }
     return ['all-collections', ...uniqueSlugs];
   }
 

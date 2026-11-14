@@ -109,7 +109,7 @@ describe('AppController', () => {
   });
 
   describe('verify', () => {
-    const validRequestBody: VerifySignatureDto = {
+    const validRequestBody = <VerifySignatureDto><unknown>{
       data: {
         address: '0x1234567890123456789012345678901234567890',
         userId: 'discord-user-123',
@@ -178,7 +178,7 @@ describe('AppController', () => {
       });
 
     it('should handle missing optional fields gracefully', async () => {
-      const requestWithMissingFields: VerifySignatureDto = {
+      const requestWithMissingFields = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
         },
@@ -215,7 +215,7 @@ describe('AppController', () => {
     });
 
     it('should handle discordIcon field mapping correctly', async () => {
-      const requestWithDiscordIcon: VerifySignatureDto = {
+      const requestWithDiscordIcon = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           discordIcon: 'https://cdn.discordapp.com/icon-alt.png',
@@ -250,7 +250,7 @@ describe('AppController', () => {
     });
 
     it('should prioritize discordIconURL over discordIcon', async () => {
-      const requestWithBothIconFields: VerifySignatureDto = {
+      const requestWithBothIconFields = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           discordIconURL: 'https://cdn.discordapp.com/primary-icon.png',
@@ -386,7 +386,7 @@ describe('AppController', () => {
 
     describe('data transformation', () => {
       it('should handle extra fields in request data gracefully', async () => {
-        const requestWithExtraFields: VerifySignatureDto = {
+        const requestWithExtraFields = <VerifySignatureDto><unknown>{
           data: {
             address: '0x1234567890123456789012345678901234567890',
             userId: 'discord-user-123',
@@ -424,7 +424,7 @@ describe('AppController', () => {
       });
 
       it('should handle numeric expiry correctly', async () => {
-        const requestWithNumericExpiry: VerifySignatureDto = {
+        const requestWithNumericExpiry = <VerifySignatureDto><unknown>{
           data: {
             address: '0x1234567890123456789012345678901234567890',
             expiry: 1640995200, // Unix timestamp

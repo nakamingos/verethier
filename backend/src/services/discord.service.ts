@@ -1,3 +1,4 @@
+import { VERIFICATION_REQUEST_UNAVAILABLE } from '@/utils/verification-request-error.util';
 import { BouncerLogService } from './bouncer-log.service';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { resolveEthscriptionSlug } from './discord-commands/utils/rule-validation.util';
@@ -475,44 +476,18 @@ export class DiscordService implements OnModuleInit {
     try {
       // Defer the reply early to prevent timeout
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      
-      const guild = interaction.guild;
-      if (!guild) throw new Error('Guild not found');
-      
-      const channel = interaction.channel;
-      if (!channel || !('id' in channel)) throw new Error('Channel not found');
-      
-      // Get all rules for this channel (simplified approach - no more message_id tracking)
-      const rules = await this.verificationSvc.getRulesForChannel(
-        guild.id,
-        channel.id
-      );
-      
-      // If no channel rules found, fall back to all server rules for backwards compatibility
-      let serverRules = [];
-      if (!rules || rules.length === 0) {
-        serverRules = await this.verificationSvc.getAllRulesForServer(guild.id);
-      }
-      
-      const allRules = rules && rules.length > 0 ? rules : serverRules;
-      
-      if (!allRules || allRules.length === 0) {
-        throw new Error('No verification rules found for this server or channel.');
-      }
-      
-      // Route to verification handling
+      // Rule lookup and member-facing refusals happen in requestVerification.
       await this.handleUnifiedVerification(interaction);
-      
     } catch (error) {
       Logger.error('Error in handleVerificationRequest:', error);
       if (interaction.deferred) {
         await interaction.editReply({
-          content: `Error: ${error.message}`
+          content: VERIFICATION_REQUEST_UNAVAILABLE
         });
       } else {
         try {
           await interaction.reply({
-            content: `Error: ${error.message}`,
+            content: VERIFICATION_REQUEST_UNAVAILABLE,
             flags: MessageFlags.Ephemeral
           });
         } catch (replyError) {

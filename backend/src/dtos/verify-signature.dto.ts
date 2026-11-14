@@ -1,50 +1,48 @@
-import { IsString, IsNotEmpty, IsObject, IsOptional, IsNumber, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
+
+/**
+ * The verification payload the verify page submits. Every field is listed:
+ * the global pipe rejects unknown properties. Identity and nonce fields are
+ * checked against the server-held nonce later; validating their shape here
+ * keeps malformed values out of logs and database filters.
+ */
+export class VerifySignatureDataDto {
+  @Matches(/^\d{17,22}$/) userId: string;
+  @Matches(/^\d{17,22}$/) discordId: string;
+  @Matches(/^[a-f0-9]{64}$/) nonce: string;
+  @IsInt() @Min(0) expiry: number;
+  @IsString() @IsNotEmpty() @MaxLength(100) address: string;
+
+  @IsOptional() @IsIn(['evm', 'bitcoin', 'solana']) walletType?: 'evm' | 'bitcoin' | 'solana';
+  @IsOptional() @IsIn([2]) proofVersion?: 2;
+  @IsOptional() @IsInt() @Min(1) chainId?: number;
+  // Checked strictly by privacyChoice() and bound into the signed proof.
+  @IsOptional() @IsObject() privacy?: import('@/portal/privacy.service').PrivacyChoice;
+
+  // Display fields echoed from the server-held nonce context. Not trusted.
+  @IsOptional() @IsString() @MaxLength(256) userTag?: string;
+  @IsOptional() @IsString() @MaxLength(2048) avatar?: string;
+  @IsOptional() @IsString() @MaxLength(256) discordName?: string;
+  @IsOptional() @IsString() @MaxLength(2048) discordIcon?: string;
+  @IsOptional() @IsString() @MaxLength(2048) discordIconURL?: string;
+  @IsOptional() @IsString() @MaxLength(2048) signingOrigin?: string;
+}
 
 /**
  * VerifySignatureDto
- * 
- * Data Transfer Object for wallet signature verification requests.
- * Validates the structure of verification payloads sent from the frontend
- * after users sign verification messages with their wallets.
- * 
- * Contains:
- * - data: Decoded JWT payload with user, server, and verification details
- * - signature: EIP-712 or Bitcoin BIP-322 signature from the user's wallet
- * 
- * The verification system automatically handles all verification rules
- * transparently without requiring different API structures.
+ *
+ * A wallet signature verification request: the verification payload and the
+ * EIP-712, BIP-322/Bitcoin signed-message, or Solana signature over it.
  */
 export class VerifySignatureDto {
-  /**
-   * The decoded verification data object.
-   * Contains user information, Discord server details, and verification metadata.
-   * The verification engine automatically processes the verification criteria.
-   */
   @IsObject()
-  data: {
-    userId?: string;
-    userTag?: string;
-    avatar?: string;
-    discordId?: string;
-    discordName?: string;
-    discordIconURL?: string;
-    nonce?: string;
-    expiry?: number;
-    address?: string;
-    walletType?: 'evm' | 'bitcoin' | 'solana';
-    // Allow additional fields for forward compatibility
-    [key: string]: any;
-  };
+  @ValidateNested()
+  @Type(() => VerifySignatureDataDto)
+  data: VerifySignatureDataDto;
 
-  /**
-   * The EIP-712 or BIP-322 signature from the user's wallet.
-   * Used to verify control of the claimed address.
-   */
   @IsString()
   @IsNotEmpty()
   @MaxLength(32770)
   signature: string;
-
-  // Allow additional top-level fields for extensibility
-  [key: string]: any;
 }

@@ -1,16 +1,9 @@
-// Polyfill for crypto.randomUUID in case it's not available
-if (!global.crypto) {
-  global.crypto = require('crypto');
-}
-if (!global.crypto.randomUUID) {
-  global.crypto.randomUUID = () => require('crypto').randomBytes(16).toString('hex');
-}
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { EnvironmentConfig } from './config/environment.config';
+import { validationPipeOptions } from './config/validation.config';
 
 // Validate environment variables at startup
 EnvironmentConfig.validate();
@@ -51,13 +44,7 @@ async function bootstrap() {
   }));
 
   // Security: Global validation pipe for input validation
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // Strip unknown properties for security
-    forbidNonWhitelisted: true, // Reject unknown properties
-    transform: true,
-    disableErrorMessages: EnvironmentConfig.NODE_ENV === 'production',
-    skipMissingProperties: false, // Enforce required properties
-  }));
+  app.useGlobalPipes(new ValidationPipe(validationPipeOptions()));
 
   app.setGlobalPrefix('api');
   

@@ -82,6 +82,7 @@ describe('DynamicRoleService', () => {
     };
 
     const mockDiscordVerificationServiceValue = {
+      isMember: jest.fn().mockResolvedValue(true),
       removeUserRole: jest.fn().mockResolvedValue(true),
       addUserRoleDynamic: jest.fn().mockResolvedValue(true),
     };

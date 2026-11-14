@@ -68,6 +68,18 @@ Notes:
 - `DATA_*` and `DB_*` can point at separate Supabase projects.
 - `DB_SUPABASE_KEY` must be the backend database's service-role key. Wallet restrictions are inaccessible to anonymous and authenticated public clients.
 - `DYNAMIC_ROLE_CRON` accepts either the named presets in [environment.config.ts](src/config/environment.config.ts) or a raw cron expression.
+- `CLIENT_IP_HEADER` names the header your hosting edge overwrites with the caller's IP; anonymous requests (wallet verification, sign-in) are rate-limited per caller using it. On Railway, set `CLIENT_IP_HEADER=x-real-ip`. Leave it unset when nothing in front of the backend overwrites a header, otherwise callers could choose their own rate-limit key. If the header is missing or isn't a single IP, the backend logs one warning and falls back to the connection address, which behind a proxy is shared by every caller. Signed-in portal users are always limited per Discord account.
+
+## Deployment: run one instance
+
+Run exactly one backend instance. Verification nonces, the Discord replies they update, per-account action locks, `/setup edit-rule` sessions and slash-command pagination are held in process memory.
+
+- A second replica would receive verification steps for links created by the other process, and they would fail. Keep the replica count at 1.
+- A restart or deploy clears that state. Verification links issued in the last `NONCE_EXPIRY` (5 minutes by default) stop working, and members see "This verification link is no longer active" and request a new one. Wallets, earned roles, jobs and settings are stored in Postgres and are unaffected.
+- If the host overlaps the old and new deployment, both processes briefly connect to Discord with the same bot token. Disable deployment overlap, or accept that links created during the overlap may need to be requested again.
+- Prefer deploying outside busy periods such as mints or announcements.
+
+Running more than one instance would first require moving nonces and pending verification state to Postgres or Redis.
 
 ## Wallet Blocks
 

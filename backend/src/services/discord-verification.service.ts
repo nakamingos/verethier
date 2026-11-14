@@ -1,3 +1,4 @@
+import { VerificationRequestError, VERIFICATION_REQUEST_UNAVAILABLE } from '@/utils/verification-request-error.util';
 import { ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
@@ -30,6 +31,8 @@ dotenv.config();
 
 const EXPIRY = EnvironmentConfig.NONCE_EXPIRY;
 const REPLACED_LINK_NOTICE_TTL_MS = 10_000;
+// Release a link's stored reply once its nonce can no longer be submitted.
+const TRACKED_REQUEST_GRACE_MS = 60_000;
 
 /** Fresh member state shared only within one reconciliation run. */
 export type RoleSyncContext = Map<string, Promise<GuildMember>> & {
@@ -217,6 +220,20 @@ export class DiscordVerificationService {
       delete this.nonceScopes[previousNonce];
       delete this.latestRequestNonces[scopeKey];
     }
+  }
+
+  /**
+   * An abandoned link would otherwise keep its Discord interaction in memory
+   * until the process restarts. A submission still in flight keeps its reply
+   * until it finishes.
+   */
+  private scheduleTrackedRequestExpiry(nonce: string, delayMs: number): void {
+    const timeout = setTimeout(() => {
+      if (!this.tempMessages[nonce]) return;
+      if (this.activeVerificationRequests.has(nonce)) this.scheduleTrackedRequestExpiry(nonce, TRACKED_REQUEST_GRACE_MS);
+      else this.clearTrackedRequest(nonce);
+    }, delayMs);
+    timeout.unref?.();
   }
 
   private clearTrackedRequest(nonce: string): void {
@@ -481,20 +498,15 @@ export class DiscordVerificationService {
       const channel = interaction.channel;
       if (!channel || !('id' in channel)) throw new Error('Channel not found');
       
-      // Get verification rules for this channel
-      let rules: any[] = [];
-      try {
-        rules = await this.dbSvc.getRulesByChannel(guild.id, channel.id);
-      } catch (err) {
-        Logger.error('Error fetching verification rules', err);
-      }
+      // A lookup failure must not be reported as "no rules"; it reaches the
+      // generic retry message below.
+      const rules = await this.dbSvc.getRulesByChannel(guild.id, channel.id);
+      if (!rules || rules.length === 0) throw new VerificationRequestError('No verification rules found for this channel.');
       
-      if (!rules || rules.length === 0) throw new Error('No verification rules found for this channel.');
-      
-      // Use the first rule found (most common case is one rule per channel)
-      const rule = rules[0];
-      const role = guild.roles.cache.get(rule.role_id);
-      if (!role) throw new Error('Role not found');
+      // A deleted role disables only its own rules. Stop early only when no
+      // rule in this channel can grant a role that still exists.
+      if (!expandRuleRoles(rules).some(rule => guild.roles.cache.has(rule.role_id)))
+        throw new VerificationRequestError('This channel\'s verification roles no longer exist. Ask a server administrator to run Check Setup.');
 
       const scopeKey = this.getScopeKey(interaction.user.id, guild.id, channel.id);
       await this.retirePreviousVerificationRequest(scopeKey);
@@ -530,7 +542,7 @@ export class DiscordVerificationService {
       );
 
       // Keep Discord's button URL short; display details live in the nonce cache.
-      const url = `${process.env.BASE_URL}/verify/${nonce}`;
+      const url = `${EnvironmentConfig.BASE_URL}/verify/${nonce}`;
 
       // Reply to the interaction
       await interaction.editReply({
@@ -555,13 +567,14 @@ export class DiscordVerificationService {
       this.tempMessages[nonce] = interaction;
       this.nonceScopes[nonce] = scopeKey;
       this.latestRequestNonces[scopeKey] = nonce;
+      this.scheduleTrackedRequestExpiry(nonce, EXPIRY + TRACKED_REQUEST_GRACE_MS);
       
     } catch (error) {
       Logger.error('Error in requestVerification:', error);
       // Since interaction is already deferred by caller, we can directly edit reply
       try {
         await interaction.editReply({
-          content: `Error: ${error.message}`
+          content: error instanceof VerificationRequestError ? `Error: ${error.message}` : VERIFICATION_REQUEST_UNAVAILABLE
         });
       } catch (replyError) {
         Logger.error('Failed to edit reply with error:', replyError);
@@ -937,29 +950,20 @@ export class DiscordVerificationService {
   }
 
   /**
-   * Check if a user is still in a Discord server
-   * Used to clean up role assignments for users who left
+   * Whether the user is still a member of the server. Returns false only when
+   * Discord confirms Unknown Member (10007); any other failure throws, so the
+   * caller retries rather than treating an outage as a departure. The fetch is
+   * shared through the role-sync context, so a following role change reuses it.
    */
-  async isUserInServer(userId: string, serverId: string): Promise<boolean> {
-    if (!this.client) {
-      Logger.error('Discord client not initialized');
-      return false;
-    }
-
+  async isMember(userId: string, serverId: string, context?: RoleSyncContext): Promise<boolean> {
+    if (!this.client) throw new Error('Discord bot not initialized');
+    const guild = await this.client.guilds.fetch(serverId);
     try {
-      const guild = await this.client.guilds.fetch(serverId);
-      if (!guild) {
-        Logger.error(`Guild ${serverId} not found`);
-        return false;
-      }
-
-      const member = await guild.members.fetch(userId);
-      return !!member;
-
+      await this.fetchRoleSyncMember(guild, userId, context);
+      return true;
     } catch (error) {
-      // User likely left the server
-      Logger.debug(`User ${userId} not found in guild ${serverId}:`, error.message);
-      return false;
+      if (error?.code === 10007) return false;
+      throw error;
     }
   }
 

@@ -156,7 +156,7 @@ describe('Security and Input Validation', () => {
 
   describe('Injection Attack Prevention', () => {
     it('should handle SQL injection attempts in address field', async () => {
-      const maliciousPayload: VerifySignatureDto = {
+      const maliciousPayload = <VerifySignatureDto><unknown>{
         data: {
           address: "'; DROP TABLE users; --",
           userId: 'normal-user-id',
@@ -182,7 +182,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle NoSQL injection attempts in userId field', async () => {
-      const maliciousPayload: VerifySignatureDto = {
+      const maliciousPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           userId: '{"$ne": null}',
@@ -207,7 +207,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle XSS attempts in userTag field', async () => {
-      const maliciousPayload: VerifySignatureDto = {
+      const maliciousPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           userTag: '<script>alert("XSS")</script>',
@@ -232,7 +232,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle command injection attempts in nonce field', async () => {
-      const maliciousPayload: VerifySignatureDto = {
+      const maliciousPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           nonce: 'valid-nonce; rm -rf /',
@@ -261,7 +261,7 @@ describe('Security and Input Validation', () => {
     it('should handle extremely long strings gracefully', async () => {
       const veryLongString = 'A'.repeat(100000); // 100KB string
       
-      const largePayload: VerifySignatureDto = {
+      const largePayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           userTag: veryLongString,
@@ -299,7 +299,7 @@ describe('Security and Input Validation', () => {
         }
       };
 
-      const nestedPayload: VerifySignatureDto = {
+      const nestedPayload = <VerifySignatureDto><unknown>{
         data: deeplyNestedData,
         signature: '0xvalidsignature',
       };
@@ -326,7 +326,7 @@ describe('Security and Input Validation', () => {
 
   describe('Invalid Data Types', () => {
     it('should handle null values in data fields', async () => {
-      const nullValuePayload: VerifySignatureDto = {
+      const nullValuePayload = <VerifySignatureDto><unknown>{
         data: {
           address: null,
           userId: null,
@@ -357,7 +357,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle undefined values in data fields', async () => {
-      const undefinedValuePayload: VerifySignatureDto = {
+      const undefinedValuePayload = <VerifySignatureDto><unknown>{
         data: {
           address: undefined,
           userId: undefined,
@@ -387,7 +387,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle boolean values in string fields', async () => {
-      const booleanValuePayload: VerifySignatureDto = {
+      const booleanValuePayload = <VerifySignatureDto><unknown>{
         data: {
           address: true as any,
           userId: false as any,
@@ -416,7 +416,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle array values in string fields', async () => {
-      const arrayValuePayload: VerifySignatureDto = {
+      const arrayValuePayload = <VerifySignatureDto><unknown>{
         data: {
           address: ['0x123', '0x456'] as any,
           userId: ['user1', 'user2'] as any,
@@ -445,7 +445,7 @@ describe('Security and Input Validation', () => {
 
   describe('Edge Cases and Boundary Conditions', () => {
     it('should handle empty data object', async () => {
-      const emptyDataPayload: VerifySignatureDto = {
+      const emptyDataPayload = <VerifySignatureDto><unknown>{
         data: {},
         signature: '0xvalidsignature',
       };
@@ -475,7 +475,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle numeric strings in string fields', async () => {
-      const numericStringPayload: VerifySignatureDto = {
+      const numericStringPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '123456789',
           userId: '987654321',
@@ -503,7 +503,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle unicode characters in string fields', async () => {
-      const unicodePayload: VerifySignatureDto = {
+      const unicodePayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           userTag: 'user🚀#1234',
@@ -530,7 +530,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle maximum safe integer for expiry', async () => {
-      const maxIntegerPayload: VerifySignatureDto = {
+      const maxIntegerPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           expiry: Number.MAX_SAFE_INTEGER,
@@ -555,7 +555,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle negative expiry values', async () => {
-      const negativeExpiryPayload: VerifySignatureDto = {
+      const negativeExpiryPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           expiry: -1234567890,
@@ -582,7 +582,7 @@ describe('Security and Input Validation', () => {
 
   describe('URL and Path Traversal Prevention', () => {
     it('should handle path traversal attempts in avatar URLs', async () => {
-      const pathTraversalPayload: VerifySignatureDto = {
+      const pathTraversalPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           avatar: '../../../etc/passwd',
@@ -607,7 +607,7 @@ describe('Security and Input Validation', () => {
     });
 
     it('should handle malformed URLs in icon fields', async () => {
-      const malformedUrlPayload: VerifySignatureDto = {
+      const malformedUrlPayload = <VerifySignatureDto><unknown>{
         data: {
           address: '0x1234567890123456789012345678901234567890',
           discordIconURL: 'javascript:alert("XSS")',
