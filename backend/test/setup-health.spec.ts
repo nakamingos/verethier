@@ -43,7 +43,7 @@ describe('Setup provider probes', () => {
     ] as any);
     expect(nfts.checkSetupHealth.mock.calls).toEqual([[1], [4663]]);
     expect(metadata.checkSetupHealth).toHaveBeenCalledTimes(1);
-    expect(report.find((p) => p.id === 'rpc:1').rule_ids).toEqual([1, 2]);
+    expect(report.find((p) => p.id === 'rpc:1')!.rule_ids).toEqual([1, 2]);
     expect(report.every((p) => p.status === 'healthy')).toBe(true);
   });
   it('reports a failing provider separately without leaking RPC URLs or credentials', async () => {
@@ -54,8 +54,8 @@ describe('Setup provider probes', () => {
       { id: 1, asset_type: 'nft', chain_id: 1 },
       { id: 2, asset_type: 'ethscription' },
     ] as any);
-    expect(report.find((p) => p.id === 'rpc:1').status).toBe('unavailable');
-    expect(report.find((p) => p.id === 'ethscriptions:data:false').status).toBe(
+    expect(report.find((p) => p.id === 'rpc:1')!.status).toBe('unavailable');
+    expect(report.find((p) => p.id === 'ethscriptions:data:false')!.status).toBe(
       'healthy',
     );
     expect(JSON.stringify(report)).not.toMatch(

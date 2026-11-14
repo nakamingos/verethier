@@ -4,7 +4,7 @@ import { walletCheckNetwork, walletMatchesRule } from '../src/utils/wallet-check
 const address='0x'+'1'.repeat(40),other='0x'+'2'.repeat(40);
 const rule:any={id:1,server_id:'server',asset_type:'nft',chain_id:1,min_items:5,contract_address:'0x'+'3'.repeat(40)};
 function fixture(rules=[rule]) {
- const rows={verifier_wallet_dormancy:[],user_wallets:[address,other].map(address=>({address,user_id:'member',wallet_type:'evm',last_verified_at:'2026-11-09T10:00:00Z',evm_chain_ids:null}))};
+ const rows={verifier_wallet_dormancy:[] as any[],user_wallets:[address,other].map(address=>({address,user_id:'member',wallet_type:'evm',last_verified_at:'2026-11-09T10:00:00Z',evm_chain_ids:null}))};
  const db:any={rpc:jest.fn(async()=>({data:true,error:null})),from:jest.fn(table=>{
   let filtered=[...rows[table]],error=null;
   const q:any={select:()=>q,eq:(key,value)=>{filtered=filtered.filter(row=>row[key]===value);return q;},in:(key,values)=>{filtered=filtered.filter(row=>values.includes(row[key]));return q;},then:(resolve)=>resolve({data:filtered,error})};return q;
@@ -29,7 +29,7 @@ describe('Wallet dormancy completeness and retained proof',()=>{
  it('does not renew a fast zero timestamp while waiting for another wallet',async()=>{
   let clock=0;const now=jest.spyOn(Date,'now').mockImplementation(()=>clock);
   try {
-   const f=fixture();let release:(count:bigint)=>void;
+   const f=fixture();let release!:(count:bigint)=>void;
    f.counter.mockImplementation(async(_rule,a)=>a===address?0n:new Promise<bigint>(resolve=>release=resolve));
    const pending=f.read(rule,[address,other],2n);await new Promise(resolve=>setImmediate(resolve));clock=61000;release(2n);await pending;
    await f.service.finish(f.context);expect(f.db.rpc).not.toHaveBeenCalled();

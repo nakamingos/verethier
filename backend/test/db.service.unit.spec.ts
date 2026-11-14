@@ -413,9 +413,9 @@ describe('DbService (Unit Tests)', () => {
       const criteria = { kind: 'numbers' as const, ranges: [[0, 99999]] as Array<[number, number]> };
       const fields = { asset_type: assetType, chain_id: assetType === 'ordinal' ? null : 1, inscription_criteria: criteria };
       mockSupabaseClient.single.mockResolvedValue({ data: { id: 1 }, error: null });
-      await service.addRoleMapping('server', 'Server', 'channel', 'verify', null, 'role', 'Holder', 'ALL', 'ALL', 1, fields);
+      await service.addRoleMapping('server', 'Server', 'channel', 'verify', null as any, 'role', 'Holder', 'ALL', 'ALL', 1, fields);
       expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ ...fields, slug: null }));
-      await service.checkForExactDuplicateRule('server', 'channel', null, 'ALL', 'ALL', 1, 'role', fields);
+      await service.checkForExactDuplicateRule('server', 'channel', null as any, 'ALL', 'ALL', 1, 'role', fields);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('asset_type', assetType);
       expect(mockSupabaseClient.is).toHaveBeenCalledWith('slug', null);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('inscription_criteria', JSON.stringify(criteria));
@@ -470,12 +470,12 @@ describe('DbService (Unit Tests)', () => {
       token_decimals: 6, token_symbol: 'TEST', min_balance: '500000', collection_name: 'Test', token_standard: null, token_ids: null };
     it('saves token fields without collection or item-count defaults', async () => {
       mockSupabaseClient.single.mockResolvedValue({ data: { id: 1, ...token } });
-      await service.addRoleMapping('guild', 'Guild', 'channel', 'Channel', null, 'role', 'Holder', 'ALL', 'ALL', null, token);
+      await service.addRoleMapping('guild', 'Guild', 'channel', 'Channel', null as any, 'role', 'Holder', 'ALL', 'ALL', null, token);
       expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.objectContaining({ slug: null, min_items: null, ...token }));
     });
     it('matches duplicates by network, contract, and exact minimum independently of NFT rules', async () => {
-      await service.checkForExactDuplicateRule('guild', 'channel', null, 'ALL', 'ALL', null, 'role', token);
-      await service.checkForDuplicateRule('guild', 'channel', null, 'ALL', 'ALL', null, 'other-role', { ...token, min_balance: '1000000' });
+      await service.checkForExactDuplicateRule('guild', 'channel', null as any, 'ALL', 'ALL', null, 'role', token);
+      await service.checkForDuplicateRule('guild', 'channel', null as any, 'ALL', 'ALL', null, 'other-role', { ...token, min_balance: '1000000' });
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('asset_type', 'erc20');
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('chain_id', 4663);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('contract_address', token.contract_address);

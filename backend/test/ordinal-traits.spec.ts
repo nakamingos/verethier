@@ -47,7 +47,7 @@ describe('Ordinals live traits and outage fallback', () => {
       if (path.startsWith('/v1/ordinals/collections/')) return { id: base.slug, name: 'Pizza Comrades' };
       if (path.includes('/inscriptions/collection/')) return collectionPage(owned);
       if (path.endsWith('/collections?limit=25&offset=0')) return { totalCollections: 1, limit: 25, offset: 0, items: [{ id: base.slug, total: owned.length }] };
-      if (path.startsWith('/v1/inscriptions/batch?')) return new URLSearchParams(path.split('?')[1]).get('inscriptionIds').split(',')
+      if (path.startsWith('/v1/inscriptions/batch?')) return new URLSearchParams(path.split('?')[1]).get('inscriptionIds')!.split(',')
         .map(id => ({ id, currentAddress: owners.get(id) || other }));
       throw new Error('Unexpected mock request: ' + path);
     });
@@ -63,7 +63,7 @@ describe('Ordinals live traits and outage fallback', () => {
     expect(await service.count({ ...base, id: 2, attribute_value: 'Red' }, [wallet, other], context)).toBe(1n);
     expect(get).toHaveBeenCalledTimes(1);
     expect(request).not.toHaveBeenCalled();
-    expect(rule.ordinal_trait_snapshot.inscription_ids).toEqual([id(1), id(2)]);
+    expect(rule.ordinal_trait_snapshot!.inscription_ids).toEqual([id(1), id(2)]);
     expect(db.cacheOrdinalTraitSnapshot).toHaveBeenCalledTimes(2);
   });
   it('counts key-only rules and keeps separate trait criteria in the count cache', async () => {
@@ -84,7 +84,7 @@ describe('Ordinals live traits and outage fallback', () => {
     get.mockResolvedValue(page([item(1, wallet, 'Red')]));
     const rule = cached();
     expect(await service.count(rule, [wallet])).toBe(0n);
-    expect(rule.ordinal_trait_snapshot.inscription_ids).toEqual([]);
+    expect(rule.ordinal_trait_snapshot!.inscription_ids).toEqual([]);
     expect(db.cacheOrdinalTraitSnapshot).toHaveBeenCalled();
   });
   it.each(['missing-traits', 'partial-pages'])('does not overwrite a snapshot after %s', async problem => {
@@ -104,10 +104,10 @@ describe('Ordinals live traits and outage fallback', () => {
     expect(service.checkDetails(base, [wallet], context)).toMatchObject({ provider: 'xverse', source: 'trait-snapshot' });
   });
   it('recognizes replacements and first-time holders using wallet intersections without renewing the snapshot', async () => {
-    const rule = cached([id(1), id(2)]); const timestamp = rule.ordinal_trait_snapshot.fetched_at;
+    const rule = cached([id(1), id(2)]); const timestamp = rule.ordinal_trait_snapshot!.fetched_at;
     owned = [id(2), id(3)]; const context = run();
     expect(await service.count(rule, [wallet], context)).toBe(1n);
-    expect(rule.ordinal_trait_snapshot.fetched_at).toBe(timestamp);
+    expect(rule.ordinal_trait_snapshot!.fetched_at).toBe(timestamp);
     expect(service.checkDetails(rule, [wallet], context)).toEqual({ provider: 'xverse', source: 'trait-snapshot', snapshot_fetched_at: timestamp });
     expect(request.mock.calls.some(([path]) => path.includes('/inscriptions/batch'))).toBe(false);
   });
@@ -125,14 +125,14 @@ describe('Ordinals live traits and outage fallback', () => {
     expect(await service.count(cached(ids.slice(10), { id: 2 }), [other], context)).toBe(20n);
     const batches = request.mock.calls.filter(([path]) => path.startsWith('/v1/inscriptions/batch'));
     expect(batches).toHaveLength(3);
-    expect(batches.map(([path]) => new URLSearchParams(path.split('?')[1]).get('inscriptionIds').split(',').length)).toEqual([25, 25, 1]);
+    expect(batches.map(([path]) => new URLSearchParams(path.split('?')[1]).get('inscriptionIds')!.split(',').length)).toEqual([25, 25, 1]);
   });
   it('shares overlapping concurrent batches without duplicate requested IDs', async () => {
     owners = new Map([id(1), id(2), id(3)].map(id => [id, wallet]));
     const context = run(true);
     await Promise.all([service.count(cached([id(1), id(2)]), [wallet], context), service.count(cached([id(2), id(3)], { id: 2 }), [wallet], context)]);
     const requested = request.mock.calls.filter(([path]) => path.startsWith('/v1/inscriptions/batch')).flatMap(([path]) =>
-      new URLSearchParams(path.split('?')[1]).get('inscriptionIds').split(','));
+      new URLSearchParams(path.split('?')[1]).get('inscriptionIds')!.split(','));
     expect(requested.sort()).toEqual([id(1), id(2), id(3)]);
   });
   it('defers when cached IDs no longer qualify but the collection still meets the threshold', async () => {
@@ -147,10 +147,10 @@ describe('Ordinals live traits and outage fallback', () => {
   it.each(['missing', 'expired', 'changed', 'future', 'malformed'])('cannot grant from a %s snapshot and retains a collection holder', async problem => {
     const rule = cached();
     if (problem === 'missing') rule.ordinal_trait_snapshot = null;
-    if (problem === 'expired') rule.ordinal_trait_snapshot.fetched_at = new Date(Date.now() - ORDINAL_SNAPSHOT_MAX_AGE_MS).toISOString();
+    if (problem === 'expired') rule.ordinal_trait_snapshot!.fetched_at = new Date(Date.now() - ORDINAL_SNAPSHOT_MAX_AGE_MS).toISOString();
     if (problem === 'changed') rule.attribute_value = 'Red';
-    if (problem === 'future') rule.ordinal_trait_snapshot.fetched_at = new Date(Date.now() + 60000).toISOString();
-    if (problem === 'malformed') rule.ordinal_trait_snapshot.inscription_ids = ['bad-id'];
+    if (problem === 'future') rule.ordinal_trait_snapshot!.fetched_at = new Date(Date.now() + 60000).toISOString();
+    if (problem === 'malformed') rule.ordinal_trait_snapshot!.inscription_ids = ['bad-id'];
     await expect(service.count(rule, [wallet])).rejects.toThrow('unavailable');
     owned = [];
     expect(await service.count(rule, [wallet], run())).toBe(0n);
@@ -158,7 +158,7 @@ describe('Ordinals live traits and outage fallback', () => {
   it.each(['omitted', 'duplicate', 'unexpected', 'unknown-owner', 'testnet-owner', 'failed'])('keeps eligibility uncertain after a %s batch response', async problem => {
     const normal = request.getMockImplementation();
     request.mockImplementation(async path => {
-      if (!String(path).startsWith('/v1/inscriptions/batch')) return normal(path);
+      if (!String(path).startsWith('/v1/inscriptions/batch')) return normal!(path);
       if (problem === 'failed') throw new Error('provider unavailable');
       if (problem === 'omitted') return [];
       if (problem === 'duplicate') return [{ id: id(1), currentAddress: wallet }, { id: id(1), currentAddress: wallet }];
@@ -185,8 +185,8 @@ describe('Ordinals live traits and outage fallback', () => {
     const rule = cached(); const engine = new VerificationEngine({} as any, new AssetOwnershipService({} as any, {} as any, service),
       { getUserAddresses: jest.fn().mockResolvedValue([wallet]) } as any, { allowedAddresses: async (_serverId, wallets) => wallets } as any);
     const result = await engine.verifyUser('user', rule.id, wallet, run(), rule);
-    expect(result.isValid).toBe(true); expect(result.ownershipDetails.provider).toBe('xverse');
-    expect(result.rule.ordinal_trait_snapshot).toBeUndefined(); expect(JSON.stringify(result)).not.toContain('inscription_ids');
+    expect(result.isValid).toBe(true); expect(result.ownershipDetails!.provider).toBe('xverse');
+    expect(result.rule!.ordinal_trait_snapshot).toBeUndefined(); expect(JSON.stringify(result)).not.toContain('inscription_ids');
   });
   it('allows another passing rule for the same role when a trait check is unavailable', async () => {
     const rule = cached(); owned = [id(9)];
@@ -206,9 +206,9 @@ describe('Ordinals live traits and outage fallback', () => {
   });
   it('warms suggestions from full scans and supports key-only, case-insensitive suggestions', async () => {
     get.mockResolvedValue(page([item(1), item(2, wallet, 'Red')]));
-    await ordnet.snapshot(base.slug, run());
-    expect(await service.suggestions(base.slug)).toEqual(['Background']);
-    expect(await service.suggestions(base.slug, 'background')).toEqual(['Blue', 'Red']);
+    await ordnet.snapshot(base.slug!, run());
+    expect(await service.suggestions(base.slug!)).toEqual(['Background']);
+    expect(await service.suggestions(base.slug!, 'background')).toEqual(['Blue', 'Red']);
     expect(get).toHaveBeenCalledTimes(1);
   });
   it('rejects duplicate snapshot IDs and fingerprints only collection/trait criteria', () => {

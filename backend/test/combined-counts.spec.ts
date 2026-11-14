@@ -35,7 +35,7 @@ describe('combined collectible role counts', () => {
     ownership.matchingAssets.mockImplementation(async r=>new Map((r.id===174?['selected']:['a','b','c','d']).map(id=>[id,1n])));
     const result=await verify();
     expect(result.validRules).toHaveLength(2);
-    expect(result.results.every(r=>r.combinedAssetCount===5 && r.rule.min_items===5)).toBe(true);
+    expect(result.results.every(r=>r.combinedAssetCount===5 && r.rule!.min_items===5)).toBe(true);
     expect(ownership.matchingAssets.mock.calls[0][0].inscription_criteria).toEqual(rules[0].inscription_criteria);
     rules=rules.slice(0,1);
     expect((await verify()).validRules).toHaveLength(0);

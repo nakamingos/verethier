@@ -84,16 +84,16 @@ describe('Bitcoin Stamps ownership',()=>{
   rows=[balance(),balance()];await expect(service.count(rule(),[wallet])).rejects.toThrow();
  });
  it.each([{}, {result:[],bouncer_height:973830,result_count:1,next_cursor:null},{result:[balance()],bouncer_height:973830,result_count:1,next_cursor:undefined}])('rejects incomplete balance envelopes',async envelope=>{
-  const previous=request.getMockImplementation();request.mockImplementation((provider,path)=>provider==='xcp'&&path!=='/'?envelope:previous(provider,path));
+  const previous=request.getMockImplementation();request.mockImplementation((provider,path)=>provider==='xcp'&&path!=='/'?envelope:previous!(provider,path));
   await expect(service.count(rule(),[wallet])).rejects.toThrow();
  });
  it('follows Counterparty cursors to the end and rejects repeated cursors',async()=>{
   const previous=request.getMockImplementation();request.mockImplementation((provider,path)=>{
    if(provider==='xcp'&&path!=='/')return path.includes('cursor=2')?{result:[balance(2,{asset:'A2'})],bouncer_height:973830,result_count:2,next_cursor:null}:{result:[balance()],bouncer_height:973830,result_count:2,next_cursor:2};
-   return previous(provider,path);
+   return previous!(provider,path);
   });
   expect(await service.count(rule(),[wallet])).toBe(3n);
-  request.mockImplementation((provider,path)=>provider==='xcp'&&path!=='/'?{result:[balance()],bouncer_height:973830,result_count:2,next_cursor:2}:previous(provider,path));
+  request.mockImplementation((provider,path)=>provider==='xcp'&&path!=='/'?{result:[balance()],bouncer_height:973830,result_count:2,next_cursor:2}:previous!(provider,path));
   await expect(service.count(rule(),[wallet])).rejects.toThrow();
  });
  it('requires complete catalog pagination and rejects duplicates',async()=>{
@@ -104,7 +104,7 @@ describe('Bitcoin Stamps ownership',()=>{
   catalog=[];expect(await service.count(rule({creator:wallet}),[wallet])).toBe(3n);
  });
  it.each([{divisible:true},{creator:other},{cpid:null}])('rejects invalid explicit scopes during setup',async fields=>{
-  const previous=request.getMockImplementation();request.mockImplementation((provider,path)=>path==='/stamps/1'?{data:{stamp:stamp(1,fields)}}:previous(provider,path));
+  const previous=request.getMockImplementation();request.mockImplementation((provider,path)=>path==='/stamps/1'?{data:{stamp:stamp(1,fields)}}:previous!(provider,path));
   await expect(service.prepareRule({creator:wallet,stamp_ids:['1']})).rejects.toThrow();
  });
  it('excludes cursed stamps in an otherwise valid mixed inventory',async()=>{
@@ -116,7 +116,7 @@ describe('Bitcoin Stamps ownership',()=>{
   const previous=request.getMockImplementation();
   request.mockImplementation((provider,path)=>provider==='xcp'&&path!=='/'?(path.includes('cursor=2')?
    {result:[balance(1,{asset:'A2'})],bouncer_height:973831,result_count:2,next_cursor:null}:
-   {result:[balance()],bouncer_height:973830,result_count:2,next_cursor:2}):previous(provider,path));
+   {result:[balance()],bouncer_height:973830,result_count:2,next_cursor:2}):previous!(provider,path));
   await expect(service.count(rule(),[wallet])).rejects.toThrow();
  });
  it('validates provider health instead of granting or revoking on unavailable responses',async()=>{
@@ -140,7 +140,7 @@ describe('Stamps rule creation and editing',()=>{
  it('allows minimum edits without exposing unsupported trait or collection editors',async()=>{
   const before=rule();expect(ruleEditFields(before).map(f=>f.key)).toEqual(['min_items']);
   expect(portalRule(before).fields.map(f=>f.key)).toEqual(['min_items']);
-  const editor=new RuleEditService(null,null,null,null);
+  const editor=new RuleEditService(null as any,null as any,null as any,null as any);
   expect((await editor.prepare(before,{min_items:'7'})).min_items).toBe(7);
   await expect(editor.prepare(before,{min_items:'7',trait_filter:'null'})).rejects.toThrow();
  });
@@ -151,7 +151,7 @@ describe('Stamps rule creation and editing',()=>{
  });
  it('routes Stamps away from EVM ownership',async()=>{
   const stamps={count:jest.fn().mockResolvedValue(3n),matchingAssets:jest.fn().mockResolvedValue(new Map([[asset,3n]]))};
-  const ownership=new AssetOwnershipService(null,null,null,null,null,null,stamps as any);
+  const ownership=new AssetOwnershipService(null as any,null as any,null as any,null as any,null as any,null as any,stamps as any);
   expect(await ownership.count(rule(),[wallet,'0x'+'1'.repeat(40)])).toBe(3n);
   expect(stamps.count.mock.calls[0][1]).toEqual([wallet]);
  });
@@ -173,7 +173,7 @@ describe('Stamps upstream transport',()=>{
  it('uses the confirmed node height from headers and does not follow redirects',async()=>{
   const fetch=jest.spyOn(global,'fetch').mockResolvedValue(new Response('{"result":[]}',{status:200,headers:headers()}));
   expect(await (new StampsOwnershipService() as any).request('xcp','/')).toMatchObject({result:[],bouncer_height:973830});
-  expect(fetch.mock.calls[0][1].redirect).toBe('error');
+  expect(fetch.mock.calls[0][1]!.redirect).toBe('error');
  });
  it('does not expose upstream errors or treat failures as empty holdings',async()=>{
   jest.spyOn(global,'fetch').mockRejectedValue(new Error('sensitive upstream details'));

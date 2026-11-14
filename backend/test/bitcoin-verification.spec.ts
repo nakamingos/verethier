@@ -135,7 +135,7 @@ describe('Bitcoin wallet proof', () => {
     await expect(signatures.getContext(undefined, undefined, consumed)).rejects.toThrow('Invalid or expired nonce');
     const expired = await nonces.createNonce('user', 'guild', 'message', 'channel');
     const context = await nonces.getActiveNonce('user', 'guild', expired);
-    jest.spyOn(Date, 'now').mockReturnValue(context.expiry * 1000);
+    jest.spyOn(Date, 'now').mockReturnValue(context.expiry! * 1000);
     await expect(signatures.getContext(undefined, undefined, expired)).rejects.toThrow('Invalid or expired nonce');
     expect(db.getRulesByChannel).not.toHaveBeenCalled();
     expect(db.getRoleMappings).not.toHaveBeenCalled();

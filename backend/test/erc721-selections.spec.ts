@@ -201,7 +201,7 @@ describe('ERC-721 ID selections', () => {
         token_ids: '1-3,2',
         min_items: 3,
       },
-      { data: null, nfts: service },
+      { data: null as any, nfts: service },
     );
     expect(prepared).toMatchObject({
       assetFields: { token_ids: ['1', '2', '3'], token_standard: 'erc721' },
@@ -217,13 +217,13 @@ describe('ERC-721 ID selections', () => {
             token_ids: '1',
             min_items: 2,
           },
-          { data: null, nfts: service },
+          { data: null as any, nfts: service },
         )
       ).minItems,
     ).toBe(2);
   });
   it('round-trips selection edits and canonical identities without changing rule identity', async () => {
-    const editor = new RuleEditService(null, service, null, null);
+    const editor = new RuleEditService(null as any, service, null as any, null as any);
     const input = { token_ids: '2,1-3', min_items: '3', trait_filter: 'null' };
     const after = await editor.prepare(base, input);
     expect(after).toMatchObject({
@@ -252,7 +252,7 @@ describe('ERC-721 ID selections', () => {
       getRoleMappings: async () => rules,
       getRuleById: async (id) => rules.find((r) => String(r.id) === String(id)),
     };
-    const ownership = new AssetOwnershipService(null, service);
+    const ownership = new AssetOwnershipService(null as any, service);
     const engine = new VerificationEngine(
       db,
       ownership,

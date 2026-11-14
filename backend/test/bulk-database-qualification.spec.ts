@@ -14,7 +14,7 @@ describe('Database-backed qualification before bulk Ordinals scans',()=>{
  it('grants through sufficient database holdings without requesting Ordinals',async()=>{
   const f=fixture();const context:NftCheckContext={checks:new Map(),ordinalMode:'scheduled',bulkGrantOnly:true};
   const result=await f.engine.evaluateRole('member','guild','holder',context);
-  expect(result.status).toBe('passed');expect(result.results.every(r=>r.rule.asset_type==='ethscription')).toBe(true);
+  expect(result.status).toBe('passed');expect(result.results.every(r=>r.rule!.asset_type==='ethscription')).toBe(true);
   expect(f.ownership.count.mock.calls.some(([r])=>r.asset_type==='ordinal')).toBe(false);
  });
  it('still combines both protocols when database holdings alone are insufficient',async()=>{

@@ -5,8 +5,8 @@ import { DbService } from '../src/services/db.service';
 
 describe('VerificationService', () => {
   let service: VerificationService;
-  let mockDbService: jest.Mocked<Partial<DbService>>;
-  let mockVerificationEngine: jest.Mocked<Partial<VerificationEngine>>;
+  let mockDbService: jest.Mocked<Pick<DbService, 'getRoleMappings' | 'getRulesByChannel'>>;
+  let mockVerificationEngine: jest.Mocked<Pick<VerificationEngine, 'verifyUserBulk'>>;
 
   beforeEach(async () => {
     mockDbService = {

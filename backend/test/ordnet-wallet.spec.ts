@@ -13,7 +13,7 @@ describe('Dedicated ord.net test wallet setup',()=>{
     expect(Object.keys(result).sort()).toEqual(['ordinalsAddress','paymentAddress']);
     expect(statSync(filename).mode & 0o777).toBe(0o600);
     const data=readFileSync(filename,'utf8');expect(data).toContain('ORDINALS_PROVIDER=ordnet');
-    const wif=data.match(/^ORDNET_ORDINALS_WIF=(.+)$/m)[1];
+    const wif=data.match(/^ORDNET_ORDINALS_WIF=(.+)$/m)![1];
     for(const address of Object.values(result) as string[])expect(Verifier.verifySignature(address,'test',Signer.sign(wif,address,'test'))).toBe(true);
   });
   it('refuses to replace an existing wallet file',()=>{

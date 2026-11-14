@@ -97,13 +97,13 @@ describe('Portal server discovery', () => {
         ...(operator ? [botOnly] : []),
       ]);
       expect(result.servers.filter((g) => g.id === installed)).toHaveLength(1);
-      expect(result.servers.find((g) => g.id === installed).installed).toBe(
+      expect(result.servers.find((g) => g.id === installed)!.installed).toBe(
         true,
       );
       for (const id of [admin, owner]) {
         const server = result.servers.find((g) => g.id === id);
-        expect(server.installed).toBe(false);
-        const invite = new URL(server.invite);
+        expect(server!.installed).toBe(false);
+        const invite = new URL(server!.invite);
         expect(invite.searchParams.get('guild_id')).toBe(id);
         expect(invite.searchParams.get('client_id')).toBe(bot);
         expect(invite.searchParams.get('scope')).toBe(
@@ -118,7 +118,7 @@ describe('Portal server discovery', () => {
   it('keeps live admin authorization for changes to operator-visible servers', async () => {
     const { service, guild } = setup(true);
     expect(
-      service.servers(session).servers.find((g) => g.id === botOnly).installed,
+      service.servers(session).servers.find((g) => g.id === botOnly)!.installed,
     ).toBe(true);
     await expect(service.access(session, botOnly)).rejects.toThrow(
       'Administrator',

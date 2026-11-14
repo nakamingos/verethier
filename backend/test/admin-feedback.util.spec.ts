@@ -56,9 +56,9 @@ describe('AdminFeedback', () => {
 
       const embedData = embed.toJSON();
       expect(embedData.fields).toHaveLength(2);
-      expect(embedData.fields[0].name).toBe('Role');
-      expect(embedData.fields[0].value).toBe('<@&123456789>');
-      expect(embedData.fields[0].inline).toBe(true);
+      expect(embedData.fields![0].name).toBe('Role');
+      expect(embedData.fields![0].value).toBe('<@&123456789>');
+      expect(embedData.fields![0].inline).toBe(true);
     });
 
     it('should maintain visual consistency across success messages', () => {
@@ -90,11 +90,11 @@ describe('AdminFeedback', () => {
       expect(embedData.title).toBe('❌ Permission Denied');
       expect(embedData.description).toBe('Unable to create role due to insufficient permissions.');
       
-      const guidanceField = embedData.fields.find(f => f.name === '💡 What you can do:');
+      const guidanceField = embedData.fields!.find(f => f.name === '💡 What you can do:');
       expect(guidanceField).toBeDefined();
-      expect(guidanceField.value).toContain('• Check your permissions');
-      expect(guidanceField.value).toContain('• Verify the role hierarchy');
-      expect(guidanceField.value).toContain('• Try again in a few minutes');
+      expect(guidanceField!.value).toContain('• Check your permissions');
+      expect(guidanceField!.value).toContain('• Verify the role hierarchy');
+      expect(guidanceField!.value).toContain('• Try again in a few minutes');
     });
 
     it('should handle error without actions', () => {
@@ -125,9 +125,9 @@ describe('AdminFeedback', () => {
 
       const embedData = embed.toJSON();
       expect(embedData.fields).toHaveLength(3); // 2 custom + 1 actions
-      expect(embedData.fields[0].name).toBe('Error Code');
-      expect(embedData.fields[1].name).toBe('Timestamp');
-      expect(embedData.fields[2].name).toBe('💡 What you can do:');
+      expect(embedData.fields![0].name).toBe('Error Code');
+      expect(embedData.fields![1].name).toBe('Timestamp');
+      expect(embedData.fields![2].name).toBe('💡 What you can do:');
     });
 
     it('should maintain consistent error styling', () => {
@@ -170,7 +170,7 @@ describe('AdminFeedback', () => {
 
       const embedData = embed.toJSON();
       expect(embedData.fields).toHaveLength(3);
-      expect(embedData.fields[2].inline).toBe(false);
+      expect(embedData.fields![2].inline).toBe(false);
     });
   });
 
@@ -189,9 +189,9 @@ describe('AdminFeedback', () => {
       expect(embedData.title).toBe('⚠️ Rate Limit Approaching');
       expect(embedData.description).toBe('You are approaching Discord API rate limits.');
       
-      const actionsField = embedData.fields.find(f => f.name === '💡 What you can do:');
+      const actionsField = embedData.fields!.find(f => f.name === '💡 What you can do:');
       expect(actionsField).toBeDefined();
-      expect(actionsField.value).toContain('Review your configuration');
+      expect(actionsField!.value).toContain('Review your configuration');
     });
 
     it('should handle warnings without action guidance', () => {
@@ -384,8 +384,8 @@ describe('AdminFeedback', () => {
 
       const embedData = embed.toJSON();
       expect(embedData.fields).toHaveLength(3); // 2 custom + 1 actions
-      expect(embedData.fields[2].name).toBe('💡 What you can do:');
-      expect(embedData.fields[2].inline).toBe(false);
+      expect(embedData.fields![2].name).toBe('💡 What you can do:');
+      expect(embedData.fields![2].inline).toBe(false);
     });
   });
 
@@ -404,7 +404,7 @@ describe('AdminFeedback', () => {
       );
 
       const embedData = embed.toJSON();
-      const guidanceField = embedData.fields[0];
+      const guidanceField = embedData.fields![0];
       
       expect(guidanceField.name).toBe('💡 What you can do:');
       actions.forEach(action => {

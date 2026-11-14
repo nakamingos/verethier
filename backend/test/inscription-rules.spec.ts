@@ -28,7 +28,7 @@ describe('Specific inscription inputs', () => {
   it('stores inclusive ranges compactly and merges duplicate, overlapping, and adjacent selections', () => {
     expect(parseInscriptionCriteria(null, '100-200,150,0-99,201,500')).toEqual({ kind: 'numbers', ranges: [[0, 201], [500, 500]] });
     expect(parseInscriptionCriteria(null, '0-99999')).toEqual({ kind: 'numbers', ranges: [[0, 99999]] });
-    expect(inscriptionCriteriaCapacity(parseInscriptionCriteria(null, '0-99999'))).toBe(100000n);
+    expect(inscriptionCriteriaCapacity(parseInscriptionCriteria(null, '0-99999')!)).toBe(100000n);
     expect(parseInscriptionCriteria(null, '-10--1,0')).toEqual({ kind: 'numbers', ranges: [[-10, 0]] });
   });
   it.each(['', '1,', '1,,2', '10-1', '1.5', '1e3', '9007199254740992', 'all', '1-2-3'])('rejects malformed number selection %s', input => {
@@ -80,9 +80,9 @@ describe('Specific Ordinals ownership', () => {
   it('allows one number to contribute toward a higher combined minimum during creation and editing', async () => {
     const criteria={kind:'numbers',ranges:[[10100838,10100838]]};
     expect(await service.prepareInscriptionRule(null,'10100838',5)).toMatchObject({inscription_criteria:criteria});
-    const prepared=await prepareRuleCriteria({asset_type:'ordinal',inscription_numbers:'10100838',min_items:5}, {data:null,nfts:null,ordinals:service});
+    const prepared=await prepareRuleCriteria({asset_type:'ordinal',inscription_numbers:'10100838',min_items:5}, {data:null as any,nfts:null as any,ordinals:service});
     expect(prepared).toMatchObject({minItems:5,assetFields:{inscription_criteria:criteria}});
-    const editor=new RuleEditService(null,null,service,null);
+    const editor=new RuleEditService(null as any,null as any,service,null as any);
     expect(await editor.prepare({...base,inscription_criteria:criteria} as any,{selection:'10100838',label:'McSkull',min_items:'5'})).toMatchObject({min_items:5,inscription_criteria:criteria});
     expect(request).not.toHaveBeenCalled();
   });
@@ -96,7 +96,7 @@ describe('Specific Ordinals ownership', () => {
     expect(request).not.toHaveBeenCalled();
   });
   it('shares fresh owner batches across overlapping rules, members and stacked wallets', async () => {
-    request.mockImplementation(async path => new URLSearchParams(path.split('?')[1]).get('inscriptionIds').split(',')
+    request.mockImplementation(async path => new URLSearchParams(path.split('?')[1]).get('inscriptionIds')!.split(',')
       .map(value => ({ id: value, currentAddress: value === id(2) ? other : wallet })));
     const context = run();
     const list = { ...base, inscription_criteria: parseInscriptionCriteria(`${id(1)},${id(2)}`) };
@@ -109,7 +109,7 @@ describe('Specific Ordinals ownership', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
   it('uses batches of 25 and does not make a separate lookup for every member', async () => {
-    request.mockImplementation(async path => new URLSearchParams(path.split('?')[1]).get('inscriptionIds').split(',').map(value => ({ id: value, currentAddress: wallet })));
+    request.mockImplementation(async path => new URLSearchParams(path.split('?')[1]).get('inscriptionIds')!.split(',').map(value => ({ id: value, currentAddress: wallet })));
     const list = { ...base, inscription_criteria: parseInscriptionCriteria(Array.from({ length: 26 }, (_, n) => id(n)).join(',')) };
     const context = run();
     expect(await service.count(list, [wallet], context)).toBe(26n);

@@ -288,8 +288,8 @@ describe('DataService', () => {
       expect(error.unknownItems).toBe(5);
       expect(error.matchingAssets.size).toBe(50);
     }
-    expect(first.in[1]).toHaveLength(50);
-    expect(second.in[1]).toHaveLength(5);
+    expect(first.in![1]).toHaveLength(50);
+    expect(second.in![1]).toHaveLength(5);
     expect(await service.checkAssetOwnershipWithCriteria('wallet','one','ALL','ALL',55,context)).toBe(55);
   });
 

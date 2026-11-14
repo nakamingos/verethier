@@ -53,7 +53,7 @@ describe('Portal server boundaries', () => {
   });
   it('shares one Discord read between overlapping access checks and reads again afterwards', async () => {
     const admin = { id: user, permissions: { has: () => true } };
-    let release: (member: any) => void;
+    let release!: (member: any) => void;
     guild.members.fetch.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
     const overlapping = [service.access(session, server), service.access(session, server)];
     release(admin);
@@ -139,7 +139,7 @@ describe('Portal server boundaries', () => {
           ]);
           expect(query.range).toHaveBeenLastCalledWith(limit, limit * 2 - 1);
           expect(query.order.mock.invocationCallOrder[1]).toBeLessThan(
-            query.range.mock.invocationCallOrder.at(-1),
+            query.range.mock.invocationCallOrder.at(-1)!,
           );
           expect(result).toEqual({
             items: [],

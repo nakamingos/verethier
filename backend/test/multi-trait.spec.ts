@@ -166,7 +166,7 @@ describe('Multi-trait rules', () => {
         trait_filter: filter(),
         min_items: 2,
       },
-      { data: null, nfts },
+      { data: null as any, nfts },
     );
     expect(prepared.assetFields.trait_filter).toEqual(filter());
     expect(nfts.validateTraits).toHaveBeenCalledWith(
@@ -189,11 +189,11 @@ describe('Multi-trait rules', () => {
         slug: 'comrades',
         trait_filter: filter('OR'),
       },
-      { data, nfts: null },
+      { data, nfts: null as any },
     );
     expect(prepared.assetFields.trait_filter).toEqual(filter('OR'));
     expect(data.getAllAttributeValues).toHaveBeenCalledWith('Hat', 'comrades');
-    const edit = new RuleEditService(data, null, null, null);
+    const edit = new RuleEditService(data, null as any, null as any, null as any);
     const changed = await edit.prepare(
       { ...base, asset_type: 'ethscription', trait_filter: filter() },
       {
@@ -205,7 +205,7 @@ describe('Multi-trait rules', () => {
         }),
       },
     );
-    expect(changed.trait_filter.conditions[1]).toEqual({
+    expect(changed.trait_filter!.conditions[1]).toEqual({
       key: 'Hat',
       value: 'Cap',
     });
@@ -220,12 +220,12 @@ describe('Multi-trait rules', () => {
             conditions: [conditions[0], { key: 'Hat', value: 'Missing' }],
           },
         },
-        { data, nfts: null },
+        { data, nfts: null as any },
       ),
     ).rejects.toThrow('does not exist');
   });
   it('refuses legacy modal fields for a multi-trait rule', async () => {
-    const edit = new RuleEditService(null, null, null, null);
+    const edit = new RuleEditService(null as any, null as any, null as any, null as any);
     await expect(
       edit.prepare(
         { ...base, trait_filter: filter() },

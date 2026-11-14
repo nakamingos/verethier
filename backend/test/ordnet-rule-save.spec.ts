@@ -76,7 +76,7 @@ describe('ord.net-first ownership and automatic rule-save policy', () => {
   });
   it('keeps combined-group ownership and deduplication entirely on ord.net', async () => {
     const a = { ...rule, min_items: 3 }, b = { ...a, id: 2, attribute_key: 'Color', attribute_value: 'Blue' };
-    const ownership = new AssetOwnershipService(undefined, undefined, service);
+    const ownership = new AssetOwnershipService(undefined as any, undefined as any, service);
     const engine = new VerificationEngine({} as any, ownership, { getUserAddresses: async () => [wallet] } as any,
       { allowedAddresses: async (_server, addresses) => addresses } as any);
     const checked = await engine.verifyUserBulk('user', [1, 2], wallet, [a, b], run(true));
@@ -88,7 +88,7 @@ describe('ord.net-first ownership and automatic rule-save policy', () => {
     const db: any = { getRoleMappings: jest.fn().mockResolvedValue([rule]),
       getEarnedRoleAssignments: jest.fn().mockResolvedValue([{ id: 'assignment', user_id: 'user', server_id: 'guild', role_id: 'holder' }]),
       saveRoleCheckDetails: jest.fn(), updateLastVerified: jest.fn(), updateRoleAssignmentStatus: jest.fn() };
-    const engine = new VerificationEngine(db, new AssetOwnershipService(undefined, undefined, service),
+    const engine = new VerificationEngine(db, new AssetOwnershipService(undefined as any, undefined as any, service),
       { getUserAddresses: async () => [wallet] } as any, { allowedAddresses: async (_server, addresses) => addresses } as any);
     const discord: any = { isMember:jest.fn().mockResolvedValue(true), removeUserRole: jest.fn(), addUserRoleDynamic: jest.fn() };
     expect(await new DynamicRoleService(db, engine, discord).reverifyRoleInServer('guild', 'holder', run(true)))

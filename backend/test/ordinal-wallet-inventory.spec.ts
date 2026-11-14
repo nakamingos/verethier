@@ -27,7 +27,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
     xverse = jest.fn().mockResolvedValue(new Map([[id(1), 113558765]]));
     fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async (url, options) => {
       if (String(url).includes('ordiscan')) return response({ data: [id(1), id(2)] });
-      const method = JSON.parse(options.body as string).method;
+      const method = JSON.parse(options!.body as string).method;
       return response({ jsonrpc: method === 'btc_getblockcount' ? '1.0' : '2.0', id: 1, result: method === 'ord_address' ? { inscriptions: [id(1)] } : 900000 });
     });
     service = new OrdinalWalletInventoryService(requests, db);
@@ -103,7 +103,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
     db.reserveOrdinalProviderRequest.mockResolvedValue(false);
     fetchMock.mockImplementation(async (url, options) => {
       if (String(url).includes('subfrost')) return response({}, 503);
-      const method = JSON.parse(options.body as string).method;
+      const method = JSON.parse(options!.body as string).method;
       return response({ jsonrpc: '2.0', id: 1, result: method === 'ord_address' ? { inscriptions: [id(1)] } : 900000 });
     });
     expect((await service.inventory(wallet, run(), false, xverse)).provider).toBe('sandshrew');
@@ -113,7 +113,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
   it.each(['behind', 'invalid height', 'invalid wallet result'])('skips an ord node with %s', async problem => {
     jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'subfrost,xverse');
     fetchMock.mockImplementation(async (url, options) => {
-      const method = JSON.parse(options.body as string).method;
+      const method = JSON.parse(options!.body as string).method;
       const result = method === 'btc_getblockcount' ? 900000 : method === 'ord_blockheight'
         ? problem === 'behind' ? 899990 : problem === 'invalid height' ? '900000' : 900000
         : { inscriptions: null };
@@ -142,8 +142,8 @@ describe('ordered Ordinals wallet ownership providers', () => {
       ? Array.from({ length: 100 }, (_, i) => ({ inscription_id: id(i), inscription_number: i, owner_address: wallet }))
       : [{ inscription_id: id(100), inscription_number: -1, owner_address: wallet }] }));
     const inventory = await service.inventory(wallet, context, false, xverse);
-    expect(inventory.numbers.size).toBe(101);
-    expect(inventory.numbers.get(id(100))).toBe(-1);
+    expect(inventory.numbers!.size).toBe(101);
+    expect(inventory.numbers!.get(id(100))).toBe(-1);
     expect(await service.inventory(wallet, context, true, xverse)).toBe(inventory);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -157,7 +157,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
       service.inventory(wallet, context, false, xverse),
     ]);
     expect(inventories.every(inventory => inventory === inventories[0])).toBe(true);
-    expect(inventories[0].numbers.get(id(1))).toBe(1);
+    expect(inventories[0].numbers!.get(id(1))).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(xverse).not.toHaveBeenCalled();
   });
@@ -168,7 +168,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
     if (provider === 'sandshrew') {
       const healthy = fetchMock.getMockImplementation();
       fetchMock.mockImplementation((url, options) => String(url).includes('subfrost')
-        ? Promise.resolve(response({}, 503)) : healthy(url, options));
+        ? Promise.resolve(response({}, 503)) : healthy!(url, options));
     }
     const context = { ...run(), ordinalNeedsNumbers: true };
     const checks = await Promise.allSettled([
@@ -222,10 +222,10 @@ describe('ordered Ordinals wallet ownership providers', () => {
       if (String(url).includes('ordiscan')) return Promise.resolve(String(url).endsWith('page=1')
         ? response({ data: Array.from({ length: 100 }, (_, i) => ({ inscription_id: id(i), inscription_number: i, owner_address: wallet })) })
         : response({}, 503));
-      if (JSON.parse(options.body as string).method === 'ord_address') {
+      if (JSON.parse(options!.body as string).method === 'ord_address') {
         return Promise.resolve(response({ jsonrpc: '2.0', id: 1, result: { inscriptions: [] } }));
       }
-      return healthy(url, options);
+      return healthy!(url, options);
     });
     const context = { ...run(), ordinalNeedsNumbers: true };
     const inventory = await service.inventory(wallet, context, false, xverse);
@@ -255,7 +255,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
       rule(2, 'trait', { attribute_key: 'Crown', attribute_value: 'Gold' }),
       rule(3, 'ids', { slug: null, inscription_criteria: { kind: 'ids', ids: [id(1)] } }),
     ];
-    const ownership = new AssetOwnershipService(undefined, undefined, ordinal);
+    const ownership = new AssetOwnershipService(undefined as any, undefined as any, ordinal);
     const engine = new VerificationEngine({} as any, ownership,
       { getUserAddresses: async () => [wallet] } as any,
       { allowedAddresses: async (_server, addresses) => addresses } as any);
@@ -279,7 +279,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
     const items = [{ inscription_id: id(1), inscription_number: 1, owner_address: wallet },
       { inscription_id: id(2), inscription_number: 2, owner_address: wallet }];
     if (problem === 'wrong owner') items[0].owner_address = other;
-    if (problem === 'missing number') delete items[0].inscription_number;
+    if (problem === 'missing number') delete (items[0] as any).inscription_number;
     if (problem === 'duplicate number') items[1].inscription_number = 1;
     if (problem === 'duplicate ID') items[1].inscription_id = id(1);
     if (problem === 'partial failure') {

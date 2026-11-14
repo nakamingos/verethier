@@ -73,7 +73,7 @@ describe('Ordinals request scheduling', () => {
   });
 
   it('lets an in-flight background request finish before starting verification and preserves its cooldown', async () => {
-    let release: () => void;
+    let release!: () => void;
     const inFlight = new Promise<void>(resolve => { release = resolve; });
     const bg = scheduler.enqueue('ordnet', background(), () => inFlight);
     await jest.advanceTimersByTimeAsync(0);

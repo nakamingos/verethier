@@ -28,10 +28,8 @@ jobs:
           cache: yarn
           cache-dependency-path: backend/yarn.lock
       - run: yarn install --frozen-lockfile
-      - name: Type check (source and tests)
+      - name: Type check (source and tests, strict null checks)
         run: yarn typecheck
-      - name: Strict null checks (files not on the to-do list)
-        run: yarn typecheck:strict
       # Uses backend/.env.test. Specs under test/live_test skip themselves
       # because no local Supabase is running here.
       - name: Unit tests

@@ -869,7 +869,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       // Get all available slugs with cache and timeout protection
       const allSlugs = await Promise.race([
         this.dataSvc.getAllSlugs(),
-        this.timeoutPromise(2000, [])
+        this.timeoutPromise<string[]>(2000, [])
       ]);
       
       // Filter slugs based on user input and exclude 'all-collections' as it's handled by leaving slug empty
@@ -923,7 +923,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       // Get all available attribute keys for the selected slug with cache and timeout protection
       const allKeys = await Promise.race([
         resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAttributeKeys(slug, this.dataSvc) : []),
-        this.timeoutPromise(2000, [])
+        this.timeoutPromise<string[]>(2000, [])
       ]);
       
       // Improved filtering: show all options if user is editing "ALL" or field is empty
@@ -972,7 +972,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       if (this.nftMetadataSvc && /^0x[0-9a-f]{40}$/.test(contract || '') && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
         suggestions = await Promise.race([
           this.nftMetadataSvc.suggestions({ chain_id: getNftNetworkId(interaction.options.getString('network') || 'ethereum'), contract_address: contract || undefined }, key ?? undefined),
-          this.timeoutPromise(1500, []),
+          this.timeoutPromise<string[]>(1500, []),
         ]);
       }
     } catch { /* Manual entry is available when metadata suggestions are unavailable. */ }
@@ -985,7 +985,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
     const typed = normalizeCollectionSlug(String(interaction.options.getFocused()));
     let slugs: string[] = [];
     try {
-      slugs = await Promise.race([this.dbSvc.getKnownOrdinalCollectionSlugs(), this.timeoutPromise(1500, [])]);
+      slugs = await Promise.race([this.dbSvc.getKnownOrdinalCollectionSlugs(), this.timeoutPromise<string[]>(1500, [])]);
     } catch { /* Manual entry remains available if database suggestions fail. */ }
     const values = slugs.filter(slug => slug.includes(typed)).slice(0, 25);
     if (typed !== 'all' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(typed) && !values.includes(typed)) {
@@ -1005,7 +1005,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
       if (this.ordinalsSvc && slug && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
         suggestions = await Promise.race([
-          this.ordinalsSvc.suggestions(slug, key ?? undefined), this.timeoutPromise(1500, []),
+          this.ordinalsSvc.suggestions(slug, key ?? undefined), this.timeoutPromise<string[]>(1500, []),
         ]);
       }
     } catch { /* Typed traits remain available when suggestions time out. */ }
@@ -1048,7 +1048,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       if (!focusedValue || focusedValue.length <= 2) {
         const values = await Promise.race([
           resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAttributeValues(slug, selectedAttributeKey, this.dataSvc) : []),
-          this.timeoutPromise(2000, [])
+          this.timeoutPromise<string[]>(2000, [])
         ]);
 
         const choices = values.slice(0, 25).map(value => ({
@@ -1065,7 +1065,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       // For longer input, get ALL values and prioritize user's input
       const allValues = await Promise.race([
         resolveEthscriptionSlug(this.dataSvc, selectedSlug).then(slug => slug ? this.cacheSvc.getAllAttributeValues(slug, selectedAttributeKey, this.dataSvc) : []),
-        this.timeoutPromise(2000, [])
+        this.timeoutPromise<string[]>(2000, [])
       ]);
 
       if (allValues.length === 0) {

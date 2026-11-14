@@ -5,8 +5,5 @@
     "test",
     "dist",
     "**/*spec.ts"
-  ],
-  "compilerOptions": {
-    "strictNullChecks": true
-  }
+  ]
 }
