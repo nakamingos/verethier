@@ -47,11 +47,12 @@ export class CacheService {
   }
 
   /**
-   * Set cached data with TTL
+   * Set cached data with a TTL in seconds. The cache store takes
+   * milliseconds, so the value is converted here, in one place.
    */
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     try {
-      await this.cacheManager.set(key, value, ttl);
+      await this.cacheManager.set(key, value, ttl === undefined ? undefined : ttl * 1000);
       // Log cache operations only in development
       if (process.env.NODE_ENV === 'development') {
         AppLogger.debug(`Cache set: ${key} (TTL: ${ttl || 'default'}s)`);
