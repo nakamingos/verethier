@@ -16,7 +16,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { ChannelType, Guild, PermissionFlagsBits } from 'discord.js';
+import { ChannelType, Guild, GuildMember, PermissionFlagsBits } from 'discord.js';
 import { DiscordService } from '@/services/discord.service';
 import { DbService } from '@/services/db.service';
 import { DiscordMessageService } from '@/services/discord-message.service';
@@ -99,6 +99,7 @@ export class PortalService {
       );
     return client;
   }
+  private readonly accessReads = new Map<string, Promise<GuildMember>>();
   async readAccess(session: PortalSession, server: string, operation = 'admin_read'): Promise<Guild> {
     if (!this.privacy?.isOperator(session.user.id)) return this.access(session,server);
     if (!snowflake(server)) throw new BadRequestException('Invalid server ID.');
@@ -114,10 +115,18 @@ export class PortalService {
       throw new NotFoundException('Bouncer is not installed in this server.');
     let member;
     try {
-      member = await guild.members.fetch({
-        user: session.user.id,
-        force: true,
-      });
+      // A page load sends several requests at once. Calls that overlap share
+      // one fresh Discord read; nothing is kept once it settles, so a later
+      // call (including deliberate re-checks) always reads again.
+      const key = `${guild.id}:${session.user.id}`;
+      let fetching = this.accessReads.get(key);
+      if (!fetching) {
+        fetching = guild.members.fetch({ user: session.user.id, force: true });
+        this.accessReads.set(key, fetching);
+        const clear = () => { if (this.accessReads.get(key) === fetching) this.accessReads.delete(key); };
+        fetching.then(clear, clear);
+      }
+      member = await fetching;
     } catch {
       throw new ForbiddenException(
         'Could not confirm your membership in this server.',

@@ -139,6 +139,40 @@ describe('Portal authentication', () => {
     expect(query.delete).toHaveBeenCalled();
     expect(res.redirect).toHaveBeenCalledWith('/admin');
   });
+  describe('session lookup', () => {
+    const request = () => ({ headers: { cookie: `__Host-bouncer_session=${'t'.repeat(43)}` } }) as any;
+    const row = { token_hash: 'hash', profile: { id: '222222222222222222' }, guilds: [] };
+    it('reads the session once per request and again for the next request', async () => {
+      query.maybeSingle.mockResolvedValue({ data: row, error: null });
+      const req = request();
+      const [guard, controller] = await Promise.all([auth.session(req, false), auth.session(req)]);
+      expect(guard).toBe(controller);
+      expect(await auth.session(req)).toBe(guard);
+      expect(query.maybeSingle).toHaveBeenCalledTimes(1);
+      await auth.session(request());
+      expect(query.maybeSingle).toHaveBeenCalledTimes(2);
+    });
+    it('reuses a missing session within a request: optional callers get null, required callers are refused', async () => {
+      query.maybeSingle.mockResolvedValue({ data: null, error: null });
+      const req = request();
+      expect(await auth.session(req, false)).toBeNull();
+      await expect(auth.session(req)).rejects.toThrow('Your sign-in expired');
+      expect(query.maybeSingle).toHaveBeenCalledTimes(1);
+    });
+    it('does not reuse a failed read', async () => {
+      query.maybeSingle.mockResolvedValueOnce({ data: null, error: { message: 'down' } })
+        .mockResolvedValue({ data: row, error: null });
+      const req = request();
+      await expect(auth.session(req, false)).rejects.toThrow('Could not check your sign-in');
+      expect(await auth.session(req)).toMatchObject({ hash: 'hash' });
+      expect(query.maybeSingle).toHaveBeenCalledTimes(2);
+    });
+    it('does not query for a missing or malformed cookie', async () => {
+      expect(await auth.session({ headers: {} } as any, false)).toBeNull();
+      await expect(auth.session({ headers: { cookie: '__Host-bouncer_session=short' } } as any)).rejects.toThrow('Please sign in');
+      expect(query.maybeSingle).not.toHaveBeenCalled();
+    });
+  });
   it('checks exact origin and CSRF even for Unicode input, without exposing a session token', async () => {
     const session = { csrf: 'a'.repeat(64) } as any;
     expect(() =>

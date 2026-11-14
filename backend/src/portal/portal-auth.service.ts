@@ -59,6 +59,8 @@ export class PortalAuthService {
     }
   }
 
+  private readonly sessionReads = new WeakMap<Request, Promise<PortalSession | null>>();
+
   get configured(): boolean {
     try {
       return !!(
@@ -244,6 +246,24 @@ export class PortalAuthService {
         throw new UnauthorizedException('Please sign in with Discord.');
       return null;
     }
+    // The rate-limit guard and the controller both need the session; read it
+    // once per request. Nothing is kept after the request ends.
+    let lookup = this.sessionReads.get(req);
+    if (!lookup) {
+      lookup = this.readSession(token);
+      this.sessionReads.set(req, lookup);
+      // A failed read is not reused, so a later call in the request retries.
+      lookup.catch(() => this.sessionReads.delete(req));
+    }
+    const session = await lookup;
+    if (!session && required)
+      throw new UnauthorizedException(
+        'Your sign-in expired. Please sign in again.',
+      );
+    return session;
+  }
+
+  private async readSession(token: string): Promise<PortalSession | null> {
     const { data, error } = await this.db
       .from('verifier_web_sessions')
       .select('token_hash,profile,guilds')
@@ -254,13 +274,7 @@ export class PortalAuthService {
       throw new ServiceUnavailableException(
         'Could not check your sign-in. Please try again.',
       );
-    if (!data) {
-      if (required)
-        throw new UnauthorizedException(
-          'Your sign-in expired. Please sign in again.',
-        );
-      return null;
-    }
+    if (!data) return null;
     return {
       user: data.profile,
       guilds: data.guilds,

@@ -51,6 +51,32 @@ describe('Portal server boundaries', () => {
     expect(query.eq).toHaveBeenCalledWith('server_id', server);
     expect(await (service as any).replay(session, server, 'request')).toHaveProperty('rechecks_queued', count);
   });
+  it('shares one Discord read between overlapping access checks and reads again afterwards', async () => {
+    const admin = { id: user, permissions: { has: () => true } };
+    let release: (member: any) => void;
+    guild.members.fetch.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const overlapping = [service.access(session, server), service.access(session, server)];
+    release(admin);
+    await Promise.all(overlapping);
+    expect(guild.members.fetch).toHaveBeenCalledTimes(1);
+    // A later check sees a permission change: nothing was kept.
+    guild.members.fetch.mockResolvedValue({ id: user, permissions: { has: () => false } });
+    await expect(service.access(session, server)).rejects.toThrow('Administrator');
+    expect(guild.members.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('does not keep a failed access read', async () => {
+    guild.members.fetch.mockRejectedValueOnce(new Error('discord down'))
+      .mockResolvedValue({ id: user, permissions: { has: () => true } });
+    await expect(service.access(session, server)).rejects.toThrow('Could not confirm your membership');
+    await expect(service.access(session, server)).resolves.toBe(guild);
+  });
+  it('does not share an access read between different users', async () => {
+    guild.members.fetch.mockImplementation(async ({ user: id }: any) => ({ id, permissions: { has: () => id === user } }));
+    const other = { ...session, user: { id: '444444444444444444' } };
+    const results = await Promise.allSettled([service.access(session, server), service.access(other, server)]);
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect(guild.members.fetch).toHaveBeenCalledTimes(2);
+  });
   it('does not trust OAuth guild snapshots for server administration', async () => {
     guild.members.fetch.mockResolvedValue({
       id: user,
