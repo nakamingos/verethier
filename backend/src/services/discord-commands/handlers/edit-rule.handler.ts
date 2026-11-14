@@ -36,7 +36,7 @@ export class EditRuleHandler {
     try {
       const id = interaction.options.getString('rule_id', true).trim();
       if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))) throw new Error('Enter one valid rule ID from /setup list-rules.');
-      const before = await this.db.getRuleForServer(id, interaction.guildId);
+      const before = await this.db.getRuleForServer(id, interaction.guildId!);
       if (!before || before.server_id !== interaction.guildId) throw new Error('This rule was not found in this server.');
       if ((ruleTraits(before)?.conditions.length || 0) > 1) throw new Error('This rule has multiple trait conditions. Edit it in the web Control Room to preserve the complete filter.');
       const modal = new ModalBuilder().setCustomId(`edit-rule-form-${interaction.id}`).setTitle(`Edit rule ${id}`);
@@ -127,17 +127,19 @@ export class EditRuleHandler {
       return;
     }
     const match = /^edit-rule-(save|cancel)-(.+)$/.exec(interaction.customId);
-    const session = await this.session(interaction, match?.[2], 'preview', 'saving'); if (!session) return;
-    if (match[1] === 'cancel') {
-      this.dropSession(match[2]);
+    const session = await this.session(interaction, match?.[2] ?? '', 'preview', 'saving'); if (!session) return;
+    // session() returns nothing for an unknown button, so match is set below.
+    if (match![1] === 'cancel') {
+      this.dropSession(match![2]);
       await interaction.update({ content: 'Rule edit canceled.', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] } }); return;
     }
-    await this.applyChange(interaction, match[2], session, 'save');
+    await this.applyChange(interaction, match![2], session, 'save');
   }
 
   private async applyChange(interaction: ButtonInteraction, key: string, session: EditSession, action: EditAction): Promise<void> {
-    const expected = action === 'save' ? session.before : session.current;
-    const target = action === 'undo' ? session.before : session.after;
+    // session() only returns a session in the stage that sets these.
+    const expected = (action === 'save' ? session.before : session.current)!;
+    const target = (action === 'undo' ? session.before : session.after)!;
     const previousStage = action === 'save' ? 'preview' : action === 'undo' ? 'saved' : 'undone';
     let invalidate = action === 'save';
     let acknowledged = false;

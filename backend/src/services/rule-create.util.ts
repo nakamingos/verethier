@@ -94,7 +94,7 @@ export async function prepareRuleCriteria(
     const criteria=solanaCriteria(input.solana_criteria);
     if (input.asset_type === 'solana_token') {
       if (criteria.kind !== 'token' || input.min_items != null || !!filter || attributeKey !== 'ALL' || attributeValue !== 'ALL') throw new Error('Solana token rules use a mint and minimum balance.');
-      const prepared=await services.solana.prepareToken(criteria.mint,input.min_balance);
+      const prepared=await services.solana.prepareToken(criteria.mint,input.min_balance ?? '');
       if (prepared.solana_criteria.kind !== 'token' || criteria.program !== prepared.solana_criteria.program) throw new Error('Solana mint program changed.');
       return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems:null,assetFields:{asset_type:'solana_token' as const,...prepared,chain_id:null}};
     }
@@ -165,7 +165,7 @@ export async function prepareRuleCriteria(
     if (!provider)
       throw new Error('Specific inscription verification is not configured.');
     assetFields = input.asset_type === 'ordinal' && input.slug?.trim()
-      ? await services.ordinals.prepareInscriptionRule(input.inscription_ids ?? null, input.inscription_numbers ?? null, minItems, input.slug)
+      ? await services.ordinals!.prepareInscriptionRule(input.inscription_ids ?? null, input.inscription_numbers ?? null, minItems, input.slug)
       : await provider.prepareInscriptionRule(input.inscription_ids ?? null, input.inscription_numbers ?? null, minItems);
     assetFields.rule_label = normalizeRuleLabel(input.label);
     return {
@@ -241,15 +241,15 @@ export async function prepareRuleCriteria(
       'Use /setup add-nft-rule for network, contract_address, token_ids, or collection_name.',
     );
   if (filter) {
-    const conditions = [];
+    const conditions: { key: string; value: string }[] = [];
     for (const condition of filter.conditions) {
       const checked = await validateEthscriptionCriteria(services.data, slug, condition.key, condition.value);
       if (!checked.isValid) throw new Error(checked.message);
-      slug = checked.criteria.slug;
-      conditions.push({ key: checked.criteria.attributeKey, value: checked.criteria.attributeValue });
+      slug = checked.criteria!.slug;
+      conditions.push({ key: checked.criteria!.attributeKey, value: checked.criteria!.attributeValue });
     }
     filter = normalizeTraitFilter({ operator: filter.operator, conditions });
-    attributeKey = filter.conditions[0].key; attributeValue = filter.conditions[0].value;
+    attributeKey = filter!.conditions[0].key; attributeValue = filter!.conditions[0].value;
   }
   const validated = await validateEthscriptionCriteria(
     services.data,

@@ -349,7 +349,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       const rules = await this.dbSvc.getRoleMappings(interaction.guildId);
       const channels = [...new Set(rules.map(rule => rule.channel_id))];
       const links = channels.map(id => `[<#${id}>](https://discord.com/channels/${interaction.guildId}/${id})`).join(' · ');
-      const origin = EnvironmentConfig.BASE_URL.replace(/\/$/, '');
+      const origin = EnvironmentConfig.requireBaseUrl();
       await interaction.editReply({ content: join
         ? channels.length ? `Open a verification channel and click **Request Verification**: ${links}` : 'This server has no verification rules yet. Ask an administrator to set up Bouncer.'
         : `**Bouncer · Wallet verification**\nConnect your wallet and sign a message to check your collections. Bouncer never needs your seed phrase, private key, a payment, or token approval.\n\n${links || 'An administrator needs to add a verification rule.'}\n\n[Wallet help](${origin}/help) · [Control room / Check setup](${origin}/admin)`,
@@ -373,7 +373,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       const lines = report.issues.map(issue => `${issue.message} ${issue.remedy}`);
       lines.push(...report.providers.map(provider => `${provider.label}: ${provider.status.replace('_', ' ')}. ${provider.detail}`));
       const summary = lines.length ? lines.join('\n\n').slice(0, 1650) : 'Configured roles, channels and messages are accessible. No rule providers need checking.';
-      await interaction.editReply({ content: `**Bouncer · Check Setup**\n${summary}\n\nFull report and reviewed repairs: ${EnvironmentConfig.BASE_URL.replace(/\/$/, '')}/admin`, allowedMentions: { parse: [] } });
+      await interaction.editReply({ content: `**Bouncer · Check Setup**\n${summary}\n\nFull report and reviewed repairs: ${EnvironmentConfig.requireBaseUrl()}/admin`, allowedMentions: { parse: [] } });
     } catch {
       await interaction.editReply('Could not complete Check Setup. Current server owner or Administrator permission is required; Discord may also be temporarily unavailable.');
     }
@@ -564,6 +564,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       new SlashCommandBuilder()
         .setName('setup')
         .setDescription('Setup the bot for the first time or manage rules')
+        .setDMPermission(false)
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // 🔒 ADMIN ONLY
         .addSubcommand(sc => sc.setName('add-stamps-rule').setDescription('Add a Bitcoin Stamps ownership rule')
           .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true))
@@ -970,7 +971,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
       if (this.nftMetadataSvc && /^0x[0-9a-f]{40}$/.test(contract || '') && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
         suggestions = await Promise.race([
-          this.nftMetadataSvc.suggestions({ chain_id: getNftNetworkId(interaction.options.getString('network') || 'ethereum'), contract_address: contract }, key),
+          this.nftMetadataSvc.suggestions({ chain_id: getNftNetworkId(interaction.options.getString('network') || 'ethereum'), contract_address: contract || undefined }, key ?? undefined),
           this.timeoutPromise(1500, []),
         ]);
       }
@@ -1004,7 +1005,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
       const key = input.name === 'attribute_value' ? interaction.options.getString('attribute_key') : undefined;
       if (this.ordinalsSvc && slug && (input.name === 'attribute_key' || (key && key !== 'ALL'))) {
         suggestions = await Promise.race([
-          this.ordinalsSvc.suggestions(slug, key), this.timeoutPromise(1500, []),
+          this.ordinalsSvc.suggestions(slug, key ?? undefined), this.timeoutPromise(1500, []),
         ]);
       }
     } catch { /* Typed traits remain available when suggestions time out. */ }
@@ -1076,7 +1077,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
 
       // Smart filtering with user input priority
       const userInput = focusedValue.toLowerCase();
-      const choices = [];
+      const choices: { name: string; value: string }[] = [];
 
       // 1. Exact match (highest priority)
       const exactMatch = allValues.find(value => 

@@ -199,18 +199,18 @@ export class RemovalUndoInteractionHandler {
    * Handles bulk undo removal for multiple rules
    */
   private async handleBulkUndoRemoval(interaction: any, removedRules: any[]): Promise<void> {
-    const restorationResults = [];
+    const restorationResults: any[] = [];
     
     for (const removedRule of removedRules) {
       try {
         // Handle role recreation if needed
-        let roleToUse = null;
+        let roleToUse: any = null;
         if (removedRule.wasNewlyCreated) {
           const existingRole = interaction.guild.roles.cache.get(removedRule.role_id);
           if (!existingRole) {
             // Recreate role
             const botMember = interaction.guild.members.me;
-            let position = undefined;
+            let position: number | undefined;
             if (botMember) {
               const botHighestPosition = botMember.roles.highest.position;
               position = Math.max(1, botHighestPosition - 1);
@@ -253,7 +253,7 @@ export class RemovalUndoInteractionHandler {
    * Handles single undo removal
    */
   private async handleSingleUndoRemoval(interaction: any, removedRule: any, chainId: string): Promise<void> {
-    let roleToUse = null;
+    let roleToUse: any = null;
     
     // If this rule had a newly created role, we need to recreate it first
     if (removedRule.wasNewlyCreated) {
@@ -264,7 +264,7 @@ export class RemovalUndoInteractionHandler {
         if (!existingRole) {
           // Role doesn't exist, recreate it
           const botMember = interaction.guild.members.me;
-          let position = undefined;
+          let position: number | undefined;
           
           if (botMember) {
             const botHighestPosition = botMember.roles.highest.position;
@@ -408,7 +408,7 @@ export class RemovalUndoInteractionHandler {
       description.trim()
     );
 
-    const components = [];
+    const components: any[] = [];
     if (successful.length > 0) {
       // Create Undo button for successful restorations using the chain ID
       const chainId = interaction.customId.replace('undo_removal_', '');

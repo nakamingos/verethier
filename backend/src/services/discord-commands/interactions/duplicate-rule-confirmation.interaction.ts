@@ -233,7 +233,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
   }
 
   createRuleInfoFields(rule: any): Array<{name: string, value: string, inline: boolean}> {
-    const fields = [];
+    const fields: { name: string; value: any; inline: boolean }[] = [];
     
     // Collection
     if (['erc20','solana_token'].includes(rule.asset_type)) {

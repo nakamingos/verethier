@@ -73,7 +73,7 @@ export class DiscordCommandsService {
     private readonly auditLogHandler: AuditLogHandler,
     private readonly walletBlockHandler: WalletBlockHandler,
     private readonly editRuleHandler: EditRuleHandler,
-    private readonly refreshCollectionHandler?: RefreshCollectionHandler
+    private readonly refreshCollectionHandler: RefreshCollectionHandler
   ) {}
 
   async handleEditRule(interaction: ChatInputCommandInteraction): Promise<void> { return this.editRuleHandler.handle(interaction); }
@@ -109,7 +109,7 @@ export class DiscordCommandsService {
     }
   ): Promise<void> {
     // Get the existing role name for display
-    const existingRole = await this.discordSvc.getRole(interaction.guild.id, existingRule.role_id);
+    const existingRole = await this.discordSvc.getRole(interaction.guild!.id, existingRule.role_id);
     
     // Create rule objects for consistent formatting
     const existingRuleFormatted = {
@@ -226,13 +226,13 @@ export class DiscordCommandsService {
     const { channel, role, slug, attributeKey, attributeValue, minItems, wasNewlyCreated = false } = ruleData;
 
     // Check for existing verification setup
-    const existingRules = await this.dbSvc.getRulesByChannel(interaction.guild.id, channel.id);
+    const existingRules = await this.dbSvc.getRulesByChannel(interaction.guild!.id, channel.id);
     
     let newRule;
     try {
       newRule = await this.dbSvc.addRoleMapping(
-        interaction.guild.id,
-        interaction.guild.name,
+        interaction.guild!.id,
+        interaction.guild!.name,
         channel.id,
         channel.name,
         slug,
@@ -289,7 +289,7 @@ export class DiscordCommandsService {
       // Store confirmation data for Undo functionality
       const confirmationInfo = {
         ruleId: newRule.id,
-        serverId: interaction.guild.id,
+        serverId: interaction.guild!.id,
         channel,
         role,
         slug,
@@ -378,7 +378,7 @@ export class DiscordCommandsService {
       // Store confirmation data for Undo functionality
       const confirmationInfo = {
         ruleId: newRule.id,
-        serverId: interaction.guild.id,
+        serverId: interaction.guild!.id,
         channel,
         role,
         slug,
@@ -480,7 +480,7 @@ export class DiscordCommandsService {
   ): Promise<boolean> {
     // Check for exact duplicate rules first (same role + same criteria)
     const exactDuplicate = await this.dbSvc.checkForExactDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id,
       slug,
       attributeKey,
@@ -511,7 +511,7 @@ export class DiscordCommandsService {
 
     // Check for duplicate rules with different roles
     const existingRule = await this.dbSvc.checkForDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id,
       slug,
       attributeKey,
@@ -540,7 +540,7 @@ export class DiscordCommandsService {
 
     // Check for duplicate roles (same role with different criteria)
     const existingRoleRule = await this.dbSvc.checkForDuplicateRule(
-      interaction.guild.id,
+      interaction.guild!.id,
       channel.id,
       slug,
       attributeKey,
@@ -579,7 +579,7 @@ export class DiscordCommandsService {
     const cleanRoleName = normalizeRoleName(roleName);
     
     // Try to find existing role (including ones we can't manage)
-    let role = interaction.guild.roles.cache.find(r => 
+    let role = interaction.guild!.roles.cache.find(r => 
       r.name.toLowerCase() === cleanRoleName.toLowerCase()
     );
 
@@ -605,7 +605,7 @@ export class DiscordCommandsService {
 
     // If role doesn't exist, create it
     // Double-check that no role with this name exists anywhere in the server
-    const existingRoleWithName = interaction.guild.roles.cache.find(r => 
+    const existingRoleWithName = interaction.guild!.roles.cache.find(r => 
       r.name.toLowerCase() === cleanRoleName.toLowerCase()
     );
     
@@ -622,8 +622,8 @@ export class DiscordCommandsService {
 
     try {
       // Get bot member to determine role position
-      const botMember = interaction.guild.members.me;
-      let position = undefined;
+      const botMember = interaction.guild!.members.me;
+      let position: number | undefined;
       
       if (botMember) {
         // Create role below bot's highest role
@@ -631,7 +631,7 @@ export class DiscordCommandsService {
         position = Math.max(1, botHighestPosition - 1);
       }
 
-      role = await interaction.guild.roles.create({
+      role = await interaction.guild!.roles.create({
         name: cleanRoleName,
         color: 'Blue', // Default color
         position: position,
@@ -746,7 +746,7 @@ export class DiscordCommandsService {
       description.trim()
     );
 
-    const components = [];
+    const components: any[] = [];
     if (successful.length > 0) {
       // Create Undo button for successful removals
       const undoButton = this.duplicateRuleConfirmationHandler.createUndoRemovalButton(interaction.id, 'removal');
@@ -827,7 +827,7 @@ export class DiscordCommandsService {
       description.trim()
     );
 
-    const components = [];
+    const components: any[] = [];
     if (successful.length > 0) {
       // Create Undo button for successful restorations (to remove them again)
       const undoButton = new ActionRowBuilder<ButtonBuilder>()
@@ -902,8 +902,8 @@ export class DiscordCommandsService {
     try {
       // Create the rule in the database
       const createdRule = await this.dbSvc.addRoleMapping(
-        interaction.guild.id,
-        interaction.guild.name,
+        interaction.guild!.id,
+        interaction.guild!.name,
         cancelledRule.channel.id,
         cancelledRule.channel.name,
         cancelledRule.slug,
@@ -917,7 +917,7 @@ export class DiscordCommandsService {
       // Store the created rule for potential undo
       this.ruleConfirmationHandler.storeConfirmationData(interaction.id, {
         ruleId: createdRule.id,
-        serverId: interaction.guild.id
+        serverId: interaction.guild!.id
       });
       
       // Create detailed rule info fields for the created rule
@@ -1127,7 +1127,7 @@ export class DiscordCommandsService {
       
       // If no other rules use this role, delete it
       if (rulesUsingRole.length === 0) {
-        const role = interaction.guild.roles.cache.get(roleId);
+        const role = interaction.guild!.roles.cache.get(roleId);
         if (role && role.editable) {
           await role.delete('Cleaning up unused role after rule undo');
           Logger.log(`Cleaned up newly created role: ${role.name} (${roleId})`);
