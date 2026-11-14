@@ -12,6 +12,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --silent",
     "test:watch": "jest --silent --watch",
     "test:coverage": "jest --silent --coverage",
