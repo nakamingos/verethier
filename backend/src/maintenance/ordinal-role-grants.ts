@@ -46,7 +46,8 @@ export async function runOrdinalRoleGrants(
       if (!member) { summary.absentMembers++; return; }
       summary.members++;
       deps.record({ event: 'member_before', userId: saved.userId, roles: [...member.roles] });
-      const pending = groups.map(group => group.filter(rule => !member.roles.has(rule.role_id))).filter(group => group.length);
+      const present = member;
+      const pending = groups.map(group => group.filter(rule => !present.roles.has(rule.role_id))).filter(group => group.length);
       if (!pending.length) { summary.alreadyCovered++; return; }
       // Live ownership is shared within this member's checks, never across members.
       const context: NftCheckContext = { checks: new Map(), ordinalWork: { priority: 'background' } };
@@ -95,7 +96,7 @@ export async function runOrdinalRoleGrants(
       summary.granted++;
       member.roles.add(roleId);
       deps.record({ event: 'granted', userId: saved.userId, roleId });
-      try { await deps.track(saved.userId, member.name, check.rule, roleChecks); }
+      try { await deps.track(saved.userId, member.name, check.rule!, roleChecks); }
       catch {
         // Never remove a role to compensate for a database failure. Stop so the
         // journal can be used to repair tracking before any further grants.

@@ -249,7 +249,7 @@ export class CacheService {
       'Body', 'Skin', 'Hair', 'Accessories', 'Earring', 'Face'
     ];
 
-    const valuePromises = [];
+    const valuePromises: Promise<unknown>[] = [];
     let totalValueCaches = 0;
 
     for (const slug of allSlugs.slice(0, 50)) { // Limit to first 50 collections for values
@@ -385,7 +385,7 @@ export class CacheService {
     const resultMap = new Map<string, T | undefined>();
     
     results.forEach(({ key, value }) => {
-      resultMap.set(key, value);
+      resultMap.set(key, value ?? undefined);
     });
 
     return resultMap;

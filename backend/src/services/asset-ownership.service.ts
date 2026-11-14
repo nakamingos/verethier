@@ -49,7 +49,7 @@ export class AssetOwnershipService {
     if (rule.asset_type === 'nft') return this.nftSvc.matchingAssets(rule, evm, context);
     const criteria = inscriptionCriteria(rule);
     if (criteria && !this.ethscriptionsSvc) throw new Error('Ethscriptions verification is not configured.');
-    const ids = criteria ? await this.ethscriptionsSvc.matchingIds(evm, criteria, context)
+    const ids = criteria ? await this.ethscriptionsSvc!.matchingIds(evm, criteria, context)
       : rule.trait_filter !== undefined
         ? await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', 'ALL', 'ALL', 1, context, rule.trait_filter)
         : await this.dataSvc.matchingAssetIdsWithCriteria(evm, rule.slug || 'ALL', rule.attribute_key || 'ALL', rule.attribute_value || 'ALL', 1, context);

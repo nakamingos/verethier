@@ -85,6 +85,12 @@ export class EnvironmentConfig {
   // Runtime flags
   public static readonly IS_TEST = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
   
+  /** The frontend origin that wallet proofs are bound to. */
+  public static requireBaseUrl(): string {
+    if (!this.BASE_URL) throw new Error('BASE_URL is not configured, so wallet proofs cannot be checked.');
+    return this.BASE_URL;
+  }
+
   /**
    * Validate required environment variables
    * Call this during application startup

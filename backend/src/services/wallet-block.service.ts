@@ -45,7 +45,7 @@ export class WalletBlockService {
     const { data, error, count } = await this.supabase.from('verifier_wallet_blocks').select('*', { count: 'exact' })
       .eq('server_id', serverId).order('blocked_at', { ascending: false }).order('address')
       .range(page * pageSize, (page + 1) * pageSize - 1);
-    if (error || !Array.isArray(data) || !Number.isSafeInteger(count) || count < 0) {
+    if (error || !Array.isArray(data) || typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
       throw new Error('Could not list blocked wallets. Please try again.');
     }
     return { rows: data, total: count };

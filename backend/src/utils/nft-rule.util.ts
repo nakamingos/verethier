@@ -46,7 +46,7 @@ export function nftRuleScope(rule: Partial<NftRuleFields>): string {
   }
   const trait = nftTrait(rule);
   const attribute = trait.enabled ? ` · ${traitFilterLabel(rule)}` : '';
-  return `${nftRuleLabel(rule)} · ${nftNetworkLabel(rule.chain_id)} · ${rule.token_standard === 'erc1155' ? 'ERC-1155' : 'ERC-721'}${scope}${attribute}`;
+  return `${nftRuleLabel(rule)} · ${nftNetworkLabel(rule.chain_id ?? undefined)} · ${rule.token_standard === 'erc1155' ? 'ERC-1155' : 'ERC-721'}${scope}${attribute}`;
 }
 
 export function nftRuleCriteria(rule: Partial<NftRuleFields> & { min_items?: number | null }): string {

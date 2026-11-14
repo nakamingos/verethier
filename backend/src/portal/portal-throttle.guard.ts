@@ -32,7 +32,8 @@ export function clientAddress(
       );
     }
   }
-  return req.ip;
+  // Without a usable address every caller would share one bucket keyed 'undefined'.
+  return req.ip ?? 'unknown';
 }
 
 @Injectable()

@@ -37,7 +37,7 @@ export class OrdinalWalletInventoryService {
       // rule, and parallel ID rules/recommendations must share the same rescue.
       context.ordinalWalletInventories.set(key, result);
     }
-    return context.ordinalWalletInventories.get(key);
+    return context.ordinalWalletInventories.get(key)!;
   }
 
   private providers(): Provider[] {

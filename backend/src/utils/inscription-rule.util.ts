@@ -18,7 +18,8 @@ export function normalizeRuleLabel(value?: string | null): string | null {
 export function parseInscriptionCriteria(ids?: string | null, numbers?: string | null, assetType: 'ordinal' | 'ethscription' = 'ordinal'): InscriptionCriteria | null {
   if (ids == null && numbers == null) return null;
   if (ids != null && numbers != null) throw new RuleInputError('Use inscription_ids or inscription_numbers, not both.');
-  const parts = (ids ?? numbers).split(',').map(part => part.trim());
+  // One of the two is set: both missing returned above.
+  const parts = (ids ?? numbers)!.split(',').map(part => part.trim());
   if (parts.length > MAX_SELECTIONS || parts.some(part => !part)) throw new RuleInputError('Enter 1–1,000 comma-separated inscription IDs or numbers.');
   if (ids != null) {
     const normalized = [...new Set(parts.map(id => id.toLowerCase()))].sort();

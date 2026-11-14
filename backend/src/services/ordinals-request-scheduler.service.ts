@@ -59,7 +59,7 @@ export class OrdinalsRequestScheduler {
     if (!this.queues.has(provider)) this.queues.set(provider, {
       requests: [], running: false, availableAt: 0, lastBackgroundAllowance: -Infinity,
     });
-    const queue = this.queues.get(provider);
+    const queue = this.queues.get(provider)!;
     const now = Date.now();
     const result = new Promise<T>((resolve, reject) => queue.requests.push({
       work, queuedAt: now, accountedAt: now, eligibleWait: 0,

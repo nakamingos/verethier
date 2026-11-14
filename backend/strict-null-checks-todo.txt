@@ -2,29 +2,24 @@
 # Every other file under src/ must stay clean; see scripts/check-strict-null.cjs.
 # Remove a file from this list once it is fixed. Do not add new files.
 src/app.controller.ts
-src/maintenance/ordinal-role-grants.ts
 src/portal/bulk-role.controller.ts
 src/portal/bulk-role.service.ts
 src/portal/member.controller.ts
 src/portal/member.service.ts
 src/portal/portal-auth.service.ts
 src/portal/portal-jobs.service.ts
-src/portal/portal-throttle.guard.ts
 src/portal/portal.controller.ts
 src/portal/portal.service.ts
 src/portal/privacy.controller.ts
 src/portal/privacy.service.ts
 src/portal/wallet-export.service.ts
-src/services/asset-ownership.service.ts
 src/services/bitcoin-signature.service.ts
-src/services/cache.service.ts
 src/services/data.service.ts
 src/services/db.service.ts
 src/services/discord-commands.service.ts
 src/services/discord-commands/handlers/add-rule.handler.ts
 src/services/discord-commands/handlers/edit-rule.handler.ts
 src/services/discord-commands/handlers/list-rules.handler.ts
-src/services/discord-commands/handlers/refresh-collection.handler.ts
 src/services/discord-commands/handlers/remove-rule.handler.ts
 src/services/discord-commands/handlers/wallet-block.handler.ts
 src/services/discord-commands/interactions/duplicate-rule-confirmation.interaction.ts
@@ -41,9 +36,7 @@ src/services/nft-collection.service.ts
 src/services/nft-metadata.service.ts
 src/services/nft-ownership.service.ts
 src/services/ordinal-collection-cache.service.ts
-src/services/ordinal-wallet-inventory.service.ts
 src/services/ordinals-ownership.service.ts
-src/services/ordinals-request-scheduler.service.ts
 src/services/ordnet-api.service.ts
 src/services/ordnet-ownership.service.ts
 src/services/rule-create.util.ts
@@ -51,17 +44,11 @@ src/services/rule-edit.service.ts
 src/services/server-setup.service.ts
 src/services/setup-health.service.ts
 src/services/solana-ownership.service.ts
-src/services/solana-signature.service.ts
 src/services/stamps-ownership.service.ts
-src/services/utils/admin-feedback.util.ts
 src/services/verification-engine.service.ts
 src/services/verify.service.ts
-src/services/wallet-block.service.ts
 src/services/wallet-check.service.ts
-src/services/wallet.service.ts
 src/utils/erc20-rule.util.ts
-src/utils/inscription-rule.util.ts
-src/utils/nft-rule.util.ts
 src/utils/ordinal-rule.util.ts
 src/utils/rule-consolidation.util.ts
 src/utils/rule-edit.util.ts
