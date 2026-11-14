@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { CacheService } from '@/services/cache.service';
+import { boundedCacheOptions } from '../src/utils/bounded-cache.util';
 
 /**
  * CacheService Unit Tests
@@ -384,8 +385,8 @@ describe('CacheService', () => {
     });
   });
   it('keeps an entry for seconds, not milliseconds, in a real cache store', async () => {
-    const { caching } = require('cache-manager');
-    const real = new CacheService(await caching('memory', { max: 10 }));
+    const { createCache } = require('cache-manager');
+    const real = new CacheService(createCache(boundedCacheOptions(10)));
     await real.set('key', 'value', 2);
     // With the lifetime passed through as 2 ms this entry would already be gone.
     await new Promise(resolve => setTimeout(resolve, 150));
