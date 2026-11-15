@@ -28,6 +28,8 @@ interface State {
   walletConnecting: boolean;
   walletConnected: boolean;
   connectedAddress: string | null;
+  chainId: number | null;
+  networkSwitching: boolean;
   messageSigning: boolean;
   verificationSubmitting: boolean;
   messageSigned: boolean;
@@ -70,6 +72,8 @@ export class VerifyComponent {
     walletConnecting: false,
     walletConnected: false,
     connectedAddress: null,
+    chainId: null,
+    networkSwitching: false,
     messageSigning: false,
     verificationSubmitting: false,
     messageSigned: false,
@@ -131,6 +135,7 @@ export class VerifyComponent {
           walletConnecting: this.disconnecting || account.isConnecting || account.isReconnecting,
           walletConnected: account.isConnected && !account.isReconnecting,
           connectedAddress: account.isConnected ? account.address || null : null,
+          chainId: account.isConnected ? account.chainId ?? null : null,
         });
       }),
       takeUntilDestroyed(),
@@ -459,6 +464,22 @@ export class VerifyComponent {
       connectedAddress: account?.isConnected ? account.address || null : null,
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
+  }
+
+  get evmNetworks() { return this.walletSvc.evmNetworks; }
+
+  async chooseNetwork(chainId: number): Promise<void> {
+    const state = this.state$.value;
+    if (state.walletType !== 'evm' || !state.walletConnected || state.walletConnecting || state.networkSwitching
+      || state.messageSigning || state.verificationSubmitting || state.messageVerified || state.chainId === chainId) return;
+    this.setState({ networkSwitching: true, errorMessage: null });
+    try {
+      this.setState({ chainId: await this.walletSvc.switchNetwork(chainId) });
+    } catch (error) {
+      this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not switch networks.' }, 'connection');
+    } finally {
+      this.setState({ networkSwitching: false });
+    }
   }
 
   async disconnect(): Promise<void> {

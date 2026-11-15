@@ -73,7 +73,7 @@
   // The active step sizes this panel, including privacy choices and errors.
   height: auto;
 
-  .bitcoin-wallet-choice {
+  .bitcoin-wallet-choice, .network-choice {
     display: flex;
     flex-wrap: wrap;
     gap: .75rem;
@@ -85,6 +85,8 @@
       &[aria-pressed='true'] { opacity: 1; }
     }
   }
+
+  .network-choice { margin-top: 1rem; }
 
   .step-2 .actions {
     display: flex;

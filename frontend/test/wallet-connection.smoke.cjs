@@ -23,7 +23,7 @@ for (const dependency of ['@wagmi/core', '@wagmi/connectors']) {
   assert.equal(require.resolve(dependency, { paths: [adapterDirectory] }), require.resolve(dependency), `${dependency} must resolve consistently inside AppKit`);
 }
 
-async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false, privacy = false, transferred = false } = {}) {
+async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { chainId = 1, smart = false, counterfactual = false, baseAccount = false, privacy = false, transferred = false, switchable = false } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 393, height: 851 } : { width: 1000, height: 850 },
     ...(mobile ? { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36' } : {}),
@@ -45,7 +45,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
       const signature = await account.signTypedData(data);
       return counterfactual ? serializeErc6492Signature({address:'0x'+'cd'.repeat(20),data:'0x12345678',signature}) : signature;
     });
-    await page.addInitScript(({ address, chainId, baseAccount }) => {
+    await page.addInitScript(({ address, chainId, baseAccount, switchable }) => {
       const listeners = new Map();
       let authorized = localStorage.getItem('test-wallet-authorized') === 'true';
       const provider = {
@@ -68,6 +68,14 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
             authorized = true; localStorage.setItem('test-wallet-authorized','true');
             return {accounts:[{address}],chainIds:['0x'+chainId.toString(16)]};
           }
+          // Most fixtures keep the original wallet that refuses network changes.
+          if (method === 'wallet_switchEthereumChain' && switchable) {
+            const next = Number(params[0].chainId);
+            if (![1, 8453, 4663].includes(next)) throw Object.assign(new Error('Unrecognized chain'), { code: 4902 });
+            chainId = next;
+            (listeners.get('chainChanged') || []).forEach(fn => fn('0x' + next.toString(16)));
+            return null;
+          }
           if (method === 'wallet_getCapabilities') return {};
           if (method === 'eth_signTypedData_v4') return window.__testSign(JSON.parse(params[1]));
           if (method === 'wallet_revokePermissions') {
@@ -84,7 +92,7 @@ async function setup(browser, mobile, injected, entry = '/verify/' + nonce, { ch
         info: { uuid: 'b121fd92-aad7-42d3-afbe-88e14ca6b211', name: 'Test Wallet', rdns: 'test.bouncer.wallet', icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' }, provider,
       } }));
       if (!baseAccount) { addEventListener('eip6963:requestProvider', announce); announce(); }
-    }, { address: smart ? '0x' + 'ab'.repeat(20) : account.address, chainId, baseAccount });
+    }, { address: smart ? '0x' + 'ab'.repeat(20) : account.address, chainId, baseAccount, switchable });
   }
   await page.routeWebSocket('**', socket => {
     socket.onMessage(raw => {
@@ -292,6 +300,27 @@ async function restorePreviousWalletConnectConnection(page) {
       assert.equal(test.signatures,2,'An unreadable response must not trigger another signature automatically');
       await page.screenshot({path:path.join(artifacts,`privacy-invalid-response-${width}.png`),fullPage:true});
       console.log(JSON.stringify({scenario:`invalid-verification-response-${width}`,result:'passed'}));
+      await test.context.close();
+    }
+    for (const mobile of [false,true]) {
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} choose the proof network on the page`;
+      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:1,smart:true,switchable:true});
+      const {page} = test;
+      await page.locator('.step-1 .actions button').click();
+      await page.getByText('Test Wallet',{exact:true}).last().click();
+      const networks = page.getByRole('group',{name:'Network to verify on'});
+      await networks.waitFor();
+      assert.equal(await networks.getByRole('button',{name:'Ethereum',exact:true}).getAttribute('aria-pressed'),'true');
+      await networks.getByRole('button',{name:'Base',exact:true}).click();
+      await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
+      assert.ok((await page.evaluate(() => window.__walletCalls)).includes('wallet_switchEthereumChain'));
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.locator('.step-3.active').waitFor();
+      assert.equal(test.proof.data.chainId,8453);
+      assert.equal(Number(test.typedData.domain.chainId),8453);
+      assert.deepEqual(test.errors,[]);
+      await page.screenshot({path:path.join(artifacts,`network-choice-${mobile ? 'mobile' : 'desktop'}.png`),fullPage:true});
+      console.log(JSON.stringify({scenario:currentScenario,result:'passed; proof signed on the network chosen on the page'}));
       await test.context.close();
     }
     for (const mobile of [false,true]) {
