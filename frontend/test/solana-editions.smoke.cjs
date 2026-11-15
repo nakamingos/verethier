@@ -133,7 +133,8 @@ async function choose(page, name, label) {
           .count(),
         0,
       );
-      await choose(page, "Discord role", "Holder");
+      await choose(page, "Discord roles", "Holder");
+      await page.getByRole("combobox", { name: "Discord roles", exact: true }).press("Escape");
       await page.locator('[name="solanaAddresses"]').fill(address);
       await page
         .getByRole("button", { name: "+ Add rule", exact: true })
