@@ -324,6 +324,28 @@ async function restorePreviousWalletConnectConnection(page) {
       await test.context.close();
     }
     for (const mobile of [false,true]) {
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} Base Account starts on Base`;
+      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:1,smart:true,counterfactual:true,baseAccount:true,switchable:true});
+      const {page} = test;
+      await page.locator('.step-1 .actions button').click();
+      await page.getByText('Base Account',{exact:true}).last().click();
+      const networks = page.getByRole('group',{name:'Network to verify on'});
+      await networks.waitFor();
+      await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
+      await page.getByText('Base Account proofs count for Base rules.',{exact:false}).waitFor();
+      await networks.getByRole('button',{name:'Ethereum',exact:true}).click();
+      await page.getByText('Base Account may ask for a one-time paid setup on this network.',{exact:false}).waitFor();
+      await networks.getByRole('button',{name:'Base',exact:true}).click();
+      await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
+      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
+      await page.locator('.step-3.active').waitFor();
+      assert.equal(test.proof.data.chainId,8453);
+      assert.deepEqual(test.errors,[]);
+      await page.screenshot({path:path.join(artifacts,`base-account-default-${mobile ? 'mobile' : 'desktop'}.png`),fullPage:true});
+      console.log(JSON.stringify({scenario:currentScenario,result:'passed; Base Account moved to Base after connecting, notes follow the chosen network'}));
+      await test.context.close();
+    }
+    for (const mobile of [false,true]) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} Base smart-wallet proof`;
       const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,smart:true});
       const {page} = test;

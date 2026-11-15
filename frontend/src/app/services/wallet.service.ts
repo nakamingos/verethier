@@ -181,6 +181,7 @@ export class WalletService implements OnDestroy {
         const account = getAccount(this.config);
         if ((account.isConnected && !account.isReconnecting) || !this.modal.getState().open) finish();
       });
+      await this.preferBaseForBaseAccount();
     } catch (error) {
       throw error instanceof WalletConnectionError ? error : new Error(connectionErrorMessage(error));
     }
@@ -262,6 +263,27 @@ export class WalletService implements OnDestroy {
       connections: new Map(state.connections).set(uid!, { ...connection, chainId }),
     }));
     return chainId;
+  }
+
+  /** True when the connected wallet is a Base Account (Coinbase smart wallet). */
+  isBaseAccount(account: GetAccountReturnType = getAccount(this.config)): boolean {
+    return account.isConnected && account.connector?.id === 'baseAccount';
+  }
+
+  /**
+   * A Base Account is set up on Base for free; elsewhere Coinbase may charge
+   * for a one-time setup. AppKit can move a new connection to its default
+   * network (Ethereum), so move a Base Account back. A failure is not an
+   * error: the page's network chooser still works.
+   */
+  private async preferBaseForBaseAccount(): Promise<void> {
+    const account = getAccount(this.config);
+    if (!this.isBaseAccount(account)) return;
+    try {
+      if (await account.connector!.getChainId() !== base.id) await switchChain(this.config, { chainId: base.id });
+    } catch {
+      // Leave the wallet where it is.
+    }
   }
 
   /** The networks a proof can be signed on, in display order. */
