@@ -10,6 +10,7 @@ import {
   GetAccountReturnType,
   getAccount,
   signTypedData,
+  switchChain,
   watchAccount,
 } from '@wagmi/core';
 
@@ -261,6 +262,31 @@ export class WalletService implements OnDestroy {
       connections: new Map(state.connections).set(uid!, { ...connection, chainId }),
     }));
     return chainId;
+  }
+
+  /** The networks a proof can be signed on, in display order. */
+  readonly evmNetworks: ReadonlyArray<{ id: number; name: string }> = networks.map(network => ({ id: network.id, name: network.name }));
+
+  /**
+   * Ask the connected wallet to change network. Some wallets, such as Base
+   * Account, have no network control of their own, so the page offers one.
+   */
+  async switchNetwork(chainId: number): Promise<number> {
+    await this.modal.ready();
+    const account = getAccount(this.config);
+    if (!account.isConnected || !account.connector) throw new Error('Wallet not connected');
+    if (!networks.some(network => network.id === chainId)) throw new Error('That network is not supported.');
+    try {
+      await switchChain(this.config, { chainId: chainId as (typeof networks)[number]['id'] });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : '';
+      if (/user rejected|user denied|user disapproved/i.test(reason))
+        throw new Error('The network change was declined. Try again when you are ready.');
+      throw new Error('Your wallet could not switch networks. Switch it in your wallet, or reconnect and try again.');
+    }
+    const current = await this.getSigningChainId();
+    if (current !== chainId) throw new Error('Your wallet did not switch networks. Switch it in your wallet, or reconnect and try again.');
+    return current;
   }
 
   async signTypedMessage(typedData: any, record?: (stage: string) => void): Promise<{

@@ -248,12 +248,36 @@
               }}</span>
             }
           </div>
+          @if (state.walletType === "evm" && state.walletConnected && !state.messageVerified) {
+            <div class="network-choice" role="group" aria-label="Network to verify on">
+              <span>Verify on:</span>
+              @for (network of evmNetworks; track network.id) {
+                <button
+                  type="button"
+                  [attr.aria-pressed]="state.chainId === network.id"
+                  [disabled]="
+                    state.walletConnecting ||
+                    state.networkSwitching ||
+                    state.messageSigning ||
+                    state.verificationSubmitting
+                  "
+                  (click)="chooseNetwork(network.id)"
+                >
+                  {{ network.name }}
+                </button>
+              }
+            </div>
+            <p>
+              Holdings count only on the network you sign on.
+            </p>
+          }
           <div class="actions">
             <button
               (click)="verify(data)"
               [disabled]="
                 !state.walletConnected ||
                 state.walletConnecting ||
+                state.networkSwitching ||
                 state.messageSigning ||
                 state.verificationSubmitting ||
                 state.messageVerified
