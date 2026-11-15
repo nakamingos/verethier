@@ -303,24 +303,19 @@ async function restorePreviousWalletConnectConnection(page) {
       await test.context.close();
     }
     for (const mobile of [false,true]) {
-      currentScenario = `${mobile ? 'mobile' : 'desktop'} choose the proof network on the page`;
-      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:1,smart:true,switchable:true});
+      currentScenario = `${mobile ? 'mobile' : 'desktop'} no network chooser for an ordinary wallet`;
+      const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,switchable:true});
       const {page} = test;
       await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet',{exact:true}).last().click();
-      const networks = page.getByRole('group',{name:'Network to verify on'});
-      await networks.waitFor();
-      assert.equal(await networks.getByRole('button',{name:'Ethereum',exact:true}).getAttribute('aria-pressed'),'true');
-      await networks.getByRole('button',{name:'Base',exact:true}).click();
-      await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
-      assert.ok((await page.evaluate(() => window.__walletCalls)).includes('wallet_switchEthereumChain'));
+      await page.getByRole('button',{name:'Change wallet',exact:true}).waitFor();
+      assert.equal(await page.getByRole('group',{name:'Network to verify on'}).count(),0,'Key-based proofs count on every network, so no chooser');
       await page.getByRole('button',{name:'Sign Message',exact:true}).click();
       await page.locator('.step-3.active').waitFor();
-      assert.equal(test.proof.data.chainId,8453);
-      assert.equal(Number(test.typedData.domain.chainId),8453);
+      // AppKit may move the wallet to its default network; a key-based proof counts everywhere.
+      assert.ok([1,8453].includes(test.proof.data.chainId));
       assert.deepEqual(test.errors,[]);
-      await page.screenshot({path:path.join(artifacts,`network-choice-${mobile ? 'mobile' : 'desktop'}.png`),fullPage:true});
-      console.log(JSON.stringify({scenario:currentScenario,result:'passed; proof signed on the network chosen on the page'}));
+      console.log(JSON.stringify({scenario:currentScenario,result:'passed'}));
       await test.context.close();
     }
     for (const mobile of [false,true]) {
@@ -332,9 +327,9 @@ async function restorePreviousWalletConnectConnection(page) {
       const networks = page.getByRole('group',{name:'Network to verify on'});
       await networks.waitFor();
       await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
-      await page.getByText('Base Account proofs count for Base rules.',{exact:false}).waitFor();
+      await page.getByText('Your Base Account will be checked on Base.',{exact:false}).waitFor();
       await networks.getByRole('button',{name:'Ethereum',exact:true}).click();
-      await page.getByText('Base Account may ask for a one-time paid setup on this network.',{exact:false}).waitFor();
+      await page.getByText('Coinbase may ask for a small one-time fee here.',{exact:false}).waitFor();
       await networks.getByRole('button',{name:'Base',exact:true}).click();
       await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
       await page.getByRole('button',{name:'Sign Message',exact:true}).click();
