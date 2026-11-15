@@ -267,9 +267,22 @@
                 </button>
               }
             </div>
-            <p>
-              Holdings count only on the network you sign on.
-            </p>
+            @if (state.baseAccount && state.chainId === 8453) {
+              <p>
+                Base Account proofs count for Base rules. For Ethereum rules,
+                verify again on Ethereum. Coinbase may charge a one-time setup
+                fee there.
+              </p>
+            } @else if (state.baseAccount) {
+              <p>
+                Base Account may ask for a one-time paid setup on this network.
+                Setup on Base is free.
+              </p>
+            } @else {
+              <p>
+                Holdings count only on the network you sign on.
+              </p>
+            }
           }
           <div class="actions">
             <button

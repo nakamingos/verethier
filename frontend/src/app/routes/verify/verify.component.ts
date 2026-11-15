@@ -20,6 +20,9 @@ import { env } from 'src/env/env';
 import { sha256, toHex } from 'viem';
 import type { GetAccountReturnType } from '@wagmi/core';
 
+const isBaseAccount = (account: { isConnected: boolean; connector?: { id: string } }) =>
+  account.isConnected && account.connector?.id === 'baseAccount';
+
 interface State {
   walletType: 'evm' | 'bitcoin' | 'solana';
   bitcoinProvider: BitcoinWalletProvider;
@@ -29,6 +32,7 @@ interface State {
   walletConnected: boolean;
   connectedAddress: string | null;
   chainId: number | null;
+  baseAccount: boolean;
   networkSwitching: boolean;
   messageSigning: boolean;
   verificationSubmitting: boolean;
@@ -73,6 +77,7 @@ export class VerifyComponent {
     walletConnected: false,
     connectedAddress: null,
     chainId: null,
+    baseAccount: false,
     networkSwitching: false,
     messageSigning: false,
     verificationSubmitting: false,
@@ -136,6 +141,7 @@ export class VerifyComponent {
           walletConnected: account.isConnected && !account.isReconnecting,
           connectedAddress: account.isConnected ? account.address || null : null,
           chainId: account.isConnected ? account.chainId ?? null : null,
+          baseAccount: isBaseAccount(account),
         });
       }),
       takeUntilDestroyed(),
@@ -462,6 +468,8 @@ export class VerifyComponent {
       walletConnecting: account?.isConnecting || account?.isReconnecting || false,
       walletConnected: !!account?.isConnected && !account.isReconnecting,
       connectedAddress: account?.isConnected ? account.address || null : null,
+      chainId: account?.isConnected ? account.chainId ?? null : null,
+      baseAccount: !!account && isBaseAccount(account),
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
   }
