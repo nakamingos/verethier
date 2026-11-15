@@ -8,9 +8,9 @@ Ideas for later consideration. Core work remains in the [implementation plan](ha
 - [ ] **Public community discovery.** Let members discover participating communities beyond the servers they have already joined, with explicit community visibility settings. [Source: portal roadmap](../portals.md#following-releases).
 - [ ] **Recheck saved wallets without a new signature.** Consider an authenticated member action that checks fresh holdings for already-proven saved addresses and respects server blocks. Linking or claiming a wallet still requires proof. This would be a separate verification-policy decision; the current fresh-signature policy remains in place. [Source: member portal plan](halcyon-core-implementation-plan.md#5-member-portal-and-saved-wallet-management).
 
-## Waiting on provider clarification
+## Dropped
 
-- [ ] **ord.net linked-wallet lookup — on hold October 27, 2026.** The user has asked ord.net whether Bouncer can authenticate with its funded API wallet, supply another member's address, and retrieve that member's publicly linked wallets. Resume after their response. The [published API](https://developers.ord.net/openapi.json) documents the authenticated account's `/me` wallet bindings, but no lookup of another address's public links. Member-authenticated access has a payment-address balance requirement; it has not established whether one wallet login returns every wallet linked to the profile. A temporary local Xverse test was prepared and its challenge-format mismatch corrected; the member reported the funding requirement blocked the test. No successful linked-wallet lookup or production integration has been established. The temporary test server was stopped when this investigation was tabled.
+- **ord.net linked-wallet lookup — dropped November 15, 2026.** Put on hold October 27, 2026 while waiting on ord.net; no longer planned.
 
 ## Privacy, sharing and registration
 
