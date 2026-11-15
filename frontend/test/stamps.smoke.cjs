@@ -120,7 +120,8 @@ async function choose(page, name, label) {
       }
       await page.goto(origin + "/admin");
       await openRule();
-      await choose(page, "Discord role", "Holder");
+      await choose(page, "Discord roles", "Holder");
+      await page.getByRole("combobox", { name: "Discord roles", exact: true }).press("Escape");
       await page.locator('[name="stampCreator"]').fill(address);
       await page.locator('[name="stampIds"]').fill('0,1');
       assert.equal(await page.locator('[name="slug"]').count(),0);

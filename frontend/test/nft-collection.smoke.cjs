@@ -162,7 +162,8 @@ async function choose(page, name, label) {
           .getByRole("button", { name: "+ Add rule", exact: true })
           .click();
         await choose(page, "Asset type", "NFTs");
-        await choose(page, "Discord role", "Holder");
+        await choose(page, "Discord roles", "Holder");
+      await page.getByRole("combobox", { name: "Discord roles", exact: true }).press("Escape");
       }
       await createNft();
       await page

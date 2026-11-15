@@ -10,6 +10,12 @@ async function urlIs(page, server, tab) {
   const labels={rules:'Rules',settings:'Bot Settings',audit:'Audit Log'};
   await page.waitForFunction(label => Array.from(document.querySelectorAll('.workspace-tabs button')).some(button=>button.textContent.trim()===label && button.getAttribute('aria-current')==='page' && !button.disabled),labels[tab]);
 }
+async function openEditor(page) {
+  await page.getByRole('button',{name:'Edit',exact:true}).click();
+  // The editor focuses its first field on the next frame. Typing before that
+  // lands in whichever field holds focus when it happens, so wait for it.
+  await page.waitForFunction(() => !!document.activeElement?.closest('[id^="edit-rule-"]'));
+}
 async function minimumIs(page, expected) {
   await page.waitForFunction(value => Array.from(document.querySelectorAll('label')).some(label =>
     label.textContent.trim().startsWith('Minimum items:') && label.querySelector('input')?.value === value), expected);
@@ -52,7 +58,7 @@ async function minimumIs(page, expected) {
       assert.equal(await inactive.getByRole('link',{name:'Member Portal',exact:true}).getAttribute('href'),'/member');
       await page.screenshot({path:path.join(artifacts,`inactive-${width}.png`),fullPage:true});
       await inactive.getByRole('link',{name:'Control Room',exact:true}).click();
-      await urlIs(page,alpha,'rules'); await page.getByRole('button',{name:'Edit',exact:true}).click();
+      await urlIs(page,alpha,'rules'); await openEditor(page);
       await page.getByLabel('Minimum items:',{exact:true}).fill('5');
       await page.getByRole('button',{name:'Bot Settings',exact:true}).click(); await urlIs(page,alpha,'settings');
       await page.goBack(); await urlIs(page,alpha,'rules');
@@ -60,7 +66,7 @@ async function minimumIs(page, expected) {
       await page.goForward(); await urlIs(page,alpha,'settings');
       await page.goBack(); await urlIs(page,alpha,'rules');
       await page.locator('.server-list').getByRole('button',{name:'Beta',exact:true}).click(); await urlIs(page,beta,'rules');
-      await page.getByRole('button',{name:'Edit',exact:true}).click(); await page.getByLabel('Minimum items:',{exact:true}).fill('7');
+      await openEditor(page); await page.getByLabel('Minimum items:',{exact:true}).fill('7');
       await page.getByRole('button',{name:'Audit Log',exact:true}).click(); await urlIs(page,beta,'audit');
       await page.goBack(); await urlIs(page,beta,'rules');
       await minimumIs(page,'7'); assert.equal(await page.getByLabel('Minimum items:',{exact:true}).inputValue(),'7');
@@ -95,7 +101,7 @@ async function minimumIs(page, expected) {
         await page.goto(origin+`/admin?server=${beta}&tab=audit`); await urlIs(page,beta,'audit');
         await page.goto(origin+'/admin?server=not-a-server&tab=operator&nonce=must-not-persist'); await urlIs(page,beta,'rules');
         assert.equal(new URL(page.url()).searchParams.has('nonce'),false);
-        await page.getByRole('button',{name:'Edit',exact:true}).click(); await page.getByLabel('Minimum items:',{exact:true}).fill('11');
+        await openEditor(page); await page.getByLabel('Minimum items:',{exact:true}).fill('11');
         await page.getByRole('link',{name:'Help',exact:true}).click(); denyBeta=true;
         await page.goBack(); await page.getByText('Server access is no longer available.',{exact:true}).waitFor();
         assert.equal(await page.getByLabel('Minimum items:',{exact:true}).count(),0,'Restoring a draft still requires fresh server access');
