@@ -58,6 +58,7 @@ The user deferred these checks on October 28, 2026 because they did not have tim
 - [ ] Repeat verification, restore the session, decline a request, then retry. Neither connecting nor declining should create a proof.
 - [ ] Confirm that proving an address only on Base cannot qualify that address for an Ethereum-only rule.
 - [ ] For a multisig, confirm that its own required approval threshold is satisfied before the wallet returns a valid signature. Check desktop/mobile passkey prompts for Base Account.
+- [ ] After the viem 2.31 → 2.57 upgrade (PR #130, November 14, 2026), verify one deployed smart wallet (ERC-1271) and one undeployed account (ERC-6492) end to end. Signature checks for both run through viem; ordinary EVM wallets were checked against the compiled build, smart wallets were not.
 
 These acceptance steps require the wallet owner's approval; automated fixtures cannot establish real-wallet/provider compatibility. No live acceptance is claimed by the local contract and mocked-browser tests.
 
