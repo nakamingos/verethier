@@ -28,7 +28,16 @@ For other environments, apply `backend/supabase/migrations/20261028010000_smart_
 
 ## Verification
 
-Run backend regression tests and frontend wallet/verification tests. Rehearse the migration using Docker and a private Supabase backup:
+Run backend regression tests and frontend wallet/verification tests.
+
+To check a deployment's RPC settings, pass its three values to the read-only probe (it ignores `backend/.env`). For each network it confirms the chain ID, `eth_getCode`, and a contract-creation `eth_call` of viem's universal validator at the 10,000,000-gas ceiling, using a fresh unfunded key. It signs no transaction:
+
+```sh
+cd backend
+RPC_URL=... BASE_RPC_URL=... ROBINHOOD_RPC_URL=... REQUIRE_ALL=1 node test/check-smart-wallet-rpc.cjs
+```
+
+On November 15, 2026 the probe passed against the local Ethereum provider and the public Base (`mainnet.base.org`) and Robinhood endpoints; the deployed values have not been probed yet. Rehearse the migration using Docker and a private Supabase backup:
 
 ```sh
 python3 backend/test/check-smart-wallet-migration.py /path/to/private/backup
