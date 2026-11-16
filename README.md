@@ -237,7 +237,7 @@ Set backend-only `BOUNCER_OPERATOR_DISCORD_IDS` to comma/whitespace-separated nu
 
 ### Solana implementation status
 
-Initial Solana wallet proofs, fungible-token rules and Token Metadata/Core NFT scopes are implemented behind backend configuration. Production migration and live acceptance remain pending; see [Solana verification](docs/solana-verification.md) for configuration, supported scope and deferred checks.
+Solana wallet proofs, fungible-token rules, and Token Metadata, Core, compressed and printed-edition NFT rules are live in production. The database migrations were applied October 29–30, 2026, and Solana is enabled with Helius. Live Phantom acceptance (mobile, linking/transfer and Discord verification) and checks against representative real assets remain open; see [Solana verification](docs/solana-verification.md) for configuration, supported scope and the deferred checklist.
 
 ## Bitcoin Stamps
 
