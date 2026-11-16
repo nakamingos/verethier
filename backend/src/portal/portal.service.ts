@@ -13,6 +13,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ChannelType, Guild, GuildMember, PermissionFlagsBits } from 'discord.js';
@@ -463,7 +464,23 @@ export class PortalService {
         .exact
     )
       throw new ConflictException('This exact rule already exists.');
-    return this.mutate(session, server, input.request_id, null, candidate);
+    const action = await this.mutate(session, server, input.request_id, null, candidate);
+    return { ...action, message: await this.ensureVerificationMessage(guild, channel.id) };
+  }
+  /**
+   * Like `/setup add-rule`: a new rule's channel gets a verification message if it
+   * has none. The rule is already saved, so a Discord failure is reported, not thrown.
+   */
+  private async ensureVerificationMessage(guild: Guild, channelId: string) {
+    try {
+      const channel = await this.channel(guild, channelId);
+      if (await this.messages.getExistingVerificationMessage(channel)) return { posted: false };
+      const id = await this.messages.createVerificationMessage(channel);
+      return { posted: true, url: `https://discord.com/channels/${guild.id}/${channel.id}/${id}` };
+    } catch (error: any) {
+      Logger.warn(`Could not post a verification message in channel ${channelId}: ${error?.message}`, 'PortalService');
+      return { posted: false, error: 'Bouncer could not post the verification message. Check that it can view the channel, send messages and embed links, then choose Recover missing under Verification message.' };
+    }
   }
   async edit(
     session: PortalSession,
@@ -528,7 +545,8 @@ export class PortalService {
     delete (candidate as { id?: unknown }).id;
     if (this.edits.duplicates(candidate, await this.rules.getRoleMappings(server)).exact) throw new ConflictException('This exact rule already exists.');
     // Copy only rule fields; no assignment history or role-action policies.
-    return this.mutate(session, server, input.request_id, null, candidate);
+    const action = await this.mutate(session, server, input.request_id, null, candidate);
+    return { ...action, message: await this.ensureVerificationMessage(guild, candidate.channel_id) };
   }
   private async additionalRoles(guild: Guild, primary: string, inputs: {id?:string;name?:string}[] = [], actor: string) {
     if (!Array.isArray(inputs) || inputs.length > 19) throw new BadRequestException('A rule can grant up to 20 roles.');
