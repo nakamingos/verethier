@@ -59,7 +59,7 @@ The frontend connector tests use the actual installed Base Account connector and
 
 ## Deferred live acceptance
 
-The user deferred these checks on October 28, 2026 because they did not have time to approve real-wallet prompts. Keep them open until completed; automated fixtures do not mark a wallet as live-tested. The production RPC probe also remains open because local RPC settings are placeholders.
+Real-wallet checks, first deferred October 28, 2026, and completed in production on November 15–16, 2026 except where still open. Automated fixtures never mark a wallet as live-tested.
 
 - [x] Confirm the deployed RPC settings match each supported chain and allow contract-creation `eth_call` with the configured simulation gas ceiling. November 15, 2026: `test/check-smart-wallet-rpc.cjs` passed for Ethereum, Base and Robinhood with the production values.
 - [x] Connect a smart wallet through its usual connector on the correct network and approve a portal link. Confirm its address and network label. For Base Account, test a new, still-undeployed account as well as an already-deployed account. November 15, 2026: Base Account never signs while undeployed. Coinbase shows an "Upgrade your wallet" step and deploys the account on that network first, sponsored on Base and Robinhood and paid on Ethereum, so its proofs always reach Bouncer as deployed (ERC-1271). The portal shows the network labels correctly (Base, then Base and Robinhood). A member-portal link on November 16, 2026 saved the same address, labelled Base only, since the portal had no chooser and signed on Base. The portal now has the same **Link on** chooser for Base Account; on November 16, 2026 linking with Robinhood selected passed live and the wallet kept its Base and Robinhood labels.
@@ -73,6 +73,4 @@ The user deferred these checks on October 28, 2026 because they did not have tim
 
 - [x] EIP-7702 delegated EOA (MetaMask smart account) — November 15, 2026: verified once in production and received roles for both Ethereum and Base rules, as a key proof with no network restriction.
 
-These acceptance steps require the wallet owner's approval; automated fixtures cannot establish real-wallet/provider compatibility. No live acceptance is claimed by the local contract and mocked-browser tests.
-
-Local validation on October 28, 2026: 1,534 backend tests (75 suites), 45 targeted frontend tests, production builds, deployed/undeployed contract checks on all three local chain IDs, all 11 wallet browser scenarios, and member-portal smoke tests at 1280, 393 and 320 pixels passed. The prior deployed-account stage also passed migration rehearsal and privacy-portal smoke tests. The production migration is applied and verified. Production RPC capability and real-wallet acceptance checks remain pending in the checklist above; local RPC settings were placeholders, so the contract-creation capability probe was skipped.
+Results above come from real wallets in production; the local contract and mocked-browser tests are not counted as live acceptance.

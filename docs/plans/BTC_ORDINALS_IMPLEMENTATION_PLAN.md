@@ -1,7 +1,9 @@
-BTC Ordinals support — implementation plan
+# BTC Ordinals support — implementation plan
+
+Status: historical plan, implemented and released October 2026. Current behavior is documented in the [backend README](../../backend/README.md#bitcoin-ordinals).
 
 Branch: `feat/btc-ordinals-verification`, based on `main` at `7e3ccfe`.
-Research date: 2026-10-07. Implementation date: 2026-10-08. Provider: Xverse. The local implementation includes wallet proof, collection/count rules, wallet stacking, role monitoring and a tested migration. The production database migration was applied on 2026-10-08 after a fresh backup and successful restore rehearsal; app deployment remains pending. Authenticated ownership lookups passed for Pizza Comrades, and one wallet-summary request was measured at 40 credits. Additional collections, transfer freshness, listing behavior and other endpoint costs still need confirmation.
+Research date: 2026-10-07. Implementation date: 2026-10-08. Provider: Xverse. The local implementation includes wallet proof, collection/count rules, wallet stacking, role monitoring and a tested migration. The production database migration was applied on 2026-10-08 after a fresh backup and successful restore rehearsal; the app was deployed afterwards. Authenticated ownership lookups passed for Pizza Comrades, and one wallet-summary request was measured at 40 credits. Additional collections, transfer freshness, listing behavior and other endpoint costs still need confirmation.
 
 Start with Bitcoin mainnet, collection ownership and minimum inscription counts. Support Xverse only, using its Taproot Ordinals address (`bc1p…`). Keep the current Discord setup command, verification page, wallet stacking and role monitoring.
 

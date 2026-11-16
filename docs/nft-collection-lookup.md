@@ -24,9 +24,7 @@ Successful lookup results are cached in memory for five minutes with bounded cap
 
 Automated coverage includes strict input/URL handling, credentials and error sanitization, incomplete pagination and exact uint256 IDs, shared/multiple contracts, cross-chain address ambiguity, ERC-1155 scope, standard changes at save time, session/server authorization, stale browser responses and canonical rule payloads. Browser scenarios cover fixed ERC-1155 selections, explicit whole-contract ERC-721 rules and missing-key manual entry at desktop and mobile sizes.
 
-Local validation on October 28, 2026 passed: 1,595 backend tests across 77 suites, 17 targeted frontend tests, both production builds, nine NFT collection browser scenarios at 1280/393/320 pixels, and the existing admin browser smoke at five widths. The browser cases include dark and light themes.
-
-Read-only live checks on October 28, 2026 initially found an expired key. The replacement temporary key then passed collection, contract and inventory requests through Bouncer's compiled lookup service. The user reports that this key expires after seven days; replace it before relying on continued lookup access. No rules or database records were changed, and these checks required no implementation fixes.
+Read-only live checks on October 28, 2026 passed with a temporary key that expired after seven days (around November 4). Lookup reports "not configured" or provider errors until a durable `OPENSEA_API_KEY` is set; direct contract entry is unaffected.
 
 | Live case | Result |
 | --- | --- |

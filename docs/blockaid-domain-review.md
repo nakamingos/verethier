@@ -1,4 +1,6 @@
-# Bouncer domain reputation review — November 9, 2026
+# Bouncer domain reputation review
+
+**Status (November 16, 2026): resolved.** Blockaid told the operator it reviewed the live connection/signing flow and classified the hostname as benign. A read-only recheck of Rainbow's public metadata endpoint on November 16, 2026 at 23:37 UTC returned `UNVERIFIED` (no longer `SCAM`) for `https://bouncer.up.railway.app`, and live wallet tests that day showed no warning. The notes below are kept as the record of the investigation and appeal.
 
 ## Findings
 
@@ -56,4 +58,4 @@ Potentially relevant infrastructure context: https://status.railway.com/incident
 
 Operator: Snepsid. Contact: nomorelabs@gmail.com.
 
-**Status:** Draft only. No appeal or support message has been submitted by the assistant.
+**Status:** The operator filed the support requests; this draft is kept for reference.

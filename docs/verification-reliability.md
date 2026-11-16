@@ -1,4 +1,6 @@
-# Verification incident follow-up — November 7, 2026
+# Verification incident notes — November 2026
+
+A record of reported verification problems, their diagnosis and fixes. All fixes described here are released.
 
 ## Mobile browser storage
 
@@ -26,8 +28,6 @@ The verification error handler fell back to the HTTP `statusText` when the respo
 
 The error handler now preserves meaningful server messages and rate-limit guidance, explains network failures and unreadable HTTP 2xx responses, and includes the HTTP status for otherwise unexplained failures. Status labels, bare `OK` and HTML error pages are not used as explanations. The same HTTP handling covers Bitcoin/Solana challenge failures. Wallet signing errors retain their existing messages. The change does not retry signatures or change ownership/authentication decisions.
 
-Validation: 46 targeted wallet/verification unit tests, the production frontend build and the complete EVM wallet browser suite passed. The unreadable-response browser case passed at 1280, 768, 393 and 320px, with the alert below the active panel and no automatic signature retry. Desktop/mobile screenshots were inspected. The unit and browser regressions reproduced the old failure before the fix.
-
 The error-message fix was pushed to `main` in `f7073dc`. A subsequent screenshot shows a generic backend failure rather than the HTTP status label. The database investigation below identifies an explicit restriction affecting this wallet.
 
 ## Linked database follow-up: explicit wallet restriction
@@ -36,7 +36,7 @@ Read-only inspection of the linked production database on November 7 found an ex
 
 `WalletBlockService.assertAllowed` rejects the blocked address before the EVM nonce is consumed, privacy choices are saved or the wallet proof is updated. Its fixed `WALLET_BLOCKED` explanation was not recognized by the API controller and became the generic HTTP 500 message shown in the new screenshot. A production-mode controller regression reproduced that exact conversion. The existing restriction is a definite obstacle to verification; the database inspection does not reconstruct every detail of the member's individual HTTP request.
 
-The controller now returns HTTP 403 with only the existing fixed public explanation: “This wallet has been blocked from verification in this server. Contact a server administrator.” The exact constant must match; unexpected appended details still receive the generic response. Administrative block notes remain private. Restriction checks, stored blocks and verification decisions are unchanged. The backend build and 99 targeted controller, wallet-flow, block and security tests passed, including the new production response/privacy regressions. This response fix is committed locally until separately released.
+The controller now returns HTTP 403 with only the existing fixed public explanation: “This wallet has been blocked from verification in this server. Contact a server administrator.” The exact constant must match; unexpected appended details still receive the generic response. Administrative block notes remain private. Restriction checks, stored blocks and verification decisions are unchanged.
 
 ## MetaMask domain warning
 
@@ -50,19 +50,11 @@ The original support drafts have been retired. The [domain reputation review](bl
 
 Railway's [November 4–5 incident](https://status.railway.com/incident/QBCLHG1V) reports IP-reputation blocks following traffic with forged Railway source addresses. This is a plausible lead for the MetaMask review, not a confirmed cause of its hostname classification. The report now asks MetaMask to check for that connection. An authorized submission attempt could not reach the support messenger because it excludes automated/headless browsers. That automated attempt did not send a review message or receive a case number. The operator subsequently reported creating a MetaMask support ticket. In a later response shared by the operator, Blockaid stated that it reviewed the live connection/signing flow and classified the hostname as benign; propagation to individual wallets was not independently confirmed.
 
-## Validation and release
-
-The production frontend build, storage recovery regression, 50 targeted Angular wallet/verification tests, the EVM wallet browser suite (including privacy/error cases, signing/session reuse and Base accounts), Stamps browser checks and Solana signature browser checks passed. Browser fixtures use synthetic keys and mocked verification APIs; they do not prove compatibility with the affected users' actual wallet apps.
-
-The verification fixes and initial investigation notes were pushed to `main` through `8d2fb3a` on November 7. Subsequent support-request updates are recorded separately. No backend behavior, database schema, wallet associations, privacy decisions or wallet security protections were changed.
-
-Outstanding: affected desktop wallet/browser and actual error; real iOS follow-up after release; MetaMask classification review and remaining affected-client details. The holder-analysis branch remains separate.
-
 ## Deleted Discord roles
 
 Previously earned-role history can remain after a Discord role is deleted. Removal is idempotent: a fresh member without the role, a missing role result, or Discord's explicit Unknown Role response already satisfies removal. These cases retain the history without a Discord write or a fabricated removal event. Permission and transport failures still retain assignments for retry. Add/grant handling continues to require an existing role.
 
-Validation covers absent roles on fresh members, deletion races, explicit Unknown Role responses and transient lookup/removal failures. These corrections are local until published; no historical assignments are deleted.
+Tests cover absent roles on fresh members, deletion races, explicit Unknown Role responses and transient lookup/removal failures. No historical assignments are deleted.
 
 ## Ethscriptions provider failure diagnostics
 
@@ -70,7 +62,7 @@ Global numbered Ethscription rules read complete direct and marketplace-escrow i
 
 Sanitized server warnings now distinguish these failure classes without including wallet addresses, request URLs, raw exceptions or response bodies. The member-facing message stays generic. Earlier generic logs cannot establish which failure class occurred retrospectively; a successful health probe later does not prove the provider was healthy at the earlier failure time. Priority-tier evaluation can log the same cached failed requirement again when trying later alternatives; that does not establish another upstream request.
 
-The diagnostic changes preserve existing request pacing, retries, inventory bounds, role-retention behavior and dormancy safeguards. Local validation passed all 1,995 backend tests across 96 suites and the production backend build. Targeted member-wallet replays require authorization before sending saved addresses to an external provider. Three affected member-wallet replays were subsequently authorized and completed; the findings follow.
+The diagnostic changes preserve existing request pacing, retries, inventory bounds, role-retention behavior and dormancy safeguards. Replaying a member's wallet against an external provider requires authorization; three affected wallets were replayed with authorization, with the findings below.
 
 
 ## Numbered Ethscription checks for large holders

@@ -1,6 +1,6 @@
 # Solana and Tezos integration assessment
 
-Reviewed October 28, 2026. This records implementation considerations, not authorization to add either adapter now. Base is prepared separately as an EVM addition. Solana is already in core phase 7; native Tezos is an additional candidate.
+Reviewed October 28, 2026. Solana has since been implemented (see [Solana verification](../solana-verification.md)); native Tezos remains an unscheduled candidate in the [optional backlog](optional-features.md). This records implementation considerations, not authorization to add an adapter.
 
 ## Common Bouncer work
 

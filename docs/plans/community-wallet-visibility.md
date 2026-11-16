@@ -1,4 +1,6 @@
-# Community wallet visibility — November 16, 2026
+# Community wallet visibility
+
+Status: implemented and released November 16, 2026.
 
 Wallets and ownership proofs remain account-wide. The association table controls ordinary community disclosure, not which wallets can qualify for roles. Blocks, supported proof networks, and community/network dormancy retain their existing behavior. Members can qualify using wallets that their community's admins cannot inspect.
 
@@ -31,12 +33,8 @@ The Wallets tab defaults to **All wallets**, without combined dormancy warnings.
 
 Wallet activity defaults to account-wide personal history; a community view filters to that context. Jobs for a previous wallet owner's account never expose that account's community IDs or results.
 
-## Validation and release
+## Release
 
-`python3 backend/test/check-community-wallet-migration.py backup/bouncer-log-release-20261107T221833Z` restores an existing restricted backup into disposable local PostgreSQL, applies prerequisite migrations, fingerprints all existing public application tables, and rehearses the additive migration and `community-wallet-migration.sql` scenarios. It never connects to production or prints member records. Cases cover the two-server snapshot, future communities/wallets, one-wallet transitions, explicit grants and opt-outs, supported wallet families, failed-proof transaction rollback, transfer/removal/relink, admin search and audit isolation, operator evidence, retention, account erasure, and restricted SQL privileges.
+Migration `20261116010000_community_wallet_visibility.sql` was applied to production and the feature released on November 16, 2026 (#146). Existing application data was preserved; the two-community snapshot was the only backfill, and it must not be replayed for future wallets.
 
-Backend tests exercise scoped lookup, address-only and identity exports, download-time revocation, membership/CSRF boundaries, fail-closed reads, and queued notices. Member browser tests cover default and selected community views, independent sharing controls, failed mutations, account-wide copy/removal, no extra signatures, and narrow-screen rendering.
-
-Local verification on November 16 passed both production builds, all 109 backend suites (2,137 tests), three additional admin lookup regressions, and member/privacy/Control Room browser checks at 1280, 393 and 320 pixels. The final SQL rehearsal also passed after the ownership lock and retention index were added. No production migration or deployment was performed.
-
-Apply the migration once before releasing the dependent backend and frontend. Existing application data is preserved; new association records are the only backfill. Do not replay the snapshot against future wallets. A production backup and coordinated deployment remain release steps; local rehearsal does not establish production application or deployment.
+Rehearsal: `backend/test/check-community-wallet-migration.py BACKUP_DIRECTORY` restores a private backup into disposable PostgreSQL and runs the `community-wallet-migration.sql` scenarios: the two-server snapshot, future communities and wallets, one-wallet transitions, explicit grants and opt-outs, transfer/removal/relink, admin search and audit isolation, retention, account erasure and SQL privileges. Backend and member/privacy/Control Room browser tests cover the rest.

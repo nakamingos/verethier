@@ -1,6 +1,6 @@
 # Bouncer privacy implementation
 
-Accepted October 27, 2026. This document records the implemented behavior and release checks. The ord.net linked-wallet investigation remains on hold pending the provider's response.
+Accepted October 27, 2026. This document records the implemented behavior and release checks. The ord.net linked-wallet lookup was dropped on November 15, 2026.
 
 ## Operator and defaults
 

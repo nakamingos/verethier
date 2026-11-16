@@ -14,13 +14,7 @@ Verification and member-portal privacy forms preselect available sharing/export 
 
 ## Migration and cleanup
 
-Rehearse `20261027010000_privacy_controls.sql` against a fresh private roles/schema/data backup:
-
-```sh
-python3 backend/test/check-privacy-migration.py PRIVATE_BACKUP_DIRECTORY
-```
-
-Apply the tested migration and record its version using the existing guarded migration workflow before deploying the backend/frontend. Do not rewrite pre-repository Supabase migration history to force `db push`.
+The privacy migration `20261027010000_privacy_controls.sql` was applied October 27, 2026; see [database migrations](DATABASE_MIGRATION.md) for the workflow used for later changes.
 
 Cleanup runs hourly. A failed cleanup emits a generic server error and is retried on the next run. Monitor cleanup failures as part of ordinary operations. Database records and exports are backend-only with RLS and revoked public privileges.
 
@@ -55,7 +49,7 @@ The recovery function removes restored old links and queues the ordinary deletio
 
 ## Signed blocked verification attempts
 
-Migration `20261107010000_blocked_verification_attempts.sql` adds the service-only `verifier_blocked_verification_attempts` table. Apply it before deploying the corresponding backend. It is additive: no saved wallets, blocks, roles or existing consent records are changed.
+Migration `20261107010000_blocked_verification_attempts.sql` (applied November 7, 2026) added the service-only `verifier_blocked_verification_attempts` table.
 
 After a valid EVM, Bitcoin or Solana proof reaches an explicit server block, the backend awaits a minimal audit insert before returning the existing blocked-wallet response. It records Discord ID, server/channel, normalized address/type, trusted Discord/member-portal source, EVM signing chain when applicable, database timestamp and `blocked` outcome. It does not store signatures, nonces, challenges, private administrative block notes, IPs or browser details. An allowed request, invalid signature, expired context or restriction-lookup outage is not recorded as a confirmed blocked proof. Audit-write failures are logged and do not bypass the restriction.
 
@@ -63,6 +57,4 @@ Authorized operators see the latest 25 unexpired attempts and the total in Membe
 
 Attempts expire one year after creation. Operator reads exclude expired rows immediately; the hourly privacy cleanup deletes expired rows. During an ordinary deletion review, document any necessary retention of this separate security evidence. Backups retain their independent recovery lifecycle. Historical failed attempts cannot be reconstructed or backfilled from the absence of successful-wallet records.
 
-Rehearse with `python3 backend/test/check-blocked-attempts-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. Backend regressions cover proof-before-write ordering for all three wallet types, trusted source context, no wallet-link/consent side effects, continued denial during audit outages, operator-only reads and expiry cleanup.
-
-The linked application database received migration `20261107010000` on November 7, 2026, verified at 21:06 UTC. Independent checks confirmed its ledger entry, four indexes, enabled RLS, no public policies or client privileges, and only SELECT/INSERT/DELETE for the backend service role. A fresh private backup and disposable restore rehearsal preserved all 23 existing public tables. Backend validation passed all 1,776 tests and the build; the frontend build and privacy/operator browser checks passed at 1280, 393 and 320 pixels. The backend/frontend changes still require a release before new attempts are recorded or displayed.
+Backend tests cover proof-before-write ordering for all three wallet types, trusted source context, no wallet-link/consent side effects, continued denial during audit outages, operator-only reads and expiry cleanup.

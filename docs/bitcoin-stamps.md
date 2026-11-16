@@ -1,6 +1,6 @@
 # Bitcoin Stamps verification
 
-Implemented October 30, 2026 and released November 5, 2026. The production migration is applied; code is published with this release. Owner-assisted wallet/Discord acceptance remains deferred. This adapter shares Bitcoin wallet links, privacy, blocks, reconciliation, audit history and fresh export checks; it does not create another wallet identity or copy holdings into the database.
+Released November 5, 2026 (production migration applied the same day). Owner-assisted wallet/Discord acceptance remains deferred. This adapter shares Bitcoin wallet links, privacy, blocks, reconciliation, audit history and fresh export checks; it does not create another wallet identity or copy holdings into the database.
 
 ## Rules
 
@@ -47,13 +47,10 @@ Requests are serialized with bounded queue wait, timeouts and a 100-page limit o
 
 `backend/supabase/migrations/20261030020000_bitcoin_stamps.sql` adds nullable `stamp_criteria`, rule validation/duplicate/edit/undo guards, and the approved Bitcoin address constraints. A checksum-aware Base58 discriminator keeps legacy Bitcoin block records distinct from Solana keys. RPC permissions remain service-only. No existing wallet or rule values are backfilled or rewritten.
 
-The production migration was applied November 5, 2026 after a fresh private backup and rehearsal of the exact guarded script. The upgrade preserved all 23 application tables, 363 wallet records, 53 rules and existing function permissions/security settings. Independent read-only verification confirmed the migration registry, Stamps validation, address checks, service-only permissions and existing Solana print-edition support. The code release goes through `main`; deployment completion is not monitored here. Existing default provider URLs require no new Railway variables. Normal backend startup registers the Discord command.
-
-Rehearsal: `python backend/test/check-stamps-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. The optional script is the exact production transaction, including its prerequisite/hash guards, preservation assertions and migration-registry entry. It fingerprints every existing application value (excluding the new nullable field), checks Stamps criteria, duplicates, edits, deletion undo, legacy wallet blocks and RPC permissions, and removes its disposable database. It does not connect to production.
+The production migration was applied November 5, 2026 after a fresh private backup and guarded rehearsal (`backend/test/check-stamps-migration.py`). The default provider URLs need no Railway variables.
 
 ## Acceptance
 
-- All 1,761 backend tests across 84 suites and 72 targeted frontend browser unit tests passed; both production builds passed.
 - Automated tests cover creator/number intersection, editions, stacked wallets, overlapping rule counts, pagination/inconsistent blocks, malformed/imprecise data, unavailable providers, proof replay/tampering and unchanged Ordinals restrictions.
 - Independent native SegWit BIP-322 vectors and generated P2PKH/P2WPKH/nested-SegWit signatures are verified by the backend.
 - Read-only compiled-adapter checks passed for a public wallet: selected stamp #787425 = 1 copy; creator-only = 10,088 copies; creator-plus-number = 1 copy. This exercised a 1,712-row Counterparty inventory and a mixed Stamps/cursed catalog. These observations are a dated acceptance sample, not a permanent balance assertion.
@@ -62,8 +59,3 @@ Rehearsal: `python backend/test/check-stamps-migration.py BACKUP_DIRECTORY [GUAR
 
 Sources: [Stampchain API](https://stampchain.io/docs), [official explorer API implementation](https://github.com/stampchain-io/stampchain.io), [Counterparty API v2](https://apidocs.counterparty.io/), [BIP-322](https://bips.dev/322/), [Xverse message signing](https://docs.xverse.app/sats-connect/bitcoin-methods/signmessage), [UniSat wallet API](https://docs.unisat.io/developer-support/open-api-documentation/unisat-wallet.md).
 
-## November 5 release verification
-
-The clean committed release passed all 1,761 backend tests, both production builds, desktop/mobile Stamps rule-editor and signed-verification browser checks. A fresh compiled-adapter read against the public example wallet also passed, returning one copy of stamp #787425. Actual wallet-app acceptance remains deferred.
-
-Private recovery artifacts are retained under `backup/stamps-release-20261105T232933Z/`: roles/schema/data dumps, the guarded SQL and hashes, and private preflight/apply/verification receipts. Production credentials and wallet associations are excluded from version control. Unrelated in-progress holder-analysis edits are outside this release.

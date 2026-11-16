@@ -10,15 +10,7 @@ Background work uses durable per-member leases and three attempts, with a one-mi
 
 Bouncer Operator allowlist membership and normal server owner/administrator permission are both required to preview, start, resume, retry, cancel or delete. Lists and reports are operator-only, with the existing audited server read-access check. Queued and active jobs stop before further ownership checks or role mutations when the execution account is no longer an operator. Previously completed changes remain. Operator inspection uses the existing audited read-access path and does not grant mutation authority. The execution administrator must remain authorized. Jobs and results expire after 30 days, and account deletion clears matching member-result records. Configuration and action metadata identify who created, started, retried or cancelled the job. Public/client database privileges are revoked; only backend RPCs and services access job tables.
 
-Migration `20261107030000_bulk_role_checks.sql` must precede backend/frontend deployment. Rehearse it against a fresh private backup:
-
-```sh
-python3 backend/test/check-bulk-role-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
-```
-
-Validation uses disposable PostgreSQL for scope, idempotent starts, leases, completion/retry, deletion, retention cascade and privileges. Backend regressions cover default grants-only behavior, exclusions, fresh evidence, provider uncertainty, alternate rules, real Discord failures and CSRF/admin boundaries. The browser smoke test covers preview versus execution, removal confirmation, cancellation, progress/results and mobile layouts.
-
-The linked application database received migration `20261107030000` on November 8, 2026, verified at 00:04 UTC. Independent checks confirmed private tables, RLS, backend-only mutation RPCs and the migration ledger. A fresh private backup and disposable rehearsals preserved all 25 existing public tables. Backend validation passed the full 1,823-test suite and 82 final targeted regressions; production builds and bulk-role browser checks passed at 1280, 768, 393 and 320 pixels. Backend/frontend publication is still required to expose the new portal controls.
+Migrations: `20261107030000_bulk_role_checks.sql`, `20261109030000_bulk_role_throughput_resume.sql` and `20261109050000_delete_bulk_role_checks.sql`, all applied to production in November 2026, each with a rehearsal script in `backend/test/`. Browser coverage: `frontend/test/bulk-role.smoke.cjs`.
 
 ## Throughput, resume and failed retries
 
@@ -34,11 +26,7 @@ Each claim has its own worker token. New run receipts fence workers from an earl
 
 Member results record `elapsed_ms`, `eligibility_work_ms`, `guard_work_ms`, `mutation_work_ms` and the number of role checks. Server logs include elapsed and phase durations. Eligibility work can overlap, so its summed duration can exceed wall-clock elapsed time. These measurements do not expose wallet addresses or provider credentials.
 
-Migration `20261109030000_bulk_role_throughput_resume.sql` must precede publication of this worker/UI release. It updates existing backend-only RPCs and adds an active-member lease index; saved progress and completed results are not rewritten. No new environment variables are required. Rehearse with `python3 backend/test/check-bulk-role-resume-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. The linked application database received this migration on November 9, 2026, independently verified at 11:15 UTC. The migration ledger matches the committed source, the active-member index is valid, and RLS plus backend-only RPC privileges remain intact. A fresh private backup and rehearsal preserved all 27 application tables and passed the checkpoint/resume/retry and 12-session concurrency checks. Existing jobs were not manually resumed or retried.
 
-Controlled adapter tests demonstrate six sequential member reads of one collection using one provider scan instead of six, plus bounded member/role concurrency, fresh-read expiry and ordered mutations. Disposable PostgreSQL tests preserve all 27 application tables and exercise resume/retry checkpoints, stale worker fencing, unstarted/expired previews, and 12 concurrent claim/completion sessions. Browser coverage includes desktop/tablet/phone resume and failed-retry controls, retained progress, lost-response retries and removal confirmations. The new Xverse key was supplied only to Railway; local validation uses controlled provider responses and does not test or change that remote key.
-
-Final local validation: both production builds passed; all 1,886 backend tests across 91 suites passed; Resume/Retry browser flows passed at 1280, 768, 393 and 320 pixels. Migration `20261109030000` is applied; backend/frontend publication provides the new worker and portal controls.
 
 ## Delete saved checks
 
@@ -46,7 +34,7 @@ Recent bulk checks provides a Delete button for previews, completed, failed, sta
 
 Deletion uses the existing CSRF-protected action endpoint and requires live server owner/administrator permission. Backend-only RPC `verifier_delete_bulk_role_check` locks the server-scoped job and running member rows before checking active work, using the same job-first order as resume/claim/completion. Concurrent resume either wins and prevents deletion, or finds the report already deleted. Repeating a deletion after a lost response is harmless. Only bulk member reports cascade; earned-role assignments remain independent.
 
-Migration `20261109050000_delete_bulk_role_checks.sql` was applied to the linked application database on November 9, 2026, independently verified at 11:54 UTC before publication. The ledger source matches the committed migration, the backend-only delete RPC includes job/member lease locks, and RLS plus private permissions remain intact. A fresh private backup and exact guarded-script rehearsal preserved all 27 application tables. Existing checks were not deleted, resumed or retried during release. Rehearse it with `python3 backend/test/check-bulk-role-delete-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. Validation passed 41 targeted backend regressions, both production builds, and browser flows at 1280, 768, 393 and 320 pixels, covering confirmation cancellation, deletion conflicts/retry, clearing the selected report, and responsive controls. Disposable PostgreSQL preserved all 27 application tables and verified cascades, server scope, idempotence, role retention, active-work rejection, private RPC permissions and six simultaneous resume/delete races.
+
 
 ## Slow provider retries and freshness
 
@@ -54,7 +42,7 @@ A member is counted as processed only after completion or the final exhausted at
 
 Freshness checks consider only the public collections relevant to the role about to change. An expired collection read used by another role no longer invalidates otherwise current evidence for an unrelated role. Ineligible results that require no role mutation do not trigger a redundant provider recheck merely because earlier work exceeded one minute; removals of held roles and all grants still require fresh ownership and the existing current-state guards. Member-private caches and provider pacing are preserved.
 
-The November 9 `dabl` incident was a late collection-parser failure, not a failed resume transition: the job continued renewing leases and retrying the affected roles while the processed count stayed flat. The bundle-card parser fix is described in the backend README. Validation passed all 1,928 backend tests across 92 suites, both production builds, and bulk-check browser flows at 1280, 768, 393 and 320 pixels, including the provider-retry explanation. Regressions cover unrelated collection expiry, skipping non-mutating repeat reads, and refreshing stale failure evidence before role removal. No database migration is required. The user's cancelled job was observed with 52 completed members and no active leases; it was not resumed, retried or otherwise changed during diagnosis.
+The November 9 `dabl` incident was a late collection-parser failure (an ord.net bundle card), not a failed resume: the job kept renewing leases and retrying while the processed count stayed flat. The parser now handles bundle cards; see the backend README.
 
 ## Larger read cohorts and early qualification
 
@@ -64,7 +52,7 @@ Background wallet inventories have a separate three-slot limit so the larger mem
 
 Grant-only all-rule checks try ordinary database-backed Ethscription alternatives first. A fully qualifying result can grant without calling Ordinals providers for other alternatives. An insufficient subset never proves full failure: remaining rules are still evaluated, with the original combined counting and deduplication. Missing data remains unavailable, and reconciliation/removal checks plus ordinary engine callers still evaluate the complete rule set. Freshness checks follow the actual qualifying proof, so an expired Ordinals alternative cannot invalidate sufficient, current database evidence.
 
-Member timing/log records add `mutation_queue_ms` to distinguish role-write contention from provider work. No new key, setting, feature switch, frontend change or database migration is required. Existing cancelled checks can resume after publication. Validation passed all 1,948 backend tests across 94 suites and the production backend build. Regressions cover twelve-reader refill, three simultaneous writes, bounded background inventories, interactive bypass, cancellation and refresh after queue waits, grant-only proof shortcuts, full combined fallback and uncertainty. A controlled 51-page adapter scenario models four three-member cohorts separated by more than a freshness window (204 calls), versus one twelve-member cohort (51 calls), with identical counts. This measures request reuse under those conditions, not a promised production wall-clock speedup. No production jobs or provider configuration were changed during this work.
+Member timing/log records add `mutation_queue_ms` to distinguish role-write contention from provider work. In a controlled 51-page scenario, one twelve-member cohort made 51 provider calls where four three-member cohorts made 204, with identical counts; that measures request reuse, not a promised wall-clock speedup.
 
 ## Network priority and saved empty wallets
 
@@ -80,5 +68,3 @@ A subset is grants-only. Both the UI and backend reject removal-enabled filtered
 The canonical selection is saved in the existing job labels and bound to its rule-version guard. Preview, history and results identify the scope. Start, resume and retry use that stored scope regardless of later form edits. Older reports without a selection retain all-network behavior. No database migration or new environment variable is required.
 
 The preview response must confirm the requested selection before the UI offers Run. Older backends that ignore the new field therefore cannot silently expand a run. Filtered jobs also have a scoped rule-version marker, so an older worker stops them before checking providers rather than treating them as all-network jobs. The existing operator, server-administrator, CSRF, cancellation and mutation-freshness checks remain in force.
-
-Local validation passed all 2,020 backend tests across 96 suites, backend/frontend production builds, and bulk-check browser flows at 1280, 768, 393 and 320 pixels. Coverage includes empty/invalid scopes, rejected scoped removals, selected-provider enforcement, cross-protocol dormancy guards, immutable scope on resume, direct-URL operator restrictions and rejection of a preview response that drops the selection. Existing multi-role checkbox flows also passed at those four widths.

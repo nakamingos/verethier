@@ -1,5 +1,7 @@
 # NFT verification implementation plan
 
+Status: historical plan, implemented October 2026 (Ethereum, then Robinhood and Base). Current behavior is documented in the [backend README](../../backend/README.md#evm-nfts).
+
 Add Ethereum mainnet NFT rules to the existing verification flow. Users continue to click the same Discord button, connect a wallet, sign the same message, and receive their eligible roles. Existing Ethscriptions rules keep their current behavior.
 
 1. **Extend the current rules table.**
