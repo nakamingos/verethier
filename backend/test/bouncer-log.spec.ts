@@ -14,7 +14,7 @@ function fixture() {
   const query:any={select:jest.fn().mockReturnThis(),eq:jest.fn().mockReturnThis(),maybeSingle:jest.fn(async()=>({data:settings,error:null})),delete:jest.fn().mockReturnThis(),update:jest.fn().mockReturnThis()};
   query.then=(resolve:any)=>Promise.resolve({error:null}).then(resolve);
   const db={from:jest.fn(()=>query),rpc:jest.fn().mockResolvedValue({error:null})};
-  const privacy={assertActive:jest.fn().mockResolvedValue(undefined),policy:jest.fn().mockResolvedValue({share_since:'2020-01-01T00:00:00Z'}),visible:jest.fn((since,time)=>!!since && Date.parse(time)>=Date.parse(since))};
+  const privacy={walletNoticeAllowed:jest.fn().mockResolvedValue(true),assertActive:jest.fn().mockResolvedValue(undefined),policy:jest.fn().mockResolvedValue({share_since:'2020-01-01T00:00:00Z'}),visible:jest.fn((since,time)=>!!since && Date.parse(time)>=Date.parse(since))};
   const send=jest.fn().mockResolvedValue({id:'message'}),has=jest.fn().mockReturnValue(true);
   const logChannel={id:channel,type:ChannelType.GuildText,guild:{id:server},permissionsFor:()=>({has}),send};
   const guild={id:server,channels:{fetch:jest.fn().mockResolvedValue(logChannel)},members:{fetch:jest.fn().mockResolvedValue({}),fetchMe:jest.fn().mockResolvedValue({})}};
@@ -23,6 +23,15 @@ function fixture() {
   return {service,db,query,privacy,send,has,guild,logChannel,setSettings:(v:any)=>{settings=v}};
 }
 describe('Bouncer Discord channel log',()=>{
+  it('rechecks the individual wallet association after queueing and never sends an unauthorized wallet notice',async()=>{
+    const f=fixture();f.privacy.walletNoticeAllowed.mockResolvedValue(false);
+    await (f.service as any).deliver({...job,kind:'wallet_added',event_id:'event'});
+    expect(f.send).not.toHaveBeenCalled();
+    f.privacy.walletNoticeAllowed.mockRejectedValue(new Error('visibility unavailable'));
+    await expect((f.service as any).deliver({...job,kind:'wallet_removed',event_id:'event'})).rejects.toThrow();
+    expect(f.send).not.toHaveBeenCalled();
+  });
+
   it.each(BOUNCER_LOG_EVENTS)('sends %s without secrets, arbitrary error text or pings',async kind=>{
     const f=fixture();await (f.service as any).deliver({...job,kind,role_id:role,address:'0x-secret',nonce:'secret-token',reason:'raw-provider-error-secret'});
     const message=f.send.mock.calls[0][0];

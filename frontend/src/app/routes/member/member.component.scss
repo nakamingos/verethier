@@ -32,6 +32,21 @@ h1 {
 .member-counts + p {
   margin-top: 1.2rem;
 }
+.wallet-address,
+.wallet-address-inline {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-wallet .section-heading .wallet-address {
+  flex: 1;
+}
+.wallet-address-inline {
+  display: inline-block;
+  vertical-align: bottom;
+}
 .wallet-choice {
   display: block;
   max-width: 32rem;
@@ -109,3 +124,8 @@ h1 {
     gap: 0.6rem;
   }
 }
+
+.wallet-context { margin-block: 1rem; }
+.wallet-context label { max-width: 42rem; }
+.wallet-sharing { margin-block: 1rem; }
+.wallet-sharing > button { margin-bottom: .8rem; }

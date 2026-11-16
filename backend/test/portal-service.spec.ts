@@ -237,7 +237,8 @@ describe('Portal server boundaries', () => {
           : removedQuery,
     );
     rules.getEarnedRoleAssignments.mockResolvedValue([]);
-    (service as any).privacy = { isOperator: () => false, policy: async () => ({share_since:'2026-01-01T00:00:00Z'}), visible: (since,time) => !!time && Date.parse(time)>=Date.parse(since) };
+    (service as any).privacy = { isOperator: () => false, policy: async () => ({share_since:'2026-01-01T00:00:00Z'}), visible: (since,time) => !!time && Date.parse(time)>=Date.parse(since),
+      walletCommunities: async()=>[current,...history].map(row=>({address:row.address,enabled:true,source:'legacy',shared_at:'last_verified_at' in row ? row.last_verified_at : row.created_at,removed_at:null})), communityAllows: row=>!!row?.enabled };
     const result = await service.member(session, server, target, false);
     expect(result.wallets).toEqual([
       { ...current, blocked: false, block: null, checking: [] },

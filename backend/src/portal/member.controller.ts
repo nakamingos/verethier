@@ -19,6 +19,7 @@ import {
   MemberRemoveDto,
   MemberResumeDto,
   MemberVerifyDto,
+  MemberWalletCommunityDto,
 } from './member.dto';
 
 @Controller('portal/member')
@@ -69,6 +70,9 @@ export class MemberController {
       dto.address,
       dto.requestId,
     );
+  }
+  @Post('wallet-sharing') async walletSharing(@Req() req: Request, @Body() dto: MemberWalletCommunityDto) {
+    return this.member.walletSharing(await this.session(req), dto);
   }
   @Post('verify') async verify(
     @Req() req: Request,

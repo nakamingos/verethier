@@ -30,3 +30,10 @@ export class MemberVerifyDto {
 export class MemberResumeDto {
   @IsUUID() flow: string;
 }
+
+export class MemberWalletCommunityDto {
+  @Matches(/^\d{17,22}$/) server: string;
+  @IsString() @MaxLength(100) address: string;
+  @IsBoolean() enabled: boolean;
+  @IsUUID() request_id: string;
+}

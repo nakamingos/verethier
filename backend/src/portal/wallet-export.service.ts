@@ -289,14 +289,17 @@ export class WalletExportService {
     override: boolean,
   ) {
     const p = override ? null : await this.privacy.policy(server, user);
+    const scopes = override ? [] : await this.privacy.walletCommunities(user, server);
+    const associations = new Map(scopes.map(row => [row.address, row]));
     return wallets.filter(
       (w) =>
         this.family(w, f) &&
         (override ||
           // p is null only with override, which short-circuits above.
-          (this.privacy.visible(p!.export_since, w.last_verified_at) &&
+          (this.privacy.communityAllows(associations.get(w.address)) &&
+            this.privacy.visible(p!.export_since, associations.get(w.address)!.shared_at) &&
             (!f.identities ||
-              this.privacy.visible(p!.share_since, w.last_verified_at)))),
+              this.privacy.visible(p!.share_since, associations.get(w.address)!.shared_at)))),
     );
   }
   @Interval(5000)

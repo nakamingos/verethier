@@ -64,3 +64,7 @@ Active-database cleanup does not rewrite old backups. Before restoring an older 
 - Frontend/backend production builds; desktop/mobile browser smoke of privacy controls, exports, deletion and public policy.
 
 This implementation does not claim universal legal compliance. Operator identification and any jurisdiction-specific obligations still need review as the service and its audience change.
+
+## Community wallet disclosure extension — November 16, 2026
+
+The approved extension retains account-wide wallets/private verification and adds per-community disclosure associations plus per-wallet sharing controls. Existing visibility in the two current operator-owned communities is grandfathered wallet by wallet until reverification. Future wallets/communities receive no legacy grant. See [the agreed scope, lifecycle and release plan](community-wallet-visibility.md). This supersedes the earlier assumption that community consent alone can expose all account-wide wallets; existing member permissions and operator overrides otherwise retain their meaning.

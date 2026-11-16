@@ -986,12 +986,16 @@ export class PortalService {
       .select('address,wallet_type,last_verified_at')
       .eq('user_id', id);
     this.dbError(error);
-    const wallets=(savedWallets || []).filter(w=>operator || this.privacy!.visible(policy!.share_since,w.last_verified_at));
+    const communityRows = operator ? [] : await this.privacy.walletCommunities(id, server);
+    const communityWallets = new Map(communityRows.map(row => [row.address, row]));
+    const wallets=(savedWallets || []).filter(w=>operator ||
+      (this.privacy!.communityAllows(communityWallets.get(w.address)) &&
+       this.privacy!.visible(policy!.share_since,communityWallets.get(w.address)!.shared_at)));
     const removedRows = await this.removedWallets(
       id,
       new Set((wallets || []).map((wallet) => wallet.address)),
     );
-    const removedWallets=removedRows.filter(w=>operator || this.privacy!.visible(policy!.share_since,w.removed_at)).map(w=>({...w,last_verified_at:operator || this.privacy!.visible(policy!.share_since,w.last_verified_at)?w.last_verified_at:null}));
+    const removedWallets=removedRows.filter(w=>operator || (this.privacy!.communityAllows(communityWallets.get(w.address),w.removed_at) && this.privacy!.visible(policy!.share_since,w.removed_at))).map(w=>({...w,last_verified_at:operator || this.privacy!.visible(policy!.share_since,w.last_verified_at)?w.last_verified_at:null}));
     const restrictions = new Map<string, any>();
     const addresses = [
       ...new Set(
@@ -1047,7 +1051,7 @@ export class PortalService {
       name: member.displayName,
       username: member.user.username,
       avatar: member.displayAvatarURL(),
-      wallets_private: !operator && !policy!.share_since,
+      wallets_private: !operator && (!policy!.share_since || !wallets.length),
       wallets: (wallets || []).map(wallet=>({...withRestriction(wallet),checking:checking.filter(state=>state.address===wallet.address)})),
       removed_wallets: removedWallets.map(withRestriction),
       ...(operator ? { blocked_attempts: await this.blockedAttempts(server, id) } : {}),

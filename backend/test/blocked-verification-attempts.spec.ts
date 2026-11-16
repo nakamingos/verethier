@@ -89,7 +89,7 @@ describe('Blocked attempt visibility', () => {
         const args = Array(12).fill({});
         args[0] = db;
         args[2] = { getEarnedRoleAssignments: async () => [] };
-        const privacy = { isOperator: () => operator, policy: async () => ({ share_since: null }), visible: () => false };
+        const privacy = { isOperator: () => operator, policy: async () => ({ share_since: null }), visible: () => false, walletCommunities: async () => [] };
         const service = new PortalService(...(args as [
             any,
             any,

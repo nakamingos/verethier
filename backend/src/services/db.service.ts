@@ -6,6 +6,7 @@ import { NftMetadataRow } from '@/utils/nft-trait.util';
 import { OrdinalTraitSnapshot, OrdinalAttributeRow } from '@/models/ordinal-collection.interface';
 import { RULE_EDIT_GUARD_FIELDS, RULE_EDIT_MUTABLE_FIELDS } from '@/utils/rule-edit.util';
 import { ruleTraits, traitFilterKey } from '@/utils/trait-filter.util';
+import { normalizeWalletAddress } from '@/utils/wallet-address.util';
 import { WalletVerificationActivity } from '@/models/wallet-activity.interface';
 
 /**
@@ -39,7 +40,7 @@ export class DbService {
       id: activity.id,
       user_id: userId,
       kind: 'wallet_verify',
-      address: address.toLowerCase(),
+      address: normalizeWalletAddress(address, activity.walletType),
       wallet_type: activity.walletType,
       source: activity.source,
       server_id: activity.serverId,

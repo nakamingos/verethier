@@ -1,3 +1,4 @@
+import { normalizeBlockedWallet } from '@/services/wallet-block.service';
 import { WalletCheckService } from '@/services/wallet-check.service';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
@@ -26,7 +27,7 @@ import { NonceService } from '@/services/nonce.service';
 import { BitcoinSignatureService } from '@/services/bitcoin-signature.service';
 import { normalizeWalletAddress } from '@/utils/wallet-address.util';
 import { PortalAuthService, PortalSession } from './portal-auth.service';
-import { MemberLinkDto, MemberProofDto, MemberVerifyDto } from './member.dto';
+import { MemberLinkDto, MemberProofDto, MemberVerifyDto, MemberWalletCommunityDto } from './member.dto';
 
 @Injectable()
 export class MemberService {
@@ -176,6 +177,12 @@ export class MemberService {
       roles,
     };
   }
+  async walletSharing(session: PortalSession, dto: MemberWalletCommunityDto) {
+    await this.membership(session, dto.server);
+    if (!this.privacy) throw new ServiceUnavailableException('Privacy controls are unavailable.');
+    const address = normalizeBlockedWallet(dto.address);
+    return this.privacy.setWalletCommunity(session.user.id, dto.server, address, dto.enabled, dto.request_id);
+  }
   async overview(session: PortalSession) {
     const [wallets, assignments, actions] = await Promise.all([
       this.db
@@ -219,6 +226,7 @@ export class MemberService {
       }),
     );
     const checking = await this.walletChecks?.statuses(session.user.id) || [];
+    const associations = this.privacy ? await this.privacy.walletCommunities(session.user.id) : [];
     const history = this.checked(actions) ?? [];
     const jobs = history.length
       ? this.checked(
@@ -233,7 +241,7 @@ export class MemberService {
       : [];
     return {
       capabilities: {solana: EnvironmentConfig.SOLANA_ENABLED},
-      wallets: (this.checked(wallets) ?? []).map(wallet=>({...wallet,checking:checking.filter(state=>state.address===wallet.address && communities.some(community=>community.id===state.server_id)).map(state=>({...state,server_name:communities.find(community=>community.id===state.server_id)?.name}))})),
+      wallets: (this.checked(wallets) ?? []).map(wallet=>({...wallet,checking:checking.filter(state=>state.address===wallet.address && communities.some(community=>community.id===state.server_id)).map(state=>({...state,server_name:communities.find(community=>community.id===state.server_id)?.name})),communities:associations.filter(row=>row.address===wallet.address && !row.removed_at && communities.some(community=>community.id===row.server_id)).map(({server_id,source,enabled,shared_at})=>({server_id,source,enabled,shared_at}))})),
       communitiesUnavailable,
       communities,
       counts: {
@@ -252,6 +260,7 @@ export class MemberService {
         transferred: action.transferred,
         source: action.source,
         created_at: action.created_at,
+        server_id: communities.some(c=>c.id===action.server_id) ? action.server_id : null,
         community: action.server_id
           ? communities.find((c) => c.id === action.server_id)?.name ||
             'Previous community'
@@ -265,6 +274,7 @@ export class MemberService {
           .filter((job) => job.member_action_id === action.id)
           .map((job) => ({
             id: job.id,
+            ...(job.user_id===session.user.id && communities.some(c=>c.id===job.server_id) ? {server_id:job.server_id} : {}),
             status: job.status,
             community:
               job.user_id === session.user.id
