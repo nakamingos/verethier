@@ -18,7 +18,7 @@ import { DecodedData } from '@/models/app.interface';
 
 import { env } from 'src/env/env';
 import { sha256, toHex } from 'viem';
-import type { GetAccountReturnType } from '@wagmi/core';
+import type { GetConnectionReturnType } from '@wagmi/core';
 
 import { isBaseAccount, isPhone } from '@/utils/smart-wallet.util';
 
@@ -64,7 +64,7 @@ export class VerifyComponent {
   privacyPolicy: any = null;
   privacyChoice: any = null;
   routeData$!: Observable<DecodedData | null>;
-  private evmAccount?: GetAccountReturnType;
+  private evmAccount?: GetConnectionReturnType;
   private disconnecting = false;
   private errorSource: 'connection' | 'verification' | null = null;
 
