@@ -9,7 +9,6 @@ import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import {
   Config,
   GetAccountReturnType,
-  connect as wagmiConnect,
   getAccount,
   signTypedData,
   switchChain,
@@ -187,37 +186,6 @@ export class WalletService implements OnDestroy {
     } catch (error) {
       throw error instanceof WalletConnectionError ? error : new Error(connectionErrorMessage(error));
     }
-  }
-
-  private baseAccountConnector() {
-    return this.config.connectors.find(connector => connector.id === 'baseAccount');
-  }
-
-  /** Loads the Base Account SDK early, so a tap can open Coinbase's window at once. */
-  prepareBaseAccount(): void {
-    this.baseAccountConnector()?.getProvider().catch(() => undefined);
-  }
-
-  /**
-   * Connects Base Account directly, without AppKit's picker. On phones the
-   * picker lists it under Coinbase Wallet, first tries a cbwallet:// app link,
-   * then opens Coinbase's window from a generic connector. This opens the
-   * Base Account window straight from the member's tap, starting on Base.
-   */
-  connectBaseAccount(): Promise<void> {
-    if (this.connecting) return this.connecting;
-    this.connecting = (async () => {
-      this.connectionErrors.next(null);
-      const connector = this.baseAccountConnector();
-      if (!connector) throw new Error('Base Account is not available right now. Choose Connect instead.');
-      try {
-        if (getAccount(this.config).isConnected) await this.disconnectWeb3();
-        await wagmiConnect(this.config, { connector });
-      } catch (error) {
-        throw new Error(connectionErrorMessage(error));
-      }
-    })().finally(() => { this.connecting = undefined; });
-    return this.connecting;
   }
 
   async disconnectWeb3(): Promise<void> {
