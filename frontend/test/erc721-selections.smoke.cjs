@@ -102,7 +102,7 @@ async function choose(page, name, value) {
             if (body.asset_type === 'erc20') {
               assert.deepEqual(body, {
                 asset_type: 'erc20', channel_id: channel, request_id: body.request_id,
-                role_id: role, contract_address: contract, network, min_balance: '0.5',
+                role_id: role, additional_roles: [], contract_address: contract, network, min_balance: '0.5',
               });
               return route.fulfill({ json: { id: String(++sequence) } });
             }
@@ -111,6 +111,7 @@ async function choose(page, name, value) {
               channel_id: channel,
               request_id: body.request_id,
               role_id: role,
+              additional_roles: [],
               contract_address: contract,
               network,
               token_ids: '1,3-5,0003',
@@ -195,7 +196,8 @@ async function choose(page, name, value) {
         .click();
       await choose(page, 'Asset type', 'NFTs');
       await choose(page, 'Network', networkLabel);
-      await choose(page, 'Discord role', 'Holder');
+      await choose(page, 'Discord roles', 'Holder');
+      await page.getByRole('combobox', { name: 'Discord roles', exact: true }).press('Escape');
       await page
         .getByLabel('Contract address:', { exact: true })
         .fill(contract);
@@ -251,7 +253,7 @@ async function choose(page, name, value) {
         .click();
       await page
         .getByText(
-          'Rule saved. Previously earned roles are queued for a fresh check.',
+          'Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.',
           { exact: true },
         )
         .waitFor();
@@ -283,7 +285,8 @@ async function choose(page, name, value) {
       await page.getByRole('button', { name: '+ Add rule', exact: true }).click();
       await choose(page, 'Asset type', 'Tokens (ERC-20)');
       await choose(page, 'Network', networkLabel);
-      await choose(page, 'Discord role', 'Holder');
+      await choose(page, 'Discord roles', 'Holder');
+      await page.getByRole('combobox', { name: 'Discord roles', exact: true }).press('Escape');
       await page.getByLabel('Contract address:', { exact: true }).fill(contract);
       await page.getByLabel('Minimum token balance:', { exact: true }).fill('0.5');
       await page.getByRole('button', { name: 'Review changes', exact: true }).click();
