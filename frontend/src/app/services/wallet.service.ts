@@ -8,11 +8,11 @@ import { isBaseAccount } from '@/utils/smart-wallet.util';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import {
   Config,
-  GetAccountReturnType,
-  getAccount,
+  GetConnectionReturnType,
+  getConnection,
   signTypedData,
   switchChain,
-  watchAccount,
+  watchConnection,
 } from '@wagmi/core';
 
 import { BehaviorSubject, Observable } from 'rxjs';
@@ -105,7 +105,7 @@ class WalletConnectionError extends Error {}
 
 @Injectable({ providedIn: 'root' })
 export class WalletService implements OnDestroy {
-  readonly connectedState$: Observable<GetAccountReturnType>;
+  readonly connectedState$: Observable<GetConnectionReturnType>;
   private readonly connectionErrors = new BehaviorSubject<string | null>(null);
   readonly connectionErrors$ = this.connectionErrors.asObservable();
   readonly config: Config;
@@ -118,10 +118,10 @@ export class WalletService implements OnDestroy {
     this.modal = connection.modal;
 
     this.connectedState$ = new Observable((observer) => {
-      const refresh = () => this.ngZone.run(() => observer.next(getAccount(this.config)));
+      const refresh = () => this.ngZone.run(() => observer.next(getConnection(this.config)));
       const visible = () => { if (document.visibilityState === 'visible') refresh(); };
       refresh();
-      const unwatch = watchAccount(this.config, {
+      const unwatch = watchConnection(this.config, {
         onChange: (account) => this.ngZone.run(() => observer.next(account)),
       });
       // Mobile browsers can suspend rendering while the wallet app is in front.
@@ -157,7 +157,7 @@ export class WalletService implements OnDestroy {
     this.connectionErrors.next(null);
     try {
       await this.modal.ready();
-      if (getAccount(this.config).isConnected) await this.disconnectWeb3();
+      if (getConnection(this.config).isConnected) await this.disconnectWeb3();
       await this.modal.open({ view: 'Connect', namespace: 'eip155' });
       // A delayed wallet approval/rejection need not close the picker. Settle
       // on the actual outcome as well as dismissal, without a short UI timeout.
@@ -173,13 +173,13 @@ export class WalletService implements OnDestroy {
         // Some SDK subscribers invoke their callback synchronously. Register
         // cleanup safely even when the callback has already completed the wait.
         const track = (stop: () => void) => { if (settled) stop(); else cleanup.push(stop); };
-        track(watchAccount(this.config, { onChange: account => {
+        track(watchConnection(this.config, { onChange: account => {
           if (account.isConnected && !account.isReconnecting) finish();
         } }));
         track(this.modal.subscribeState(({ open }) => { if (!open) finish(); }));
         const errors = this.connectionErrors$.subscribe(message => { if (message) finish(message); });
         track(() => errors.unsubscribe());
-        const account = getAccount(this.config);
+        const account = getConnection(this.config);
         if ((account.isConnected && !account.isReconnecting) || !this.modal.getState().open) finish();
       });
       await this.preferBaseForBaseAccount();
@@ -190,7 +190,7 @@ export class WalletService implements OnDestroy {
 
   async disconnectWeb3(): Promise<void> {
     await this.modal.ready();
-    if (getAccount(this.config).isConnected) await this.modal.disconnect('eip155');
+    if (getConnection(this.config).isConnected) await this.modal.disconnect('eip155');
   }
 
   ngOnDestroy(): void {
@@ -200,7 +200,7 @@ export class WalletService implements OnDestroy {
 
   async syncConnectedAccount(): Promise<`0x${string}`> {
     await this.modal.ready();
-    const account = getAccount(this.config);
+    const account = getConnection(this.config);
     if (!account.isConnected || !account.connector) {
       throw new Error('Wallet not connected');
     }
@@ -253,7 +253,7 @@ export class WalletService implements OnDestroy {
 
   async getSigningChainId(): Promise<number> {
     await this.modal.ready();
-    const account = getAccount(this.config);
+    const account = getConnection(this.config);
     if (!account.isConnected || !account.connector) throw new Error('Wallet not connected');
     const chainId = await account.connector.getChainId();
     if (!networks.some(network => network.id === chainId))
@@ -267,7 +267,7 @@ export class WalletService implements OnDestroy {
   }
 
   /** True when the connected wallet is a Base Account (Coinbase smart wallet). */
-  isBaseAccount(account: GetAccountReturnType = getAccount(this.config)): boolean {
+  isBaseAccount(account: GetConnectionReturnType = getConnection(this.config)): boolean {
     return isBaseAccount(account);
   }
 
@@ -278,7 +278,7 @@ export class WalletService implements OnDestroy {
    * error: the page's network chooser still works.
    */
   private async preferBaseForBaseAccount(): Promise<void> {
-    const account = getAccount(this.config);
+    const account = getConnection(this.config);
     if (!this.isBaseAccount(account)) return;
     try {
       if (await account.connector!.getChainId() !== base.id) await switchChain(this.config, { chainId: base.id });
@@ -296,7 +296,7 @@ export class WalletService implements OnDestroy {
    */
   async switchNetwork(chainId: number): Promise<number> {
     await this.modal.ready();
-    const account = getAccount(this.config);
+    const account = getConnection(this.config);
     if (!account.isConnected || !account.connector) throw new Error('Wallet not connected');
     if (!networks.some(network => network.id === chainId)) throw new Error('That network is not supported.');
     try {
@@ -322,11 +322,11 @@ export class WalletService implements OnDestroy {
       throw new Error('Your wallet account changed. Please sign again.');
     const chainId = await this.getSigningChainId();
     if (typedData.domain?.chainId !== chainId) throw new Error('Your wallet network changed. Please sign again on the selected network.');
-    const connector = getAccount(this.config).connector;
+    const connector = getConnection(this.config).connector;
     record?.('Connected account ready');
     record?.('Requesting typed-data signature');
     const signature = await signTypedData(this.config, { ...typedData, account: address, chainId });
-    if (getAccount(this.config).connector?.uid !== connector?.uid || await this.getSigningChainId() !== chainId || (await this.syncConnectedAccount()).toLowerCase() !== address.toLowerCase())
+    if (getConnection(this.config).connector?.uid !== connector?.uid || await this.getSigningChainId() !== chainId || (await this.syncConnectedAccount()).toLowerCase() !== address.toLowerCase())
       throw new Error('Your wallet account or network changed while signing. Please sign again.');
     record?.('Signature received');
 

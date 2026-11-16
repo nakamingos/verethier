@@ -42,8 +42,8 @@
     "@safe-global/safe-apps-provider": "~0.18.6",
     "@safe-global/safe-apps-sdk": "^9.1.0",
     "@sats-connect/core": "0.18.0",
-    "@wagmi/connectors": "6.2.0",
-    "@wagmi/core": "2.22.1",
+    "@wagmi/connectors": "8.2.4",
+    "@wagmi/core": "3.6.9",
     "@walletconnect/sign-client": "2.23.7",
     "react": "^19.1.0",
     "rxjs": "~7.8.0",
@@ -68,7 +68,7 @@
     "typescript": "~5.9.3"
   },
   "resolutions": {
-    "@wagmi/connectors": "6.2.0",
+    "@wagmi/connectors": "8.2.4",
     "idb-keyval": "6.2.2",
     "**/viem/ws": "~8.21.0",
     "@sats-connect/core/axios": "^1.21.1"

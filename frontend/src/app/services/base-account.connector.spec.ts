@@ -2,7 +2,7 @@ import {
   connect,
   createConfig,
   disconnect,
-  getAccount,
+  getConnection,
   http,
   reconnect,
   signTypedData,
@@ -102,19 +102,19 @@ describe('Bouncer Base Account connector', () => {
     await expectAsync(
       connect(config, { connector: config.connectors[0] }),
     ).toBeRejected();
-    expect(getAccount(config).isConnected).toBeFalse();
+    expect(getConnection(config).isConnected).toBeFalse();
     declineConnection = false;
     await connect(config, { connector: config.connectors[0] });
     await disconnect(config);
     expect(provider.disconnect).toHaveBeenCalledTimes(1);
-    expect(getAccount(config).isConnected).toBeFalse();
+    expect(getConnection(config).isConnected).toBeFalse();
   });
   it('restores a saved session without opening the Base Account popup', async () => {
     const connection = await reconnect(config, { connectors: [config.connectors[0]] });
     expect(connection.length).toBe(1);
     expect(connection[0].accounts[0]).toBe(address);
     expect(connection[0].chainId).toBe(8453);
-    expect(getAccount(config).isConnected).toBeTrue();
+    expect(getConnection(config).isConnected).toBeTrue();
     const methods = provider.request.calls.allArgs().map((args: any[]) => args[0].method);
     expect(methods).not.toContain('wallet_connect');
     expect(methods).not.toContain('eth_signTypedData_v4');
@@ -131,7 +131,7 @@ describe('Bouncer Base Account connector', () => {
       throw new Error(method);
     });
     expect(await reconnect(config, { connectors: [config.connectors[0]] })).toEqual([]);
-    expect(getAccount(config).isConnected).toBeFalse();
+    expect(getConnection(config).isConnected).toBeFalse();
   });
   it('preserves wrapped signatures and permits a new signing attempt after rejection', async () => {
     await connect(config, { connector: config.connectors[0] });
