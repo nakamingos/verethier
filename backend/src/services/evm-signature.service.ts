@@ -53,6 +53,13 @@ export class EvmSignatureService {
     return this.clients.get(chainId)!;
   }
 
+  // Records which check accepted a contract proof, without the address, so live
+  // acceptance tests can tell deployed (ERC-1271) and undeployed (ERC-6492) apart.
+  private accepted(chainId: number, check: string): { chainId: number } {
+    Logger.log(`Smart-wallet proof accepted on chain ${chainId}: ${check}.`, "EvmSignatureService");
+    return { chainId };
+  }
+
   async verify(
     address: string,
     typedData: any,
@@ -128,7 +135,7 @@ export class EvmSignatureService {
           args: [hashTypedData(typedData), innerSignature],
           blockTag: "latest",
         });
-        if (result === "0x1626ba7e") return { chainId };
+        if (result === "0x1626ba7e") return this.accepted(chainId, wrapped ? "deployed account (ERC-1271, inner signature of an ERC-6492 wrapper)" : "deployed account (ERC-1271)");
       } catch (error) {
         // Reverts/malformed returns reject the proof; provider failures stay retryable.
         if (
@@ -165,7 +172,7 @@ export class EvmSignatureService {
           gas: 10_000_000n,
         });
         // The validator constructor returns a single byte, not arbitrary truthy data.
-        if (result.data === "0x01") return { chainId };
+        if (result.data === "0x01") return this.accepted(chainId, "undeployed or unprepared account (ERC-6492 simulation)");
       } catch (error) {
         if (
           !(
