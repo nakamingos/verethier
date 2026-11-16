@@ -138,6 +138,9 @@ async function choose(page, name, label) {
             assert.equal(input.channel_id, channel);
             assert.equal(input.role_id, role);
             body = { id: "created-" + creations.length, kind: "create" };
+            // The backend reports whether it posted the channel's verification message.
+            if (creations.length === 2) body.message = { posted: true, url: "https://discord.com/channels/1/2/3" };
+            if (creations.length === 3) body.message = { posted: false, error: "Bouncer could not post the verification message. Check that it can view the channel, send messages and embed links, then choose Recover missing under Verification message." };
           } else throw new Error("Unexpected portal API request " + p);
           return route.fulfill({ status, json: body });
         }
@@ -261,7 +264,7 @@ async function choose(page, name, label) {
       await page
         .getByRole("button", { name: "Save rule", exact: true })
         .click();
-      await page.getByText("Rule created.", { exact: true }).waitFor();
+      await page.getByText("Rule created. Posted a verification message in the channel.", { exact: true }).waitFor();
       assert.equal(creations[1].expected_token_standard, "erc721");
       assert.equal(creations[1].token_ids, undefined);
       mode = "unavailable";
@@ -281,7 +284,7 @@ async function choose(page, name, label) {
       await page
         .getByRole("button", { name: "Save rule", exact: true })
         .click();
-      await page.getByText("Rule created.", { exact: true }).waitFor();
+      await page.getByText(/^Rule created\. Bouncer could not post the verification message\..*Recover missing/).waitFor();
       assert.equal(creations[2].expected_token_standard, undefined);
       assert.deepEqual(errors, []);
       console.log(

@@ -701,3 +701,34 @@ describe('Current Discord role display names', () => {
     expect(guild.roles.fetch).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('Verification message after a control-room rule is created', () => {
+  const guild: any = { id: '111111111111111111' };
+  const channel = { id: '555555555555555555', name: 'test-gate' };
+  let service: any, messages: any;
+  beforeEach(() => {
+    messages = { getExistingVerificationMessage: jest.fn().mockResolvedValue(null), createVerificationMessage: jest.fn().mockResolvedValue('666666666666666666') };
+    service = Object.create(PortalService.prototype);
+    service.messages = messages;
+    service.channel = jest.fn().mockResolvedValue(channel);
+  });
+  it('posts one when the channel has none, like /setup add-rule', async () => {
+    expect(await service.ensureVerificationMessage(guild, channel.id)).toEqual({
+      posted: true, url: 'https://discord.com/channels/111111111111111111/555555555555555555/666666666666666666',
+    });
+    expect(messages.createVerificationMessage).toHaveBeenCalledWith(channel);
+  });
+  it('reuses an existing message instead of posting another', async () => {
+    messages.getExistingVerificationMessage.mockResolvedValue({ id: 'existing' });
+    expect(await service.ensureVerificationMessage(guild, channel.id)).toEqual({ posted: false });
+    expect(messages.createVerificationMessage).not.toHaveBeenCalled();
+  });
+  it('reports a Discord failure without failing the saved rule', async () => {
+    const warn = jest.spyOn(require('@nestjs/common').Logger, 'warn').mockImplementation(() => undefined);
+    messages.createVerificationMessage.mockRejectedValue(new Error('Missing Permissions'));
+    const result = await service.ensureVerificationMessage(guild, channel.id);
+    expect(result.posted).toBe(false);
+    expect(result.error).toMatch(/Recover missing/);
+    warn.mockRestore();
+  });
+});

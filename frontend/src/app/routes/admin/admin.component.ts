@@ -1219,7 +1219,11 @@ export class AdminComponent implements OnInit, OnDestroy {
       this.editor = null;
       await this.reload();
       this.notice = creating
-        ? 'Rule created.'
+        ? action.message?.posted
+          ? 'Rule created. Posted a verification message in the channel.'
+          : action.message?.error
+            ? `Rule created. ${action.message.error}`
+            : 'Rule created.'
         : action.rechecks_queued === 0
           ? 'Rule saved. No automatic check was queued. ' + this.bulkCheckAdvice
           : 'Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.';
