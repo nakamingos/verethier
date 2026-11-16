@@ -4,6 +4,7 @@ import { Address, defineChain, getAddress, http } from 'viem';
 import { base, mainnet } from 'viem/chains';
 
 import { createAppKit } from '@reown/appkit';
+import { isBaseAccount } from '@/utils/smart-wallet.util';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import {
   Config,
@@ -267,7 +268,7 @@ export class WalletService implements OnDestroy {
 
   /** True when the connected wallet is a Base Account (Coinbase smart wallet). */
   isBaseAccount(account: GetAccountReturnType = getAccount(this.config)): boolean {
-    return account.isConnected && account.connector?.id === 'baseAccount';
+    return isBaseAccount(account);
   }
 
   /**

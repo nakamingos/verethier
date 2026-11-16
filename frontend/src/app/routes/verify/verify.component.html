@@ -206,6 +206,13 @@
                   Open in Phantom app
                 </button>
               }
+              @if (state.walletType === 'evm' && !state.walletConnected && isPhone) {
+                <div class="sub mobile-wallet-help">
+                  Using Base Account or Coinbase Wallet? If the Coinbase window
+                  shows an error, open this page in a normal browser tab: use
+                  the ⋮ menu and choose Open in browser.
+                </div>
+              }
             }
           </div>
         </div>

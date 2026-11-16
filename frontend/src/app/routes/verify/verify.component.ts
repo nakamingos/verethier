@@ -20,8 +20,7 @@ import { env } from 'src/env/env';
 import { sha256, toHex } from 'viem';
 import type { GetAccountReturnType } from '@wagmi/core';
 
-const isBaseAccount = (account: { isConnected: boolean; connector?: { id: string } }) =>
-  account.isConnected && account.connector?.id === 'baseAccount';
+import { isBaseAccount, isPhone } from '@/utils/smart-wallet.util';
 
 interface State {
   walletType: 'evm' | 'bitcoin' | 'solana';
@@ -473,6 +472,8 @@ export class VerifyComponent {
       messageSigning: false, verificationSubmitting: false, messageSigned: false, messageVerified: false,
       successMessage: null, errorMessage: null });
   }
+
+  readonly isPhone = isPhone();
 
   get evmNetworks() { return this.walletSvc.evmNetworks; }
 

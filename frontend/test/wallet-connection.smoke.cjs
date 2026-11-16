@@ -306,9 +306,12 @@ async function restorePreviousWalletConnectConnection(page) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} no network chooser for an ordinary wallet`;
       const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,switchable:true});
       const {page} = test;
+      // Phones get a fallback hint for Coinbase sign-in inside Discord's built-in browser.
+      assert.equal(await page.getByText('If the Coinbase window shows an error',{exact:false}).count(),mobile?1:0);
       await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet',{exact:true}).last().click();
       await page.getByRole('button',{name:'Change wallet',exact:true}).waitFor();
+      assert.equal(await page.getByText('If the Coinbase window shows an error',{exact:false}).count(),0,'The hint is only for choosing a wallet');
       assert.equal(await page.getByRole('group',{name:'Network to verify on'}).count(),0,'Key-based proofs count on every network, so no chooser');
       await page.getByRole('button',{name:'Sign Message',exact:true}).click();
       await page.locator('.step-3.active').waitFor();
