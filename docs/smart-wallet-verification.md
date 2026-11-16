@@ -37,7 +37,7 @@ cd backend
 RPC_URL=... BASE_RPC_URL=... ROBINHOOD_RPC_URL=... REQUIRE_ALL=1 node test/check-smart-wallet-rpc.cjs
 ```
 
-On November 15, 2026 the probe passed against the local Ethereum provider and the public Base (`mainnet.base.org`) and Robinhood endpoints; the deployed values have not been probed yet. Rehearse the migration using Docker and a private Supabase backup:
+On November 15, 2026 the probe passed against the deployed production values for all three networks. Rehearse the migration using Docker and a private Supabase backup:
 
 ```sh
 python3 backend/test/check-smart-wallet-migration.py /path/to/private/backup
@@ -61,11 +61,11 @@ The frontend connector tests use the actual installed Base Account connector and
 
 The user deferred these checks on October 28, 2026 because they did not have time to approve real-wallet prompts. Keep them open until completed; automated fixtures do not mark a wallet as live-tested. The production RPC probe also remains open because local RPC settings are placeholders.
 
-- [ ] Confirm the deployed RPC settings match each supported chain and allow contract-creation `eth_call` with the configured simulation gas ceiling.
+- [x] Confirm the deployed RPC settings match each supported chain and allow contract-creation `eth_call` with the configured simulation gas ceiling. November 15, 2026: `test/check-smart-wallet-rpc.cjs` passed for Ethereum, Base and Robinhood with the production values.
 - [ ] Connect a smart wallet through its usual connector on the correct network and approve a portal link. Confirm its address and network label. For Base Account, test a new, still-undeployed account as well as an already-deployed account.
 - [ ] Verify through a Discord link in a community with a qualifying rule. Confirm holdings count for that smart-wallet address and the resulting role.
-- [ ] Repeat verification, restore the session, decline a request, then retry. Neither connecting nor declining should create a proof.
-- [ ] Confirm that proving an address only on Base cannot qualify that address for an Ethereum-only rule.
+- [ ] Repeat verification, restore the session, decline a request, then retry. Neither connecting nor declining should create a proof. November 15, 2026, Base Account in production: decline, retry and repeat verification passed, and the portal's last-verified time changed only on the approved signature. Restore failed: reloading the page opened the Coinbase sign-in popup again, and an extension wallet restored alongside it stayed active. Cause: `@wagmi/connectors` 6.2.0 sends `wallet_connect` when restoring, and the SDK always shows its popup for that. The Bouncer connector now restores from the saved session instead; re-test restore after that deploys.
+- [x] Confirm that proving an address only on Base cannot qualify that address for an Ethereum-only rule. November 15, 2026: the portal lists the Base Account as Base only. Roles still come from all of a member's saved wallets proven on each rule's network, so a member's unrestricted EOA can qualify them for Ethereum rules. A full live test would need an Ethereum asset in the Base Account, which would need the paid Ethereum setup to move it back out, so it was skipped; role checks are covered by backend tests.
 - [ ] For a multisig, confirm that its own required approval threshold is satisfied before the wallet returns a valid signature. Check desktop/mobile passkey prompts for Base Account.
 - [ ] After the viem 2.31 → 2.57 upgrade (PR #130, November 14, 2026), verify one deployed smart wallet (ERC-1271) and one undeployed account (ERC-6492) end to end. Signature checks for both run through viem; ordinary EVM wallets were checked against the compiled build and passed live verification in production on November 15, 2026. On November 15, 2026 a new Base Account verified on Base in production, after Coinbase's sponsored "Upgrade your wallet on Base" step. That step ran during signing, so it is not yet confirmed whether the signature was checked as undeployed (ERC-6492) or deployed (ERC-1271). The account is now deployed on Base.
 
