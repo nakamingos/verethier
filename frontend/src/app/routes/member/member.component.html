@@ -239,6 +239,9 @@
                             : walletKind === 'solana' ? 'Connect Phantom' : 'Connect wallet'
                       }}
                     </button>
+                    @if (walletKind === 'evm' && !address && isPhone) {
+                      <button (click)="connect(true)" [disabled]="busy || connecting || disconnecting">Connect Base Account</button>
+                    }
                     @if (walletKind === 'solana' && !address && solana.canOpenPhantomMobile()) {
                       <button (click)="solana.openPhantomMobile()" [disabled]="busy || connecting">Open in Phantom app</button>
                     }

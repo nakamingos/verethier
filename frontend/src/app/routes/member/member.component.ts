@@ -2,7 +2,7 @@ import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
-import { isBaseAccount } from '@/utils/smart-wallet.util';
+import { isBaseAccount, isPhone } from '@/utils/smart-wallet.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
 import { AsyncPipe, DatePipe } from '@angular/common';
@@ -337,13 +337,14 @@ export class MemberComponent {
     }
     return this.evm;
   }
-  async connect() {
+  readonly isPhone = isPhone();
+  async connect(baseAccount = false) {
     if (this.busy || this.connecting) return;
     this.connecting = true;
     this.error = '';
     try {
       if (this.walletKind === 'solana') await this.solana.connect();
-      else if (this.walletKind === 'evm') await this.evmWallet().connect();
+      else if (this.walletKind === 'evm') await (baseAccount ? this.evmWallet().connectBaseAccount() : this.evmWallet().connect());
       else
         await this.bitcoin.connect(
           this.walletKind === 'unisat' ? 'unisat' : 'xverse', true,
@@ -404,7 +405,10 @@ export class MemberComponent {
   addWallet() {
     this.tab = 'wallets';
     this.addOpen = !this.addOpen;
-    if (this.addOpen && this.walletKind === 'evm') this.evmWallet();
+    if (this.addOpen && this.walletKind === 'evm') {
+      this.evmWallet();
+      if (this.isPhone) this.evm?.prepareBaseAccount();
+    }
   }
   async link() {
     await this.run(async () => {
