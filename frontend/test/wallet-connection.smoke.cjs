@@ -178,7 +178,7 @@ async function restorePreviousWalletConnectConnection(page) {
       await page.evaluate(() => document.fonts.ready);
       const smallText = await page.locator('.user-tag .warn,.step-1 .sub,.wallet-choice button').evaluateAll(elements => elements.map(el=>Number.parseFloat(getComputedStyle(el).fontSize)));
       assert.ok(smallText.every(size=>size>=16), 'verification helper text must be at least 16px');
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet', { exact: true }).last().click();
       await page.getByRole('button', { name: 'Sign Message', exact: true }).waitFor({ state: 'visible' });
       const signSize = await page.getByRole('button', {name:'Sign Message',exact:true}).boundingBox();
@@ -265,7 +265,7 @@ async function restorePreviousWalletConnectConnection(page) {
       const test=await setup(browser,width<520,true,'/verify/'+nonce,{privacy:true});
       const {page}=test;
       await page.setViewportSize({width,height:900});
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet',{exact:true}).last().click();
       await page.getByRole('button',{name:'Sign Message',exact:true}).waitFor();
       await page.route('**/api/verify-signature',route=>route.fulfill({status:503,json:{message:'Ownership checks are temporarily unavailable. Please try again.'}}));
@@ -308,7 +308,7 @@ async function restorePreviousWalletConnectConnection(page) {
       const {page} = test;
       // Phones get a fallback hint for Coinbase sign-in inside Discord's built-in browser.
       assert.equal(await page.getByText('If the Coinbase window shows an error',{exact:false}).count(),mobile?1:0);
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet',{exact:true}).last().click();
       await page.getByRole('button',{name:'Change wallet',exact:true}).waitFor();
       assert.equal(await page.getByText('If the Coinbase window shows an error',{exact:false}).count(),0,'The hint is only for choosing a wallet');
@@ -321,38 +321,11 @@ async function restorePreviousWalletConnectConnection(page) {
       console.log(JSON.stringify({scenario:currentScenario,result:'passed'}));
       await test.context.close();
     }
-    {
-      currentScenario = 'mobile Connect Base Account button';
-      const test = await setup(browser,true,true,'/verify/'+nonce,{chainId:1,smart:true,counterfactual:true,baseAccount:true,switchable:true});
-      const {page} = test;
-      // Opens Base Account directly from the tap, without AppKit's picker or its cbwallet:// app link.
-      await page.getByRole('button',{name:'Connect Base Account',exact:true}).click();
-      const networks = page.getByRole('group',{name:'Network to verify on'});
-      await networks.waitFor();
-      await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
-      assert.equal(await page.locator('w3m-modal[open], w3m-modal.open').count(),0,'AppKit picker must not open');
-      assert.equal(await page.getByRole('button',{name:'Connect Base Account',exact:true}).count(),0);
-      assert.match(await page.evaluate(()=>location.href),/^https?:\/\/[^/]+\/verify\//,'No app-link navigation');
-      await page.getByRole('button',{name:'Sign Message',exact:true}).click();
-      await page.locator('.step-3.active').waitFor();
-      assert.equal(test.proof.data.chainId,8453);
-      assert.deepEqual(test.errors,[]);
-      console.log(JSON.stringify({scenario:currentScenario,result:'passed; direct connector, started on Base'}));
-      await test.context.close();
-    }
-    {
-      currentScenario = 'desktop has no separate Base Account button';
-      const test = await setup(browser,false,true,'/verify/'+nonce,{chainId:8453});
-      await test.page.locator('.step-1 .actions button').first().waitFor();
-      assert.equal(await test.page.getByRole('button',{name:'Connect Base Account',exact:true}).count(),0);
-      console.log(JSON.stringify({scenario:currentScenario,result:'passed'}));
-      await test.context.close();
-    }
     for (const mobile of [false,true]) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} Base Account starts on Base`;
       const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:1,smart:true,counterfactual:true,baseAccount:true,switchable:true});
       const {page} = test;
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       await page.getByText('Base Account',{exact:true}).last().click();
       const networks = page.getByRole('group',{name:'Network to verify on'});
       await networks.waitFor();
@@ -374,7 +347,7 @@ async function restorePreviousWalletConnectConnection(page) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} Base smart-wallet proof`;
       const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,smart:true});
       const {page} = test;
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       await page.getByText('Test Wallet',{exact:true}).last().click();
       await page.getByRole('button',{name:'Sign Message',exact:true}).click();
       await page.locator('.step-3.active').waitFor();
@@ -392,7 +365,7 @@ async function restorePreviousWalletConnectConnection(page) {
       currentScenario = `${mobile ? 'mobile' : 'desktop'} Base Account connector and ERC-6492 signature`;
       const test = await setup(browser,mobile,true,'/verify/'+nonce,{chainId:8453,smart:true,counterfactual:true,baseAccount:true});
       const {page} = test;
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       try { await page.getByText('Base Account',{exact:true}).last().click(); } catch (error) {
         await page.screenshot({path:path.join(artifacts,'base-account-picker.png'),fullPage:true});
         console.log(JSON.stringify({modalText:await page.locator('w3m-modal').ariaSnapshot(),errors:test.errors,consoleErrors:test.consoleErrors.slice(-15)}));
@@ -489,7 +462,7 @@ async function restorePreviousWalletConnectConnection(page) {
         await page.reload();
         await page.getByText('Connect your wallet', { exact: true }).waitFor({ state: 'attached' });
       }
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       const rainbowRow = page.locator('w3m-list-wallet[name="Rainbow"]');
       await rainbowRow.waitFor();
       assert.equal(await rainbowRow.getAttribute('disabled'), null, 'Rainbow must be selectable, including after a saved connection');
@@ -511,7 +484,7 @@ async function restorePreviousWalletConnectConnection(page) {
       const previousHandoff = handoff;
       handoff = undefined;
       await page.getByTestId('w3m-header-close').getByRole('button').click();
-      await page.locator('.step-1 .actions button').first().click();
+      await page.locator('.step-1 .actions button').click();
       assert.equal(await rainbowRow.getAttribute('disabled'), null);
       await page.getByText('Rainbow', { exact: true }).last().click();
       for (let n = 0; n < 40 && !handoff; n++) await page.waitForTimeout(250);
