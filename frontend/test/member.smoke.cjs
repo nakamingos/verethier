@@ -483,6 +483,19 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       await page.getByText('Connected:', { exact: false }).waitFor();
       // Key-based wallets link on every network; only Base Account gets a chooser.
       assert.equal(await page.getByRole('group', { name: 'Network to link on' }).count(), 0);
+      // Disconnecting ends the wallet app session without touching saved wallets.
+      const savedBefore = await page.locator('.saved-wallet').count();
+      await page.getByRole('button', { name: 'Disconnect wallet', exact: true }).click();
+      await page.getByRole('button', { name: 'Connect wallet', exact: true }).waitFor();
+      assert.equal(await page.getByText('Connected:', { exact: false }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Sign & link wallet', exact: true }).isDisabled(), true);
+      assert.equal(await page.locator('.saved-wallet').count(), savedBefore);
+      await page.getByRole('button', { name: 'Connect wallet', exact: true }).click();
+      await page.getByText('Test Wallet', { exact: true }).last().click();
+      await page.getByText('Connected:', { exact: false }).waitFor();
+      await page.getByRole('button', { name: 'Disconnect wallet', exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(artifacts, `${width}-add-wallet-connected.png`) });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Add wallet buttons must fit the viewport');
       await page
         .getByRole('button', { name: 'Sign & link wallet', exact: true })
         .click();

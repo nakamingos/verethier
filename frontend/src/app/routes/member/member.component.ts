@@ -129,6 +129,7 @@ export class MemberComponent {
   evmChainId: number | null = null;
   evmBaseAccount = false;
   networkSwitching = false;
+  disconnecting = false;
   linkFlow: LinkFlow | null = null;
   private transferProof: { flow: string; signature: string } | null = null;
   transferPending = false;
@@ -350,6 +351,27 @@ export class MemberComponent {
       this.fail(error);
     } finally {
       this.connecting = false;
+    }
+  }
+  /** Ends the wallet app session only; saved wallets stay linked. */
+  async disconnectWallet() {
+    if (this.busy || this.connecting || this.disconnecting || this.networkSwitching) return;
+    this.disconnecting = true;
+    this.error = '';
+    try {
+      if (this.walletKind === 'evm') {
+        await this.evm?.disconnectWeb3();
+        this.evmAddress = '';
+      } else if (this.walletKind === 'solana') this.solana.disconnect();
+      else this.bitcoin.disconnect();
+      this.address = '';
+      this.linkFlow = null;
+      this.transferProof = null;
+      this.transferPending = false;
+    } catch {
+      this.error = 'Could not disconnect your wallet. Please try again.';
+    } finally {
+      this.disconnecting = false;
     }
   }
   get evmNetworks() {
