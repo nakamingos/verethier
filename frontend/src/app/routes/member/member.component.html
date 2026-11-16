@@ -185,6 +185,26 @@
                     <span class="wallet-address-inline" [title]="address">{{ address }}</span>
                   </p>
                 }
+                @if (walletKind === "evm" && address && evmBaseAccount) {
+                  <div class="network-choice" role="group" aria-label="Network to link on">
+                    <span>Link on:</span>
+                    @for (network of evmNetworks; track network.id) {
+                      <button
+                        type="button"
+                        [attr.aria-pressed]="evmChainId === network.id"
+                        [disabled]="busy || connecting || networkSwitching"
+                        (click)="chooseNetwork(network.id)"
+                      >
+                        {{ network.name }}
+                      </button>
+                    }
+                  </div>
+                  @if (evmChainId === 8453) {
+                    <p>Your Base Account will be linked on Base. To use it for Ethereum or Robinhood rules, link it again with that network selected.</p>
+                  } @else {
+                    <p>Your Base Account will be linked on this network only. Coinbase may ask you to set up your account here first, and may charge a fee on some networks. Base is free.</p>
+                  }
+                }
                 <p class="muted">
                   Connecting a wallet app doesn’t save a wallet or grant roles.
                   Sign to link it to your Discord account. Community wallet
@@ -234,7 +254,7 @@
                     }
                     <button
                       (click)="link()"
-                      [disabled]="!address || busy || connecting"
+                      [disabled]="!address || busy || connecting || networkSwitching"
                     >
                       {{ busy ? "Linking…" : "Sign & link wallet" }}
                     </button>

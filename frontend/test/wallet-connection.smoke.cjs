@@ -329,7 +329,7 @@ async function restorePreviousWalletConnectConnection(page) {
       await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
       await page.getByText('Your Base Account will be checked on Base.',{exact:false}).waitFor();
       await networks.getByRole('button',{name:'Ethereum',exact:true}).click();
-      await page.getByText('Coinbase may ask for a small one-time fee here.',{exact:false}).waitFor();
+      await page.getByText('Coinbase may ask you to set up your account here first',{exact:false}).waitFor();
       await networks.getByRole('button',{name:'Base',exact:true}).click();
       await page.waitForFunction(() => document.querySelector('.network-choice button[aria-pressed="true"]')?.textContent.trim() === 'Base');
       await page.getByRole('button',{name:'Sign Message',exact:true}).click();

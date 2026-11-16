@@ -480,6 +480,9 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         .getByRole('button', { name: 'Connect wallet', exact: true })
         .click();
       await page.getByText('Test Wallet', { exact: true }).last().click();
+      await page.getByText('Connected:', { exact: false }).waitFor();
+      // Key-based wallets link on every network; only Base Account gets a chooser.
+      assert.equal(await page.getByRole('group', { name: 'Network to link on' }).count(), 0);
       await page
         .getByRole('button', { name: 'Sign & link wallet', exact: true })
         .click();
