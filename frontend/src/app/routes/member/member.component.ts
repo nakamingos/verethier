@@ -2,6 +2,7 @@ import { SolanaWalletService } from '@/services/solana-wallet.service';
 import { PrivacyChoicesComponent } from '@/components/privacy-choices/privacy-choices.component';
 import { privacyChoiceDraft } from '@/utils/privacy-choice.util';
 import { evmNetworkLabel } from '@/utils/evm-network.util';
+import { isBaseAccount } from '@/utils/smart-wallet.util';
 import { DeletionRequestsComponent } from '@/components/deletion-requests/deletion-requests.component';
 import { Component, DestroyRef, Injector, inject } from '@angular/core';
 import { AsyncPipe, DatePipe } from '@angular/common';
@@ -325,7 +326,7 @@ export class MemberComponent {
           const connected = account.isConnected && !account.isReconnecting;
           this.evmAddress = connected ? account.address || '' : '';
           this.evmChainId = connected ? account.chainId ?? null : null;
-          this.evmBaseAccount = connected && account.connector?.id === 'baseAccount';
+          this.evmBaseAccount = connected && isBaseAccount(account);
           if (this.walletKind === 'evm') this.address = this.evmAddress;
         });
       this.evm.connectionErrors$
