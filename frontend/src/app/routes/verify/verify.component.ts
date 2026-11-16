@@ -93,6 +93,7 @@ export class VerifyComponent {
     public bitcoinWalletSvc: BitcoinWalletService,
     public solanaWalletSvc: SolanaWalletService
   ) {
+    if (this.isPhone) this.walletSvc.prepareBaseAccount?.();
 
     // Resolve short links through the backend, while accepting existing encoded links.
     this.routeData$ = this.route.params.pipe(
@@ -510,12 +511,13 @@ export class VerifyComponent {
     }
   }
 
-  async connect(): Promise<void> {
+  async connect(baseAccount = false): Promise<void> {
     if (this.state$.value.walletConnecting || this.state$.value.messageSigning || this.state$.value.verificationSubmitting) return;
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
       if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider, this.state$.value.bitcoinStamps);
       else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect();
+      else if (baseAccount) await this.walletSvc.connectBaseAccount();
       else await this.walletSvc.connect();
     } catch (error) {
       this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not connect your wallet.' });

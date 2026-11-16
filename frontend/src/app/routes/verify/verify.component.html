@@ -207,10 +207,12 @@
                 </button>
               }
               @if (state.walletType === 'evm' && !state.walletConnected && isPhone) {
+                <button type="button" (click)="connect(true)" [disabled]="state.walletConnecting">
+                  Connect Base Account
+                </button>
                 <div class="sub mobile-wallet-help">
-                  Using Base Account or Coinbase Wallet? If the Coinbase window
-                  shows an error, open this page in a normal browser tab: use
-                  the ⋮ menu and choose Open in browser.
+                  If the Coinbase window shows an error, open this page in your
+                  browser: use the ⋮ menu and choose Open in browser.
                 </div>
               }
             }
