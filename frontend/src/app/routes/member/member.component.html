@@ -175,14 +175,14 @@
                 /></label>
                 @if (linkFlow) {
                   <p>
-                    Linking {{ short(linkFlow.address) }}. Connect that wallet
+                    Linking <span class="wallet-address-inline" [title]="linkFlow.address">{{ linkFlow.address }}</span>. Connect that wallet
                     to continue.
                   </p>
                 }
                 @if (address) {
                   <p>
                     Connected:
-                    <span [title]="address">{{ short(address) }}</span>
+                    <span class="wallet-address-inline" [title]="address">{{ address }}</span>
                   </p>
                 }
                 <p class="muted">
@@ -253,7 +253,7 @@
             @for (wallet of account.wallets; track wallet.address) {
               <section class="panel saved-wallet">
                 <div class="section-heading">
-                  <h2 [title]="wallet.address">{{ short(wallet.address) }}</h2>
+                  <h2 class="wallet-address" [title]="wallet.address">{{ wallet.address }}</h2>
                   <span class="badge">{{
                     wallet.wallet_type === "bitcoin"
                       ? "Bitcoin"
@@ -334,7 +334,7 @@
                   <div class="wallet-activity">
                     <p>
                       {{ activityLabel(action) }}
-                      {{ short(action.address) }}
+                      <span class="wallet-address-inline" [title]="action.address">{{ action.address }}</span>
                       <time>{{ action.created_at | date: "short" }}</time>
                     </p>
                     <p class="muted">

@@ -460,6 +460,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         .getByText('Discord · NoMoreLabs · #verify', { exact: true })
         .waitFor();
       await page.getByText(/NoMoreLabs: failed/).waitFor();
+      assert.equal((await page.locator('.wallet-activity .wallet-address-inline').first().textContent()).trim(), account.address);
       assert.equal(await page.getByRole('button', { name: /Retry.*check/i }).count(), 0,
         'Failed wallet activity is informational; members cannot retry ownership jobs');
       await page
@@ -519,6 +520,16 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         type: 'bip322-simple',
       });
       const evmCard = page.locator('.saved-wallet').filter({ hasText: 'EVM' });
+      const walletHeadings = await page.locator('.saved-wallet h2.wallet-address').allTextContents();
+      assert.deepEqual(walletHeadings.map(value => value.trim()).sort(), wallets.map(wallet => wallet.address).sort(),
+        'Wallet cards retain complete addresses for responsive display');
+      if (width === 1280) {
+        for (const heading of await page.locator('.saved-wallet h2.wallet-address').all()) {
+          const size = await heading.evaluate(el=>({available:el.clientWidth,full:el.scrollWidth}));
+          assert.ok(size.available >= size.full, 'Full wallet address is visible when desktop space allows');
+        }
+      }
+
       await evmCard
         .getByRole('button', {
           name: 'Remove wallet from Bouncer',
