@@ -12,6 +12,16 @@ import { Interval } from "@nestjs/schedule";
 import { EnvironmentConfig } from "@/config/environment.config";
 
 export const PRIVACY_NOTICE = "2026-10-27";
+export interface WalletCommunity {
+  user_id: string;
+  address: string;
+  server_id: string;
+  source: 'legacy' | 'verification' | 'member';
+  enabled: boolean;
+  associated_at: string;
+  shared_at: string;
+  removed_at: string | null;
+}
 export interface PrivacyChoice {
   epoch: string;
   share: boolean;
@@ -164,6 +174,42 @@ export class PrivacyService {
       Number.isFinite(Date.parse(time)) &&
       Date.parse(time) >= Date.parse(since)
     );
+  }
+  async walletCommunities(user: string, server?: string): Promise<WalletCommunity[]> {
+    const rows: WalletCommunity[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      let query = this.db.from('verifier_wallet_communities')
+        .select('user_id,address,server_id,source,enabled,associated_at,shared_at,removed_at')
+        .eq('user_id', user);
+      if (server) query = query.eq('server_id', server);
+      const batch = this.checked(await query.order('address').order('server_id').range(offset, offset + 999)) as WalletCommunity[];
+      if (!Array.isArray(batch)) throw new ServiceUnavailableException('Privacy controls are temporarily unavailable. Please retry.');
+      rows.push(...batch);
+      if (batch.length < 1000) return rows;
+    }
+  }
+  communityAllows(row: WalletCommunity | undefined, time?: string, eventServer?: string | null): boolean {
+    if (!row?.enabled) return false;
+    if (!time) return !row.removed_at;
+    const at = Date.parse(time);
+    return Number.isFinite(at) &&
+      (row.source === 'legacy' || (at >= Date.parse(row.associated_at) && (!eventServer || eventServer === row.server_id))) &&
+      (!row.removed_at || at <= Date.parse(row.removed_at));
+  }
+  async walletNoticeAllowed(server: string, user: string, event: string): Promise<boolean> {
+    if (!event) return false;
+    const action = this.checked(await this.db.from('verifier_member_actions')
+      .select('address,server_id,created_at,kind').eq('id', event).eq('user_id', user).maybeSingle());
+    if (!action) return false;
+    const scopes = await this.walletCommunities(user, server);
+    const scope = scopes.find(row=>row.address===action.address);
+    return this.communityAllows(scope, action.created_at, action.server_id);
+  }
+  async setWalletCommunity(user: string, server: string, address: string, enabled: boolean, request: string) {
+    await this.assertActive(user);
+    return this.checked(await this.db.rpc('verifier_member_wallet_community', {
+      p_user: user, p_address: address, p_server: server, p_enabled: enabled, p_request: request,
+    }));
   }
   async assertActive(user: string) {
     const rows = this.checked(

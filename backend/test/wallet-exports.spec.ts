@@ -86,6 +86,8 @@ function setup(filters: any = {}) {
     privacy = {
       checked: real.checked.bind(real),
       visible: real.visible,
+      communityAllows: real.communityAllows,
+      walletCommunities: jest.fn(async () => walletRows.map(w=>({user_id:user,address:w.address,server_id:server,source:'verification',enabled:true,associated_at:proof,shared_at:proof,removed_at:null}))),
       policy: jest
         .fn()
         .mockResolvedValue({
@@ -142,6 +144,24 @@ function setup(filters: any = {}) {
   };
 }
 describe("Fresh wallet exports", () => {
+  it('does not disclose other-community or opted-out wallets in address-only exports while keeping all wallets for private eligibility', async()=>{
+    const t=setup();
+    t.privacy.walletCommunities.mockResolvedValue([{user_id:user,address,server_id:server,source:'verification',enabled:true,associated_at:proof,shared_at:proof,removed_at:null}]);
+    const result=await t.service.build(t.job);
+    expect(result.rows.map(r=>r.address)).toEqual([address]);
+    expect(t.privacy.walletCommunities).toHaveBeenCalledWith(user,server);
+    const context=t.engine.verifyUserBulk.mock.calls[0][4];
+    expect(await context.userAddresses.get(user)).toEqual([address,other]);
+    t.privacy.walletCommunities.mockResolvedValue([]);
+    expect((await t.service.build(t.job)).rows).toEqual([]);
+  });
+  it('rechecks the wallet-community permission at download, including address-only mode',async()=>{
+    const t=setup(), result=await t.service.build(t.job);
+    t.setStored({...t.job,status:'completed',checked_at:new Date().toISOString(),result});
+    t.privacy.walletCommunities.mockResolvedValue([]);
+    await expect(t.service.download(session,server,t.job.id)).rejects.toThrow('permissions changed');
+  });
+
   it('includes additional role outputs when both a rule and an additional role filter are selected',async()=>{
     const additional='666666666666666666', t=setup({rule:'1',roles:[additional]});
     (t.rule as any).additional_roles=[{id:additional,name:'Additional'}];

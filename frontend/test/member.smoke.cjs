@@ -51,7 +51,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
           },
         ],
         pending = null,
-        failRemoval = false;
+        failRemoval = false, failSharing = false;
       const communities = [
         {
           id: server,
@@ -318,6 +318,16 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
               ];
               body = { removed: true };
             }
+          } else if (p === '/member/wallet-sharing') {
+            if (failSharing) { failSharing=false; return route.fulfill({status:503,json:{message:'Could not save wallet sharing.'}}); }
+            assert.equal(typeof posted.enabled,'boolean');
+            const wallet=wallets.find(w=>w.address===posted.address);
+            assert(wallet && communities.some(c=>c.id===posted.server));
+            wallet.communities ||= [];
+            const scope=wallet.communities.find(c=>c.server_id===posted.server);
+            if(scope) scope.enabled=posted.enabled;
+            else wallet.communities.push({server_id:posted.server,source:'member',enabled:posted.enabled,shared_at:new Date().toISOString()});
+            body={ok:true};
           } else if (p === '/member/verify') {
             assert.deepEqual(posted, { server, channel });
             pending = {
@@ -593,7 +603,41 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       const smartCard = page.locator('.saved-wallet').filter({ hasText: 'Smart wallet' });
       await smartCard.waitFor();
       assert((await smartCard.innerText()).includes('Proven networks: Ethereum, Base, Robinhood'));
-      assert((await smartCard.innerText()).includes('Dormant'));
+      assert(!(await smartCard.innerText()).includes('Checks paused'), 'All-wallets view has no combined dormancy warnings');
+      const secondServer='666666666666666666';
+      communities[0].privacy={sharing_enabled:true,share_since:'2020-01-01',export_since:'2020-01-01'};
+      communities.push({...communities[0],id:secondServer,name:'Other community'});
+      const smartWallet=wallets.find(w=>w.evm_chain_ids?.length);
+      smartWallet.communities=[{server_id:server,source:'legacy',enabled:true,shared_at:new Date().toISOString()},{server_id:secondServer,source:'verification',enabled:true,shared_at:new Date().toISOString()}];
+      smartWallet.checking.push({server_id:secondServer,server_name:'Other community',network:'base',network_name:'Base',empty_checked_at:'2026-11-09T12:00:00Z'});
+      await page.reload();
+      await page.getByRole('button',{name:'Wallets',exact:true}).click();
+      const walletView=page.getByRole('combobox',{name:'Wallet view',exact:true});
+      assert.equal((await walletView.textContent()).trim(),'All wallets');
+      await walletView.click();
+      await page.getByRole('option',{name:'NoMoreLabs',exact:true}).click();
+      assert((await smartCard.innerText()).includes('Checks paused'));
+      assert((await smartCard.innerText()).includes('Ethereum'));
+      assert(!(await smartCard.innerText()).includes('Checks paused · Base'));
+      const countBeforeSharing=signatures;
+      failSharing=true;
+      await smartCard.getByLabel('Allow sharing this wallet with NoMoreLabs').uncheck();
+      await page.getByText('Could not save wallet sharing.',{exact:true}).waitFor();
+      assert.equal(await smartCard.getByLabel('Allow sharing this wallet with NoMoreLabs').isChecked(),true,'Failed sharing changes restore the real setting');
+      await page.getByRole('button',{name:'Dismiss',exact:true}).click();
+      await smartCard.getByLabel('Allow sharing this wallet with NoMoreLabs').uncheck();
+      await page.getByText('Wallet hidden from this community’s admin views and exports. Private role checks continue.',{exact:true}).waitFor();
+      assert.equal(smartWallet.communities.find(c=>c.server_id===server).enabled,false);
+      assert.equal(smartWallet.communities.find(c=>c.server_id===secondServer).enabled,true);
+      assert.equal(signatures,countBeforeSharing,'Sharing never requests another proof');
+      await page.getByRole('button',{name:'Dismiss',exact:true}).click();
+      await walletView.click();
+      await page.getByRole('option',{name:'Other community',exact:true}).click();
+      assert((await smartCard.innerText()).includes('Checks paused'));
+      assert((await smartCard.innerText()).includes('Base'));
+      assert.equal(await smartCard.getByLabel('Allow sharing this wallet with Other community').isChecked(),true);
+      assert.equal(await smartCard.getByText('This wallet keeps its previous sharing settings until you verify it again.',{exact:true}).count(),0);
+
       assert((await smartCard.innerText()).includes('Sign with this wallet again to resume checks.'));
       assert(!(await smartCard.innerText()).includes('additional empty wallet'));
       assert.equal(
@@ -618,6 +662,18 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
         requests.filter((r) => r.posted).every((r) => r.csrf === 'csrf'),
         'Every mutation carries CSRF',
       );
+      // Rule removal must not hide a wallet's existing sharing controls.
+      communities.find(c=>c.id===secondServer).channels=[];
+      await page.reload();
+      await page.getByRole('button',{name:'Wallets',exact:true}).click();
+      await page.getByRole('combobox',{name:'Wallet view',exact:true}).click();
+      await page.getByRole('option',{name:'Other community',exact:true}).click();
+      assert.equal(await page.locator('.saved-wallet').count(),1,'Associated wallet stays manageable without matching rules');
+      await smartCard.getByLabel('Allow sharing this wallet with Other community').uncheck();
+      await page.getByText('Wallet hidden from this community’s admin views and exports. Private role checks continue.',{exact:true}).waitFor();
+      assert.equal(await page.locator('.saved-wallet').count(),1,'Opting out does not hide the re-enable control');
+      assert.equal(await smartCard.getByLabel('Allow sharing this wallet with Other community').isChecked(),false);
+      await page.getByRole('button',{name:'Dismiss',exact:true}).click();
       assert.deepEqual(errors, []);
       await page.getByRole('button', { name: /Sign out ·/ }).click();
       await page

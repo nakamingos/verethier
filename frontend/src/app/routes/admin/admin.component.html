@@ -1784,15 +1784,14 @@
                         }
                       } @empty {
                         <tr>
-                          <td colspan="3">No wallets saved.</td>
+                          <td colspan="3">{{ member.wallets_private ? "No wallets shared with this community." : "No wallets saved." }}</td>
                         </tr>
                       }
                     </tbody>
                   </table>
                   @if (member.wallets_private) {
                     <p>
-                      This member’s wallet associations are private. Role checks
-                      continue using their saved wallets.
+                      Wallet visibility follows this member’s sharing choices for this community. Private role checks continue.
                     </p>
                   }
                   @if (member.removed_wallets?.length) {

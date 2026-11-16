@@ -60,6 +60,7 @@ interface Account {
     address: string;
     wallet_type: 'evm' | 'bitcoin' | 'solana';
     last_verified_at: string;
+    communities?: Array<{server_id: string; source: 'legacy' | 'verification' | 'member'; enabled: boolean; shared_at: string}>;
     checking?: Array<{server_id: string; server_name: string; network: string; network_name: string; empty_checked_at: string}>;
     evm_chain_ids?: number[] | null;
   }>;
@@ -74,9 +75,10 @@ interface Account {
     created_at: string;
     transferred?: boolean;
     source: 'portal' | 'discord';
+    server_id?: string | null;
     community: string | null;
     channel: string | null;
-    jobs: Array<{ id: string; status: string; community: string; result: any }>;
+    jobs: Array<{ id: string; status: string; server_id?: string; community: string; result: any }>;
   }>;
 }
 
@@ -120,6 +122,7 @@ export class MemberComponent {
   hiddenPending = '';
   addOpen = false;
   walletKind = 'evm';
+  walletCommunityId = '';
   address = '';
   connecting = false;
   linkFlow: LinkFlow | null = null;
@@ -147,6 +150,47 @@ export class MemberComponent {
         c.name.toLowerCase().includes(query),
       ) || []
     );
+  }
+  get walletCommunityOptions() {
+    return [{value:'',label:'All wallets'}, ...(this.data?.communities || []).map(c=>({value:c.id,label:c.name}))];
+  }
+  get walletCommunity() { return this.data?.communities.find(c=>c.id===this.walletCommunityId); }
+  get visibleWallets() {
+    const community = this.walletCommunity;
+    if (!community) return this.data?.wallets || [];
+    return (this.data?.wallets || []).filter(wallet => this.walletSharing(wallet) || community.channels.some(channel => channel.rules.some(rule => {
+      if (wallet.wallet_type === 'bitcoin') return ['ordinal','stamp'].includes(rule.asset);
+      if (wallet.wallet_type === 'solana') return ['solana_nft','solana_token'].includes(rule.asset);
+      return ['ethscription','nft','erc20'].includes(rule.asset) &&
+        (!wallet.evm_chain_ids?.length || wallet.evm_chain_ids.includes(rule.asset==='ethscription'?1:rule.network || 1));
+    })));
+  }
+  walletSharing(wallet: Account['wallets'][number]) {
+    return wallet.communities?.find(c=>c.server_id===this.walletCommunityId);
+  }
+  walletShared(wallet: Account['wallets'][number]) { return !!this.walletSharing(wallet)?.enabled; }
+  walletVisible(wallet: Account['wallets'][number]) {
+    const scope = this.walletSharing(wallet), since = this.walletCommunity?.privacy?.share_since;
+    return !!scope?.enabled && !!since && Date.parse(scope.shared_at)>=Date.parse(since);
+  }
+  walletChecking(wallet: Account['wallets'][number]) {
+    return (wallet.checking || []).filter(state=>state.server_id===this.walletCommunityId);
+  }
+  get walletActions() {
+    return (this.data?.actions || []).filter(action=>!this.walletCommunityId || action.server_id===this.walletCommunityId || action.jobs.some(job=>job.server_id===this.walletCommunityId));
+  }
+  async shareWallet(wallet: Account['wallets'][number], input: HTMLInputElement) {
+    const enabled = input.checked;
+    const community = this.walletCommunity;
+    if (!community) return;
+    await this.run(async () => {
+      await this.api('/wallet-sharing', {server:community.id,address:wallet.address,enabled,request_id:crypto.randomUUID()});
+      await this.refresh();
+      this.notice = enabled ? 'Wallet sharing allowed for this community. Your privacy choices still apply.' : 'Wallet hidden from this community’s admin views and exports. Private role checks continue.';
+    });
+    // Native checkbox state changes before the request; restore authoritative
+    // state on errors as well as after a successful overview refresh.
+    input.checked = !!this.data?.wallets.find(w=>w.address===wallet.address)?.communities?.find(c=>c.server_id===community.id)?.enabled;
   }
   constructor() {
     if (new URL(window.location.href).searchParams.get('sign_in') === 'failed')
@@ -210,6 +254,7 @@ export class MemberComponent {
     const data = await this.api<Account>();
     if (!this.live) return;
     this.data = data;
+    if (this.walletCommunityId && !data.communities.some(c=>c.id===this.walletCommunityId)) this.walletCommunityId='';
     for (const c of data.communities) {
       if (c.privacy)
         c.privacy_choice = privacyChoiceDraft(c.privacy);

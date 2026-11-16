@@ -46,7 +46,7 @@ import { RouterLink } from '@angular/router';
         <p class="muted">
           Bouncer keeps wallet records for verification and security. Bouncer's
           operators can still see and download these records when sharing is off.
-          These choices control what community admins can access.
+          These choices and your per-wallet sharing settings control what community admins can access.
           <a routerLink="/privacy" target="_blank" rel="noopener"
             >Privacy policy</a
           >

@@ -85,6 +85,7 @@ export class BouncerLogService {
     if (job.kind === 'wallet_added' || job.kind === 'wallet_removed') {
       const policy = await this.privacy.policy(job.server_id, job.user_id);
       if (!this.privacy.visible(policy.share_since, job.occurred_at)) return;
+      if (!await this.privacy.walletNoticeAllowed(job.server_id, job.user_id, job.event_id)) return;
     }
     const channel = await guild.channels.fetch(job.channel_id);
     if (!channel || channel.type !== ChannelType.GuildText || channel.guild.id !== guild.id) throw new Error('channel');
