@@ -10,9 +10,7 @@ Adding an output to an existing rule queues fresh checks for the server's previo
 
 Removing an output or deleting the rule queues each affected role for reconciliation. Another qualifying rule preserves the role; unavailable ownership providers do not justify removal. Undo/Redo restores the output list and queues the same checks. Historical action snapshots retain their recorded names. Identical requirements with overlapping outputs are rejected, including when an output is secondary on another rule.
 
-Apply `backend/supabase/migrations/20261108010000_multi_role_rules.sql` before deploying this release. No new environment variables or user signatures are required. Existing single-role rules keep their IDs, requirements and primary roles, and their additional-output lists start empty. Existing single-role version hashes stay stable. Refresh an editor after upgrading before adding outputs.
-
-Validation includes backend multi-role and duplicate regression tests; production builds; `npm run test:multi-role-smoke` in `frontend` at desktop/tablet/mobile widths; and `python3 backend/test/check-multi-role-migration.py PRIVATE_BACKUP_DIRECTORY`. The database rehearsal checks original data preservation, role-list validation, overlap rejection, independent range copies, stale writes, Undo/Redo, reconciliation audience and RPC permissions using a disposable PostgreSQL instance. It never changes the remote database.
+Migration `20261108010000_multi_role_rules.sql` (applied November 8, 2026) added `additional_roles`; existing single-role rules kept their IDs, requirements and version hashes. Browser coverage: `frontend/test/multi-role.smoke.cjs`.
 
 ## Specific inscription contributions
 
@@ -20,6 +18,6 @@ A single inscription ID or number may use a minimum greater than one so it can c
 
 The selection's capacity no longer limits the saved minimum. This permits building the group one rule at a time, consistent with ERC-721 selections. Positive safe-integer minimums, valid canonical IDs, range ordering and the 1,000-selection limit still apply. Create, edit, duplicate and Undo/Redo retain the chosen minimum.
 
-Migration `20261109010000_combined_inscription_minimums.sql` updates only the inscription-criteria validator and rewrites no saved rules or assignments. Apply before deploying the backend change. Rehearse against a private backup with `python3 backend/test/check-combined-inscription-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`.
+Migration `20261109010000_combined_inscription_minimums.sql` (applied November 9, 2026) updated only the inscription-criteria validator.
 
 Portal input errors now distinguish trusted validation messages from unexpected service failures. Invalid ranges or minimums show specific input guidance with HTTP 400; unexpected provider/database errors remain sanitized with retry/operator guidance. Provider URLs, credentials and raw database details are never copied into the response.

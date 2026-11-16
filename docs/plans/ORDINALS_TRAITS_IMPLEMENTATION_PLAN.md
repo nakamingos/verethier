@@ -1,5 +1,7 @@
 # Ordinals trait roles with shared IDs on each rule
 
+Status: historical plan, implemented October 2026; trait storage later moved to canonical `trait_filter`. Current behavior is documented in the [backend README](../../backend/README.md#ordinals-traits).
+
 Use ord.net for live trait verification. Store all inscription IDs matching each configured trait rule on that rule, then use Xverse for fresh ownership checks during an ord.net outage. Store no per-member inscription list, full trait catalog, or cached ownership.
 
 1. **Keep `/setup add-rule`.** Enable the existing `attribute_key`, `attribute_value`, and `min_items` options for Ordinals. Reuse case-insensitive matching and key-only matching when the value is `ALL`. Autocomplete uses sampled or warmed ord.net traits within Discord's response deadline; allow manual entry. The existing deferred rule-creation flow builds and validates the complete matching ID list before saving the rule.

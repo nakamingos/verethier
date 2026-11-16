@@ -2,60 +2,54 @@
 
 **Verify your wallet. Get your roles.**
 
-Discord-based wallet verification for Ethscriptions, NFTs, ERC-20 tokens and Bitcoin Ordinals communities.
+Bouncer is a Discord bot and web app that assigns Discord roles to members who prove they own a wallet holding the right assets. It supports Ethscriptions, EVM NFTs and ERC-20 tokens (Ethereum, Base and Robinhood), Bitcoin Ordinals, Bitcoin Stamps and Solana tokens/NFTs.
 
 Bouncer is split into two deployable apps:
-- `backend/`: a NestJS API and Discord bot
-- `frontend/`: an Angular verification app used by Discord users when they follow a verify link
+
+- `backend/`: NestJS API, Discord bot, scheduled role checks and Supabase migrations
+- `frontend/`: Angular app for the verification page, the admin **Control Room** (`/admin`) and the **member portal** (`/member`)
 
 ## Features
 
-- Wallet verification with EIP-712 signatures
-- Collection-level, category-level, and trait-level verification rules
-- ERC-20 token balance rules with exact decimal amounts and wallet stacking on Ethereum, Base and Robinhood mainnet
-- ERC-721 and ERC-1155 NFT rules on Ethereum, Base and Robinhood mainnet
-- Bitcoin mainnet Ordinals quantity and trait rules using Xverse or UniSat wallet signatures, persistent collection metadata, and ordered ownership API fallbacks
-- Wallet stacking across multiple verified addresses
-- Scheduled reconciliation of previously earned roles: restore eligible roles, remove ineligible roles, and retry failed Discord changes. New roles still require explicit wallet verification.
-- Rich Discord verification result messages
+- **Wallet proofs.** EIP-712 signatures for EVM wallets, including deployed (ERC-1271) and undeployed (ERC-6492) smart wallets and Base Account; BIP-322/legacy message proofs for Bitcoin (Xverse, UniSat); Ed25519 signatures for Solana (Phantom). Signing never requests approvals or transactions.
+- **Rules.** Collection, trait (up to ten AND/OR conditions), specific-ID/number and quantity rules for Ethscriptions, Ordinals, EVM NFTs (ERC-721/1155) and Stamps; exact-unit minimum balances for ERC-20 and Solana tokens; Solana Token Metadata, Core, compressed and printed-edition NFTs. One rule can grant up to 20 roles.
+- **Stacking and combined counts.** Holdings stack across a member's saved wallets. Collectible rules sharing a channel, role and minimum combine their counts, even across protocols; each asset counts once.
+- **Role upkeep.** Scheduled checks restore eligible previously earned roles and remove roles that are no longer earned. Newly eligible roles still need the member to verify. Provider failures never count as zero holdings, so uncertain checks keep existing roles.
+- **Control Room.** Discord-authenticated admin dashboard: rules with review, Undo/Redo and duplicate; channel setup and **Check Setup**; verification messages; member lookup and repairs; wallet blocks; role actions; audit log; activity feed; privacy-aware exports; operator-only bulk role checks.
+- **Member portal.** Manage saved wallets across communities, link or transfer wallets with a fresh signature, see earned and available roles, control per-community sharing.
+- **Privacy.** Wallets are private by default; community sharing and exports need member permission. The public policy is the app's `/privacy` page; see also [privacy operations](docs/privacy-operations.md).
 
-## Requirements
-
-- Node.js `22.12+` (22.x) for the frontend; the backend also supports `20.19+`
-- Yarn `1.22.x`
-- Supabase CLI for local database work
-- A Discord application/bot and Supabase project(s)
-
-## Project Layout
+## Project layout
 
 ```text
 verethier/
 ├── backend/    # NestJS API, Discord bot, Supabase migrations, tests
-├── frontend/   # Angular verification app
-└── README.md
+├── frontend/   # Angular verification page, Control Room and member portal
+├── docs/       # Feature, operations and planning documentation
+└── handoff/    # Styling reference package (integrated November 2026)
 ```
 
-## Quick Start
+## Requirements
 
-### 1. Backend
+- Node.js `22.12+` (22.x) for both apps
+- Yarn `1.22.x`
+- Supabase CLI and Docker for local database work
+- A Discord application with a bot user, and Supabase project(s)
+
+## Quick start
+
+### Backend
 
 ```bash
 cd backend
 yarn install
-cp env.example .env
-```
-
-Fill in `backend/.env` using [backend/env.example](backend/env.example).
-
-If you want the checked-in frontend dev config to work without changes, run the backend on port `3200`:
-
-```bash
+cp env.example .env   # then fill it in; see backend/env.example
 PORT=3200 yarn start:dev
 ```
 
-If `PORT` is unset, the backend defaults to `3000`.
+The checked-in frontend development config ([env.dev.ts](frontend/src/env/env.dev.ts)) expects the API at `http://localhost:3200/api`. Without `PORT`, the backend listens on `3000`.
 
-### 2. Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -63,186 +57,84 @@ yarn install
 yarn ng serve
 ```
 
-The Angular dev server runs on `http://localhost:4200`.
+The dev server runs on `http://localhost:4200`.
 
-The checked-in dev environment file, [env.dev.ts](frontend/src/env/env.dev.ts), currently points to `http://localhost:3200/api`.
-
-For mobile EVM wallet troubleshooting, open `/wallet-check`, start **Bouncer kit**, then use **Test signature** after connecting. It uses the same signing path as verification with a separate diagnostic message and never calls the verification API or changes Discord roles. **Copy connection details** includes signing stages, WalletConnect request-sent events, relay state, and page visibility, but excludes addresses, signatures, message payloads, pairing links, and session topics. WalletConnect's request-sent event does not confirm that the wallet displayed a prompt. The WalletConnect-only mode remains a connection test.
-
-### 3. Local Supabase
-
-Migrations live in [backend/supabase/migrations](backend/supabase/migrations).
-
-For a fresh local database:
+### Local database
 
 ```bash
 cd backend
 npx supabase start
-npx supabase db reset
+npx supabase db reset   # applies every migration in backend/supabase/migrations
 ```
 
-## Environment Overview
+## Configuration
 
-- Backend runtime config is documented in [backend/env.example](backend/env.example) and [backend/.env.production.example](backend/.env.production.example).
-- Frontend API/RPC settings live in [env.ts](frontend/src/env/env.ts) and [env.dev.ts](frontend/src/env/env.dev.ts).
-- NFT/token checks use the backend's `RPC_URL` for Ethereum, `BASE_RPC_URL` for Base and `ROBINHOOD_RPC_URL` for Robinhood. Each requires a full HTTP(S) URL for its mainnet. Base configuration and migration instructions are documented in [Base mainnet](backend/README.md#base-mainnet).
+Backend settings are documented in [backend/env.example](backend/env.example) (local) and [backend/.env.production.example](backend/.env.production.example) (production). The main groups:
 
-Create rules with `/setup add-nft-rule`, `/setup add-ordinals-rule`, or `/setup add-ethscription-rule`. The command selects the asset type and shows only its relevant options; existing rules, confirmations and Undo use the same flow. Refresh slash commands after deploying this change.
+- **Discord:** `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (portal sign-in), `DISCORD_BOT_TOKEN`
+- **Databases:** `DB_SUPABASE_*` (application database, service-role key) and `DATA_SUPABASE_*` (Ethscriptions market data)
+- **EVM:** `RPC_URL` (Ethereum), `BASE_RPC_URL`, `ROBINHOOD_RPC_URL`; full mainnet URLs. Alchemy URLs also provide NFT metadata.
+- **Bitcoin:** `XVERSE_API_KEY`, `ORDINALS_PROVIDER`, ord.net wallet settings and fallback providers for Ordinals; optional Stamps provider overrides
+- **Solana:** `SOLANA_ENABLED`, `SOLANA_RPC_URL`, `SOLANA_DAS_URL` (Helius in production)
+- **Optional:** `OPENSEA_API_KEY` (collection lookup), `BOUNCER_OPERATOR_DISCORD_IDS`, `CLIENT_IP_HEADER`
 
-Use `/setup list-rules` to show all server rules, or add `asset_type:NFT`, `asset_type:Ordinals`, or `asset_type:Ethscriptions` to filter the list. Pagination keeps the selected filter.
+The frontend has no secrets. Its API URL lives in [env.ts](frontend/src/env/env.ts); the public WalletConnect/Reown project ID is in `frontend/src/app/services/evm-wallet.config.ts`.
 
-For a Robinhood NFT rule:
+## Setting up verification
+
+Admins can do everything from the Control Room at `/admin`, or with `/setup` slash commands:
+
+| Command | Purpose |
+| --- | --- |
+| `/setup add-ethscription-rule`, `add-ordinals-rule`, `add-nft-rule`, `add-token-rule`, `add-stamps-rule`, `add-solana-nft-rule`, `add-solana-token-rule` | Create a rule for that asset family |
+| `/setup list-rules`, `edit-rule`, `remove-rule` | Browse (filter with `asset_type`), edit with Undo/Redo, or remove rules |
+| `/setup verification` | Refresh, re-post or recover a channel's verification message |
+| `/setup block-wallet`, `unblock-wallet`, `list-blocked-wallets` | Server-scoped wallet restrictions |
+| `/setup refresh-collection` | Refresh a saved Ordinals collection catalog |
+| `/setup audit-log` | Recent role assignment activity |
+| `/help`, `/join` | Member-facing shortcuts; admins also get **Check Setup** from `/help` |
+
+Creating a rule posts a verification message in its channel if there isn't one already. Members click the message's button, open their personal link, connect a wallet and sign. Examples:
 
 ```text
-/setup add-nft-rule channel:#verify role:Holder network:Robinhood contract_address:0x…
-```
-
-Omitting `network` defaults NFT rules to Ethereum. Wallet verification uses the existing signing flow; the backend checks the verified address on the rule's network. ERC-1155 rules still check IDs 0–99 by default, or the configured token ID list/range.
-
-NFT rules also support the existing `attribute_key` and `attribute_value` options. For example, `attribute_key:Color attribute_value:Red min_items:2` counts two matching NFTs or ERC-1155 copies. Traits use Alchemy metadata through the existing backend RPC keys; see [NFT trait configuration](backend/README.md#nft-trait-rules).
-
-For an Ordinals rule, configure `XVERSE_API_KEY` on the backend and use the collection's Xverse slug:
-
-```text
+/setup add-nft-rule channel:#verify role:Holder network:base contract_address:0x… min_items:1
+/setup add-token-rule channel:#verify role:Whale contract_address:0x… min_balance:1000
 /setup add-ordinals-rule channel:#verify role:Holder slug:pizza-comrades min_items:10
+/setup add-ordinals-rule channel:#verify role:Early inscription_numbers:0-99999 min_items:1
 ```
 
-The collection label comes from the configured provider. Bitcoin mainnet is implicit; connect the Taproot Ordinals address (`bc1p…`) holding your inscriptions with Xverse or UniSat. Ordinals-only channels select Bitcoin automatically; mixed channels offer Ethereum, Xverse, or UniSat within the existing verification page. Multiple verified Bitcoin wallets stack distinct inscriptions. Add `attribute_key` and optionally `attribute_value` for a trait rule; `min_items` counts matching inscriptions. Trait setup requires ord.net and saves the collection's complete matching ID list on the rule.
-
-UniSat browser-extension users choose UniSat and connect normally. Mobile users choose UniSat, then **Open in UniSat app**, and connect/sign inside the app's browser. The same verification link and selected wallet are retained. This uses UniSat's HTTPS `openDapp` link from its [developer guidance](https://github.com/unisat-wallet/dev-support/issues/105#issuecomment-5307886170); use a current UniSat app release. Mainnet is checked using `getChain()` so Fractal mainnet cannot be mistaken for Bitcoin mainnet. Both wallets sign the backend's exact message as a BIP-322 simple proof. Wallet selection does not change `ORDINALS_PROVIDER`, collections, role checks, or API billing. No additional API key or database migration is required for UniSat support.
-
-Set `ORDINALS_PROVIDER=ordnet` to store collection IDs and traits in Supabase, refreshing each unique collection with scheduled role checks every six hours by default. Compatible collection and trait ownership checks try a fresh **ord.net** scan first. Explicit checks fall back to **Ordiscan → SUBFROST → Sandshrew → Xverse**, configurable through `ORDINALS_OWNERSHIP_PROVIDERS`, if ord.net is unavailable. Number/range selections scoped to an ord.net collection also use ord.net directly; unscoped numbers and exact-ID ownership checks use wallet inventories. Automatic Control Room rule-save rechecks require ord.net-compatible Ordinals rules and never fall back to other Ordinals providers. Apply `20261109040000_ordnet_rule_save_checks.sql` before publishing this policy. Set backend-only `ORDISCAN_API_KEY`, `SANDSHREW_API_KEY`, and `XVERSE_API_KEY`; SUBFROST uses its public endpoint. Unavailable or exhausted providers are skipped, and uncertain checks retain existing roles. Back up Supabase and apply `20261015010000_add_ordinal_collection_cache.sql` before deploying. Admins can refresh early with `/setup refresh-collection collection_slug:pizza-comrades`. See [catalogs and fallback behavior](backend/README.md#persistent-catalogs-and-wallet-ownership-fallbacks).
-
-For specific **Ordinals or Ethscriptions**, use `/setup add-ordinals-rule` or `/setup add-ethscription-rule` with either `inscription_ids` (full ID or comma-separated IDs) or `inscription_numbers` (global numbers or inclusive ranges). Leave `slug` and attributes empty:
-
-```text
-/setup add-ordinals-rule channel:#verify role:EarlyHolder inscription_numbers:0-99999 min_items:1
-/setup add-ethscription-rule channel:#verify role:EthscriptionHolder inscription_numbers:5853618,6000000-6000099 min_items:1
-```
-
-Ordinals IDs have the `transactionhashi0` format; Ethscription IDs are `0x` transaction hashes. `min_items:1` accepts any selected asset; three selected IDs with `min_items:3` require all three across linked wallets. These checks also support assets outside collections. Ordinals selections use fresh wallet inventories through the ownership fallback chain; number/range rules skip ID-only providers and use Xverse when necessary. Specific Ethscriptions use the public Ethscriptions API, with marketplace escrow handling. Apply `20261011020000_add_inscription_selection_rules.sql` before deployment. See [selection limits and storage](backend/README.md#specific-inscription-rules).
-
-NFT collection setup in the Control Room also supports OpenSea collection URLs/slugs when the backend has `OPENSEA_API_KEY`. The key is never needed on the frontend. See [collection lookup and scope selection](docs/nft-collection-lookup.md); direct contract entry remains available without this optional key.
+Rule details for each family are in the [backend README](backend/README.md) and the feature docs below.
 
 ## Testing
 
 ```bash
 cd backend
+yarn typecheck
 yarn test --runInBand --testPathIgnorePatterns=live_test
 
 cd ../frontend
 yarn test --watch=false --browsers=ChromeHeadless
+yarn build && node test/wallet-connection.smoke.cjs   # one of the browser smoke suites in frontend/test
 ```
 
-An optional, read-only provider smoke test uses the local backend key and API credits:
+Browser smoke suites use Playwright's Chromium (`CHROME_BIN`), simulated wallets and mocked APIs. Optional read-only live checks are listed in the backend README; some use paid provider credits.
 
-```bash
-cd backend
-yarn build
-node test/check-ordinals-live.cjs
-```
+## Deployment
 
-## Deployment Notes
+Both apps run on Railway (Railpack, Node 22) and deploy from `main`.
 
-- Backend and frontend deploy separately.
-- The frontend is built output plus static serving: `yarn build` then `yarn start`.
-- On Railway, prefer `Railpack` for both services.
-- The frontend `start` script serves `dist/frontend/browser` and expects a build to exist first.
-- For Ordinals, back up the application database and apply `20261008010000_add_ordinals_verification.sql` before deploying the updated apps. Set `XVERSE_API_KEY` on the Railway backend; `BASE_URL` must be the verification page's origin. Use Node.js 20.19+ for Bitcoin signature verification. No Bitcoin RPC URL or frontend API key is needed.
+- **Backend:** run exactly one instance; see [Deployment: run one instance](backend/README.md#deployment-run-one-instance).
+- **Frontend:** `yarn build`, then Caddy serves `dist/frontend/browser` using [frontend/Caddyfile](frontend/Caddyfile), which also forwards `/api/*` to the backend so portal cookies stay on the frontend origin.
+- **Database:** production has every migration in [backend/supabase/migrations](backend/supabase/migrations) applied, through `20261116010000_community_wallet_visibility.sql`. Apply new migrations to production before deploying code that depends on them; see [database migrations and backups](docs/DATABASE_MIGRATION.md).
 
-## Docs
+## Documentation
 
-For a one-time grant-only Ordinals catch-up, build the backend and run
-`yarn ordinals:grant-once --server SERVER_ID` from `backend`. It uses the linked
-Supabase CLI login and the live `DISCORD_BOT_TOKEN` from the environment or the
-gitignored local env files. Add `--data-workdir PATH` pointing to the separately
-linked holdings project to include combined Ethscription/Ordinals minimums.
-The default is a dry run; `--apply` rechecks eligibility and adds missing roles.
-Only saved Bitcoin users who are still server members are checked. Existing
-roles are preserved, new grants are tracked normally, and a private journal is
-written under `backend/temp` (or the path supplied with `--report`). This does
-not enable recurring grants or start another bot/scheduled role monitor.
-Use `--retry-report FILE` to retry only members with failed/unavailable checks
-in an earlier journal, or `--user DISCORD_USER_ID` to check one saved holder.
-Use `--collections-only` to restrict the Ordinals scope to collection rules and
-their shared collectible minimums, skipping specific inscription selections.
-Use `--shared-evm-only` to check only the EVM paths of those shared roles, without
-an Ordinals ownership lookup. The candidate members still need a saved Bitcoin
-wallet; roles available only through EVM rules remain outside this command.
-
-- [Backend README](backend/README.md)
-- [Frontend README](frontend/README.md)
+- [Backend README](backend/README.md): configuration, rule behavior per asset family, providers, scripts
+- [Frontend README](frontend/README.md): wallet connections, diagnostics, smoke tests
+- Features: [portals (Control Room and member portal)](docs/portals.md) and [portal styling](docs/portal-styling.md) · [smart wallets](docs/smart-wallet-verification.md) · [Solana](docs/solana-verification.md) · [Bitcoin Stamps](docs/bitcoin-stamps.md) · [NFT collection lookup](docs/nft-collection-lookup.md) · [multiple role outputs](docs/multi-role-rules.md) · [bulk role checks](docs/bulk-role-checks.md) · [wallet checking and dormancy](docs/wallet-checking.md) · [activity feed](docs/bouncer-activity-log.md) · [wallet signing privacy](docs/wallet-signing-privacy.md)
+- Operations: [database migrations and backups](docs/DATABASE_MIGRATION.md) · [privacy operations](docs/privacy-operations.md) · [verification incidents](docs/verification-reliability.md) · [domain reputation review](docs/blockaid-domain-review.md)
+- Plans: [optional feature backlog](docs/plans/optional-features.md) · [core implementation plan](docs/plans/halcyon-core-implementation-plan.md) and earlier feature plans in [docs/plans](docs/plans)
 
 ## License
 
 [CC0 1.0 Universal](LICENSE)
-
-## ERC-20 token rules
-
-Use `/setup add-token-rule` with `channel`, `role`, `contract_address`, and a required `min_balance` such as `1000` or `0.5`. Set `network:base` or `network:robinhood` for those mainnets; otherwise Ethereum is used. The matching backend `RPC_URL`, `BASE_RPC_URL` or `ROBINHOOD_RPC_URL` setting applies.
-
-The bot reads token decimals, name, and symbol from the contract. Amounts are compared as exact base-unit integers; excess decimal precision is rejected. Linked EVM wallets are deduplicated and summed at one block per network. These rules check tokens held directly in wallets. Tokens without readable `decimals`, `balanceOf`, and `totalSupply` are rejected. Name and symbol are optional.
-
-`/setup list-rules asset_type:erc20` filters token rules. Scheduled checks follow assignment history: newly eligible roles require explicit verification, previously earned roles can be restored, and RPC failures preserve existing roles. Database `min_balance` stores canonical base units as text; `token_decimals` and `token_symbol` describe display amounts. Token rules leave `min_items` null.
-
-## Audit log
-
-`/setup audit-log days:7` displays recent assignment activity with Previous/Next buttons, page numbers, and entry ranges. Pages contain up to 20 complete rows and adjust to Discord’s description limit without cutting rows or wallet links. Each view belongs to its requesting administrator and expires after five minutes; rerun the command to refresh it.
-
-The log uses the latest saved record for each user/role pair, rather than an immutable event history. Larger result sets and wallet lookups are paginated in Supabase.
-
-## Discord activity feed
-
-Control Room → Bot Settings → Bouncer activity log selects an optional Discord text channel and event types for verification outcomes, wallet additions/removals and actual Bouncer role changes. It starts disabled, suppresses mention pings and never posts wallet addresses or private block notes. Wallet changes require current community sharing permission. Migration `20261107020000_bouncer_log.sql` is required before deployment; no new environment variables are needed. See [configuration, privacy and delivery](docs/bouncer-activity-log.md).
-
-## Bulk role checks
-
-Control Room → Bulk role check previews current role holders or verified server members, then checks saved proven wallets against one rule or all server rules. It can grant new roles without another signature. Grants-only is the default; optional reconciliation requires separate confirmation and preserves roles during provider uncertainty. Durable progress, per-member results, cancellation/resume and failed-member retries are included. Three member workers overlap bounded ownership reads and share short-lived fresh collection responses. Apply migrations `20261107030000_bulk_role_checks.sql` and `20261109030000_bulk_role_throughput_resume.sql` before deploying these controls. See [bulk role checks](docs/bulk-role-checks.md).
-
-## Wallet blocks
-
-Server administrators can manage wallet restrictions:
-
-```text
-/setup block-wallet address:0x… reason:Temporarily shared asset across accounts
-/setup unblock-wallet address:0x…
-/setup list-blocked-wallets
-```
-
-Blocks apply only to the server where the command runs and cover EVM wallets across supported networks and Bitcoin mainnet Ordinals wallets (`bc1p…`). Blocked wallets cannot complete verification or contribute to stacked holdings. Blocking or unblocking immediately rechecks the linked member’s previously earned roles in that server. Other eligible wallets still count, and provider failures preserve existing roles for retry. Blocks remain attached to the address when it is unlinked or linked to another Discord account. The administrator list includes the full address, reason, blocking administrator, and date, with Previous/Next buttons. This blocks a wallet; it does not ban a Discord account or block an inscription from moving to another wallet.
-
-Apply `20261013010000_add_wallet_blocklist.sql` before deploying. `DB_SUPABASE_KEY` must be a backend service-role key; anonymous/public keys cannot access wallet restrictions. No new environment variables are required.
-
-## Editing rules
-
-Use `/setup edit-rule rule_id:173` to open a prefilled form. Search the rule selector by ID, role name, or collection. Review the before/after preview, then Save or Cancel. Editors expire after ten minutes; another administrator's changes require reopening the form. Long previews attach the complete values, and lists use two text fields without dropping entries. Lists too long for both fields are rejected; numeric ranges can shorten them.
-
-After saving, Undo restores the original requirements and offers Redo. Redo reapplies the edit and offers Undo again. This cycle can repeat; each successful action opens a fresh five-minute button window. Buttons belong to the administrator who opened the editor, and an old button or a newer edit cannot overwrite the rule. Undo and Redo restore the same rule row and recheck previously earned roles each time. Previously validated definitions can be restored during provider outages; fresh ownership checks preserve existing roles when results are uncertain. Only a matching, unexpired Ordinals trait snapshot is reused.
-
-The editor changes requirements within the existing rule type: collection and traits, specific IDs or numbers, NFT token IDs, minimum item count, or ERC-20 minimum balance. IDs stay IDs and numeric rules stay numeric rules. Rule ID, channel, role, asset type, network, and contract remain fixed. NFT collection labels also stay fixed; changing an Ordinals collection refreshes its label and trait snapshot.
-
-Saving rechecks everyone who previously earned the affected role against all rules for that role in the server. Alternative qualifying rules preserve the role; newly eligible members who never earned it must verify themselves. Provider errors preserve existing roles for a later scheduled check. No database migration or new environment variables are needed. Restarting the backend registers the command; reload Discord if it does not appear.
-
-### Combined collectible minimums
-
-Collectible rules in the same server with the same Discord role and `min_items` combine their matching holdings. For example, two rules with minimum 10 can qualify a member holding 7 matching Ethscriptions and 3 matching Ordinals across their verified wallets. Rules with different minimums remain alternative ways to earn the role. Initial verification uses the rules in that verification channel; scheduled checks consider all rules for the earned role.
-
-Overlapping rules count each asset once. NFT identity includes its network, contract, and token ID; ERC-1155 copies retain their quantity without counting the same copies twice. ERC-20 balances remain independent. An incomplete combined check preserves an earned role unless confirmed holdings already meet the minimum. Use one collection per rule; add another rule with the same role and minimum to include another collection. `/setup list-rules` labels combined channel groups and their shared minimum, including when an asset filter hides other members of the group. The single-collection migration splits existing comma-separated rules and the database rejects new comma-separated slugs.
-
-### Privacy controls and Bouncer Operators
-
-Migration `20261027010000_privacy_controls.sql` introduces private-by-default community wallet sharing, member export choices, fresh filtered CSV exports, one-year removed-wallet association cleanup and operator-reviewed account deletion. Apply the rehearsed migration before releasing the portal/backend. The public policy is `/privacy`.
-
-Set backend-only `BOUNCER_OPERATOR_DISCORD_IDS` to comma/whitespace-separated numeric Discord user IDs to appoint operators. Empty or malformed configuration grants no extra access. Operators can inspect private retained data and use a reasoned, audited export override. Existing Discord admin/owner checks remain required for server changes. The owner configures this variable manually in Railway. See [privacy implementation](docs/plans/privacy-implementation-plan.md) and [privacy operations/recovery](docs/privacy-operations.md).
-
-### Solana implementation status
-
-Solana wallet proofs, fungible-token rules, and Token Metadata, Core, compressed and printed-edition NFT rules are live in production. The database migrations were applied October 29–30, 2026, and Solana is enabled with Helius. Live Phantom acceptance (mobile, linking/transfer and Discord verification) and checks against representative real assets remain open; see [Solana verification](docs/solana-verification.md) for configuration, supported scope and the deferred checklist.
-
-## Bitcoin Stamps
-
-Bitcoin Stamps rules and Stamps-specific legacy/SegWit wallet proofs are released; the production migration was applied November 5, 2026. See [scope, providers, migration and release status](docs/bitcoin-stamps.md). Ordinals-only channels remain Taproot-only.
-
-### Duplicate rules and multiple roles
-
-Rules → Duplicate copies the complete requirements into an independent draft with a new role selection. Checkboxes in the Discord roles dropdown select multiple role outputs from one set of requirements; rechecks and role removals still respect alternative qualifying rules. Apply migration `20261108010000_multi_role_rules.sql` before deployment. No new environment variables are needed. See [behavior and validation](docs/multi-role-rules.md).

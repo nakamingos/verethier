@@ -1,74 +1,41 @@
 # Bouncer Backend
 
-NestJS API and Discord bot for wallet verification, rule evaluation, and role assignment.
+NestJS API and Discord bot for wallet verification, rule evaluation, role assignment and the Control Room/member portal APIs.
 
 When Discord is enabled, startup waits up to 60 seconds for the gateway and aborts if it cannot connect. Once running, `/api/health` returns HTTP 503 if the bot becomes unavailable, so a running HTTP server cannot mask broken verification buttons. When Discord is intentionally disabled, the health check covers the API alone.
 
 ## Stack
 
-- NestJS 9
-- Supabase / Postgres
+- NestJS 11, TypeScript (strict null checks)
 - Discord.js 14
+- Supabase / Postgres
+- viem (EVM), bitcoinjs-lib and bip322-js (Bitcoin), @noble/curves (Solana Ed25519)
 - Jest
-
-## What It Does
-
-- Registers and manages Discord verification rules
-- Verifies wallet ownership with EIP-712 signatures
-- Evaluates collection-level, category-level, and trait-level rules
-- Tracks assigned roles in `verifier_user_roles`
-- Supports scheduled dynamic re-verification via `DYNAMIC_ROLE_CRON`
 
 ## Requirements
 
-- Node.js `20.19+` or `22.12+` recommended for the repo as a whole
+- Node.js `22.12+` (22.x)
 - Yarn `1.22.x`
-- Supabase CLI for local database work
+- Supabase CLI and Docker for local database work
 
 ## Setup
 
 ```bash
 yarn install
 cp env.example .env
+PORT=3200 yarn start:dev   # matches the checked-in frontend dev config; default port is 3000
 ```
 
-Then fill in `backend/.env`.
+## Environment variables
 
-For local development that matches the checked-in frontend dev config:
+[env.example](env.example) lists every variable with comments; [.env.production.example](.env.production.example) shows the production set. Notes:
 
-```bash
-PORT=3200 yarn start:dev
-```
-
-If `PORT` is unset, the app listens on `3000`.
-
-## Environment Variables
-
-See [env.example](env.example) for the full list. The main ones are:
-
-```bash
-BASE_URL=http://localhost:4200
-
-DISCORD=1
-DISCORD_CLIENT_ID=...
-DISCORD_BOT_TOKEN=...
-
-DATA_SUPABASE_URL=...
-DATA_SUPABASE_ANON_KEY=...
-
-DB_SUPABASE_URL=...
-DB_SUPABASE_KEY=...
-
-NONCE_EXPIRY=300000
-DYNAMIC_ROLE_CRON=EVERY_6_HOURS
-```
-
-Notes:
-- `BASE_URL` is used for CORS and verification flow URLs.
-- `DATA_*` and `DB_*` can point at separate Supabase projects.
-- `DB_SUPABASE_KEY` must be the backend database's service-role key. Wallet restrictions are inaccessible to anonymous and authenticated public clients.
-- `DYNAMIC_ROLE_CRON` accepts either the named presets in [environment.config.ts](src/config/environment.config.ts) or a raw cron expression.
-- `CLIENT_IP_HEADER` names the header your hosting edge overwrites with the caller's IP; anonymous requests (wallet verification, sign-in) are rate-limited per caller using it. On Railway, set `CLIENT_IP_HEADER=x-real-ip`. Leave it unset when nothing in front of the backend overwrites a header, otherwise callers could choose their own rate-limit key. If the header is missing or isn't a single IP, the backend logs one warning and falls back to the connection address, which behind a proxy is shared by every caller. Signed-in portal users are always limited per Discord account.
+- `BASE_URL` is the verification/portal origin with no trailing slash. It drives CORS, verification links and wallet-proof origins.
+- `DATA_*` and `DB_*` can point at separate Supabase projects. `DB_SUPABASE_KEY` must be the application database's service-role key; wallet restrictions and other private tables are inaccessible to public clients.
+- `DISCORD_CLIENT_SECRET` enables Discord sign-in for the portals. Register `{BASE_URL}/api/portal/auth/callback` as the OAuth2 redirect.
+- `DYNAMIC_ROLE_CRON` accepts the named presets in [environment.config.ts](src/config/environment.config.ts) or a raw cron expression (default every six hours).
+- `CLIENT_IP_HEADER` names the header your hosting edge overwrites with the caller's IP; anonymous requests (wallet verification, sign-in) are rate-limited per caller using it. On Railway, set `CLIENT_IP_HEADER=x-real-ip`. Leave it unset when nothing in front of the backend overwrites a header, otherwise callers could choose their own rate-limit key. If the header is missing or isn't a single IP, the backend logs one warning and falls back to the connection address. Signed-in portal users are always limited per Discord account.
+- `BOUNCER_OPERATOR_DISCORD_IDS` appoints Bouncer Operators; see [privacy operations](../docs/privacy-operations.md).
 
 ## Deployment: run one instance
 
@@ -79,146 +46,7 @@ Run exactly one backend instance. Verification nonces, the Discord replies they 
 - If the host overlaps the old and new deployment, both processes briefly connect to Discord with the same bot token. Disable deployment overlap, or accept that links created during the overlap may need to be requested again.
 - Prefer deploying outside busy periods such as mints or announcements.
 
-Running more than one instance would first require moving nonces and pending verification state to Postgres or Redis.
-
-## Wallet Blocks
-
-`/setup block-wallet address:… reason:…`, `/setup unblock-wallet address:…`, and `/setup list-blocked-wallets` are administrator-only commands. The list is private and paginated. Blocks cover EVM and Bitcoin mainnet Ordinals wallets and apply only in the current Discord server. Blocked wallets cannot complete signature verification or contribute to stacked holdings. The same address stays blocked if it changes Discord accounts.
-
-Blocking or unblocking rechecks the linked member's previously earned roles in that server immediately. Eligible unblocked wallets still count; unavailable checks preserve existing roles for retry. Blocks are stored in `verifier_wallet_blocks` with the server, canonical address, wallet type, reason, administrator, and timestamp. Apply `20261013010000_add_wallet_blocklist.sql` before deploying. Local migration and access-control checks are in `test/wallet-blocks-migration.sql`.
-
-## Verification Messages
-
-Use `/setup verification` with a required `channel` and `action`:
-
-- **Refresh existing** (`action:refresh`): Update the current message to the Bouncer style while preserving its link, pins, and position.
-- **Create new** (`action:new`): Post another message while leaving existing messages working.
-- **Recover missing** (`action:recover`): Post a message only if the bot cannot find one already in the channel.
-
-For example: `/setup verification channel:#verify action:refresh`. Refresh and recovery look for the bot's verification button in the latest 100 messages, then in pinned messages. Read or edit failures are reported without automatically posting a replacement.
-
-All messages use the channel's existing rules. These actions require Administrator permissions and do not change rules, linked wallets, or assigned roles. This command cleanup needs no database migration.
-
-Verification links use a dedicated in-memory cache, separate from autocomplete and other cached data. Its 10,000-entry limit accommodates nonce records and their latest-link markers without letting autocomplete warming evict active links. The original expiry, replacement, and single-use checks still apply. Restarting the backend clears pending links and Discord interactions; members must request a fresh link after a restart. No database storage or migration is required for link caching.
-
-## Ethscriptions Verification
-
-Collection and trait rules share one paginated read of linked wallets' holdings and attributes from the existing market database. This data stays in the verification context in memory and is reused for combined counts and recommendations. A fresh verification reads ownership again; Bouncer does not copy Ethscriptions metadata into its database. Missing attributes do not exclude an asset from collection-wide counts, and failed pages make the check unavailable rather than using a partial count.
-
-Trait values may be strings, numbers, booleans or lists of those values. AND conditions must match the same item; OR matches count that item once. Only queried fields affect the result, so unrelated list or opaque fields cannot abort verification. Missing metadata and unsupported queried values remain unknown. Enough distinct, proven matches can establish eligibility, including combined rules; otherwise uncertainty preserves existing roles. Fresh wallet exports require complete matching evidence. Audit activity reports unsuccessful operations as errors, since Discord and persistence failures also contribute to that count.
-
-Each Discord role is assigned and tracked once per verification, with all matching rules retained in its history and success-message details. Roles the member already holds still have their tracking refreshed. Backend logs report timings for wallet verification, rule loading, each asset type's rule checks, eligibility, role updates, and completion/recommendations. No database migration is required.
-
-## NFT collection lookup
-
-The Control Room can resolve OpenSea collection URLs/slugs into reviewed contract and token-ID fields for new NFT rules. Set the optional backend-only `OPENSEA_API_KEY` to enable lookup. Fixed collection IDs are the default; whole-contract ERC-721 scope requires an explicit selection, and ERC-1155 lookup never falls back to IDs 0–99. Saved rules keep their existing on-chain scope without a runtime OpenSea dependency. No database migration is required. See [scope limits, configuration and pending live checks](../docs/nft-collection-lookup.md).
-
-## NFT Trait Rules
-
-Use `/setup add-nft-rule` with the contract address, and the existing `attribute_key`, `attribute_value`, and `min_items` options. For example, `attribute_key:Color attribute_value:Red min_items:2` requires two matching NFTs across linked wallets. Leaving the value empty matches any value for the selected key. Trait keys and values match without regard to letter case.
-
-Ethereum, Base and Robinhood rules use `RPC_URL`, `BASE_RPC_URL` and `ROBINHOOD_RPC_URL`, respectively. When these are full Alchemy URLs, the backend reuses their keys for that chain's NFT API. Other RPC providers need the optional `ALCHEMY_API_KEY`; enable the required networks for that key. Autocomplete samples the first 100 collection tokens and supports manual entry for other traits. The collection must have readable `attributes` metadata in Alchemy.
-
-ERC-721 collection trait checks discover token IDs through Alchemy, then confirm every current owner and the complete wallet balance through RPC. A specified ERC-721 ID skips discovery. ERC-1155 rules retain their configured ID scope (0–99 by default) and count matching copies. Quantity-only rules continue using RPC alone.
-
-For each owned token, verification reads ERC-721 `tokenURI` or ERC-1155 `uri` at the ownership block. Embedded JSON attributes are decoded fresh on every run, so evolving NFTs use their current traits. Hosted metadata uses Alchemy with `refreshCache:true` when the local ten-minute cache expires. The bot does not fetch arbitrary token URI URLs itself.
-
-The `nft_token_metadata` table caches hosted attributes for ten minutes by network, contract, and token ID, and records fresh embedded attributes for reference. Use a backend Supabase service-role key for cache access; verification falls back to Alchemy if the cache is unavailable. Ownership is checked fresh on every run. Missing metadata or incomplete ownership results produce an unavailable check and preserve existing roles during re-verification.
-
-### Base mainnet
-
-Base (`8453`) supports the same ERC-20 balances, ERC-721/1155 collections and ID selections, multi-trait rules, combined counts and wallet snapshot exports as the other EVM networks. Select Base in the portal or use `network:base` with the existing NFT/token Discord setup commands. Ethereum remains the default. Rule editing, trait suggestions and member requirements retain the selected chain; exports label Base contributions separately from Ethereum and Robinhood.
-
-Set `BASE_RPC_URL` to a production Base mainnet RPC endpoint, for example `https://base-mainnet.g.alchemy.com/v2/YOUR_KEY`. NFT trait discovery and hosted metadata use `base-mainnet.g.alchemy.com/nft/v3`; enable Base for the configured Alchemy key. An absent or wrong-chain Base RPC cannot fall back to another chain's balances or metadata. Other configured networks continue working independently.
-
-Before deploying, rehearse `20261027020000_add_base_network.sql` with `python3 backend/test/check-base-network-migration.py PRIVATE_BACKUP_DIRECTORY`. The migration expands only the NFT/ERC-20 rule and metadata-cache network constraints; it does not rewrite existing records. Back up and apply it before enabling Base rules in production.
-
-Existing signed EVM externally owned accounts can qualify through Base holdings without saving a second copy of the address. Purpose-bound EVM proofs also support deployed ERC-1271 and undeployed ERC-6492 smart accounts, with proof scope limited to their verified networks; see [smart-wallet verification](../docs/smart-wallet-verification.md). Native ETH balance rules and non-EVM wallet families remain separate capabilities. A contract proof on one chain does not establish control of that address on another chain.
-
-## Specific Inscription Rules
-
-`/setup add-ordinals-rule` and `/setup add-ethscription-rule` support exact IDs, lists of IDs, global inscription numbers and inclusive number ranges. Set one of `inscription_ids` or `inscription_numbers`, with optional `min_items`. Leave `slug` and attributes empty. IDs and numbers are separate inputs; they cannot be combined in one rule. Overlapping ranges and duplicate IDs are normalized so each asset counts once across linked wallets. Historical negative Ordinals numbers are accepted (`-10--1`); Ethscription numbers must be nonnegative.
-
-Ordinals selections use the configured wallet ownership fallback chain. Exact IDs intersect a fresh wallet ID inventory. Number/range rules use a provider with complete numbered inventory (Ordiscan, then Xverse by default); ID-only ord nodes are skipped for these rules. Each wallet inventory is shared across applicable rules within a verification. Large ranges remain predicates and are never expanded into individual requests. Keep `XVERSE_API_KEY` for final fallback and validation of exact IDs at setup. No permanent ID-to-number lookup table is stored.
-
-Ethscription selections use the free [public Ethscriptions API](https://api-docs.ethscriptions.com/reference), including assets absent from the marketplace database. Exact hashes use its `transaction_hash[]` batch filter (50 per request); number rules read a wallet's complete direct and escrow inventories, then compare global `ethscription_number` values. The existing marketplace address and previous-owner policy are retained. Collection and trait Ethscription rules continue querying the existing data Supabase.
-
-Selections are stored only on `verifier_rules.inscription_criteria` as `{ "kind": "ids", "ids": [...] }` or `{ "kind": "numbers", "ranges": [[start, end], ...] }`. Ranges stay compact, and these administrator selections do not expire. Member check records omit the selection list and keep rule IDs, count, status and a bounded display summary. No collection metadata import or new member table is needed.
-
-Apply `20261011020000_add_inscription_selection_rules.sql` after backing up the application database, then deploy the backend and refresh slash commands (restart registers them). The migration preserves existing rules, wallets, assignments and trait snapshots. No frontend change or new environment variable is required.
-
-Inputs accept up to 1,000 entries within Discord's 6,000-character option limit. Number checks are capped at 1,000 owned inscriptions per wallet (including escrow for Ethscriptions), with bounded pagination and request timeouts. Larger or incomplete inventories produce an unavailable check instead of an incorrect count. Ownership is fetched fresh for every verification/recheck; overlapping ID batches and number inventories are shared only within that run. API errors, missing selected IDs and malformed/partial pages preserve existing roles; a complete non-match allows removal. Run `yarn test --runInBand test/inscription-rules.spec.ts test/ethscriptions-ownership.spec.ts` and `python3 test/check-nft-migration.py` for the ownership and disposable database checks.
-
-## ord.net Provider Experiment
-
-`ORDINALS_PROVIDER=xverse` remains available for direct Xverse collection checks. Set it to `ordnet` to use fresh ord.net collection ownership first, with the persistent metadata catalog and wallet ownership fallback chain described below. Keep `XVERSE_API_KEY` configured for final fallback. Discord uses `/setup add-ordinals-rule`, and members connect and sign with Xverse or UniSat. Both wallets use the same Bitcoin mainnet Taproot address checks, BIP-322 proof verification, and `wallet_type:bitcoin` records. Existing rules and collection names are preserved. New ord.net rules use the canonical slug as their label. Back up the application database and apply `20261015010000_add_ordinal_collection_cache.sql` before deploying this version.
-
-The public ord.net API is wallet-authenticated: the API wallet's payment address needs at least **0.001 BTC (100,000 sats) confirmed**, and sessions last one hour. This is the bot's dedicated API wallet, not a requirement for members' wallets. The backend signs new BIP-322 login challenges, shares concurrent renewals, and renews before expiration or after a rejected session. Sessions stay in memory. Only collection reads and the two authentication routes are used.
-
-Create a dedicated test wallet locally, then inspect the provider:
-
-```bash
-cd backend                 # When starting from the repository root
-yarn install
-yarn build
-yarn ordnet:wallet         # Creates backend/.env.ordnet once; prints public addresses only
-# Fund the printed PAYMENT address with at least 0.001 BTC and wait for confirmation.
-yarn ordnet:check          # Defaults to Pizza Comrades and our known community wallet
-
-# Optional: inspect several collections or another member's Ordinals address.
-yarn ordnet:check --collection yonder --collection pizza-comrades --collection idiots --wallet bc1p…
-```
-
-The generated `.env.ordnet` is gitignored, created with mode `0600`, and never overwritten. It contains the signing key: retain it privately for wallet recovery. It uses one key with a Taproot Ordinals address and a native SegWit payment address. The check command reads this private file and then the normal `.env`; it does not start Discord or access Supabase. Its output includes complete collection size, owned count, unknown owners, missing/empty trait coverage, owned trait values/counts, and elapsed time.
-
-For an existing dedicated wallet, set `ORDNET_ORDINALS_ADDRESS`, `ORDNET_PAYMENT_ADDRESS`, and `ORDNET_ORDINALS_WIF` (a compressed mainnet WIF key). Set `ORDNET_PAYMENT_WIF` when the payment address uses a different key; otherwise the Ordinals key is used for both. Payment addresses may be native SegWit, Taproot, or nested SegWit. The backend checks that the keys control the configured addresses before requesting a challenge. As an optional manual test, `ORDNET_SESSION_TOKEN` takes precedence over automatic login; leave it empty for automatic renewal.
-
-The application itself reads the normal `.env`, not `.env.ordnet`. To test locally with the generated wallet, launch Node with `--env-file=.env.ordnet` after building; the normal `.env` supplies other application settings. For Railway, put the generated `ORDNET_*` values and `ORDINALS_PROVIDER=ordnet` in **backend** variables. Credentials stay on the backend. Setting `ORDINALS_PROVIDER=xverse` selects Xverse again.
-
-ord.net has no documented arbitrary-wallet holdings endpoint. Its collection scan supplies membership and traits; member ownership is fetched separately. A first scan uses 100-item cursor pages and can still take several minutes. Scans are shared across simultaneous requests, serialized at least 2.1 seconds apart, and bounded at 200 pages (20,000 items). The standalone `ordnet:check` diagnostic continues to inspect live scans; normal verification uses the saved catalog once available.
-
-During a signed member verification, new background requests pause on every Ordinals provider. In-flight requests finish, and a cold collection scan needed by the member is promoted, including its authentication work. Cached autocomplete remains available. A background request waiting at least five minutes can run, at most once every 30 seconds per provider. Background work resumes normally when the last active verification finishes or fails. Intentional pauses do not consume the 45-second queue timeout. There is no overall verification deadline.
-
-The completion message recommends only roles configured in the Discord channel where verification started, excluding roles the member already has or just received. It reuses ownership results from that verification and does not inspect rules in other channels.
-
-Sources: [authentication](https://developers.ord.net/reference/authentication/), [collection owners and traits](https://developers.ord.net/reference/collections/), [rate limits](https://developers.ord.net/reference/errors-rate-limits/).
-
-### Ordinals trait rules
-
-Use the existing `attribute_key`, `attribute_value`, and `min_items` options. Matching is case-insensitive; leave the value empty or use `ALL` to match any value for that key. In ord.net catalog mode, autocomplete and trait validation use the saved complete collection, including rare values, and survive restarts. A first fill can take several minutes; typed entries remain available while suggestions fill. Ownership is always fetched fresh. The seven-day in-memory menu and per-rule snapshots remain available for the direct provider mode and older rules.
-
-Each rule's nullable `ordinal_trait_snapshot` JSONB stores only the matching `inscription_ids`, `criteria_hash`, and `fetched_at`. Live ord.net scans refresh it once per rule per run; changed collection/trait criteria invalidate it. Member check details record provider and status without copying IDs or trait metadata. Snapshot persistence failure does not interrupt an otherwise successful live check.
-
-During ord.net outages, individual verification intersects Xverse wallet collection IDs with the saved list; scheduled checks share batches of up to 25 current-owner lookups across members/rules. Snapshot age is limited to 24 hours; Xverse ownership does not renew its timestamp. A valid snapshot can qualify new members or replacement inscriptions. A failed cached match alone cannot revoke a role. Only a complete collection count below the trait threshold proves ineligibility during an outage; otherwise the rule is unavailable. Roles use OR across their rules, retaining existing roles whenever a remaining rule is uncertain. Both providers must recognize the same collection slug for fallback.
-
-Switching to `ORDINALS_PROVIDER=xverse` keeps existing trait snapshots usable for their remaining lifetime. Live trait refresh and new trait setup require ord.net credentials. Fallback uses the last known traits; subsequent trait changes are confirmed when live ord.net scans resume.
-
-### Persistent catalogs and wallet ownership fallbacks
-
-With `ORDINALS_PROVIDER=ordnet`, the initial complete scan is stored in `ordinal_collections` and `ordinal_collection_attributes`. Attributes follow the marketplace format: `slug`, `inscription_id`, and JSONB `values`, including multiple values for a key. The composite key permits an inscription to belong to more than one collection. No owners, member inventories, or inscription number mappings are stored in these tables.
-
-At the start of scheduled role reverification (every six hours by default), each unique collection used by any server rule is refreshed once, even if no member currently has its role. Checks use the updated catalog after successful refreshes. Member verification can use the previous complete catalog during the refresh. Overdue catalogs encountered between runs trigger a background refresh. All pages, IDs, traits and timestamps are validated before an atomic database replacement; empty or incomplete scans cannot wipe a saved catalog. Failed refreshes retain the last complete version and its original timestamp. This intentionally uses last-known metadata during an ord.net outage; corrections take effect at the next successful refresh. Compatible collection and trait checks first use current owners and traits from a complete live ord.net scan. If that scan fails, explicit checks can use the saved complete catalog with fresh wallet inventories from the configured fallback chain. Automatic rule-save checks remain ord.net-only and retain roles during an outage.
-
-Administrators can run `/setup refresh-collection collection_slug:pizza-comrades` for an immediate background refresh of a collection used by their server. This updates the shared catalog, without changing rule definitions or assigning roles. The slash command is registered on backend startup; reload Discord if it is not visible.
-
-The default `ORDINALS_OWNERSHIP_PROVIDERS` is `ordiscan,subfrost,sandshrew,xverse`. It can be reordered or restricted to those provider names. Missing keys are skipped. Ordiscan uses `ORDISCAN_API_KEY`, Sandshrew uses `SANDSHREW_API_KEY` on its working `/v1/` endpoint, and Xverse uses `XVERSE_API_KEY`. SUBFROST uses its public JSON-RPC endpoint without a key. Public endpoints and free-plan eligibility remain subject to their providers' terms and limits; remove a provider from the order to disable it.
-
-When a verification needs wallet inventories for unscoped number/range rules, other inventory-based rules first share the numbered inventory to avoid duplicate requests. If that lookup fails, collection, trait, and exact-ID checks use their own shared ID inventory through the configured fallback chain, including SUBFROST and Sandshrew. Number/range checks stay unavailable unless a complete numbered inventory succeeds; an ID-only result cannot prove their count. Both successful and failed lookups are shared only within the current run. No additional requests are made when the shared numbered inventory succeeds.
-
-Ordiscan requests reserve one slot in `ordinal_provider_usage` before dispatch, capped at 1,000 per UTC calendar month across this installation. This survives restarts; API use outside this bot may exhaust the account earlier. Provider limits and `Retry-After` are also respected. Invalid responses, HTTP/JSON-RPC errors and timeouts cause fallback with cooldowns. Public ord nodes have a shared short-lived health check requiring their Ordinals index to be within two blocks of their Bitcoin node. Wallet inventories are never reused across independent verification runs. Valid empty inventories mean zero; failures do not. If every provider fails, existing earned roles are preserved and new roles are not granted from uncertain ownership.
-
-Migration checks are in `test/ordinal-catalog-migration.sql`; `test/check-backup.py` rehearses the migration on a restored isolated database and verifies every existing application value is preserved.
-
-## Database
-
-Supabase migrations live in [supabase/migrations](supabase/migrations).
-
-Typical local workflow:
-
-```bash
-npx supabase start
-npx supabase db reset
-```
+Running more than one instance would first require moving nonces and pending verification state to Postgres or Redis. Slash commands are registered on startup; reload Discord if a new command or option does not appear.
 
 ## Scripts
 
@@ -229,83 +57,195 @@ yarn start:dev      # Start in watch mode
 yarn start:debug    # Start with Nest debug mode
 yarn start:prod     # Run dist/main
 
+yarn typecheck      # Type-check source and tests
 yarn test           # Full backend test suite
 yarn test:watch     # Jest watch mode
 yarn test:coverage  # Coverage report
 yarn test:verbose   # Verbose Jest output
-yarn test:debug     # Verbose, no-cache Jest run
 
-yarn typecheck      # Type-check source and tests (strict null checks)
+yarn ordnet:wallet  # Create a dedicated ord.net API wallet (see below)
+yarn ordnet:check   # Inspect live ord.net collection scans
+yarn ordinals:grant-once --server SERVER_ID   # One-time Ordinals grant catch-up (see below)
 ```
 
-`strictNullChecks` is on for all backend source and tests (`tsconfig.json`), so the editor, `yarn typecheck`, the build and Jest all reject code that uses a possibly missing value without handling it.
+Optional read-only live checks (build first; some use paid provider credits):
 
-## Project Layout
+- `node test/check-ordinals-live.cjs`: Xverse Ordinals metadata and holdings
+- `node test/check-smart-wallet-rpc.cjs`: smart-wallet RPC capability for given `RPC_URL`/`BASE_RPC_URL`/`ROBINHOOD_RPC_URL`; see [smart wallets](../docs/smart-wallet-verification.md)
+- `node test/check-smart-wallet-evm.cjs`: smart-wallet proofs against a disposable local EVM
+
+### One-time Ordinals grant catch-up
+
+`yarn ordinals:grant-once --server SERVER_ID` (after `yarn build`) checks saved Bitcoin users who are still server members and adds missing Ordinals roles. It uses the linked Supabase CLI login and `DISCORD_BOT_TOKEN` from the environment or gitignored local env files. The default is a dry run; `--apply` rechecks eligibility and grants. Existing roles are preserved, new grants are tracked normally, and a private journal is written under `backend/temp` (or `--report PATH`). It does not enable recurring grants or start another bot.
+
+- `--data-workdir PATH`: the separately linked holdings project, to include combined Ethscription/Ordinals minimums
+- `--retry-report FILE`: retry only members with failed/unavailable checks in an earlier journal
+- `--user DISCORD_USER_ID`: check one saved holder
+- `--collections-only`: only collection rules and their shared minimums, skipping specific inscription selections
+- `--shared-evm-only`: only the EVM paths of shared roles, without Ordinals lookups. Candidates still need a saved Bitcoin wallet.
+
+## Database
+
+Migrations live in [supabase/migrations](supabase/migrations); production has all of them applied. Locally:
+
+```bash
+npx supabase start
+npx supabase db reset
+```
+
+Backups, rehearsals and the production migration workflow are in [database migrations and backups](../docs/DATABASE_MIGRATION.md).
+
+## Rules and verification
+
+### Verification messages
+
+Use `/setup verification` with `channel` and `action`:
+
+- **Refresh existing** (`action:refresh`): update the current message to the Bouncer style while preserving its link, pins and position.
+- **Create new** (`action:new`): post another message; existing messages keep working.
+- **Recover missing** (`action:recover`): post a message only if the bot cannot find one in the channel.
+
+Refresh and recovery look for the bot's verification button in the latest 100 messages, then pinned messages. Every message uses the channel's current rules. Creating a rule with `/setup` or in the Control Room also posts a message when the channel has none.
+
+Verification links use a dedicated in-memory cache (10,000 entries) separate from autocomplete, with expiry, replacement and single-use checks. Restarting the backend clears pending links.
+
+The completion message recommends only roles configured in the channel where verification started, excluding roles the member already has or just received. It reuses that verification's ownership results.
+
+Interactive verification checks only the proven wallet family: EVM checks Ethereum, Base and Robinhood NFT/token rules plus Ethscriptions; Bitcoin checks Ordinals and Stamps; Solana checks Solana rules. Earned roles that depend on another family are left for complete scheduled checks.
+
+### Editing rules
+
+`/setup edit-rule rule_id:173` opens a prefilled form; search the selector by ID, role name or collection. Review the before/after preview, then Save or Cancel. Editors expire after ten minutes, and another administrator's changes require reopening. The Control Room offers the same editing with more options (multi-trait conditions, role changes, multiple roles).
+
+After saving, Undo restores the original requirements and offers Redo, repeatable, each with a fresh five-minute button window. Buttons belong to the administrator who opened the editor; an old button or a newer edit cannot overwrite the rule.
+
+The editor changes requirements within the existing rule type: collection and traits, specific IDs or numbers, NFT token IDs, minimum count, ERC-20 minimum balance or a selection label. Rule ID, channel, asset type, network and contract stay fixed. Saving rechecks everyone who previously earned the affected role against all rules for that role. Alternative qualifying rules preserve the role; newly eligible members must verify themselves; provider errors preserve existing roles.
+
+### Combined minimums and one collection per rule
+
+Collectible rules in the same server with the same channel, role and `min_items` combine matching holdings. For example, two rules with minimum 10 can qualify a member holding 7 matching Ethscriptions and 3 matching Ordinals. Rules with different minimums remain alternatives. Initial verification uses the verification channel's rules; scheduled checks consider all rules for the earned role.
+
+Overlapping rules count each asset once. NFT identity includes network, contract and token ID; ERC-1155 copies keep their quantity. ERC-20 and Solana token balances don't combine with collectible counts. An incomplete combined check preserves an earned role unless confirmed holdings already meet the minimum.
+
+Use one collection per rule; add another rule with the same role and minimum to include another collection. The database rejects comma-separated slugs. `/setup list-rules` labels combined groups and their shared minimum, even when an asset filter hides other members of the group.
+
+Collection slug input is trimmed, lowercased and has whitespace runs converted to one hyphen (` PIZZA   COMRADES ` → `pizza-comrades`). Ethscriptions collection names and trait keys/values match without case sensitivity and save the data source's spelling.
+
+### Wallet blocks
+
+`/setup block-wallet address:… reason:…`, `/setup unblock-wallet address:…` and `/setup list-blocked-wallets` (also in Control Room → Member Lookup) are administrator-only. Blocks apply only in the current server and cover EVM, Bitcoin and Solana wallets. A blocked wallet cannot complete verification or contribute to stacked holdings, and stays blocked if it moves to another Discord account. Blocking or unblocking immediately rechecks the linked member's previously earned roles; other eligible wallets still count. This blocks a wallet, not a Discord account. Blocks are stored in `verifier_wallet_blocks`.
+
+### Audit log
+
+`/setup audit-log days:7` shows recent assignment activity with pagination (up to 20 rows per page). Each view belongs to its requesting administrator and expires after five minutes. The log shows the latest saved record per user/role pair rather than an immutable event history. The Control Room's Audit Log adds rule changes, role checks and setup activity.
+
+### Ethscriptions
+
+Collection and trait rules share one paginated read of linked wallets' holdings and attributes from the market database (`DATA_SUPABASE_*`). The data stays in memory for that verification. Missing attributes do not exclude an asset from collection-wide counts, and failed pages make the check unavailable rather than using a partial count.
+
+Trait values may be strings, numbers, booleans or lists. AND conditions must match the same item; OR matches count the item once. Missing metadata stays unknown: enough proven matches can still establish eligibility, otherwise uncertainty preserves existing roles.
+
+### EVM NFTs
+
+`/setup add-nft-rule` takes `contract_address`, optional `network` (Ethereum by default, Base, Robinhood), optional `token_ids`, trait options and `min_items`. The Control Room also supports up to ten AND/OR trait conditions and [OpenSea collection lookup](../docs/nft-collection-lookup.md).
+
+- **Token IDs:** comma-separated IDs, inclusive ranges or both (`1,5,20-30`), up to 1,000 unique IDs with full uint256 precision. Blank means any token for ERC-721, and IDs 0–99 for ERC-1155. A minimum can exceed a selection's size so other combined rules can contribute.
+- **Ownership:** read fresh at one block per network, in batches of up to 100. Burned/unminted IDs count as zero; transport failures make the check unavailable.
+- **Traits:** keys and values match without case sensitivity; an empty value (or `ALL`) matches any value. ERC-721 trait checks discover IDs through Alchemy, then confirm owners through RPC. For each owned token, `tokenURI`/`uri` is read at the ownership block; embedded JSON is decoded fresh, and hosted metadata uses Alchemy with a ten-minute cache in `nft_token_metadata`. The bot never fetches arbitrary token URLs itself.
+- **Providers:** `RPC_URL`, `BASE_RPC_URL` and `ROBINHOOD_RPC_URL` must be full mainnet URLs. When they are Alchemy URLs, their keys are reused for the NFT API; other providers need `ALCHEMY_API_KEY` with the networks enabled. A missing or wrong-chain RPC fails that network only; it never falls back to another chain.
+
+### ERC-20 token rules
+
+`/setup add-token-rule` takes `contract_address`, a required `min_balance` such as `1000` or `0.5`, and optional `network`. The bot reads decimals, name and symbol from the contract; tokens without readable `decimals`, `balanceOf` and `totalSupply` are rejected. Amounts are compared as exact base-unit integers (excess precision is rejected), and linked EVM wallets are summed at one block per network. Database `min_balance` stores canonical base units as text. Only tokens held directly in wallets count.
+
+### Smart wallets
+
+Deployed ERC-1271 and undeployed ERC-6492 accounts are verified with the same RPC settings on Ethereum, Base and Robinhood. Contract proofs only count on the network they were signed on; ordinary key proofs, including EIP-7702 delegated accounts signing with their own key, count on every network. See [smart-wallet verification](../docs/smart-wallet-verification.md).
+
+### Specific inscription rules
+
+`/setup add-ordinals-rule` and `/setup add-ethscription-rule` accept `inscription_ids` (IDs or comma-separated lists) or `inscription_numbers` (numbers and inclusive ranges), with optional `min_items` and `label`. Leave `slug` and attributes empty, except that an Ordinals number rule may set `slug` to scope it to an ord.net collection. Ordinals IDs use the `<txid>i0` format; Ethscription IDs are `0x` transaction hashes. Historical negative Ordinals numbers are accepted (`-10--1`).
+
+- Inputs accept up to 1,000 entries within Discord's 6,000-character limit. Overlaps and duplicates are normalized so each asset counts once.
+- Selections are stored in `verifier_rules.inscription_criteria` as `{ "kind": "ids", ... }` or `{ "kind": "numbers", "ranges": [...] }`; ranges stay compact and are never expanded into requests.
+- **Ordinals** selections use fresh wallet inventories through the ownership fallback chain. Number rules need a provider with complete numbered inventory (Ordiscan, then Xverse). A collection-scoped number rule reads the live ord.net collection instead.
+- **Ethscriptions** selections use the [public Ethscriptions API](https://api-docs.ethscriptions.com/reference), including assets outside the marketplace database, with the marketplace escrow policy. Number selections up to 1,000 numbers use its `ethscription_number[]` filter; larger ranges read complete direct and escrow inventories, capped at 1,000 per wallet.
+- Labels (up to 100 characters) identify a selection in confirmations, lists and the editor; they never filter holdings. Label-only edits trigger no ownership checks.
+- Incomplete inventories, API errors or missing selected IDs are unavailable and preserve roles; a complete non-match allows removal.
+
+### Bitcoin Ordinals
+
+`/setup add-ordinals-rule` takes the collection's slug (`slug:pizza-comrades`), optional trait options and `min_items`. Members connect the Taproot Ordinals address (`bc1p…`) with Xverse or UniSat and sign a BIP-322 simple proof of the backend's exact message. Ordinals-only channels select Bitcoin automatically; mixed channels offer the relevant wallet families. Multiple Bitcoin wallets stack distinct inscriptions.
+
+UniSat extension users connect normally. Mobile users choose UniSat, then **Open in UniSat app**, and connect inside its browser; the link and wallet choice are kept. This uses UniSat's HTTPS `openDapp` link. Mainnet is checked with `getChain()` so Fractal mainnet cannot pass as Bitcoin mainnet.
+
+#### Providers
+
+`ORDINALS_PROVIDER=xverse` uses Xverse for collections. `ORDINALS_PROVIDER=ordnet` uses fresh ord.net collection scans first, with a persistent metadata catalog. Keep `XVERSE_API_KEY` configured either way for validation and final fallback.
+
+The ord.net API is wallet-authenticated: the bot's dedicated API wallet needs at least **0.001 BTC (100,000 sats) confirmed** on its payment address (members' wallets need nothing). The backend signs BIP-322 login challenges and renews one-hour sessions in memory.
+
+```bash
+yarn build
+yarn ordnet:wallet   # creates gitignored backend/.env.ordnet (mode 0600) once; prints public addresses only
+# Fund the printed PAYMENT address with at least 0.001 BTC and wait for confirmation.
+yarn ordnet:check    # defaults to Pizza Comrades; add --collection SLUG / --wallet bc1p… to inspect others
+```
+
+`.env.ordnet` holds the signing key; keep it privately for recovery. The app reads the normal `.env`; for Railway, copy the `ORDNET_*` values and `ORDINALS_PROVIDER=ordnet` into backend variables. For an existing wallet, set `ORDNET_ORDINALS_ADDRESS`, `ORDNET_PAYMENT_ADDRESS`, `ORDNET_ORDINALS_WIF` and optionally `ORDNET_PAYMENT_WIF`. `ORDNET_SESSION_TOKEN` overrides automatic login for manual tests.
+
+ord.net has no wallet-holdings endpoint: its collection scan supplies membership, owners and traits. Scans use 100-item pages, at least 2.1 seconds apart, bounded at 200 pages, and are shared across simultaneous requests. Bundle ("lot") display cards are validated and excluded from counts; every bundle member must appear individually. During a member's verification, background Ordinals requests pause so the member's work runs first.
+
+Sources: [authentication](https://developers.ord.net/reference/authentication/), [collections](https://developers.ord.net/reference/collections/), [rate limits](https://developers.ord.net/reference/errors-rate-limits/).
+
+#### Catalogs and wallet ownership fallbacks
+
+With `ordnet`, a complete scan is stored in `ordinal_collections` and `ordinal_collection_attributes` (slug, inscription ID and JSONB trait values; no owners). Each collection used by a rule is refreshed at the start of scheduled reverification; failed or incomplete refreshes keep the last complete catalog. `/setup refresh-collection collection_slug:SLUG` refreshes one early. Collection slug autocomplete uses saved rules and the catalog.
+
+Wallet inventories fall back through `ORDINALS_OWNERSHIP_PROVIDERS` (default `ordiscan,subfrost,sandshrew,xverse`); providers without keys are skipped, and SUBFROST uses its public endpoint. Ordiscan use is capped at 1,000 requests per UTC month in `ordinal_provider_usage`. Errors, timeouts and rate limits fall back with cooldowns. Valid empty inventories mean zero; failures don't. If every provider fails, earned roles are kept and no new roles are granted.
+
+#### Ordinals traits
+
+Use `attribute_key`, `attribute_value` and `min_items` (value empty or `ALL` matches any value; case-insensitive). Trait setup requires ord.net. Each trait rule's `ordinal_trait_snapshot` stores the matching inscription IDs (no owners or member data), refreshed by live scans. During an ord.net outage, checks intersect fresh Xverse wallet IDs with a snapshot up to 24 hours old; a failed cached match alone never revokes a role.
+
+#### Automatic rule-save checks
+
+Saving a rule in the Control Room queues a role recheck only if every Ordinals rule contributing to that role can be checked with ord.net (collection/trait rules or collection-scoped number selections). These automatic jobs use fresh ord.net data with no fallback, and outages preserve roles. Unscoped number and exact-ID selections suppress the automatic job for that role; the portal explains when to run an explicit bulk check. Explicit Check Roles, repairs, bulk checks, exports and scheduled checks keep their normal provider policies.
+
+### Bitcoin Stamps
+
+`/setup add-stamps-rule` or the Control Room takes creator addresses, stamp numbers or both, with indivisible-copy minimums. Stamps channels also accept legacy and SegWit Bitcoin proofs; Ordinals-only channels remain Taproot-only. See [Bitcoin Stamps verification](../docs/bitcoin-stamps.md).
+
+### Solana
+
+Solana wallet proofs (Phantom), SPL/allowlisted Token-2022 minimums, and Token Metadata, Core, compressed and printed-edition NFT rules are live. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL` (Helius) and set `SOLANA_ENABLED=1`; unset pauses Solana. Use `/setup add-solana-token-rule`, `/setup add-solana-nft-rule` or the Control Room. See [Solana verification](../docs/solana-verification.md).
+
+### Bulk checks
+
+Operator bulk role checks use twelve member readers, three guarded mutation slots and three background wallet-inventory slots per process; interactive verification bypasses the background gate. See [bulk role checks](../docs/bulk-role-checks.md).
+
+## Project layout
 
 ```text
 backend/
 ├── src/
 │   ├── config/
 │   ├── constants/
+│   ├── content/
 │   ├── dtos/
+│   ├── maintenance/
 │   ├── models/
-│   └── services/
+│   ├── portal/      # Control Room and member portal APIs
+│   ├── services/
+│   ├── types/
+│   └── utils/
+├── scripts/         # Operator scripts (grant catch-up, ord.net wallet, privacy recovery, …)
 ├── supabase/
 │   └── migrations/
-└── test/
+└── test/            # Jest specs, migration rehearsals and live checks
 ```
 
-## Related Docs
+## Related docs
 
 - [Project root README](../README.md)
 - [Frontend README](../frontend/README.md)
-
-### One collection per rule
-
-Create a separate rule for each collection. Collectible rules sharing a channel, role and minimum combine matching holdings, including across protocols; overlapping assets count once. The rule list labels each combined channel group and its shared minimum even when filtered by asset type. ERC-20 balances remain independent.
-
-Apply `20261016010000_single_collection_rules.sql` after a verified backup. It splits comma-separated Ethscriptions rules while preserving the source IDs, roles, channels, minimums, creation timestamps and assignment references. The database rejects comma-separated collection slugs afterward; setup and editing explain how to add another rule instead. Specific ID/number lists are unchanged.
-
-Ordinals collection slug autocomplete in `/setup add-ordinals-rule` suggests collections already present in saved Ordinals rules or the shared collection cache. Suggestions use only Supabase, search case-insensitively, and allow manual entry for collections not yet stored. New slugs still undergo normal provider validation when the rule is created. Restarting the backend registers autocomplete on the slash command; reload Discord if it is not visible.
-
-Collection slug input is trimmed, lowercased, and consecutive whitespace becomes one hyphen in autocomplete, rule creation/editing, and Ordinals collection refreshes. For example, ` PIZZA   COMRADES ` resolves to `pizza-comrades`; the normalized slug must still exist in the data source or pass normal provider validation. Ethscriptions setup/editing matches collection names and trait keys/values without case sensitivity and saves the data source’s canonical spelling. Trait values and role names keep their internal spaces and punctuation; only collection slugs receive space-to-hyphen normalization. No database migration is needed.
-
-### Labels for specific inscription rules
-
-`/setup add-ordinals-rule` and `/setup add-ethscription-rule` accept an optional `label` after `inscription_ids` / `inscription_numbers`. For example, `inscription_numbers:123,456 label:Pizza Comrades — Gold Crowns`. Labels identify the selection in confirmations, rule lists, removal/restoration, and the editor; they never filter holdings or assert collection membership. Slug and trait criteria remain unavailable on specific selections.
-
-Labels keep capitalization and internal spaces, are trimmed, and support up to 100 characters on one line. `/setup edit-rule` can add, rename, or clear a label with Undo/Redo. Label-only edits perform no ownership lookups or member role checks, and a different label does not permit duplicate eligibility rules. Apply `20261016020000_add_inscription_rule_labels.sql` before deploying this backend; it adds the nullable `verifier_rules.rule_label` column and a selection-only label constraint without changing existing rules or assignments. Restart registers the new slash-command option; reload Discord if it is missing.
-
-## Smart-wallet verification
-
-Deployed ERC-1271 and undeployed ERC-6492 accounts use the existing RPC settings on Ethereum, Base and Robinhood. Wrapped proofs simulate account deployment/preparation in a read-only `eth_call`; no transaction is submitted. The frontend enables Base Account and requests Base first for that connector. The production migration `20261028010000_smart_wallet_proofs.sql` was applied October 28, 2026; apply it before deploying to other environments. This stage needs no additional migration or environment variables. Real-wallet acceptance remains on the [deferred test checklist](../docs/smart-wallet-verification.md#deferred-live-acceptance). See [configuration, scope and acceptance checks](../docs/smart-wallet-verification.md).
-
-## Solana mainnet
-
-The initial Solana adapter is opt-in. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL`, apply `20261029010000_solana_verification.sql` through the reviewed migration workflow, and set `SOLANA_ENABLED=1` only when ready. No frontend secret is needed. Wallet proofs, SPL/allowlisted Token-2022 minima, and Token Metadata/Core NFT scopes are implemented; compressed NFTs remain separate. Production migration and live provider/wallet acceptance are pending. See [Solana verification](../docs/solana-verification.md).
-
-## Bitcoin Stamps
-
-Use `/setup add-stamps-rule` or the Control Room for creator addresses, stamp numbers or both, with indivisible-copy minimums. Stamps supports the approved legacy and SegWit proofs; Ordinals-only channels remain Taproot-only. Provider defaults, additive migration, release status and acceptance are documented in [Bitcoin Stamps verification](../docs/bitcoin-stamps.md).
-
-### Automatic Control Room rule-save checks
-
-Migration `20261109040000_ordnet_rule_save_checks.sql` adds a private job policy and an insert trigger. Saving a rule queues a role recheck only if every current Ordinals rule contributing to that output can be checked using ord.net: canonical collection/trait rules or number/range selections with `collection_slug`. Unscoped number/range and exact-ID selections suppress that output's automatic job; other independent compatible outputs can still be queued. All alternatives, combined groups and additional role outputs are considered. The rule itself is still saved. Undo/Redo uses the same queue policy.
-
-Queued automatic jobs carry `ordinal_provider_policy=ordnet-only`, retained by retry. Legacy Control Room rule-save jobs are recognized from their action record without rewriting progress. Workers check compatibility again before processing, so a later incompatible edit skips the automatic job instead of evaluating incomplete criteria. Compatible automatic ownership checks use fresh ord.net data with no fallback to Xverse, Ordiscan, Subfrost or Sandshrew; outages remain unavailable and preserve existing roles. Explicit Check Roles, member repairs, bulk jobs, exports, and ordinary scheduled checks retain their existing provider policies. Exact-ID validation while creating/changing a selection can still use Xverse; this policy restricts automatic ownership rechecks after a save.
-
-The save response reports the number of queued jobs, including on idempotent replay, and the portal explains when an explicit bulk check is needed. No new environment variable is required. Rehearse with `python3 backend/test/check-ordnet-rule-save-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]`. Migration `20261109040000` was applied to the linked application database on November 9, 2026, independently verified at 11:54 UTC. The ledger source matches the committed migration; the nullable job policy, enabled insert trigger and private helper permissions are verified. A fresh private backup and exact guarded-script rehearsal preserved all 27 application tables.
-
-Validation: all 1,910 backend tests across 92 suites passed; both production builds passed; Control Room smoke checks passed at 1280 and 320 pixels, including queued versus skipped save feedback. A disposable PostgreSQL rehearsal preserved all 27 application tables and verified queue suppression, compatible additional-output scope, explicit repairs, cleanup and helper permissions. Migration `20261109040000` is applied; backend/frontend publication activates the corresponding worker and portal behavior.
-
-### ord.net bundle display cards
-
-The live collection feed can include `kind: lot` display cards whose `id` and `inscriptionId` are `lot:<UUID>`, alongside complete individual inscription records. Bundle previews include member IDs/numbers but omit individual owners and traits. The parser validates the card and complete member reference lists, excludes the display wrapper from counts/autocomplete, and requires every referenced member to appear independently with the same inscription number before accepting the complete scan. It never copies the bundle's owner or traits to its members. Missing/truncated/conflicting members, duplicate cards or invalid identifiers remain unavailable, and existing earned roles are retained.
-
-On November 9, 2026, a read-only live `dabl` scan reproduced the old page-43 failure. The corrected parser completed 51 pages containing 5,071 cards: 5,070 individual inscriptions plus one five-member lot card. Every bundle member was present individually; no numbers, owners or traits were missing. The scan took 138 seconds with the existing request pacing. No member verification, wallet association, role, job or provider configuration was changed by this diagnostic. No new API key or migration is required.
-
-### Bulk-check provider efficiency
-
-Bulk checks use twelve member readers, three guarded mutation slots and three background wallet-inventory slots per process. Interactive wallet verification bypasses the background inventory gate, while existing provider request pacing and priority stay intact. A complete collection read can serve the larger cohort within its existing freshness window. Only unchecked planned numeric rules cause a member's ID lookups to share a numbered inventory.
-
-For grant-only bulk role evaluation, sufficient ordinary Ethscription database holdings can qualify the role before Ordinals alternatives are requested. A nonqualifying partial check always continues through the complete rule set; uncertainty and combined/deduplicated counts retain their existing meaning. Reconciliation, exports and ordinary callers do not enable this optimization. Guards and fresh evidence are rechecked after waiting for a mutation slot. See [bulk-check throughput](../docs/bulk-role-checks.md#larger-read-cohorts-and-early-qualification). No new environment variables or migration are needed.

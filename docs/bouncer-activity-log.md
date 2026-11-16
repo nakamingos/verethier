@@ -12,14 +12,6 @@ Posted Discord messages are external copies under the channel’s access control
 
 Migration `20261107020000_bouncer_log.sql` adds optional server configuration, a private address-free outbox, narrowly callable backend RPCs and insert triggers for existing wallet activity/blocked proofs. New triggers queue new events only; no historical activity is backfilled. An outbox failure does not undo a wallet operation or bypass a wallet block. Role/failure enqueue errors do not change the verification outcome.
 
-Apply the migration before releasing the backend and frontend. Rehearse using a fresh private roles/schema/data backup:
-
-```sh
-python3 backend/test/check-bouncer-log-migration.py PRIVATE_BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
-```
-
 The worker claims events with database leases, renews active leases and sends up to five events every ten seconds. Discord failures retry with backoff for up to 24 hours. Expired entries are removed even when the Discord client is disconnected. Changing the channel or event choices rotates the configuration version and invalidates old queued events; background-check setting changes alone do not. Successful/discarded messages leave the outbox immediately. A stable Discord nonce reduces duplicates after an interrupted send; Discord’s recent-nonce window does not establish exactly-once delivery across long outages.
 
-Tests cover private grants, atomic event capture, disabled defaults, sharing epochs, deduplication, claims, deletion, sanitized messages, mention suppression, configuration authorization, retries and actual role-change hooks. Browser coverage includes selecting/disabling a channel, event toggles, saving and responsive settings controls. Production Discord delivery requires a configured channel after deployment; automated checks use mocks and disposable PostgreSQL.
-
-The linked application database received migration `20261107020000` on November 7, 2026, verified at 22:24 UTC. Checks confirmed its ledger entry, RLS, private client permissions, backend RPC grants and all four enabled triggers, with zero configured servers and zero queued messages. A fresh private backup and disposable rehearsals preserved all 24 existing public tables. The backend suite passed 1,797 tests, with all 27 targeted feature tests passing after six additional integration cases were added. Both builds, admin browser checks at 1280/768/600/393/320 pixels and privacy checks at 1280/393/320 pixels passed. Release the backend/frontend before configuring a channel; live Discord delivery has not been exercised by these checks.
+The migration was applied to production on November 7, 2026 and the feature is released. The feed stays off until an admin selects a channel. Rehearsal script: `backend/test/check-bouncer-log-migration.py`.
