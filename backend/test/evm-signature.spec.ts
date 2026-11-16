@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { EvmSignatureService } from "../src/services/evm-signature.service";
 import {
   decodeAbiParameters,
@@ -54,6 +55,27 @@ describe("EVM key, deployed and counterfactual contract proofs", () => {
         blockTag: "latest",
       }),
     );
+  });
+  it("logs which check accepted a contract proof, without the address", async () => {
+    const log = jest.spyOn(Logger, "log").mockImplementation(() => undefined);
+    try {
+      const signature = await owner.signTypedData(data());
+      await service.verify(contract, data(), signature);
+      await service.verify(contract, data(), wrap("0x11223344"));
+      rpc.getCode.mockResolvedValue("0x");
+      await service.verify(contract, data(), wrap());
+      expect(log.mock.calls.map(([message]) => message)).toEqual([
+        "Smart-wallet proof accepted on chain 8453: deployed account (ERC-1271).",
+        "Smart-wallet proof accepted on chain 8453: deployed account (ERC-1271, inner signature of an ERC-6492 wrapper).",
+        "Smart-wallet proof accepted on chain 8453: undeployed or unprepared account (ERC-6492 simulation).",
+      ]);
+      expect(JSON.stringify(log.mock.calls).toLowerCase()).not.toContain(contract.slice(2));
+      log.mockClear();
+      await service.verify(owner.address, data(), signature);
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
   });
   it("accepts non-ECDSA contract signature bytes, including empty signatures", async () => {
     for (const signature of ["0x", "0x123456"])
