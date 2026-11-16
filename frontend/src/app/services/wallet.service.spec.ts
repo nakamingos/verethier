@@ -1,5 +1,5 @@
 import { fakeAsync, flushMicrotasks, tick, TestBed } from '@angular/core/testing';
-import { createConfig, getConnection, http } from '@wagmi/core';
+import { createConfig, getAccount, http } from '@wagmi/core';
 import { base, mainnet } from 'viem/chains';
 import { EVM_WALLET_CONNECTION, EvmWalletConnection, WalletService } from './wallet.service';
 
@@ -183,7 +183,7 @@ describe('EVM wallet connection', () => {
       primaryType: 'Verification', message: { Nonce: 'test-nonce' } };
     expect(await service.signTypedMessage(typedData, stage => stages.push(stage))).toEqual({ address: activeAddress, signature });
     expect(stages).toEqual(['Checking connected account', 'Connected account ready', 'Requesting typed-data signature', 'Signature received']);
-    expect(getConnection(config).address).toBe(activeAddress);
+    expect(getAccount(config).address).toBe(activeAddress);
     const signingRequest = request.calls.allArgs().map(args => args[0]).find(args => args.method === 'eth_signTypedData_v4');
     expect(signingRequest.params[0]).toBe(activeAddress);
     expect(JSON.parse(signingRequest.params[1])).toEqual(jasmine.objectContaining({
@@ -200,7 +200,7 @@ describe('EVM wallet connection', () => {
       throw new Error(method);
     });
     connectedWallet(request);
-    spyOn(getConnection(config).connector!, 'getChainId').and.resolveTo(8453);
+    spyOn(getAccount(config).connector!, 'getChainId').and.resolveTo(8453);
     expect(await service.getSigningChainId()).toBe(8453);
     const typed = {domain:{name:'Bouncer',version:'1',chainId:8453},types:{Verification:[{name:'Nonce',type:'string'}]},primaryType:'Verification',message:{Nonce:'base-proof'}};
     expect(await service.signTypedMessage(typed)).toEqual({address:firstAddress,signature});
@@ -223,7 +223,7 @@ describe('EVM wallet connection', () => {
       if (method === 'eth_signTypedData_v4') { chain = 8453; return `0x${'11'.repeat(65)}`; }
       throw new Error(method);
     });
-    connectedWallet(request); spyOn(getConnection(config).connector!, 'getChainId').and.callFake(async()=>chain);
+    connectedWallet(request); spyOn(getAccount(config).connector!, 'getChainId').and.callFake(async()=>chain);
     await expectAsync(service.signTypedMessage({domain:{name:'Bouncer',version:'1',chainId:1},types:{Proof:[{name:'Nonce',type:'string'}]},primaryType:'Proof',message:{Nonce:'proof'}})).toBeRejectedWithError(/network changed while signing/);
     chain = 137; await expectAsync(service.getSigningChainId()).toBeRejectedWithError(/Switch your wallet/);
   });
