@@ -125,6 +125,10 @@ export class MemberComponent {
   walletCommunityId = '';
   address = '';
   connecting = false;
+  /** Network of the connected EVM wallet; Base Account members choose it here. */
+  evmChainId: number | null = null;
+  evmBaseAccount = false;
+  networkSwitching = false;
   linkFlow: LinkFlow | null = null;
   private transferProof: { flow: string; signature: string } | null = null;
   transferPending = false;
@@ -317,10 +321,10 @@ export class MemberComponent {
       this.evm.connectedState$
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((account) => {
-          this.evmAddress =
-            account.isConnected && !account.isReconnecting
-              ? account.address || ''
-              : '';
+          const connected = account.isConnected && !account.isReconnecting;
+          this.evmAddress = connected ? account.address || '' : '';
+          this.evmChainId = connected ? account.chainId ?? null : null;
+          this.evmBaseAccount = connected && account.connector?.id === 'baseAccount';
           if (this.walletKind === 'evm') this.address = this.evmAddress;
         });
       this.evm.connectionErrors$
@@ -346,6 +350,25 @@ export class MemberComponent {
       this.fail(error);
     } finally {
       this.connecting = false;
+    }
+  }
+  get evmNetworks() {
+    return this.evm?.evmNetworks ?? [];
+  }
+  /**
+   * Base Account has no network control of its own. Ordinary key-based wallets
+   * don't need one: their link counts on every supported network.
+   */
+  async chooseNetwork(chainId: number) {
+    if (!this.evm || this.busy || this.connecting || this.networkSwitching || this.evmChainId === chainId) return;
+    this.networkSwitching = true;
+    this.error = '';
+    try {
+      this.evmChainId = await this.evm.switchNetwork(chainId);
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.networkSwitching = false;
     }
   }
   openUniSat() {

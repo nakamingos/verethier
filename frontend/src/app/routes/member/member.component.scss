@@ -129,3 +129,16 @@ h1 {
 .wallet-context label { max-width: 42rem; }
 .wallet-sharing { margin-block: 1rem; }
 .wallet-sharing > button { margin-bottom: .8rem; }
+
+.network-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+  margin: 1rem 0;
+
+  button {
+    opacity: .65;
+    &[aria-pressed='true'] { opacity: 1; }
+  }
+}
