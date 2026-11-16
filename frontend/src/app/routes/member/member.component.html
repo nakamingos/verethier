@@ -230,7 +230,7 @@
                     <label>Bitcoin address:<app-pixel-select name="stampAddress" [ngModel]="address" (ngModelChange)="bitcoin.selectAddress($event); linkFlow = null" [options]="(bitcoin.addresses$ | async) || []" label="Bitcoin address" [disabled]="busy || connecting" /></label>
                   }
                   <div class="actions">
-                    <button (click)="connect()" [disabled]="busy || connecting">
+                    <button (click)="connect()" [disabled]="busy || connecting || disconnecting">
                       {{
                         connecting
                           ? "Connecting…"
@@ -254,10 +254,18 @@
                     }
                     <button
                       (click)="link()"
-                      [disabled]="!address || busy || connecting || networkSwitching"
+                      [disabled]="!address || busy || connecting || networkSwitching || disconnecting"
                     >
                       {{ busy ? "Linking…" : "Sign & link wallet" }}
                     </button>
+                    @if (address) {
+                      <button
+                        (click)="disconnectWallet()"
+                        [disabled]="busy || connecting || networkSwitching || disconnecting"
+                      >
+                        {{ disconnecting ? "Disconnecting…" : "Disconnect wallet" }}
+                      </button>
+                    }
                   </div>
                 }
               </section>
