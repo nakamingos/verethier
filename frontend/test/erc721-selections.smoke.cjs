@@ -283,7 +283,7 @@ async function choose(page, name, value) {
       );
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.getByRole('button', { name: '+ Add rule', exact: true }).click();
-      await choose(page, 'Asset type', 'Tokens (ERC-20)');
+      await choose(page, 'Asset type', 'Tokens');
       await choose(page, 'Network', networkLabel);
       await choose(page, 'Discord roles', 'Holder');
       await page.getByRole('combobox', { name: 'Discord roles', exact: true }).press('Escape');

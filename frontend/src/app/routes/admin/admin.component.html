@@ -482,11 +482,20 @@
                           >Asset type:<span class="select-control"
                             ><app-pixel-select
                               name="asset"
-                              [(ngModel)]="draft.asset_type"
-                              (ngModelChange)="changeAsset()"
+                              [(ngModel)]="draftAsset"
                               [options]="assetChoices"
                               label="Asset type" /></span
                         ></label>
+                        @if (draftAsset === "nft" || draftAsset === "erc20") {
+                          <label
+                            >Network:<span class="select-control"
+                              ><app-pixel-select
+                                name="network"
+                                [(ngModel)]="draftNetwork"
+                                [options]="ruleNetworkChoices"
+                                label="Network" /></span
+                          ></label>
+                        }
                         <label
                           >Verification channel:<span class="select-control"
                             ><app-pixel-select
@@ -587,15 +596,6 @@
                           draft.asset_type === "nft" ||
                           draft.asset_type === "erc20"
                         ) {
-                          <label
-                            >Network:<span class="select-control"
-                              ><app-pixel-select
-                                name="network"
-                                [(ngModel)]="draft.network"
-                                (ngModelChange)="clearNftLookupExpectation()"
-                                [options]="networkChoices"
-                                label="Network" /></span
-                          ></label>
                           <label
                             >Contract address:<input
                               name="contract"

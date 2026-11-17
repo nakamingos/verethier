@@ -116,7 +116,8 @@ async function choose(page, name, label) {
         await page
           .getByRole("button", { name: "+ Add rule", exact: true })
           .click();
-        await choose(page, "Asset type", "Solana NFTs");
+        await choose(page, "Asset type", "NFTs");
+        await choose(page, "Network", "Solana");
       }
       await page.goto(origin + "/admin");
       await openRule();

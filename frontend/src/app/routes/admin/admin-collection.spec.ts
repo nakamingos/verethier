@@ -95,6 +95,28 @@ describe('Canonical NFT rules from a collection lookup', () => {
       selection.contract_address,
     );
   });
+  it('chooses Solana rules as NFTs or Tokens on the Solana network',()=>{
+    expect(component.assetChoices.map(choice=>choice.label)).toEqual(['Ethscriptions','Ordinals','Bitcoin Stamps','NFTs','Tokens']);
+    expect(component.ruleNetworkChoices.map(choice=>choice.value)).toEqual(['ethereum','base','robinhood']);
+    component.data.capabilities.solana=true;
+    expect(component.ruleNetworkChoices.map(choice=>choice.value)).toEqual(['ethereum','base','robinhood','solana']);
+    component.draft.channel_id='channel';
+    component.draftAsset='nft';component.draftNetwork='base';
+    expect(component.draft.asset_type).toBe('nft');expect(component.draft.network).toBe('base');
+    component.draftNetwork='solana';
+    expect(component.draft.asset_type).toBe('solana_nft');expect(component.draftAsset).toBe('nft');expect(component.draftNetwork).toBe('solana');
+    expect(component.draft.channel_id).toBe('channel');
+    component.draftAsset='erc20';component.draftNetwork='solana';
+    expect(component.draft.asset_type).toBe('solana_token');expect(component.draftAsset).toBe('erc20');
+    component.draftNetwork='robinhood';
+    expect(component.draft.asset_type).toBe('erc20');expect(component.draft.network).toBe('robinhood');
+    expect(component.payload().solana_criteria).toBeUndefined();
+  });
+  it('filters Solana rules under NFTs and Tokens',()=>{
+    component.data.rules=[{id:1,asset_type:'nft'},{id:2,asset_type:'solana_nft'},{id:3,asset_type:'erc20'},{id:4,asset_type:'solana_token'}];
+    component.filter='nft';expect(component.rules.map((r:any)=>r.id).sort()).toEqual([1,2]);
+    component.filter='erc20';expect(component.rules.map((r:any)=>r.id).sort()).toEqual([3,4]);
+  });
   it('keeps Solana token mint/program and minimum separate from EVM defaults',()=>{
     component.draft.asset_type='solana_token';component.changeAsset();
     component.draft.solana_mint='So11111111111111111111111111111111111111112';
