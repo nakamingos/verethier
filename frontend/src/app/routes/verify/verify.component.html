@@ -191,6 +191,20 @@
                 On mobile, open this page in UniSat. On desktop, use the UniSat
                 browser extension.
               </div>
+            } @else if (
+              state.walletType === "solana" &&
+              !state.walletConnected &&
+              solanaWalletSvc.canOpenMobileWallet()
+            ) {
+              @for (name of solanaWalletSvc.mobileWallets; track name) {
+                <button type="button" (click)="solanaWalletSvc.openMobileWallet(name)">
+                  Open in {{ name }}
+                </button>
+              }
+              <div class="sub mobile-wallet-help">
+                On mobile, open this page in your Solana wallet app's browser,
+                then connect there.
+              </div>
             } @else {
               <button (click)="connect()" [disabled]="state.walletConnecting">
                 <span class="button-label"
@@ -206,13 +220,6 @@
                   }}</span></span
                 >
               </button>
-              @if (state.walletType === 'solana' && !state.walletConnected && solanaWalletSvc.canOpenMobileWallet()) {
-                @for (name of solanaWalletSvc.mobileWallets; track name) {
-                  <button type="button" (click)="solanaWalletSvc.openMobileWallet(name)" [disabled]="state.walletConnecting">
-                    Open in {{ name }}
-                  </button>
-                }
-              }
               @if (state.walletType === 'evm' && !state.walletConnected && isPhone) {
                 <div class="sub mobile-wallet-help">
                   Using Base Account or Coinbase Wallet? If the Coinbase window
