@@ -65,7 +65,7 @@ describe('Verification page wallet choice', () => {
     await fixture.componentInstance.connect();
     expect(connect).toHaveBeenCalledOnceWith('Solflare');
   });
-  it('offers each wallet app on mobile when no wallet is detected', () => {
+  it('offers only the wallet apps on mobile when no wallet is detected', () => {
     const fixture = page(['solana']);
     const wallet = fixture.componentInstance.solanaWalletSvc;
     spyOn(wallet, 'canOpenMobileWallet').and.returnValue(true);
@@ -75,6 +75,7 @@ describe('Verification page wallet choice', () => {
     buttons.find((button) => button.textContent?.includes('Open in Solflare'))!.click();
     expect(open).toHaveBeenCalledOnceWith('Solflare');
     expect(buttons.some((button) => button.textContent?.includes('Open in Phantom'))).toBeTrue();
+    expect(buttons.some((button) => button.textContent?.trim().endsWith('Connect'))).toBeFalse();
   });
   it('selects Solana after opening in a wallet app, including older Phantom links', () => {
     for (const wallet of ['solana', 'phantom']) {

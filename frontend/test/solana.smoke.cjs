@@ -199,9 +199,10 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
       });
       await page.goto(origin + '/verify/' + nonce + '?wallet=phantom');
       const connect = page.getByRole('button', { name: 'Connect', exact: true });
-      await connect.waitFor();
       const app = page.getByRole('button', { name: 'Open in Phantom', exact: true });
+      await (mobile ? app : connect).waitFor();
       assert.equal(await app.count(), mobile ? 1 : 0);
+      assert.equal(await connect.count(), mobile ? 0 : 1);
       assert.equal(await page.getByRole('button', { name: 'Open in Solflare', exact: true }).count(), mobile ? 1 : 0);
       if (mobile) {
         await app.click();
