@@ -486,7 +486,17 @@
                               [options]="assetChoices"
                               label="Asset type" /></span
                         ></label>
-                        @if (draftAsset === "nft" || draftAsset === "erc20") {
+                        @if (fixedNetwork; as network) {
+                          <label
+                            >Network:<span class="select-control"
+                              ><app-pixel-select
+                                name="fixedNetwork"
+                                [ngModel]="network[0].value"
+                                [options]="network"
+                                [disabled]="true"
+                                label="Network" /></span
+                          ></label>
+                        } @else {
                           <label
                             >Network:<span class="select-control"
                               ><app-pixel-select

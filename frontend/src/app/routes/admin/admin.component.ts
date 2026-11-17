@@ -287,6 +287,14 @@ export class AdminComponent implements OnInit, OnDestroy {
   get ruleNetworkChoices(): SelectChoice[] {
     return [...EVM_NETWORKS, ...(this.data?.capabilities?.solana ? [{ value: 'solana', label: 'Solana' }] : [])];
   }
+  /** Ordinals, Stamps and Ethscriptions each live on one network, shown locked in the form. */
+  private static readonly BITCOIN_NETWORK: SelectChoice[] = [{ value: 'bitcoin', label: 'Bitcoin' }];
+  private static readonly ETHEREUM_NETWORK: SelectChoice[] = [{ value: 'ethereum', label: 'Ethereum' }];
+  get fixedNetwork(): SelectChoice[] | null {
+    const asset = this.draftAsset;
+    return asset === 'ordinal' || asset === 'stamp' ? AdminComponent.BITCOIN_NETWORK
+      : asset === 'ethscription' ? AdminComponent.ETHEREUM_NETWORK : null;
+  }
   get draftNetwork() {
     return ['solana_nft', 'solana_token'].includes(this.draft.asset_type) ? 'solana' : this.draft.network;
   }
