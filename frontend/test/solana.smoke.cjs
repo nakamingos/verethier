@@ -204,6 +204,7 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
       assert.equal(await app.count(), mobile ? 1 : 0);
       assert.equal(await connect.count(), mobile ? 0 : 1);
       assert.equal(await page.getByRole('button', { name: 'Open in Solflare', exact: true }).count(), mobile ? 1 : 0);
+      assert.equal(await page.getByRole('button', { name: 'Open in MetaMask', exact: true }).count(), mobile ? 1 : 0);
       if (mobile) {
         await app.click();
         await page.waitForURL('https://phantom.com/**');

@@ -89,8 +89,11 @@ describe('Solana wallet connector', () => {
       expect(target.pathname).toBe('/verify/' + 'a'.repeat(64));
       expect(target.searchParams.get('wallet')).toBe('solana');
       expect(target.searchParams.get('from')).toBe('member');
-      expect(link.searchParams.get('ref')).toBe(window.location.origin);
+      expect(link.searchParams.get('ref')).toBe('https://bouncer.test');
     }
+    expect(service.mobileWalletUrl('MetaMask', page)).toBe(
+      'https://link.metamask.io/dapp/bouncer.test/verify/' + 'a'.repeat(64) + '?from=member&wallet=solana',
+    );
     expect(() => service.mobileWalletUrl('Phantom', 'http://bouncer.test/verify/example')).toThrow();
   });
   it('signs the exact UTF-8 challenge and preserves case', async () => {
