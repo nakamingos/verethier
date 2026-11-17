@@ -112,6 +112,12 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expect(component.draft.asset_type).toBe('erc20');expect(component.draft.network).toBe('robinhood');
     expect(component.payload().solana_criteria).toBeUndefined();
   });
+  it('locks the network for single-network asset types',()=>{
+    for(const [asset,network] of [['ordinal','bitcoin'],['stamp','bitcoin'],['ethscription','ethereum']]){
+      component.draftAsset=asset;expect(component.fixedNetwork?.map(choice=>choice.value)).toEqual([network]);
+    }
+    for(const asset of ['nft','erc20']){component.draftAsset=asset;expect(component.fixedNetwork).toBeNull();}
+  });
   it('filters Solana rules under NFTs and Tokens',()=>{
     component.data.rules=[{id:1,asset_type:'nft'},{id:2,asset_type:'solana_nft'},{id:3,asset_type:'erc20'},{id:4,asset_type:'solana_token'}];
     component.filter='nft';expect(component.rules.map((r:any)=>r.id).sort()).toEqual([1,2]);
