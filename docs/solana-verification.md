@@ -87,7 +87,7 @@ The Solana browser smoke tests (`frontend/test/solana*.smoke.cjs`) sign the buil
 
 - [x] Configure real RPC/DAS access and confirm token programs, pagination/count semantics and indexed freshness with Helius.
 - [x] Rehearse against a fresh backup and apply the production migration through the normal release workflow (October 29, 2026).
-- [ ] Test Phantom desktop/mobile connection, cancellation, repeat signatures, linking/transfer and Discord verification.
+- [x] Test Phantom desktop/mobile connection, cancellation, repeat signatures, linking/transfer and Discord verification (passed November 17, 2026). Found and fixed: the portal's **Change wallet** didn't prompt Phantom again, and signing with an account Phantom hadn't approved showed Phantom's raw "not been authorized" error.
 - [ ] Check representative SPL/Token-2022, Token Metadata/programmable and Core assets: positive/negative holdings, movement/burns, traits, stale providers, role preservation and permission-respecting exports.
 - [x] Operator enabled Solana with the accepted Helius endpoint; Solana appears in verification and the user confirmed the corrected desktop Phantom connection works.
 

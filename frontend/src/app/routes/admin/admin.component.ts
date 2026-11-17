@@ -283,7 +283,14 @@ export class AdminComponent implements OnInit, OnDestroy {
     return asset === 'solana_nft' ? 'nft' : asset === 'solana_token' ? 'erc20' : asset;
   }
   get draftAsset() { return AdminComponent.assetFamily(this.draft.asset_type); }
-  set draftAsset(value: string) { this.draft.asset_type = value; this.changeAsset(); }
+  set draftAsset(value: string) {
+    // NFTs and Tokens share the network list; keep the chosen network when switching between them.
+    const evmOrSolana = (asset: string) => asset === 'nft' || asset === 'erc20';
+    const network = evmOrSolana(this.draftAsset) && evmOrSolana(value) ? this.draftNetwork : null;
+    this.draft.asset_type = value;
+    this.changeAsset();
+    if (network) this.draftNetwork = network;
+  }
   get ruleNetworkChoices(): SelectChoice[] {
     return [...EVM_NETWORKS, ...(this.data?.capabilities?.solana ? [{ value: 'solana', label: 'Solana' }] : [])];
   }

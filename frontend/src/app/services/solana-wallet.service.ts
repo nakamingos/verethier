@@ -48,7 +48,11 @@ export class SolanaWalletService implements OnDestroy {
     return mobile && !this.isAvailable();
   }
   async connect(): Promise<string> {
+    // Changing wallets: Phantom silently returns an account it already approved,
+    // so withdraw that approval first to make it ask again.
+    const previous = { wallet: this.wallet, provider: this.provider };
     this.disconnect();
+    if (previous.wallet || previous.provider) await this.revoke(previous);
     const generation = this.generation;
     const wallet = this.phantomWallet();
     if (wallet) {
@@ -124,7 +128,7 @@ export class SolanaWalletService implements OnDestroy {
     if (this.wallet) {
       const [result] = await this.wallet.features[
         'solana:signMessage'
-      ].signMessage({ account: this.account, message: bytes });
+      ].signMessage({ account: this.account, message: bytes }).catch((error: unknown) => { throw this.signError(error); });
       if (
         !(result?.signedMessage instanceof Uint8Array) ||
         result.signedMessage.length !== bytes.length ||
@@ -135,7 +139,7 @@ export class SolanaWalletService implements OnDestroy {
         );
       signature = result.signature;
     } else
-      signature = (await this.provider.signMessage(bytes, 'utf8')).signature;
+      signature = (await this.provider.signMessage(bytes, 'utf8').catch((error: unknown) => { throw this.signError(error); })).signature;
     if (
       generation !== this.generation ||
       (await this.syncConnectedAccount()) !== address
@@ -159,6 +163,29 @@ export class SolanaWalletService implements OnDestroy {
   }
   openPhantomMobile() {
     if (this.canOpenPhantomMobile()) window.location.assign(this.phantomMobileUrl());
+  }
+  /**
+   * Phantom reports 4100 when it no longer approves this site for the account,
+   * for example after switching to an account that never connected here.
+   */
+  private signError(error: unknown): unknown {
+    const { code, message } = (error ?? {}) as { code?: number; message?: string };
+    if (code !== 4100 && !/not been authorized/i.test(String(message ?? ''))) return error;
+    this.disconnect();
+    return new Error('Phantom hasn’t approved Bouncer for this account. Connect Phantom again, approve the connection, then sign.');
+  }
+  /** Withdraws the wallet's approval of this site; failures leave only Bouncer's session ended. */
+  private async revoke({ wallet, provider }: { wallet?: any; provider?: any }) {
+    try {
+      if (wallet) await wallet.features?.['standard:disconnect']?.disconnect();
+      else await provider?.disconnect?.();
+    } catch { /* The next connection may reuse the existing approval. */ }
+  }
+  /** Ends Bouncer’s session and the wallet’s approval of this site. */
+  async disconnectWallet() {
+    const previous = { wallet: this.wallet, provider: this.provider };
+    this.disconnect();
+    await this.revoke(previous);
   }
   disconnect() {
     this.generation++;
