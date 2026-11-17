@@ -1,3 +1,4 @@
+import { EnvironmentConfig } from '../src/config/environment.config';
 import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
 import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
 import { validateEthscriptionCriteria } from '../src/services/discord-commands/utils/rule-validation.util';
@@ -153,6 +154,52 @@ describe('AddRuleHandler', () => {
       roleName: 'Gold Crown Holders', slug: 'Pizza-Comrades', attributeKey: 'EyeColor', attributeValue: 'Gold Crown', minItems: 10,
     });
     expect(interaction.editReply).not.toHaveBeenCalled();
+  });
+
+  describe('Solana network on add-nft-rule and add-token-rule', () => {
+    const mint = 'So11111111111111111111111111111111111111112';
+    const program = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+    const solana = { prepareToken: jest.fn() };
+    const interaction = (values: Record<string, string>, minItems: number | null = null) => ({
+      options: { getChannel: () => ({ id: 'channel' }), getString: (key: string) => ({ role: 'Holder', ...values })[key] ?? null, getInteger: () => minItems },
+      editReply: jest.fn(),
+    });
+    beforeEach(() => {
+      jest.replaceProperty(EnvironmentConfig, 'SOLANA_ENABLED', true);
+      (handler as any).solanaSvc = solana;
+      solana.prepareToken.mockReset().mockResolvedValue({ solana_criteria: { kind: 'token', mint, program }, min_balance: '1000000000', token_decimals: 9 });
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    it('creates a Solana NFT rule from add-nft-rule with network Solana', async () => {
+      const i = interaction({ network: 'solana', scope: 'verified_creator', addresses: mint, formats: 'all' }, 2);
+      const result = await (handler as any).validateInputParams(i, 'nft');
+      expect(i.editReply).not.toHaveBeenCalled();
+      expect(result.assetFields).toMatchObject({ asset_type: 'solana_nft', chain_id: null,
+        solana_criteria: { kind: 'verified_creator', addresses: [mint], formats: ['compressed', 'core', 'metadata'] } });
+      expect(result.minItems).toBe(2);
+    });
+
+    it('creates a Solana token rule from add-token-rule, reading the program from the mint', async () => {
+      const i = interaction({ network: 'solana', contract_address: mint, min_balance: '1' });
+      const result = await (handler as any).validateInputParams(i, 'erc20');
+      expect(i.editReply).not.toHaveBeenCalled();
+      expect(solana.prepareToken).toHaveBeenCalledWith(mint, '1');
+      expect(result.assetFields).toMatchObject({ asset_type: 'solana_token', chain_id: null, min_balance: '1000000000',
+        solana_criteria: { kind: 'token', mint, program } });
+      expect(mockTokenService.prepareRule).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ network: 'solana', scope: 'collection', addresses: mint, contract_address: '0x1' }, 'Solana NFT rules use scope and addresses, not contract_address, token_ids or collection_name.'],
+      [{ network: 'solana', scope: 'collection' }, 'Solana NFT rules need a scope and addresses.'],
+      [{ network: 'base', contract_address: '0x1', scope: 'collection', addresses: mint }, 'scope, addresses are for Solana NFTs; choose network: Solana.'],
+      [{ network: 'base' }, 'NFT rules require contract_address'],
+    ])('rejects mismatched NFT options %#', async (values, message) => {
+      const i = interaction(values);
+      expect(await (handler as any).validateInputParams(i, 'nft')).toBeNull();
+      expect(i.editReply).toHaveBeenCalledWith({ content: expect.stringContaining(message) });
+    });
   });
 
   describe('handle', () => {

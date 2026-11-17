@@ -16,8 +16,10 @@ import { formatAttribute } from '../utils/rule-validation.util';
 type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
 const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
   stamp: 'Bitcoin Stamps', solana_nft: 'Solana NFTs', solana_token: 'Solana tokens',
-  erc20: 'Tokens (ERC-20)', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
+  erc20: 'Token', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
 };
+/** The Token and NFT filters include Solana rules. */
+const assetFamily = (asset: string) => asset === 'solana_nft' ? 'nft' : asset === 'solana_token' ? 'erc20' : asset;
 
 /**
  * List Rules Command Handler
@@ -64,7 +66,7 @@ export class ListRulesHandler {
       if (rules.length === 0) {
         await interaction.editReply({
           embeds: [AdminFeedback.info('Verification Rules', assetType
-            ? `No verification rules found for ${ASSET_TYPE_LABELS[assetType]}.`
+            ? `No ${ASSET_TYPE_LABELS[assetType]} verification rules found.`
             : 'No verification rules found.')]
         });
         return;
@@ -234,7 +236,7 @@ export class ListRulesHandler {
   private filterAndSortRules(allRules: any[], assetType: RuleAssetType | null): any[] {
     return allRules
       .filter(rule => rule.server_id !== '000000000000000000')
-      .filter(rule => !assetType || (rule.asset_type ?? 'ethscription') === assetType)
+      .filter(rule => !assetType || assetFamily(rule.asset_type ?? 'ethscription') === assetType)
       .sort((a, b) => a.id - b.id); // Sort by Rule ID in ascending order
   }
 

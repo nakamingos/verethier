@@ -86,7 +86,7 @@ Admins can do everything from the Control Room at `/admin`, or with `/setup` sla
 
 | Command | Purpose |
 | --- | --- |
-| `/setup add-ethscription-rule`, `add-ordinals-rule`, `add-nft-rule`, `add-token-rule`, `add-stamps-rule`, `add-solana-nft-rule`, `add-solana-token-rule` | Create a rule for that asset family |
+| `/setup add-ethscription-rule`, `add-ordinals-rule`, `add-stamps-rule`, `add-nft-rule`, `add-token-rule` | Create a rule for that asset family; NFT and token rules take a `network` (Ethereum, Base, Robinhood or Solana) |
 | `/setup list-rules`, `edit-rule`, `remove-rule` | Browse (filter with `asset_type`), edit with Undo/Redo, or remove rules |
 | `/setup verification` | Refresh, re-post or recover a channel's verification message |
 | `/setup block-wallet`, `unblock-wallet`, `list-blocked-wallets` | Server-scoped wallet restrictions |

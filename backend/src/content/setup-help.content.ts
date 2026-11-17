@@ -35,11 +35,10 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🪙 `/setup add-token-rule`',
-      value: 'Use **channel**, **role**, **contract_address**, and **min_balance**, such as `1000` or `0.5`.\n' +
-             '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
-             '• ERC-20 balances are summed across verified EVM wallets\n' +
-             '• Name, symbol, and decimals are read from the contract\n' +
-             '• Checks tokens held directly in wallets; staking and pool positions need separate rules',
+      value: 'Use **channel**, **role**, **contract_address** and **min_balance**, such as `1000` or `0.5`.\n' +
+             '• **Network**: Ethereum (default), Base, Robinhood or Solana; on Solana, **contract_address** is the token mint\n' +
+             '• Balances are summed across the member\'s verified wallets on that network\n' +
+             '• Counts tokens held directly in wallets; staking and pool positions need separate rules',
       inline: false
     },
     {
@@ -55,14 +54,12 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
     },
     {
       name: '🖼️ `/setup add-nft-rule`',
-      value: 'Use **channel**, **role**, and **contract_address: 0x…**.\n' +
-             '• **Network**: Ethereum (default) or Robinhood mainnet\n' +
-             '• **ERC-721**: Any token, or **token_ids** such as `1,5,20-30` (up to 1,000 IDs)\n' +
-             '• **ERC-1155**: Checks IDs **0–99** by default; set **token_ids** to a list or range such as `1,5,20-30` (up to 1,000 IDs)\n' +
+      value: 'Use **channel**, **role** and **contract_address: 0x…**; the bot detects ERC-721 or ERC-1155.\n' +
+             '• **Network**: Ethereum (default), Base, Robinhood or Solana\n' +
+             '• **Solana**: use **scope** and **addresses** instead of contract_address; **formats** adds compressed NFTs\n' +
+             '• **token_ids**: a list or range such as `1,5,20-30` (up to 1,000). Without it, any ERC-721 token or ERC-1155 IDs 0–99 count\n' +
              '• **Min Items**: Total tokens/copies across verified wallets\n' +
-             '• **Collection Name**: Optional label; detected when available\n' +
-             '• **Attributes**: Optional trait key/value; min items counts matching tokens/copies. Requires Alchemy NFT metadata access.\n' +
-             'Contract address is required; the bot detects ERC-721 or ERC-1155.',
+             '• **Attributes**: Optional trait key/value (EVM traits need Alchemy NFT metadata)',
       inline: false
     },
     {
@@ -106,7 +103,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       name: '📋 `/setup list-rules`',
       value: '**View all verification rules**\n' +
              '• Shows rule IDs, channels, roles, and criteria\n' +
-             '• **Asset Type**: Optional Tokens, NFT, Ordinals, or Ethscriptions filter; omit to show all\n' +
+             '• **Asset Type**: Optional Tokens, NFTs, Ordinals, Ethscriptions or Stamps filter\n' +
              '• Organized by channel for easy reading\n' +
              '• Use rule IDs for editing or removal\n' +
              '**Example**: `/setup list-rules asset_type:Ordinals`\n\n',

@@ -91,11 +91,14 @@ export async function prepareRuleCriteria(
   if (isSolanaRule(input)) {
     if (!EnvironmentConfig.SOLANA_ENABLED || !services.solana) throw new Error('Solana is not enabled.');
     if (evmOptions || selected || input.slug != null || input.expected_token_standard !== undefined) throw new Error('Solana rules use Solana criteria, not EVM or inscription options.');
-    const criteria=solanaCriteria(input.solana_criteria);
+    const raw = input.solana_criteria as any;
+    // Discord's /setup add-token-rule omits the program; prepareToken reads the real one from the mint.
+    const programFromMint = input.asset_type === 'solana_token' && raw?.kind === 'token' && raw.program === undefined;
+    const criteria = programFromMint ? solanaCriteria({ ...raw, program: raw.mint }) : solanaCriteria(raw);
     if (input.asset_type === 'solana_token') {
       if (criteria.kind !== 'token' || input.min_items != null || !!filter || attributeKey !== 'ALL' || attributeValue !== 'ALL') throw new Error('Solana token rules use a mint and minimum balance.');
       const prepared=await services.solana.prepareToken(criteria.mint,input.min_balance ?? '');
-      if (prepared.solana_criteria.kind !== 'token' || criteria.program !== prepared.solana_criteria.program) throw new Error('Solana mint program changed.');
+      if (prepared.solana_criteria.kind !== 'token' || (!programFromMint && criteria.program !== prepared.solana_criteria.program)) throw new Error('Solana mint program changed.');
       return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems:null,assetFields:{asset_type:'solana_token' as const,...prepared,chain_id:null}};
     }
     if (criteria.kind === 'token' || input.min_balance != null) throw new Error('Solana NFT rules require an NFT scope.');

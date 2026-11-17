@@ -402,10 +402,11 @@ describe('DiscordService - Enhanced Tests', () => {
       expect(list.options[0]).toEqual(expect.objectContaining({
         name: 'asset_type',
         choices: [
-          { name: 'Tokens (ERC-20)', value: 'erc20' },
-          { name: 'NFT', value: 'nft' },
+          { name: 'Tokens (EVM and Solana)', value: 'erc20' },
+          { name: 'NFTs (EVM and Solana)', value: 'nft' },
           { name: 'Ordinals', value: 'ordinal' },
-          { name: 'Ethscriptions', value: 'ethscription' }
+          { name: 'Ethscriptions', value: 'ethscription' },
+          { name: 'Bitcoin Stamps', value: 'stamp' }
         ]
       }));
       expect(list.options[0].required).not.toBe(true);
@@ -416,9 +417,9 @@ describe('DiscordService - Enhanced Tests', () => {
       const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
-        'add-stamps-rule', 'add-solana-nft-rule', 'add-solana-token-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+        'add-stamps-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([5, 8, 5, 5, 9, 9, 9]);
+      expect(rules.map(rule => rule.options.length)).toEqual([5, 5, 12, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -426,21 +427,23 @@ describe('DiscordService - Enhanced Tests', () => {
         ]);
         expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
         for (const name of ['attribute_key', 'attribute_value']) {
-          if (!rule.name.startsWith('add-solana-') && !['add-token-rule','add-stamps-rule'].includes(rule.name)) expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+          if (!['add-token-rule','add-stamps-rule'].includes(rule.name)) expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
         }
       }
-      const [stamps,solanaNft,solanaToken,token,nft,ordinals,ethscriptions] = rules;
+      const [stamps,token,nft,ordinals,ethscriptions] = rules;
       expect(stamps.options.map(o=>o.name)).toEqual(['channel','role','creator_address','stamp_ids','min_items']);
-      expect(solanaNft.options[2]).toMatchObject({name:'scope',required:true});
-      expect(solanaNft.options[3]).toMatchObject({name:'addresses',required:true});
-      expect(solanaNft.options.find(option => option.name === 'formats')).toMatchObject({
+      const networks = [{name:'Ethereum',value:'ethereum'},{name:'Base',value:'base'},{name:'Robinhood',value:'robinhood'},{name:'Solana',value:'solana'}];
+      for (const rule of [token, nft]) expect(rule.options.find(option => option.name === 'network').choices).toEqual(networks);
+      expect(token.options[2]).toMatchObject({ name: 'contract_address', required: true, max_length: 44 });
+      expect(token.options[3]).toEqual(expect.objectContaining({ name: 'min_balance', type: 3, required: true }));
+      expect(token.options.some(option => ['min_items', 'program', 'mint'].includes(option.name))).toBe(false);
+      expect(nft.options.map(o=>o.name)).toEqual(['channel','role','network','contract_address','token_ids','collection_name','scope','addresses','formats','attribute_key','attribute_value','min_items']);
+      expect(nft.options.slice(2).some(option => option.required)).toBe(false);
+      expect(nft.options.find(option => option.name === 'scope').choices.map(c=>c.value)).toEqual(['collection','verified_creator','asset_ids','master_edition']);
+      expect(nft.options.find(option => option.name === 'addresses').max_length).toBe(4000);
+      expect(nft.options.find(option => option.name === 'formats')).toMatchObject({
         choices: [{name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}]
       });
-      expect(solanaToken.options[2]).toMatchObject({name:'mint',required:true});
-      expect(solanaToken.options[4]).toMatchObject({name:'min_balance',required:true});
-      expect(token.options[3]).toEqual(expect.objectContaining({ name: 'min_balance', type: 3, required: true }));
-      expect(token.options.some(option => option.name === 'min_items')).toBe(false);
-      expect(nft.options[2]).toEqual(expect.objectContaining({ name: 'contract_address', required: true }));
       expect(nft.options.some(option => ['slug', 'inscription_ids', 'inscription_numbers'].includes(option.name))).toBe(false);
       for (const rule of [ordinals, ethscriptions]) {
         expect(rule.options.some(option => ['network', 'contract_address', 'token_ids', 'collection_name'].includes(option.name))).toBe(false);

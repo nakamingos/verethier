@@ -147,7 +147,7 @@ Trait values may be strings, numbers, booleans or lists. AND conditions must mat
 
 ### EVM NFTs
 
-`/setup add-nft-rule` takes `contract_address`, optional `network` (Ethereum by default, Base, Robinhood), optional `token_ids`, trait options and `min_items`. The Control Room also supports up to ten AND/OR trait conditions and [OpenSea collection lookup](../docs/nft-collection-lookup.md).
+`/setup add-nft-rule` takes `contract_address`, optional `network` (Ethereum by default, Base, Robinhood), optional `token_ids`, trait options and `min_items`. With `network: Solana` it takes `scope`, `addresses` and `formats` instead; see [Solana](#solana). The Control Room also supports up to ten AND/OR trait conditions and [OpenSea collection lookup](../docs/nft-collection-lookup.md).
 
 - **Token IDs:** comma-separated IDs, inclusive ranges or both (`1,5,20-30`), up to 1,000 unique IDs with full uint256 precision. Blank means any token for ERC-721, and IDs 0–99 for ERC-1155. A minimum can exceed a selection's size so other combined rules can contribute.
 - **Ownership:** read fresh at one block per network, in batches of up to 100. Burned/unminted IDs count as zero; transport failures make the check unavailable.
@@ -156,7 +156,7 @@ Trait values may be strings, numbers, booleans or lists. AND conditions must mat
 
 ### ERC-20 token rules
 
-`/setup add-token-rule` takes `contract_address`, a required `min_balance` such as `1000` or `0.5`, and optional `network`. The bot reads decimals, name and symbol from the contract; tokens without readable `decimals`, `balanceOf` and `totalSupply` are rejected. Amounts are compared as exact base-unit integers (excess precision is rejected), and linked EVM wallets are summed at one block per network. Database `min_balance` stores canonical base units as text. Only tokens held directly in wallets count.
+`/setup add-token-rule` takes `contract_address`, a required `min_balance` such as `1000` or `0.5`, and optional `network`. With `network: Solana`, `contract_address` is the token mint. The bot reads decimals, name and symbol from the contract; tokens without readable `decimals`, `balanceOf` and `totalSupply` are rejected. Amounts are compared as exact base-unit integers (excess precision is rejected), and linked EVM wallets are summed at one block per network. Database `min_balance` stores canonical base units as text. Only tokens held directly in wallets count.
 
 ### Smart wallets
 
@@ -218,7 +218,7 @@ Saving a rule in the Control Room queues a role recheck only if every Ordinals r
 
 ### Solana
 
-Solana wallet proofs (Phantom), SPL/allowlisted Token-2022 minimums, and Token Metadata, Core, compressed and printed-edition NFT rules are live. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL` (Helius) and set `SOLANA_ENABLED=1`; unset pauses Solana. Use `/setup add-solana-token-rule`, `/setup add-solana-nft-rule` or the Control Room. See [Solana verification](../docs/solana-verification.md).
+Solana wallet proofs (Phantom), SPL/allowlisted Token-2022 minimums, and Token Metadata, Core, compressed and printed-edition NFT rules are live. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL` (Helius) and set `SOLANA_ENABLED=1`; unset pauses Solana. Use `/setup add-token-rule` or `/setup add-nft-rule` with `network: Solana`, or the Control Room. See [Solana verification](../docs/solana-verification.md).
 
 ### Bulk checks
 
