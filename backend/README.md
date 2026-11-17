@@ -218,7 +218,7 @@ Saving a rule in the Control Room queues a role recheck only if every Ordinals r
 
 ### Solana
 
-Solana wallet proofs (Phantom), SPL/allowlisted Token-2022 minimums, and Token Metadata, Core, compressed and printed-edition NFT rules are live. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL` (Helius) and set `SOLANA_ENABLED=1`; unset pauses Solana. Use `/setup add-token-rule` or `/setup add-nft-rule` with `network: Solana`, or the Control Room. See [Solana verification](../docs/solana-verification.md).
+Solana wallet proofs (any Wallet Standard wallet: Phantom, Solflare, Backpack and others), SPL/allowlisted Token-2022 minimums, and Token Metadata, Core, compressed and printed-edition NFT rules are live. Configure backend-only `SOLANA_RPC_URL` and `SOLANA_DAS_URL` (Helius) and set `SOLANA_ENABLED=1`; unset pauses Solana. Use `/setup add-token-rule` or `/setup add-nft-rule` with `network: Solana`, or the Control Room. See [Solana verification](../docs/solana-verification.md).
 
 ### Bulk checks
 

@@ -115,7 +115,12 @@
             }}
           </div>
           @if (state.walletType === 'solana') {
-            <p>Connect Phantom on Solana mainnet.</p>
+            <p>Connect a Solana wallet such as Phantom, Solflare or Backpack.</p>
+            @if (!state.walletConnected && (solanaWalletSvc.wallets$ | async); as wallets) {
+              @if (wallets.length > 1) {
+                <label>Solana wallet:<app-pixel-select name="solanaWallet" [ngModel]="solanaWallet || wallets[0].value" (ngModelChange)="solanaWallet = $event" [options]="wallets" label="Solana wallet" [disabled]="state.walletConnecting" /></label>
+              }
+            }
           }
           @if (state.walletType === "bitcoin") {
             <div
@@ -191,20 +196,22 @@
                 <span class="button-label"
                   ><span aria-hidden="true">Connecting...</span
                   ><span aria-hidden="true">Connected</span
-                  ><span aria-hidden="true">{{ state.walletType === 'solana' ? 'Connect Phantom' : 'Connect' }}</span
+                  ><span aria-hidden="true">Connect</span
                   ><span>{{
                     state.walletConnecting
                       ? "Connecting..."
                       : state.walletConnected
                         ? "Connected"
-                        : state.walletType === 'solana' ? 'Connect Phantom' : 'Connect'
+                        : 'Connect'
                   }}</span></span
                 >
               </button>
-              @if (state.walletType === 'solana' && !state.walletConnected && solanaWalletSvc.canOpenPhantomMobile()) {
-                <button type="button" (click)="solanaWalletSvc.openPhantomMobile()" [disabled]="state.walletConnecting">
-                  Open in Phantom app
-                </button>
+              @if (state.walletType === 'solana' && !state.walletConnected && solanaWalletSvc.canOpenMobileWallet()) {
+                @for (name of solanaWalletSvc.mobileWallets; track name) {
+                  <button type="button" (click)="solanaWalletSvc.openMobileWallet(name)" [disabled]="state.walletConnecting">
+                    Open in {{ name }}
+                  </button>
+                }
               }
               @if (state.walletType === 'evm' && !state.walletConnected && isPhone) {
                 <div class="sub mobile-wallet-help">
@@ -255,6 +262,9 @@
               }}</span>
             }
           </div>
+          @if (state.walletType === 'solana' && state.walletConnected && !state.messageVerified) {
+            <p class="sub">To use a different account, switch accounts in {{ solanaWalletSvc.walletName }}.</p>
+          }
           @if (state.walletType === "evm" && state.walletConnected && state.baseAccount && !state.messageVerified) {
             <div class="network-choice" role="group" aria-label="Network to verify on">
               <span>Verify on:</span>

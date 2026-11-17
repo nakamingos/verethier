@@ -264,34 +264,6 @@ describe('Member account boundaries and fresh wallet proofs', () => {
     );
     expect(rules.getRulesByChannel).toHaveBeenCalledWith(server, channel);
   });
-  it('resumes an invalid/expired verification with a fresh challenge', async () => {
-    jest.spyOn(service as any, 'flow').mockResolvedValue({
-      id: 'flow',
-      purpose: 'verify',
-      server_id: server,
-      channel_id: channel,
-      expires_at: new Date(Date.now() + 60000).toISOString(),
-      nonce: 'consumed',
-    });
-    nonces.getActiveNonce.mockRejectedValue(new Error('used'));
-    const start = jest
-      .spyOn(service, 'verify')
-      .mockResolvedValue({ url: '/verify/fresh' });
-    expect(await service.resume(session, 'flow')).toEqual({
-      url: '/verify/fresh',
-    });
-    expect(start).toHaveBeenCalledWith(session, { server, channel });
-    await expect(service.resume(session, 'different')).rejects.toThrow(
-      'no longer available',
-    );
-  });
-  it.each(['evm','bitcoin','solana'])('refreshes a legacy %s wallet-link challenge before asking the wallet to sign it again', async walletType => {
-    const challenge=walletType==='evm'?{domain:{version:'1',chainId:8453}}:'Bouncer wallet link\nDiscord user: private-user';
-    jest.spyOn(service as any,'flow').mockResolvedValue({id:'legacy',purpose:'wallet_link',wallet_type:walletType,address:account.address,challenge,expires_at:new Date(Date.now()+300000).toISOString()});
-    const fresh=jest.spyOn(service,'linkChallenge').mockResolvedValue({id:'minimal'} as any);
-    expect(await service.resume(session,'legacy')).toEqual({id:'minimal'});
-    expect(fresh).toHaveBeenCalledWith(session,{address:account.address,walletType,...(walletType==='evm'?{chainId:8453}:{})});
-  });
   it('only removes the authenticated member’s link through an atomic database operation', async () => {
     await service.remove(session, account.address, 'request');
     expect(db.rpc).toHaveBeenCalledWith('verifier_member_remove_wallet', {

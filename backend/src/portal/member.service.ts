@@ -285,7 +285,6 @@ export class MemberService {
             result: job.user_id === session.user.id ? job.result : null,
           })),
       })),
-      pending: await this.pending(session),
     };
   }
   private async flow(session: PortalSession) {
@@ -296,18 +295,6 @@ export class MemberService {
         .eq('user_id', session.user.id)
         .maybeSingle(),
     );
-  }
-  async pending(session: PortalSession) {
-    const flow = await this.flow(session);
-    if (!flow || flow.completed_at) return null;
-    return {
-      id: flow.id,
-      purpose: flow.purpose,
-      address: flow.address,
-      server: flow.server_id,
-      channel: flow.channel_id,
-      expiresAt: flow.expires_at,
-    };
   }
   private async locked<T>(session: PortalSession, task: () => Promise<T>) {
     if (this.locks.has(session.user.id))
@@ -536,55 +523,6 @@ export class MemberService {
       throw error;
     }
     return { url: `/verify/${nonce}?from=member` };
-  }
-  async resume(session: PortalSession, id: string) {
-    const flow = await this.flow(session);
-    if (!flow || flow.id !== id || flow.completed_at)
-      throw new BadRequestException(
-        'This pending action is no longer available.',
-      );
-    if (flow.purpose === 'wallet_link') {
-      const legacyIdentity = flow.wallet_type === 'evm'
-        ? flow.challenge?.domain?.version !== '2'
-        : /^Discord (?:user|server|channel):/m.test(String(flow.challenge));
-      if (legacyIdentity || new Date(flow.expires_at).getTime() <= Date.now())
-        return this.linkChallenge(session, {
-          address: flow.address,
-          walletType: flow.wallet_type,
-          ...(flow.wallet_type === 'evm' ? { chainId: flow.challenge.domain.chainId } : {}),
-        });
-      return this.linkResponse(flow);
-    }
-    await this.membership(session, flow.server_id);
-    if (new Date(flow.expires_at).getTime() <= Date.now())
-      return this.verify(session, {
-        server: flow.server_id,
-        channel: flow.channel_id,
-      });
-    try {
-      await this.nonces.getActiveNonce(
-        session.user.id,
-        flow.server_id,
-        flow.nonce,
-      );
-    } catch {
-      return this.verify(session, {
-        server: flow.server_id,
-        channel: flow.channel_id,
-      });
-    }
-    // Recheck channel visibility/rules as well as membership when continuing.
-    const { member, guild } = await this.membership(session, flow.server_id);
-    const channel = await guild.channels.fetch(flow.channel_id);
-    if (
-      !channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel) ||
-      !(await this.rules.getRulesByChannel(flow.server_id, flow.channel_id))
-        .length
-    )
-      throw new ForbiddenException(
-        'This verification channel is no longer available.',
-      );
-    return { url: `/verify/${flow.nonce}?from=member` };
   }
   async assertPortalVerification(
     userId: string,
