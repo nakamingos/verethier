@@ -40,14 +40,6 @@ interface Community {
   channels: Array<{ id: string; name: string; rules: Requirement[] }>;
   roles: Array<{ id: string; name: string; status: string }>;
 }
-interface Pending {
-  id: string;
-  purpose: string;
-  address: string | null;
-  server: string | null;
-  channel: string | null;
-  expiresAt: string;
-}
 interface LinkFlow {
   id: string;
   address: string;
@@ -68,7 +60,6 @@ interface Account {
   capabilities?: {solana?: boolean};
   communities: Community[];
   counts: { wallets: number; communities: number; roles: number };
-  pending: Pending | null;
   actions: Array<{
     id: string;
     kind: string;
@@ -120,7 +111,8 @@ export class MemberComponent {
     { value: 'available', label: 'Available roles' },
     { value: 'earned', label: 'Earned roles' },
   ];
-  hiddenPending = '';
+  /** The chosen Solana wallet when several are detected; blank uses the first. */
+  solanaWallet = '';
   addOpen = false;
   walletKind = 'evm';
   walletCommunityId = '';
@@ -144,7 +136,7 @@ export class MemberComponent {
 
     { value: 'xverse', label: 'Bitcoin · Xverse' },
     { value: 'unisat', label: 'Bitcoin · UniSat' },
-    ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana · Phantom'}] : []),
+    ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana'}] : []),
   ];}
   get user() {
     return this.session.user;
@@ -342,7 +334,7 @@ export class MemberComponent {
     this.connecting = true;
     this.error = '';
     try {
-      if (this.walletKind === 'solana') await this.solana.connect();
+      if (this.walletKind === 'solana') await this.solana.connect(this.solanaWallet || undefined);
       else if (this.walletKind === 'evm') await this.evmWallet().connect();
       else
         await this.bitcoin.connect(
@@ -510,21 +502,6 @@ export class MemberComponent {
         channel: this.channels[community.id],
       });
       await this.router.navigateByUrl(result.url);
-    });
-  }
-  async resume() {
-    await this.run(async () => {
-      const result = await this.api('/resume', {
-        flow: this.data?.pending?.id,
-      });
-      if (result.url) await this.router.navigateByUrl(result.url);
-      else {
-        this.linkFlow = result;
-        this.tab = 'wallets';
-        this.addOpen = true;
-        this.walletKind = result.walletType === 'evm' ? 'evm' : result.walletType === 'solana' ? 'solana' : 'xverse';
-        if (this.walletKind === 'evm') this.evmWallet();
-      }
     });
   }
   async refreshAccount() {

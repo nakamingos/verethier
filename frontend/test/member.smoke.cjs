@@ -338,9 +338,7 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
               expiresAt: new Date(expiry * 1000).toISOString(),
             };
             body = { url: '/verify/' + nonce + '?from=member' };
-          } else if (p === '/member/resume')
-            body = { url: '/verify/' + nonce + '?from=member' };
-          else {
+          } else {
             throw new Error('Unexpected portal path ' + p);
           }
           return route.fulfill({ status, json: body });
@@ -592,21 +590,12 @@ const expiry = Math.floor(Date.now() / 1000) + 600;
       await page
         .getByRole('link', { name: 'Back to member portal', exact: true })
         .click();
-      await page
-        .getByRole('button', { name: 'Continue', exact: true })
-        .waitFor();
-      await page.getByRole('button', { name: 'Not now', exact: true }).click();
+      await page.getByRole('button', { name: 'Communities', exact: true }).waitFor();
       assert.equal(
-        await page
-          .getByRole('button', { name: 'Continue', exact: true })
-          .count(),
+        await page.getByText('Continue where you left off').count(),
         0,
+        'An unfinished verification does not interrupt the portal',
       );
-      await page.reload();
-      await page.getByRole('button', { name: 'Continue', exact: true }).click();
-      await page
-        .getByRole('link', { name: 'Back to member portal', exact: true })
-        .click();
       wallets.push({
         address: '0x' + 'cd'.repeat(20),
         wallet_type: 'evm',

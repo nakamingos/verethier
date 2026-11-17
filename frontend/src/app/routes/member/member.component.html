@@ -73,28 +73,6 @@
               </button>
             </section>
           }
-          @if (account.pending && hiddenPending !== account.pending.id) {
-            <section class="panel pending-flow">
-              <h2>Continue where you left off</h2>
-              <p>
-                {{
-                  account.pending.purpose === "wallet_link"
-                    ? "Finish linking your wallet."
-                    : "Continue your community verification."
-                }}
-              </p>
-              <div class="actions">
-                <button (click)="resume()" [disabled]="busy || connecting">
-                  Continue</button
-                ><button
-                  (click)="hiddenPending = account.pending.id"
-                  [disabled]="busy"
-                >
-                  Not now
-                </button>
-              </div>
-            </section>
-          }
           @if (tab === "overview") {
             <section class="panel">
               <h2>Welcome, {{ user.name }}</h2>
@@ -226,21 +204,33 @@
                     </div>
                   </div>
                 } @else {
+                  @if (walletKind === 'solana' && !address && (solana.wallets$ | async); as wallets) {
+                    @if (wallets.length > 1) {
+                      <label>Solana wallet:<app-pixel-select name="solanaWallet" [ngModel]="solanaWallet || wallets[0].value" (ngModelChange)="solanaWallet = $event" [options]="wallets" label="Solana wallet" [disabled]="busy || connecting" /></label>
+                    }
+                  }
+                  @if (walletKind === 'solana' && address) {
+                    <p class="muted">To use a different account, switch accounts in {{ solana.walletName }}.</p>
+                  }
                   @if (walletKind === 'xverse' && address) {
                     <label>Bitcoin address:<app-pixel-select name="stampAddress" [ngModel]="address" (ngModelChange)="bitcoin.selectAddress($event); linkFlow = null" [options]="(bitcoin.addresses$ | async) || []" label="Bitcoin address" [disabled]="busy || connecting" /></label>
                   }
                   <div class="actions">
-                    <button (click)="connect()" [disabled]="busy || connecting || disconnecting">
-                      {{
-                        connecting
-                          ? "Connecting…"
-                          : address
-                            ? "Change wallet"
-                            : walletKind === 'solana' ? 'Connect Phantom' : 'Connect wallet'
-                      }}
-                    </button>
-                    @if (walletKind === 'solana' && !address && solana.canOpenPhantomMobile()) {
-                      <button (click)="solana.openPhantomMobile()" [disabled]="busy || connecting">Open in Phantom app</button>
+                    @if (walletKind !== 'solana' || !address) {
+                      <button (click)="connect()" [disabled]="busy || connecting || disconnecting">
+                        {{
+                          connecting
+                            ? "Connecting…"
+                            : address
+                              ? "Change wallet"
+                              : "Connect wallet"
+                        }}
+                      </button>
+                    }
+                    @if (walletKind === 'solana' && !address && solana.canOpenMobileWallet()) {
+                      @for (name of solana.mobileWallets; track name) {
+                        <button (click)="solana.openMobileWallet(name)" [disabled]="busy || connecting">Open in {{ name }}</button>
+                      }
                     }
                     @if (
                       walletKind === "unisat" && !bitcoin.isUniSatAvailable()

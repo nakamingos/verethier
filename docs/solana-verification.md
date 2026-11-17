@@ -1,10 +1,10 @@
 # Solana verification
 
-Solana is live in production with Helius as the RPC/DAS provider. Members verify with Phantom; admins create Solana token and NFT rules in the Control Room or with `/setup add-token-rule` and `/setup add-nft-rule` using `network: Solana`. Live Phantom acceptance beyond desktop connection is still open; see the [checklist](#live-acceptance).
+Solana is live in production with Helius as the RPC/DAS provider. Members verify with any Solana wallet that supports the Wallet Standard, such as Phantom, Solflare or Backpack; admins create Solana token and NFT rules in the Control Room or with `/setup add-token-rule` and `/setup add-nft-rule` using `network: Solana`.
 
 ## Coverage
 
-- Mainnet Solana wallets, with Phantom Wallet Standard discovery and a Phantom injected-provider fallback. The connector signs an exact, readable Bouncer message; it never signs transactions or pays fees. SIWS/off-chain envelopes, hardware-wallet and multisig/program-account authorization are not enabled in this slice.
+- Mainnet Solana wallets discovered through the Wallet Standard, with a Phantom injected-provider fallback for older Phantom builds. The connector signs an exact, readable Bouncer message; it never signs transactions or pays fees. SIWS/off-chain envelopes, hardware-wallet and multisig/program-account authorization are not enabled in this slice.
 - SPL Token and explicitly allowlisted transparent Token-2022 balances by mint, token program and minimum. Sum all directly owned accounts across saved wallets using raw integer units. Reject unknown balance-affecting extensions, mismatched mint configuration, overlapping accounts and incomplete responses. Frozen ownership can count; spending capability is not the criterion. Confidential, interest/scaled display and protocol-deposit balances are excluded.
 - NFTs using collection, verified creator or explicit asset-ID scopes, minimum counts and existing same-asset AND/OR trait filters. Scope addresses are case-sensitive; multiple addresses in a scope mean OR. Token Metadata/programmable NFTs and Core assets are the only advertised formats in this slice. Collection relationships are read from Token Metadata PDAs or Core's on-chain update authority, with batched reads. An indexed collection name/group alone is insufficient.
 - Wallet linking/transfers/removal, proof activity/history, privacy and deletion behavior, server wallet blocks/audits, member lookup/explorer links, rule edits/revisions, combined collectible counts, background checks, setup diagnostics and fresh exports use the new family. Solana fungible balances never join collectible item-count groups.
@@ -34,7 +34,11 @@ The proof binds the Discord member, server/channel context, nonce, account, orig
 
 ## Wallet connection
 
-The verify page and member portal show **Connect Phantom**, which uses Phantom through Wallet Standard discovery (or its injected provider) on the current page. Desktop browsers without Phantom get extension guidance. Mobile browsers without a detected Phantom provider also get **Open in Phantom app**, which reopens the page inside Phantom's browser through its `phantom.com` browse link, keeping the Solana selection for verification or wallet linking.
+The verify page and member portal list every Solana wallet the browser announces through the Wallet Standard (Phantom, Solflare, Backpack, Coinbase Wallet, MetaMask and others) that supports Solana mainnet message signing. With one wallet, **Connect** uses it; with several, a **Solana wallet** menu chooses. Older Phantom builds without the Wallet Standard use Phantom's injected provider. The backend verifies the Ed25519 signature and doesn't depend on which wallet made it.
+
+Desktop browsers without a Solana wallet get extension guidance. Phones without a detected wallet get **Open in Phantom** and **Open in Solflare**, which reopen the page in that app's browser (`phantom.com/ul/browse/…`, `solflare.com/ul/v1/browse/…`) with `?wallet=solana`, keeping the Solana selection; older `?wallet=phantom` links still work. Other wallet apps work when the page is opened in their own browser.
+
+Wallets connect whichever account is active in the wallet, and they remember approving the site, so connecting again doesn't prompt. Bouncer follows account switches made in the wallet when the new account is approved for the site, and otherwise asks to connect again. To use a different account, switch accounts in the wallet. **Disconnect wallet** in the member portal also asks the wallet to disconnect the site, so it stops signing until you connect again; to make the wallet ask for approval again, remove the site from the wallet's connected apps. If a wallet reports that the account isn't approved (error 4100), Bouncer explains and asks you to connect again.
 
 ## Evidence and provider limits
 

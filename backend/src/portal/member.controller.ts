@@ -17,7 +17,6 @@ import {
   MemberLinkDto,
   MemberProofDto,
   MemberRemoveDto,
-  MemberResumeDto,
   MemberVerifyDto,
   MemberWalletCommunityDto,
 } from './member.dto';
@@ -79,11 +78,5 @@ export class MemberController {
     @Body() dto: MemberVerifyDto,
   ) {
     return this.member.verify(await this.session(req), dto);
-  }
-  @Post('resume') async resume(
-    @Req() req: Request,
-    @Body() dto: MemberResumeDto,
-  ) {
-    return this.member.resume(await this.session(req), dto.flow);
   }
 }

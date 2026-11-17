@@ -124,8 +124,8 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
         return route.fulfill({ json: {} });
       });
       await page.goto(origin + "/verify/" + nonce);
-      assert.equal(await page.getByRole("button", { name: "Open in Phantom app", exact: true }).count(), 0);
-      await page.getByRole("button", { name: "Connect Phantom", exact: true }).click();
+      assert.equal(await page.getByRole("button", { name: /^Open in / }).count(), 0);
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
       assert.equal(await page.evaluate(() => window.__phantomConnections), 1);
       assert.equal(new URL(page.url()).origin, origin);
       await page.waitForFunction(
@@ -198,20 +198,21 @@ const artifacts = fs.mkdtempSync("/tmp/bouncer-solana-smoke-");
         return route.fulfill({ json: {} });
       });
       await page.goto(origin + '/verify/' + nonce + '?wallet=phantom');
-      const connect = page.getByRole('button', { name: 'Connect Phantom', exact: true });
+      const connect = page.getByRole('button', { name: 'Connect', exact: true });
       await connect.waitFor();
-      const app = page.getByRole('button', { name: 'Open in Phantom app', exact: true });
+      const app = page.getByRole('button', { name: 'Open in Phantom', exact: true });
       assert.equal(await app.count(), mobile ? 1 : 0);
+      assert.equal(await page.getByRole('button', { name: 'Open in Solflare', exact: true }).count(), mobile ? 1 : 0);
       if (mobile) {
         await app.click();
         await page.waitForURL('https://phantom.com/**');
         const target = new URL(decodeURIComponent(handoff.pathname.slice('/ul/browse/'.length)));
         assert.equal(target.pathname, '/verify/' + nonce);
-        assert.equal(target.searchParams.get('wallet'), 'phantom');
+        assert.equal(target.searchParams.get('wallet'), 'solana');
         assert.equal(handoff.searchParams.get('ref'), origin);
       } else {
         await connect.click();
-        await page.getByText('Install or enable the Phantom browser extension, then refresh this page.').waitFor();
+        await page.getByText('Install or enable a Solana wallet browser extension, such as Phantom or Solflare, then refresh this page.').waitFor();
         assert.equal(new URL(page.url()).origin, origin);
       }
       console.log(JSON.stringify({ scenario: mobile ? 'mobile app handoff without provider' : 'desktop extension guidance without provider', result: 'passed' }));

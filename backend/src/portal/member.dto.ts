@@ -27,10 +27,6 @@ export class MemberVerifyDto {
   @Matches(/^\d{17,22}$/) server: string;
   @Matches(/^\d{17,22}$/) channel: string;
 }
-export class MemberResumeDto {
-  @IsUUID() flow: string;
-}
-
 export class MemberWalletCommunityDto {
   @Matches(/^\d{17,22}$/) server: string;
   @IsString() @MaxLength(100) address: string;

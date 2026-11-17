@@ -114,7 +114,7 @@ export class VerifyComponent {
         this.setState({ walletTypes: context.walletTypes, bitcoinStamps: context.bitcoinStamps === true });
         if (context.walletTypes.includes('bitcoin') && new URL(window.location.href).searchParams.get('wallet') === 'unisat') {
           this.setWalletType('bitcoin', 'unisat');
-        } else if (context.walletTypes.includes('solana') && new URL(window.location.href).searchParams.get('wallet') === 'phantom') {
+        } else if (context.walletTypes.includes('solana') && ['solana', 'phantom'].includes(new URL(window.location.href).searchParams.get('wallet') || '')) {
           this.setWalletType('solana');
         } else this.setWalletType(context.walletTypes[0]);
         return resolvedData as DecodedData;
@@ -474,6 +474,8 @@ export class VerifyComponent {
   }
 
   readonly isPhone = isPhone();
+  /** The chosen Solana wallet when several are detected; blank uses the first. */
+  solanaWallet = '';
 
   get evmNetworks() { return this.walletSvc.evmNetworks; }
 
@@ -515,7 +517,7 @@ export class VerifyComponent {
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
       if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider, this.state$.value.bitcoinStamps);
-      else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect();
+      else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect(this.solanaWallet || undefined);
       else await this.walletSvc.connect();
     } catch (error) {
       this.setState({ errorMessage: error instanceof Error ? error.message : 'Could not connect your wallet.' });

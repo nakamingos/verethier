@@ -42,35 +42,49 @@ describe('Verification page wallet choice', () => {
     return fixture;
   }
 
-  it('uses Connect Phantom without a competing mobile action on desktop', async () => {
+  it('uses one Connect button without mobile app links on desktop', async () => {
     const fixture = page(['solana']);
     const wallet = fixture.componentInstance.solanaWalletSvc;
-    spyOn(wallet, 'canOpenPhantomMobile').and.returnValue(false);
+    spyOn(wallet, 'canOpenMobileWallet').and.returnValue(false);
     const connect = spyOn(wallet, 'connect').and.resolveTo('So11111111111111111111111111111111111111112');
     fixture.detectChanges();
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    expect(buttons.some((button) => button.textContent?.includes('Open in Phantom app'))).toBeFalse();
-    buttons.find((button) => button.textContent?.includes('Connect Phantom'))!.click();
+    expect(buttons.some((button) => button.textContent?.includes('Open in'))).toBeFalse();
+    buttons.find((button) => button.textContent?.trim().endsWith('Connect'))!.click();
     await fixture.whenStable();
-    expect(connect).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledOnceWith(undefined);
   });
-  it('shows the app handoff separately when needed on mobile', () => {
+  it('connects the Solana wallet chosen when several are detected', async () => {
     const fixture = page(['solana']);
     const wallet = fixture.componentInstance.solanaWalletSvc;
-    spyOn(wallet, 'canOpenPhantomMobile').and.returnValue(true);
-    const open = spyOn(wallet, 'openPhantomMobile');
+    (wallet as any).walletsState.next([{ value: 'Phantom', label: 'Phantom' }, { value: 'Solflare', label: 'Solflare' }]);
+    const connect = spyOn(wallet, 'connect').and.resolveTo('So11111111111111111111111111111111111111112');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[aria-label="Solana wallet"]')).toBeTruthy();
+    fixture.componentInstance.solanaWallet = 'Solflare';
+    await fixture.componentInstance.connect();
+    expect(connect).toHaveBeenCalledOnceWith('Solflare');
+  });
+  it('offers each wallet app on mobile when no wallet is detected', () => {
+    const fixture = page(['solana']);
+    const wallet = fixture.componentInstance.solanaWalletSvc;
+    spyOn(wallet, 'canOpenMobileWallet').and.returnValue(true);
+    const open = spyOn(wallet, 'openMobileWallet');
     fixture.detectChanges();
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    buttons.find((button) => button.textContent?.includes('Open in Phantom app'))!.click();
-    expect(open).toHaveBeenCalledTimes(1);
+    buttons.find((button) => button.textContent?.includes('Open in Solflare'))!.click();
+    expect(open).toHaveBeenCalledOnceWith('Solflare');
+    expect(buttons.some((button) => button.textContent?.includes('Open in Phantom'))).toBeTrue();
   });
-  it('selects Solana after returning through the Phantom mobile app', () => {
-    history.replaceState(null, '', '?wallet=phantom');
-    const fixture = page(['evm', 'solana']);
-    expect(fixture.componentInstance.state$.value.walletType).toBe('solana');
+  it('selects Solana after opening in a wallet app, including older Phantom links', () => {
+    for (const wallet of ['solana', 'phantom']) {
+      history.replaceState(null, '', '?wallet=' + wallet);
+      const fixture = page(['evm', 'solana']);
+      expect(fixture.componentInstance.state$.value.walletType).toBe('solana');
+    }
   });
-  it('ignores the Phantom preference when the channel has no Solana rules', () => {
-    history.replaceState(null, '', '?wallet=phantom');
+  it('ignores the Solana preference when the channel has no Solana rules', () => {
+    history.replaceState(null, '', '?wallet=solana');
     const fixture = page(['evm']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('evm');
   });
