@@ -21,6 +21,8 @@ import { ServerSetupService } from '@/services/server-setup.service';
 import { ruleCommandAssetType } from '@/utils/rule-command.util';
 import { normalizeRoleName } from './discord-commands/utils/role-management.util';
 
+const RULE_NETWORK_CHOICES = [...NFT_NETWORKS.map(({ name, value }) => ({ name, value })), { name: 'Solana', value: 'solana' }];
+
 /**
  * Discord Bot Service
  * 
@@ -572,39 +574,27 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
           .addStringOption(o=>o.setName('creator_address').setDescription('Original stamp creator Bitcoin address'))
           .addStringOption(o=>o.setName('stamp_ids').setDescription('Stamp numbers, comma-separated (up to 100)').setMaxLength(1700))
           .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum owned copies').setMinValue(1)))
-        .addSubcommand(sc => sc.setName('add-solana-nft-rule').setDescription('Add a Solana mainnet NFT ownership rule')
-          .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true).addChannelTypes(ChannelType.GuildText))
-          .addStringOption(o=>o.setName('role').setDescription('Role name').setRequired(true).setAutocomplete(true))
-          .addStringOption(o=>o.setName('scope').setDescription('NFT match scope').setRequired(true).addChoices({name:'Verified collection',value:'collection'},{name:'Verified creator',value:'verified_creator'},{name:'Asset IDs',value:'asset_ids'},{name:'Printed editions',value:'master_edition'}))
-          .addStringOption(o=>o.setName('addresses').setDescription('Comma-separated Solana scope addresses').setRequired(true).setMaxLength(4000))
-          .addStringOption(o=>o.setName('formats').setDescription('NFT formats; defaults to Token Metadata + Core').addChoices({name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}))
-          .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum NFTs').setMinValue(1))
-          .addStringOption(o=>o.setName('attribute_key').setDescription('Trait name'))
-          .addStringOption(o=>o.setName('attribute_value').setDescription('Trait value')))
-        .addSubcommand(sc => sc.setName('add-solana-token-rule').setDescription('Add a Solana mainnet fungible-token rule')
-          .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true).addChannelTypes(ChannelType.GuildText))
-          .addStringOption(o=>o.setName('role').setDescription('Role name').setRequired(true).setAutocomplete(true))
-          .addStringOption(o=>o.setName('mint').setDescription('Token mint address').setRequired(true).setMaxLength(44))
-          .addStringOption(o=>o.setName('program').setDescription('Token program').setRequired(true).addChoices({name:'SPL Token',value:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'},{name:'Token-2022',value:'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'}))
-          .addStringOption(o=>o.setName('min_balance').setDescription('Minimum token balance').setRequired(true)))
         .addSubcommand(sc =>
           sc.setName('add-token-rule')
-            .setDescription('Add an ERC-20 token balance verification rule')
+            .setDescription('Add a token balance verification rule (ERC-20 or Solana)')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
-            .addStringOption(option => option.setName('contract_address').setDescription('ERC-20 contract address on the selected network').setRequired(true))
+            .addStringOption(option => option.setName('contract_address').setDescription('Token contract address, or the token mint address on Solana').setMaxLength(44).setRequired(true))
             .addStringOption(option => option.setName('min_balance').setDescription('Minimum token amount, e.g. 1000 or 0.5').setMaxLength(360).setRequired(true))
-            .addStringOption(option => option.setName('network').setDescription('Token network (default: Ethereum)').addChoices(...NFT_NETWORKS.map(({ name, value }) => ({ name, value }))))
+            .addStringOption(option => option.setName('network').setDescription('Token network (default: Ethereum)').addChoices(...RULE_NETWORK_CHOICES))
         )
         .addSubcommand(sc =>
           sc.setName('add-nft-rule')
-            .setDescription('Add an NFT collection or token verification rule')
+            .setDescription('Add an NFT collection or token verification rule (EVM or Solana)')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
-            .addStringOption(option => option.setName('contract_address').setDescription('NFT contract address on the selected network').setRequired(true))
-            .addStringOption(option => option.setName('network').setDescription('NFT network (default: Ethereum)').addChoices(...NFT_NETWORKS.map(({ name, value }) => ({ name, value }))))
+            .addStringOption(option => option.setName('network').setDescription('NFT network (default: Ethereum)').addChoices(...RULE_NETWORK_CHOICES))
+            .addStringOption(option => option.setName('contract_address').setDescription('NFT contract address (Ethereum, Base, Robinhood)'))
             .addStringOption(option => option.setName('token_ids').setDescription('NFT token ID, list, or range; ERC-1155 defaults to 0-99'))
             .addStringOption(option => option.setName('collection_name').setDescription('Optional NFT collection name override').setMaxLength(100))
+            .addStringOption(option => option.setName('scope').setDescription('Solana: what the addresses identify').addChoices({name:'Verified collection',value:'collection'},{name:'Verified creator',value:'verified_creator'},{name:'Asset IDs',value:'asset_ids'},{name:'Printed editions',value:'master_edition'}))
+            .addStringOption(option => option.setName('addresses').setDescription('Solana: comma-separated collection, creator, asset or master mint addresses').setMaxLength(4000))
+            .addStringOption(option => option.setName('formats').setDescription('Solana: NFT formats (default: Token Metadata + Core)').addChoices({name:'Token Metadata + Core',value:'standard'},{name:'Compressed NFTs (Bubblegum V1/V2)',value:'compressed'},{name:'All supported formats',value:'all'}))
             .addStringOption(option => option.setName('attribute_key').setDescription('Attribute key (leave empty for ALL attributes)').setAutocomplete(true))
             .addStringOption(option => option.setName('attribute_value').setDescription('Attribute value (leave empty for ALL values)').setAutocomplete(true))
             .addIntegerOption(option => option.setName('min_items').setDescription('Minimum items (default: 1)').setMinValue(1))
@@ -648,10 +638,11 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
           sc.setName('list-rules')
             .setDescription('List verification rules, optionally filtered by asset type')
             .addStringOption(option => option.setName('asset_type').setDescription('Show only this asset type (default: all)').addChoices(
-              { name: 'Tokens (ERC-20)', value: 'erc20' },
-              { name: 'NFT', value: 'nft' },
+              { name: 'Tokens (EVM and Solana)', value: 'erc20' },
+              { name: 'NFTs (EVM and Solana)', value: 'nft' },
               { name: 'Ordinals', value: 'ordinal' },
-              { name: 'Ethscriptions', value: 'ethscription' }
+              { name: 'Ethscriptions', value: 'ethscription' },
+              { name: 'Bitcoin Stamps', value: 'stamp' }
             ))
         )
         .addSubcommand(sc =>

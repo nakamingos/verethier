@@ -144,6 +144,24 @@ export class AddRuleHandler {
       const input: any = { asset_type: selectedAssetType || interaction.options.getString('asset_type') || 'ethscription',
         min_items: interaction.options.getInteger('min_items') ?? undefined };
       for (const field of fields) input[field] = interaction.options.getString(field) ?? undefined;
+      const solanaOnly = ['scope', 'addresses', 'formats'].filter(name => interaction.options.getString(name) != null);
+      if (input.network === 'solana') {
+        // add-nft-rule/add-token-rule on Solana create solana_nft/solana_token rules.
+        if (input.asset_type === 'nft') {
+          if (input.contract_address || input.token_ids || input.collection_name)
+            throw new Error('Solana NFT rules use scope and addresses, not contract_address, token_ids or collection_name.');
+          if (!interaction.options.getString('scope') || !interaction.options.getString('addresses'))
+            throw new Error('Solana NFT rules need a scope and addresses.');
+          input.asset_type = 'solana_nft';
+        } else if (input.asset_type === 'erc20') {
+          input.asset_type = 'solana_token';
+          input.mint = input.contract_address;
+          input.contract_address = undefined;
+        }
+        input.network = undefined;
+      } else if (input.asset_type === 'nft') {
+        if (solanaOnly.length) throw new Error(`${solanaOnly.join(', ')} ${solanaOnly.length === 1 ? 'is' : 'are'} for Solana NFTs; choose network: Solana.`);
+      }
       if (input.asset_type === 'stamp') input.stamp_criteria = {
         ...(interaction.options.getString('creator_address') ? {creator:interaction.options.getString('creator_address')} : {}),
         ...(interaction.options.getString('stamp_ids') ? {stamp_ids:interaction.options.getString('stamp_ids')!.split(/[\s,]+/).filter(Boolean)} : {})
@@ -153,7 +171,11 @@ export class AddRuleHandler {
         const scope=interaction.options.getString('scope');
         input.solana_criteria = {kind:scope,addresses:(interaction.options.getString('addresses') || '').split(/[\s,]+/).filter(Boolean),formats:scope === 'master_edition' && (!format || format === 'standard') ? ['metadata'] : format === 'compressed' ? ['compressed'] : format === 'all' ? ['compressed','core','metadata'] : ['metadata','core']};
       }
-      if (input.asset_type === 'solana_token') input.solana_criteria = {kind:'token',mint:interaction.options.getString('mint'),program:interaction.options.getString('program')};
+      if (input.asset_type === 'solana_token') {
+        const mint = input.mint; delete input.mint;
+        // Without a program, rule preparation reads it from the mint.
+        input.solana_criteria = {kind:'token',mint};
+      }
       const criteria = await prepareRuleCriteria(input, { data: this.dataSvc, nfts: this.nftSvc,
         ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc, solana: this.solanaSvc, stamps: this.stampsSvc });
       return { channel, roleName, ...criteria, slug: input.asset_type === 'nft' ? 'ALL' : criteria.slug, assetFields: input.asset_type === 'ethscription' && !criteria.assetFields.inscription_criteria ? undefined : criteria.assetFields };

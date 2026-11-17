@@ -84,9 +84,10 @@ describe('ListRulesHandler', () => {
 
   describe('handle', () => {
     it.each([
-      [null, [1, 2, 3, 4, 5, 6, 7, 8], 'Verification Rules'],
-      ['erc20', [8], 'Tokens (ERC-20) Verification Rules'],
-      ['nft', [3, 4], 'NFT Verification Rules'],
+      [null, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'Verification Rules'],
+      ['erc20', [8, 10], 'Token Verification Rules'],
+      ['nft', [3, 4, 9], 'NFT Verification Rules'],
+      ['stamp', [11], 'Bitcoin Stamps Verification Rules'],
       ['ordinal', [5, 6], 'Ordinals Verification Rules'],
       ['ethscription', [1, 2, 7], 'Ethscriptions Verification Rules']
     ])('lists the correct rules for asset filter %s', async (assetType, expectedIds, title) => {
@@ -103,6 +104,10 @@ describe('ListRulesHandler', () => {
         { ...base, id: 7, asset_type: 'ethscription', slug: null,
           inscription_criteria: { kind: 'ids', ids: ['0x' + 'a'.repeat(64)] } },
         { ...base, id: 8, asset_type: 'erc20', chain_id: 4663, contract_address: '0x' + '1'.repeat(40), slug: null, min_items: null, token_decimals: 6, min_balance: '500000', token_symbol: 'TEST' },
+        { ...base, id: 9, asset_type: 'solana_nft', slug: null, solana_criteria: { kind: 'collection', addresses: ['So11111111111111111111111111111111111111112'], formats: ['metadata', 'core'] } },
+        { ...base, id: 10, asset_type: 'solana_token', slug: null, min_items: null, token_decimals: 9, min_balance: '1000000000',
+          solana_criteria: { kind: 'token', mint: 'So11111111111111111111111111111111111111112', program: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' } },
+        { ...base, id: 11, asset_type: 'stamp', slug: null, stamp_criteria: { stamp_ids: ['1'] } },
         { ...base, id: 99, asset_type: 'nft', server_id: '000000000000000000' }
       ];
       mockDbService.getRoleMappings.mockResolvedValue(rules.reverse() as any);
@@ -122,7 +127,7 @@ describe('ListRulesHandler', () => {
       mockInteraction.options.getString.mockReturnValue('ordinal');
       await handler.handle(mockInteraction);
       expect(mockInteraction.editReply).toHaveBeenCalledWith({
-        embeds: [AdminFeedback.info('Verification Rules', 'No verification rules found for Ordinals.')]
+        embeds: [AdminFeedback.info('Verification Rules', 'No Ordinals verification rules found.')]
       });
     });
 
