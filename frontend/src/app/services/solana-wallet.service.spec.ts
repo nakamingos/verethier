@@ -34,6 +34,32 @@ describe('Solana wallet connector', () => {
     expect(await service.connect()).toBe(address);
     expect(provider.connect).toHaveBeenCalledTimes(1);
   });
+  it('withdraws the previous approval before changing wallets so Phantom asks again', async () => {
+    provider.disconnect = jasmine.createSpy().and.resolveTo();
+    await service.connect();
+    expect(provider.disconnect).not.toHaveBeenCalled();
+    provider.disconnect.and.callFake(async () => expect(provider.connect).toHaveBeenCalledTimes(1));
+    await service.connect();
+    expect(provider.disconnect).toHaveBeenCalledTimes(1);
+    expect(provider.connect).toHaveBeenCalledTimes(2);
+  });
+  it('disconnects the wallet approval as well as the session', async () => {
+    provider.disconnect = jasmine.createSpy().and.rejectWith(new Error('offline'));
+    await service.connect();
+    await service.disconnectWallet();
+    expect(provider.disconnect).toHaveBeenCalledTimes(1);
+    let current: string | null = 'x';
+    service.address$.subscribe(value => current = value);
+    expect(current).toBeNull();
+  });
+  it('explains an unauthorized Phantom account and ends the stale session', async () => {
+    await service.connect();
+    provider.signMessage.and.rejectWith({ code: 4100, message: 'The requested method and/or account has not been authorized by the user.' });
+    await expectAsync(service.signMessage(address, 'hello')).toBeRejectedWithError(/Connect Phantom again/);
+    let current: string | null = 'x';
+    service.address$.subscribe(value => current = value);
+    expect(current).toBeNull();
+  });
   it('gives extension guidance on desktop when Phantom is unavailable', async () => {
     spyOnProperty(navigator, 'userAgent', 'get').and.returnValue('Mozilla/5.0 (X11; Linux x86_64)');
     (window as any).phantom = undefined;

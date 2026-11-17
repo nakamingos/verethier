@@ -118,6 +118,17 @@ describe('Canonical NFT rules from a collection lookup', () => {
     }
     for(const asset of ['nft','erc20']){component.draftAsset=asset;expect(component.fixedNetwork).toBeNull();}
   });
+  it('keeps the chosen network when switching between NFTs and Tokens',()=>{
+    component.data.capabilities.solana=true;
+    component.draftAsset='nft';component.draftNetwork='robinhood';
+    component.draftAsset='erc20';
+    expect(component.draft.asset_type).toBe('erc20');expect(component.draft.network).toBe('robinhood');
+    component.draftNetwork='solana';
+    component.draftAsset='nft';
+    expect(component.draft.asset_type).toBe('solana_nft');
+    component.draftAsset='ordinal';component.draftAsset='erc20';
+    expect(component.draft.asset_type).toBe('erc20');expect(component.draft.network).toBe('ethereum');
+  });
   it('filters Solana rules under NFTs and Tokens',()=>{
     component.data.rules=[{id:1,asset_type:'nft'},{id:2,asset_type:'solana_nft'},{id:3,asset_type:'erc20'},{id:4,asset_type:'solana_token'}];
     component.filter='nft';expect(component.rules.map((r:any)=>r.id).sort()).toEqual([1,2]);

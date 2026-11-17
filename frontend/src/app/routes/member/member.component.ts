@@ -363,7 +363,7 @@ export class MemberComponent {
       if (this.walletKind === 'evm') {
         await this.evm?.disconnectWeb3();
         this.evmAddress = '';
-      } else if (this.walletKind === 'solana') this.solana.disconnect();
+      } else if (this.walletKind === 'solana') await this.solana.disconnectWallet();
       else this.bitcoin.disconnect();
       this.address = '';
       this.linkFlow = null;

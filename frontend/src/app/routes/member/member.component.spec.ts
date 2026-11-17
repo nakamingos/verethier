@@ -42,7 +42,7 @@ describe('Member portal wallet disconnect', () => {
     component = Object.create(MemberComponent.prototype);
     Object.assign(component, {
       evm: { disconnectWeb3: jasmine.createSpy('disconnectWeb3').and.resolveTo() },
-      solana: { disconnect: jasmine.createSpy('solana') },
+      solana: { disconnect: jasmine.createSpy('solana'), disconnectWallet: jasmine.createSpy('solana approval').and.resolveTo() },
       bitcoin: { disconnect: jasmine.createSpy('bitcoin') },
       busy: false, connecting: false, networkSwitching: false, disconnecting: false, error: '',
       walletKind: 'evm', address: '0xabc', evmAddress: '0xabc',
@@ -62,7 +62,7 @@ describe('Member portal wallet disconnect', () => {
   it('disconnects the selected Solana or Bitcoin wallet', async () => {
     component.walletKind = 'solana';
     await component.disconnectWallet();
-    expect(component.solana.disconnect).toHaveBeenCalled();
+    expect(component.solana.disconnectWallet).toHaveBeenCalled();
     component.walletKind = 'xverse';
     component.address = 'bc1p';
     await component.disconnectWallet();
