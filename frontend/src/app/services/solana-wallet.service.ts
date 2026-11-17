@@ -7,9 +7,13 @@ export interface SolanaWalletChoice {
 }
 
 /** Wallet apps with an in-app browser link, for phones where no wallet is detected. */
+const browseLink = (base: string) => (target: URL) =>
+  `${base}${encodeURIComponent(target.href)}?ref=${encodeURIComponent(target.origin)}`;
 const MOBILE_WALLETS = [
-  { name: 'Phantom', browse: 'https://phantom.com/ul/browse/' },
-  { name: 'Solflare', browse: 'https://solflare.com/ul/v1/browse/' },
+  { name: 'Phantom', link: browseLink('https://phantom.com/ul/browse/') },
+  { name: 'Solflare', link: browseLink('https://solflare.com/ul/v1/browse/') },
+  // MetaMask takes the page without its scheme.
+  { name: 'MetaMask', link: (target: URL) => `https://link.metamask.io/dapp/${target.host}${target.pathname}${target.search}` },
 ] as const;
 export type SolanaMobileWallet = (typeof MOBILE_WALLETS)[number]['name'];
 
@@ -212,8 +216,7 @@ export class SolanaWalletService implements OnDestroy {
     if (target.protocol !== 'https:')
       throw new Error('Opening a wallet app requires an HTTPS page.');
     target.searchParams.set('wallet', 'solana');
-    const browse = MOBILE_WALLETS.find((wallet) => wallet.name === name)!.browse;
-    return `${browse}${encodeURIComponent(target.href)}?ref=${encodeURIComponent(window.location.origin)}`;
+    return MOBILE_WALLETS.find((wallet) => wallet.name === name)!.link(target);
   }
   openMobileWallet(name: SolanaMobileWallet) {
     if (this.canOpenMobileWallet()) window.location.assign(this.mobileWalletUrl(name));
