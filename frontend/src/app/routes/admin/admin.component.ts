@@ -276,9 +276,27 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'ordinal', label: 'Ordinals' },
     { value: 'stamp', label: 'Bitcoin Stamps' },
     { value: 'nft', label: 'NFTs' },
-    { value: 'erc20', label: 'Tokens (ERC-20)' },
-    ...(this.data?.capabilities?.solana ? [{value:'solana_nft',label:'Solana NFTs'},{value:'solana_token',label:'Solana tokens'}] : []),
+    { value: 'erc20', label: 'Tokens' },
   ]; }
+  /** Solana rules are stored as their own asset types but chosen as NFTs/Tokens on the Solana network. */
+  static assetFamily(asset: string) {
+    return asset === 'solana_nft' ? 'nft' : asset === 'solana_token' ? 'erc20' : asset;
+  }
+  get draftAsset() { return AdminComponent.assetFamily(this.draft.asset_type); }
+  set draftAsset(value: string) { this.draft.asset_type = value; this.changeAsset(); }
+  get ruleNetworkChoices(): SelectChoice[] {
+    return [...EVM_NETWORKS, ...(this.data?.capabilities?.solana ? [{ value: 'solana', label: 'Solana' }] : [])];
+  }
+  get draftNetwork() {
+    return ['solana_nft', 'solana_token'].includes(this.draft.asset_type) ? 'solana' : this.draft.network;
+  }
+  set draftNetwork(value: string) {
+    const family = this.draftAsset;
+    const asset = value !== 'solana' ? family : family === 'nft' ? 'solana_nft' : 'solana_token';
+    if (asset !== this.draft.asset_type) { this.draft.asset_type = asset; this.changeAsset(); }
+    if (value !== 'solana') this.draft.network = value;
+    this.clearNftLookupExpectation();
+  }
   readonly solanaFormatChoices: SelectChoice[] = [
     { value: 'standard', label: 'Token Metadata + Core' },
     { value: 'compressed', label: 'Compressed NFTs (Bubblegum V1/V2)' },
@@ -292,7 +310,6 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'ids', label: 'Inscription IDs / hashes' },
     { value: 'numbers', label: 'Global inscription numbers' },
   ];
-  readonly networkChoices: SelectChoice[] = EVM_NETWORKS;
   readonly messageActionChoices: SelectChoice[] = [
     { value: 'refresh', label: 'Refresh existing' },
     { value: 'new', label: 'Create another message' },
@@ -863,7 +880,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       : (this.data?.rules || []).filter(
           (r: any) =>
             (this.groupFilter !== 'combined' || !!this.groupFor(r)) &&
-            (!this.filter || r.asset_type === this.filter) &&
+            (!this.filter || AdminComponent.assetFamily(r.asset_type) === this.filter) &&
             (!this.query ||
               this.describe(r)
                 .toLowerCase()

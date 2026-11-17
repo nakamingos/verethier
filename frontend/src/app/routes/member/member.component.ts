@@ -610,7 +610,10 @@ export class MemberComponent {
           ethscription: 'Ethscriptions',
           ordinal: 'Ordinals',
           nft: 'NFTs',
-          erc20: 'Tokens (ERC-20)',
+          erc20: 'Tokens',
+          stamp: 'Stamps',
+          solana_nft: 'NFTs',
+          solana_token: 'Tokens',
         } as Record<string, string>
       )[asset] || asset
     );
