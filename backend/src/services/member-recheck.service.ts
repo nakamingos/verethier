@@ -42,7 +42,7 @@ function isFamily(value: string): value is WalletType {
 }
 
 /**
- * "Check saved wallets" on a member's private verification reply. It re-reads
+ * "Re-check saved wallets" on a member's private verification reply. It re-reads
  * holdings for saved wallets the member already proved, within one wallet
  * family, and grants or removes roles exactly like a signed verification in
  * that family. Linking or claiming a wallet still needs a signature, inactive
@@ -102,7 +102,7 @@ export class MemberRecheckService {
     const families = [...active.keys()];
     const selected = families.reduce((best, type) => active.get(type)!.length > active.get(best)!.length ? type : best);
     const button = new ButtonBuilder().setCustomId(RECHECK_BUTTON + selected).setStyle(ButtonStyle.Secondary)
-      .setLabel(families.length === 1 ? `Check ${LABELS[selected]} wallets` : 'Check saved wallets');
+      .setLabel(families.length === 1 ? `Re-check ${LABELS[selected]} wallets` : 'Re-check saved wallets');
     if (families.length === 1) return { button, rows: [] };
     const menu = new StringSelectMenuBuilder().setCustomId(RECHECK_SELECT).setMinValues(1).setMaxValues(1)
       .addOptions(families.map(type => {
@@ -154,8 +154,10 @@ export class MemberRecheckService {
       .map(row => row.toJSON() as APIActionRowComponent<APIComponentInMessageActionRow>)
       .map(row => ({ ...row, components: row.components.filter((component: any) => component.type === ComponentType.Button && component.url) }))
       .filter(row => row.components.length);
+    // Keep the Verify Now embed, with its expiry, above the check's result.
+    const verifyEmbeds = interaction.message.embeds.map(embed => embed.toJSON());
     const show = (title: string, description: string, color: `#${string}`) => interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle(title).setDescription(boundedEmbedDescription(description)).setColor(color)],
+      embeds: [...verifyEmbeds, new EmbedBuilder().setTitle(title).setDescription(boundedEmbedDescription(description)).setColor(color)],
       components: linkRow,
     });
     await show('Checking Saved Wallets', `Checking your saved ${LABELS[family]} wallets…`, '#5865F2');
