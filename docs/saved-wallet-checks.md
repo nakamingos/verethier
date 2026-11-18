@@ -13,7 +13,7 @@ Members can check their saved wallets again without signing. The **Re-check save
 - With one family, there is no dropdown. The button names the family, for example **Re-check EVM wallets**.
 - With no saved wallets that apply, the reply looks the same as before: just Verify Now.
 - Picking a family only updates the member's own reply. Nothing is checked until they click the button.
-- After the check, the result appears below the Verify Now message, which keeps its link and expiry time.
+- After the check, the result appears below the Verify Now message, which keeps its link and expiry time. A **Member Portal** link appears beside Verify Now.
 
 ## What a check does
 

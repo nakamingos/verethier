@@ -43,6 +43,15 @@ export type RoleSyncContext = Map<string, Promise<GuildMember>> & {
   memberRecheck?: Readonly<{ userId: string; guildId: string }>;
 };
 
+/** A link to the member portal, where members manage saved wallets and sharing. */
+export function memberPortalButton(): ButtonBuilder {
+  return new ButtonBuilder().setLabel('Member Portal').setURL(`${EnvironmentConfig.BASE_URL}/member`).setStyle(ButtonStyle.Link);
+}
+
+export function memberPortalRow(): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(memberPortalButton());
+}
+
 /** Extra controls for the private verification reply: a button beside Verify Now and optional rows below. */
 export type VerificationReplyControls = { button: ButtonBuilder; rows: ActionRowBuilder<any>[] } | null;
 
@@ -776,7 +785,7 @@ export class DiscordVerificationService {
             .setDescription(boundedEmbedDescription(description))
             .setColor('#00FF00')
         ],
-        components: [] // Remove the "Verify Now" button
+        components: [memberPortalRow()] // Replace the "Verify Now" button
       });
       
     } catch (error) {
@@ -792,7 +801,7 @@ export class DiscordVerificationService {
                 .setDescription(`You have been successfully verified in ${guild.name}.`)
                 .setColor('#00FF00')
             ],
-            components: [] // Remove the "Verify Now" button in fallback case too
+            components: [memberPortalRow()] // Replace the "Verify Now" button in fallback case too
           });
         }
       } catch (fallbackError) {
