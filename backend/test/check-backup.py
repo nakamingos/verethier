@@ -1,10 +1,10 @@
-"""Restore the bot's SQL backup and rehearse its verification migrations.
+"""Restore the bot's SQL backup into a disposable database and compare every value.
 
-Run: python3 backend/test/check-backup.py backup [ordinal-sql-file] [trait-sql-file] [ordinal-trait-sql-file] [selection-sql-file] [catalog-sql-file]
+Run: python3 backend/test/check-backup.py BACKUP_DIRECTORY
 Requires Docker and the cached Supabase Postgres image. No remote connections.
 Supabase-managed auth/storage tables are outside this application-table check.
+Migration rehearsals live in each feature's check-<feature>-migration.py script.
 """
-import hashlib
 import os
 from pathlib import Path
 import re
@@ -15,10 +15,6 @@ import time
 
 root = Path(__file__).resolve().parents[2]
 backup = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "backup"
-ordinal_sql = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "backend/supabase/migrations/20261008010000_add_ordinals_verification.sql"
-trait_sql = Path(sys.argv[3]) if len(sys.argv) > 3 else root / "backend/supabase/migrations/20261008020000_add_nft_trait_verification.sql"
-ordinal_trait_sql = Path(sys.argv[4]) if len(sys.argv) > 4 else root / "backend/supabase/migrations/20261011010000_add_ordinal_trait_snapshots.sql"
-selection_sql = Path(sys.argv[5]) if len(sys.argv) > 5 else root / "backend/supabase/migrations/20261011020000_add_inscription_selection_rules.sql"
 container = f"verethier-backup-check-{os.getpid()}"
 image = "public.ecr.aws/supabase/postgres:17.6.1.132"
 database = "verethier_backup_check"
@@ -41,19 +37,6 @@ def sql(statement, target=database):
                "psql", "-X", "-U", "postgres", "-d", target,
                "-v", "ON_ERROR_STOP=1", "-qAt", "--single-transaction", "--file=-",
                input=statement.encode()).decode()
-
-
-def fingerprint(table, upgraded=False, ordinal_upgraded=False, ordinal_traits_upgraded=False, selections_upgraded=False):
-    row = "to_jsonb(t)"
-    if upgraded and table == "verifier_rules":
-        row += " - ARRAY['asset_type','chain_id','contract_address','token_standard','token_ids','collection_name']"
-    if ordinal_upgraded and table == "user_wallets":
-        row += " - 'wallet_type'"
-    if ordinal_traits_upgraded and table == "verifier_rules":
-        row += " - 'ordinal_trait_snapshot'"
-    if selections_upgraded and table == "verifier_rules":
-        row += " - 'inscription_criteria'"
-    return hashlib.sha256(sql(f"SELECT COALESCE(jsonb_agg({row} ORDER BY ({row})::text), '[]'::jsonb) FROM public.\"{table}\" t;").encode()).hexdigest()
 
 
 files = {name: (backup / f"{name}.sql").read_text() for name in ["roles", "schema", "data"]}
@@ -99,134 +82,6 @@ try:
             raise RuntimeError(f"Restored values differ from the backup for {name}")
         print(f"PASS: {name}: {len(expected_rows)} rows, every backed-up value matches")
 
-    has_nft_columns = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='asset_type';").strip() == "1"
-    if not has_nft_columns:
-        before = {table: fingerprint(table) for table in tables}
-        migration = root / "backend/supabase/migrations/20261006223000_add_nft_verification_rules.sql"
-        sql(migration.read_text())
-        for table in tables:
-            if fingerprint(table, upgraded=True) != before[table]:
-                raise RuntimeError(f"NFT migration changed existing data in {table}")
-        if sql("SELECT count(*) FROM public.verifier_rules WHERE asset_type IS DISTINCT FROM 'ethscription' OR chain_id IS DISTINCT FROM 1;").strip() != "0":
-            raise RuntimeError("Existing rules did not receive the expected Ethscriptions defaults")
-        print("PASS: NFT migration succeeds and preserves all existing application data")
-    has_ordinal_columns = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='user_wallets' AND column_name='wallet_type';").strip() == "1"
-    if not has_ordinal_columns:
-        # Rehearse the L2 upgrade before Ordinals; never downgrade an Ordinals backup.
-        before_robinhood = {table: fingerprint(table) for table in tables}
-        sql((root / "backend/supabase/migrations/20261007033000_add_robinhood_nft_rules.sql").read_text())
-        for table in tables:
-            if fingerprint(table) != before_robinhood[table]:
-                raise RuntimeError(f"Robinhood migration changed existing data in {table}")
-        print("PASS: Robinhood migration succeeds and preserves all existing application data")
-
-        before_ordinals = {table: fingerprint(table) for table in tables}
-        if len(sys.argv) > 2:
-            # Only in this disposable database: model the production history table
-            # so the exact guarded rollout transaction can also be rehearsed.
-            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
-              INSERT INTO supabase_migrations.schema_migrations (version, name)
-                VALUES ('20261006223000', 'add_nft_verification_rules'), ('20261007033000', 'add_robinhood_nft_rules')
-                ON CONFLICT DO NOTHING;""")
-        sql(ordinal_sql.read_text())
-        for table in tables:
-            if fingerprint(table, ordinal_upgraded=True) != before_ordinals[table]:
-                raise RuntimeError(f"Ordinals migration changed existing data in {table}")
-        if sql("SELECT count(*) FROM public.user_wallets WHERE wallet_type IS DISTINCT FROM 'evm';").strip() != "0":
-            raise RuntimeError("Existing wallets did not receive the expected EVM default")
-        print("PASS: Ordinals migration succeeds and preserves every existing application value")
-    else:
-        print("PASS: backup already includes the Ordinals wallet schema")
-    sql((root / "backend/test/ordinals-migration.sql").read_text())
-    print("PASS: Bitcoin wallet and Ordinals rule constraints and duplicate guards")
-    has_traits = sql("SELECT to_regclass('public.nft_token_metadata') IS NOT NULL;").strip() == "t"
-    if not has_traits:
-        before_traits = {table: fingerprint(table) for table in tables}
-        if len(sys.argv) > 3:
-            # Only in this disposable database, recreate the linked migration history.
-            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
-              INSERT INTO supabase_migrations.schema_migrations (version)
-                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000')
-                ON CONFLICT DO NOTHING;""")
-        sql(trait_sql.read_text())
-        for table in tables:
-            if fingerprint(table) != before_traits[table]:
-                raise RuntimeError(f"NFT trait migration changed existing data in {table}")
-        print("PASS: NFT trait migration succeeds and preserves every existing application value")
-    sql((root / "backend/test/nft-traits-migration.sql").read_text())
-    print("PASS: NFT trait rules, duplicate guards, uint256 cache IDs and cache permissions")
-    sql((root / "backend/test/nft-migration.sql").read_text())
-    sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
-    print("PASS: existing ERC-721, ERC-1155 and Robinhood rule constraints")
-    has_ordinal_traits = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='ordinal_trait_snapshot';").strip() == "1"
-    if not has_ordinal_traits:
-        before_ordinal_traits = {table: fingerprint(table) for table in tables}
-        if len(sys.argv) > 4:
-            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
-              INSERT INTO supabase_migrations.schema_migrations (version)
-                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000'), ('20261008020000')
-                ON CONFLICT DO NOTHING;""")
-        sql(ordinal_trait_sql.read_text())
-        for table in tables:
-            if fingerprint(table, ordinal_traits_upgraded=True) != before_ordinal_traits[table]:
-                raise RuntimeError(f"Ordinals trait migration changed existing data in {table}")
-        if sql("SELECT count(*) FROM public.verifier_rules WHERE ordinal_trait_snapshot IS NOT NULL;").strip() != "0":
-            raise RuntimeError("Existing rules did not start with a null Ordinals trait snapshot")
-        print("PASS: Ordinals trait migration preserves every existing application value")
-    sql((root / "backend/test/ordinal-traits-migration.sql").read_text())
-    sql((root / "backend/test/ordinals-migration.sql").read_text())
-    sql((root / "backend/test/nft-traits-migration.sql").read_text())
-    sql((root / "backend/test/nft-migration.sql").read_text())
-    sql((root / "backend/test/robinhood-nft-migration.sql").read_text())
-    print("PASS: Ordinals trait criteria, snapshot storage, duplicate guards and existing NFT constraints")
-    has_selections = sql("SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='inscription_criteria';").strip() == "1"
-    if not has_selections:
-        before_selections = {table: fingerprint(table) for table in tables}
-        if len(sys.argv) > 5:
-            # Model hosted migration history only inside the disposable database
-            # to rehearse the exact guarded production transaction.
-            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
-              INSERT INTO supabase_migrations.schema_migrations (version)
-                VALUES ('20261006223000'), ('20261007033000'), ('20261008010000'),
-                  ('20261008020000'), ('20261011010000')
-                ON CONFLICT DO NOTHING;""")
-        sql(selection_sql.read_text())
-        for table in tables:
-            if fingerprint(table, selections_upgraded=True) != before_selections[table]:
-                raise RuntimeError(f"Inscription selection migration changed existing data in {table}")
-        print("PASS: inscription selection migration preserves every existing application value")
-    sql((root / "backend/test/inscription-selection-migration.sql").read_text())
-    sql((root / "backend/test/ordinal-traits-migration.sql").read_text())
-    sql((root / "backend/test/nft-traits-migration.sql").read_text())
-    sql((root / "backend/test/nft-migration.sql").read_text())
-    print("PASS: global Ethscription and Ordinals selections, minimums, duplicate guards and existing NFT/trait constraints")
-    has_catalog = sql("SELECT to_regclass('public.ordinal_collections') IS NOT NULL;").strip() == "t"
-    if not has_catalog:
-        before_catalog = {table: fingerprint(table) for table in tables}
-        if len(sys.argv) > 6:
-            # Only in this disposable target: rehearse the exact production
-            # transaction, including its existing-data and migration guards.
-            sql("""CREATE SCHEMA IF NOT EXISTS supabase_migrations;
-              CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
-                version text PRIMARY KEY, applied_at timestamptz DEFAULT now(), statements text[], name text);
-              INSERT INTO supabase_migrations.schema_migrations (version, name)
-                VALUES ('20261013010000', 'add_wallet_blocklist') ON CONFLICT DO NOTHING;""")
-        catalog_sql = Path(sys.argv[6]) if len(sys.argv) > 6 else root / "backend/supabase/migrations/20261015010000_add_ordinal_collection_cache.sql"
-        sql(catalog_sql.read_text())
-        for table in tables:
-            if fingerprint(table) != before_catalog[table]:
-                raise RuntimeError(f"Ordinals catalog migration changed existing data in {table}")
-        print("PASS: Ordinals catalog migration preserves every existing application value")
-    sql((root / "backend/test/ordinal-catalog-migration.sql").read_text())
-    print("PASS: atomic catalogs, failed-refresh preservation, complete large reads, backend-only access and persistent quota")
 finally:
     run("Removing disposable database", "docker", "stop", container)
     print("Disposable database removed; remote database was not accessed")
