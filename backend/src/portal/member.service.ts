@@ -1,3 +1,4 @@
+import { bitcoinMessage } from '@/utils/bitcoin-message.util';
 import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { normalizeBlockedWallet } from '@/services/wallet-block.service';
 import { WalletCheckService } from '@/services/wallet-check.service';
@@ -374,17 +375,7 @@ export class MemberService {
                 Expiry: expiry,
               },
             }
-          : dto.walletType === 'solana' ? solanaMessage({ origin: this.auth.origin, purpose: 'wallet_link', address, nonce, expiry }) : [
-              'Bouncer saved-wallet link',
-              '',
-              `Domain: ${this.auth.origin}`,
-              'Network: Bitcoin mainnet',
-              `Address: ${address}`,
-              `Nonce: ${nonce}`,
-              `Expires at: ${new Date(expiry * 1000).toISOString()}`,
-              '',
-              'Link this wallet to your Bouncer account. This does not verify community roles.',
-            ].join('\n');
+          : dto.walletType === 'solana' ? solanaMessage({ origin: this.auth.origin, purpose: 'wallet_link', address, nonce, expiry }) : bitcoinMessage({ purpose: 'link', origin: this.auth.origin, address, nonce, expiry });
       const flow = await this.saveFlow(session, {
         purpose: 'wallet_link',
         address,

@@ -406,7 +406,7 @@ describe("Signed privacy choices", () => {
           choice,
         ),
         sig = Signer.sign(v.test_private_key, v.address, challenge.message);
-      expect(challenge.message).toContain(consentCommitment(nonce, privacyProof(choice)));
+      expect(challenge.message).toContain('Consent: ' + consentCommitment(nonce, privacyProof(choice)).slice(2, 34));
       expect(challenge.message).not.toContain(privacyProof(choice));
       const payload = {
         ...data,

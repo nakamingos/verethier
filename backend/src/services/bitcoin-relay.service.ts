@@ -7,7 +7,7 @@ import { BitcoinSignatureService } from './bitcoin-signature.service';
 interface Relay { address: string; message: string; expires: number; signature?: string }
 
 /** Bouncer's own Bitcoin challenges; the relay never carries other text. */
-const BOUNCER_MESSAGE = /^Bouncer (?:wallet verification|saved-wallet link)\n/;
+const BOUNCER_MESSAGE = /^Bouncer (?:verification|wallet link|wallet verification|saved-wallet link)\n/;
 const TTL_MS = 15 * 60 * 1000;
 
 /**

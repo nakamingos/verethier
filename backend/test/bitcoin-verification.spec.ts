@@ -60,9 +60,13 @@ describe('Bitcoin wallet proof', () => {
   it('builds the signed challenge from trusted nonce context and consumes it once', async () => {
     const { data, signature, challenge } = await proof();
     expect(data.nonce).toMatch(/^[0-9a-f]{64}$/);
-    for (const value of ['Bouncer wallet verification', 'https://verify.example.test', vector.address, data.nonce]) {
-      expect(challenge.message).toContain(value);
-    }
+    expect(challenge.message).toBe([
+      'Bouncer verification', 'Site: https://verify.example.test', `Address: ${vector.address}`,
+      `Code: ${data.nonce.slice(0, 32)}`, `Expires: ${new Date(challenge.expiry * 1000).toISOString().slice(0, 19).replace('T', ' ')} UTC`,
+    ].join('\n'));
+    // Short enough to copy into a wallet by hand; no plus sign for Freewallet's link parser.
+    expect(challenge.message.length).toBeLessThan(220);
+    expect(challenge.message).not.toContain('+');
     expect(challenge.message).not.toMatch(/Discord (?:user|server|channel):/);
     expect((await signatures.verify(data, signature)).context.channelId).toBe('channel');
     await expect(signatures.verify(data, signature)).rejects.toThrow('Invalid or expired nonce');
