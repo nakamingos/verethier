@@ -167,8 +167,13 @@ describe('MemberRecheckService', () => {
       expect(final.embeds[0].data).toMatchObject({ title: 'Wallet Check Complete' });
       expect(final.embeds[0].data.description).toContain('Checked your saved EVM wallets in Test Guild.');
       expect(final.embeds[0].data.description).toContain('New Roles Assigned');
-      // Only the Verify Now link remains.
-      expect(final.components).toEqual([expect.objectContaining({ components: [expect.objectContaining({ url: 'https://example.com/verify/x' })] })]);
+      // Verify Now stays; the check controls are replaced by a Member Portal link.
+      expect(final.components).toHaveLength(1);
+      expect(final.components[0].components.map((c: any) => [c.label, c.url])).toEqual([
+        ['Verify Now', 'https://example.com/verify/x'], ['Member Portal', expect.stringMatching(/\/member$/)],
+      ]);
+      // While checking, only Verify Now is shown.
+      expect(interaction.editReply.mock.calls[0][0].components[0].components.map((c: any) => c.label)).toEqual(['Verify Now']);
     });
 
     it('applies a per-family cooldown, longer for Bitcoin', async () => {

@@ -596,7 +596,7 @@ describe('DiscordVerificationService', () => {
               })
             })
           ]),
-        components: [] // Expect components to be cleared
+        components: [expect.objectContaining({ components: [expect.objectContaining({ data: expect.objectContaining({ label: 'Member Portal', url: expect.stringMatching(/\/member$/) }) })] })] // Verify Now is replaced by the portal link
       });
       expect(service.tempMessages[nonce]).toBeUndefined(); // Should be cleaned up
     });
@@ -629,7 +629,7 @@ describe('DiscordVerificationService', () => {
             })
           })
         ]),
-        components: [] // Expect components to be cleared
+        components: [expect.objectContaining({ components: [expect.objectContaining({ data: expect.objectContaining({ label: 'Member Portal', url: expect.stringMatching(/\/member$/) }) })] })] // Verify Now is replaced by the portal link
       });
     });
 
@@ -661,7 +661,7 @@ describe('DiscordVerificationService', () => {
               })
             })
           ]),
-        components: [] // Expect components to be cleared
+        components: [expect.objectContaining({ components: [expect.objectContaining({ data: expect.objectContaining({ label: 'Member Portal', url: expect.stringMatching(/\/member$/) }) })] })] // Verify Now is replaced by the portal link
       });
       
       // Verify that 'GIF Goddess' appears only once in the description
@@ -1254,7 +1254,7 @@ describe('DiscordVerificationService', () => {
       expect(description).not.toContain('**✅ Roles You Already Have:**');
     });
 
-    it('should remove verify button when sending success message', async () => {
+    it('replaces the verify button with a Member Portal link when sending success message', async () => {
       const nonce = 'test-nonce';
       service.tempMessages[nonce] = mockInteraction as any;
 
@@ -1264,9 +1264,9 @@ describe('DiscordVerificationService', () => {
 
       await service.sendVerificationComplete('guild-id', nonce, roleResults);
 
-      // Verify that components array is empty (no "Verify Now" button)
+      // Verify Now is replaced by a single Member Portal link.
       const editReplyCall = mockInteraction.editReply.mock.calls[0][0];
-      expect(editReplyCall.components).toEqual([]);
+      expect(editReplyCall.components.map((row: any) => row.toJSON().components.map((c: any) => c.label))).toEqual([['Member Portal']]);
     });
 
     it('should handle error when guild not found', async () => {

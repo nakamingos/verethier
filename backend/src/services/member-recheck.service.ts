@@ -12,7 +12,7 @@ import { WalletType } from '@/utils/wallet-address.util';
 import { walletCheckNetwork, walletMatchesRule } from '@/utils/wallet-check.util';
 import { walletOnChain } from '@/utils/wallet-scope.util';
 import { DbService } from './db.service';
-import { DiscordVerificationService, RoleSyncContext, VerificationReplyControls } from './discord-verification.service';
+import { DiscordVerificationService, memberPortalButton, RoleSyncContext, VerificationReplyControls } from './discord-verification.service';
 import { DynamicRoleService } from './dynamic-role.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
@@ -156,11 +156,15 @@ export class MemberRecheckService {
       .filter(row => row.components.length);
     // Keep the Verify Now embed, with its expiry, above the check's result.
     const verifyEmbeds = interaction.message.embeds.map(embed => embed.toJSON());
-    const show = (title: string, description: string, color: `#${string}`) => interaction.editReply({
+    // Results add a Member Portal link beside Verify Now.
+    const resultRows = linkRow.length
+      ? [{ ...linkRow[0], components: [...linkRow[0].components, memberPortalButton().toJSON()] }, ...linkRow.slice(1)]
+      : [{ type: ComponentType.ActionRow, components: [memberPortalButton().toJSON()] }];
+    const show = (title: string, description: string, color: `#${string}`, rows: any[] = resultRows) => interaction.editReply({
       embeds: [...verifyEmbeds, new EmbedBuilder().setTitle(title).setDescription(boundedEmbedDescription(description)).setColor(color)],
-      components: linkRow,
+      components: rows,
     });
-    await show('Checking Saved Wallets', `Checking your saved ${LABELS[family]} wallets…`, '#5865F2');
+    await show('Checking Saved Wallets', `Checking your saved ${LABELS[family]} wallets…`, '#5865F2', linkRow);
     try {
       const outcome = await this.check(userId, guildId, channelId, family);
       const guildName = interaction.guild?.name || 'this server';
