@@ -17,6 +17,7 @@ export interface OrdinalTraitSnapshot {
 }
 
 export interface OrdinalCheckDetails {
+  /** 'sandshrew' appears only in older saved check records. */
   provider: 'ordnet' | 'xverse' | 'ordiscan' | 'subfrost' | 'sandshrew' | 'mixed';
   source: 'live' | 'trait-snapshot' | 'collection-upper-bound' | 'collection-cache';
   snapshot_fetched_at?: string;
@@ -25,7 +26,7 @@ export interface OrdinalCheckDetails {
 export interface OrdinalWalletInventory {
   ids: Set<string>;
   numbers?: Map<string, number>;
-  provider: 'xverse' | 'ordiscan' | 'subfrost' | 'sandshrew';
+  provider: 'xverse' | 'ordiscan' | 'subfrost';
 }
 
 export interface OrdinalAttributeRow {

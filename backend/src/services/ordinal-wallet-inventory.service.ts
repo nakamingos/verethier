@@ -17,6 +17,7 @@ const UNAVAILABLE = 'Ordinals verification is temporarily unavailable. Please tr
 export class OrdinalWalletInventoryService {
   private readonly reads = new AsyncSemaphore(3);
   private readonly cooldowns = new Map<Provider, number>();
+  private warnedSandshrew = false;
   private readonly health = new Map<PublicProvider, { expires: number; work: OrdinalRequestWork; result: Promise<void> }>();
 
   constructor(private readonly requests: OrdinalsRequestScheduler, private readonly db: DbService) {}
@@ -41,8 +42,15 @@ export class OrdinalWalletInventoryService {
   }
 
   private providers(): Provider[] {
-    const providers = EnvironmentConfig.ORDINALS_OWNERSHIP_PROVIDERS.split(',').map(value => value.trim().toLowerCase());
-    if (!providers.length || providers.some(value => !['ordiscan', 'subfrost', 'sandshrew', 'xverse'].includes(value))
+    const configured = EnvironmentConfig.ORDINALS_OWNERSHIP_PROVIDERS.split(',').map(value => value.trim().toLowerCase());
+    // Sandshrew's domain registration expired in 2026. Never send requests (or
+    // its key) to that domain, even if an older configuration still lists it.
+    const providers = configured.filter(value => value !== 'sandshrew');
+    if (providers.length !== configured.length && !this.warnedSandshrew) {
+      this.warnedSandshrew = true;
+      Logger.warn('Ignoring sandshrew in ORDINALS_OWNERSHIP_PROVIDERS: the service is no longer available.');
+    }
+    if (!providers.length || providers.some(value => !['ordiscan', 'subfrost', 'xverse'].includes(value))
       || new Set(providers).size !== providers.length) throw new Error('Invalid ORDINALS_OWNERSHIP_PROVIDERS configuration.');
     return providers as Provider[];
   }
@@ -59,11 +67,10 @@ export class OrdinalWalletInventoryService {
     for (const provider of this.providers()) {
       if ((this.cooldowns.get(provider) || 0) > Date.now()) continue;
       if (provider === 'ordiscan' && !EnvironmentConfig.ORDISCAN_API_KEY
-        || provider === 'sandshrew' && !EnvironmentConfig.SANDSHREW_API_KEY
         || provider === 'xverse' && !EnvironmentConfig.XVERSE_API_KEY) continue;
       // The public ord address response contains IDs only. Do not enrich every
       // inscription or build a permanent number index just to evaluate a range.
-      if (numbers && (provider === 'subfrost' || provider === 'sandshrew')) continue;
+      if (numbers && provider === 'subfrost') continue;
       try {
         if (provider === 'xverse') {
           const inventory = await xverse(wallet, work);
@@ -115,7 +122,7 @@ export class OrdinalWalletInventoryService {
     throw new Error(UNAVAILABLE);
   }
 
-  private checkHealth(provider: 'subfrost' | 'sandshrew', work: OrdinalRequestWork): Promise<void> {
+  private checkHealth(provider: 'subfrost', work: OrdinalRequestWork): Promise<void> {
     let cached = this.health.get(provider);
     if (cached && cached.expires > Date.now()) {
       if (work.priority === 'interactive') this.requests.promote(cached.work);
@@ -136,9 +143,8 @@ export class OrdinalWalletInventoryService {
     return result;
   }
 
-  private async rpc(provider: 'subfrost' | 'sandshrew', method: string, params: unknown[], work: OrdinalRequestWork): Promise<any> {
-    const url = provider === 'subfrost' ? 'https://mainnet.subfrost.io/v4/jsonrpc'
-      : `https://mainnet.sandshrew.io/v1/${EnvironmentConfig.SANDSHREW_API_KEY}`;
+  private async rpc(provider: 'subfrost', method: string, params: unknown[], work: OrdinalRequestWork): Promise<any> {
+    const url = 'https://mainnet.subfrost.io/v4/jsonrpc';
     const data = await this.http(provider, url, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),

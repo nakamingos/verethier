@@ -202,7 +202,7 @@ Sources: [authentication](https://developers.ord.net/reference/authentication/),
 
 With `ordnet`, a complete scan is stored in `ordinal_collections` and `ordinal_collection_attributes` (slug, inscription ID and JSONB trait values; no owners). Each collection used by a rule is refreshed at the start of scheduled reverification; failed or incomplete refreshes keep the last complete catalog. `/setup refresh-collection collection_slug:SLUG` refreshes one early. Collection slug autocomplete uses saved rules and the catalog.
 
-Wallet inventories fall back through `ORDINALS_OWNERSHIP_PROVIDERS` (default `ordiscan,subfrost,sandshrew,xverse`); providers without keys are skipped, and SUBFROST uses its public endpoint. Ordiscan use is capped at 1,000 requests per UTC month in `ordinal_provider_usage`. Errors, timeouts and rate limits fall back with cooldowns. Valid empty inventories mean zero; failures don't. If every provider fails, earned roles are kept and no new roles are granted.
+Wallet inventories fall back through `ORDINALS_OWNERSHIP_PROVIDERS` (default `ordiscan,subfrost,xverse`); providers without keys are skipped, and SUBFROST uses its public endpoint. Sandshrew was removed in November 2026 after its domain registration expired; `sandshrew` in this setting is ignored with a warning, and `SANDSHREW_API_KEY` is no longer read. Ordiscan use is capped at 1,000 requests per UTC month in `ordinal_provider_usage`. Errors, timeouts and rate limits fall back with cooldowns. Valid empty inventories mean zero; failures don't. If every provider fails, earned roles are kept and no new roles are granted.
 
 #### Ordinals traits
 
