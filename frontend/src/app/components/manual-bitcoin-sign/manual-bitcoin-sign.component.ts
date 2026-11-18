@@ -20,12 +20,12 @@ const POLL_MS = 2000;
       <div class="manual-bitcoin-sign">
         @if (freewallet(); as link) {
           <div class="actions">
-            <a class="button" [href]="link.url" (click)="waitForFreewallet(link.id, request)">Sign with Freewallet</a>
+            <a class="button" [href]="link.url" (click)="openFreewallet($event, link.id, request)">Sign with Freewallet</a>
           </div>
           @if (waiting()) {
-            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer. Nothing opened? Quit Freewallet completely, then click the button again.</p>
+            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer. Nothing showed up? Close any Freewallet request dialogs, then click the button again.</p>
           } @else {
-            <p class="muted">Quit Freewallet first if it's open: it only picks up the request when the button starts it. Freewallet then signs and sends the signature back.</p>
+            <p class="muted">Close any open Freewallet request dialogs first: Freewallet handles one request at a time. It then signs and sends the signature back.</p>
           }
           <p>Or sign it yourself:</p>
         }
@@ -78,6 +78,17 @@ export class ManualBitcoinSignComponent implements OnInit {
   readonly freewallet = signal<{ id: string; url: SafeUrl } | null>(null);
   readonly waiting = signal(false);
   private polling?: ReturnType<typeof setTimeout>;
+  private lastOpened = 0;
+
+  /** A second link while Freewallet shows a request opens an empty, stuck dialog, so ignore quick repeats. */
+  openFreewallet(event: Event, id: string, request: ManualSignatureRequest) {
+    if (Date.now() - this.lastOpened < 5000) {
+      event.preventDefault();
+      return;
+    }
+    this.lastOpened = Date.now();
+    this.waitForFreewallet(id, request);
+  }
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.stopWaiting());
