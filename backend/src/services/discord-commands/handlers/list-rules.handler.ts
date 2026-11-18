@@ -1,7 +1,8 @@
+import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { requireGuild } from '../utils/guild.util';
 import { ruleRoles } from '@/utils/rule-roles.util';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
-import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
+import { tokenAmount, tokenMinimum, tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -16,7 +17,7 @@ import { formatAttribute } from '../utils/rule-validation.util';
 type RuleAssetType = NonNullable<VerifierRole['asset_type']>;
 const ASSET_TYPE_LABELS: Record<RuleAssetType, string> = {
   stamp: 'Bitcoin Stamps', solana_nft: 'Solana NFTs', solana_token: 'Solana tokens',
-  erc20: 'Token', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions'
+  erc20: 'Token', nft: 'NFT', ordinal: 'Ordinals', ethscription: 'Ethscriptions', counterparty: 'Counterparty'
 };
 /** The Token and NFT filters include Solana rules. */
 const assetFamily = (asset: string) => asset === 'solana_nft' ? 'nft' : asset === 'solana_token' ? 'erc20' : asset;
@@ -280,6 +281,7 @@ export class ListRulesHandler {
       if (['erc20','solana_token'].includes(rule.asset_type)) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Token: ${tokenRuleCriteria(rule)} | Contract: ${rule.contract_address}`;
       if (rule.inscription_criteria) return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Inscriptions: ${inscriptionRuleScope(rule)} | Min: ${rule.min_items || 1}`;
       if (rule.asset_type === 'stamp') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | ${stampRuleLabel(rule)}`;
+      if (rule.asset_type === 'counterparty') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | ${counterpartyRuleLabel(rule)} | Min: ${isTokenAmountRule(rule) ? tokenAmount(rule, tokenMinimum(rule)) : rule.min_items || 1}`;
       if (rule.asset_type === 'nft' || rule.asset_type === 'ordinal') return `ID: ${rule.id} | Channel: <#${rule.channel_id}> | Role: ${mentions} | Collection: ${rule.asset_type === 'ordinal' ? ordinalRuleCriteria(rule) : nftRuleCriteria(rule)}`;
       const attribute = (ruleTraits(rule)?.conditions.length || 0) > 1 ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value);
       const slug = rule.slug || 'ALL';

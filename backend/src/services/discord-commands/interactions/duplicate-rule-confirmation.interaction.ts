@@ -1,3 +1,4 @@
+import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { solanaRuleLabel } from '@/utils/solana-rule.util';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
 import { tokenRuleScope, tokenAmount, tokenMinimum } from '@/utils/erc20-rule.util';
@@ -242,6 +243,9 @@ export class DuplicateRuleConfirmationInteractionHandler {
       fields.push({ name: '**Min Balance**', value: tokenAmount(rule, tokenMinimum(rule)), inline: true });
     } else if (rule.asset_type === 'stamp') {
       fields.push({name:'**Stamps**',value:stampRuleLabel(rule).slice(0,1024),inline:false});
+    } else if (rule.asset_type === 'counterparty') {
+      fields.push({name:'**Counterparty**',value:counterpartyRuleLabel(rule).slice(0,1024),inline:false});
+      if (isTokenAmountRule(rule)) fields.push({ name: '**Min Balance**', value: tokenAmount(rule, tokenMinimum(rule)), inline: true });
     } else if (rule.asset_type === 'solana_nft') {
       fields.push({name:'**Solana scope**',value:solanaRuleLabel(rule).slice(0,1024),inline:false});
     } else if (rule.inscription_criteria) {
@@ -260,7 +264,7 @@ export class DuplicateRuleConfirmationInteractionHandler {
     }
     
     // Attribute
-    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp'].includes(rule.asset_type) && singleTrait(rule).key && singleTrait(rule).value) {
+    if (!rule.inscription_criteria && !['nft', 'ordinal', 'erc20','solana_nft','solana_token','stamp','counterparty'].includes(rule.asset_type) && singleTrait(rule).key && singleTrait(rule).value) {
       const formatAttribute = (key: string, value: string) => {
         if (key !== 'ALL' && value !== 'ALL') return `${key}=${value}`;
         if (key !== 'ALL' && value === 'ALL') return `${key} (any value)`;

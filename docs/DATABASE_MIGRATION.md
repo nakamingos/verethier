@@ -4,7 +4,7 @@ Bouncer's application database is the Supabase project `cpwubaszhjdtqlvfdlbx` (`
 
 ## Current state
 
-As of November 16, 2026, production has every migration in the repository applied, through `20261116010000_community_wallet_visibility.sql`. Check with:
+As of November 18, 2026, production has every migration in the repository applied, through `20261118010000_counterparty_rules.sql`. Check with:
 
 ```bash
 cd backend

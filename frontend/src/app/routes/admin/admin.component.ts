@@ -130,10 +130,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
   get hasTraitEditor() {
     return this.editor?.new
-      ? !['erc20','solana_token','stamp'].includes(this.draft.asset_type) &&
+      ? !['erc20','solana_token','stamp','counterparty'].includes(this.draft.asset_type) &&
           (this.draft.asset_type === 'nft' || this.mode === 'collection')
       : this.editor &&
-          !['erc20','solana_token','stamp'].includes(this.editor.asset_type) &&
+          !['erc20','solana_token','stamp','counterparty'].includes(this.editor.asset_type) &&
           !this.editor.inscription_criteria;
   }
   traitState(rule: any) {
@@ -275,6 +275,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'ethscription', label: 'Ethscriptions' },
     { value: 'ordinal', label: 'Ordinals' },
     { value: 'stamp', label: 'Bitcoin Stamps' },
+    { value: 'counterparty', label: 'Counterparty' },
     { value: 'nft', label: 'NFTs' },
     { value: 'erc20', label: 'Tokens' },
   ]; }
@@ -299,7 +300,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   private static readonly ETHEREUM_NETWORK: SelectChoice[] = [{ value: 'ethereum', label: 'Ethereum' }];
   get fixedNetwork(): SelectChoice[] | null {
     const asset = this.draftAsset;
-    return asset === 'ordinal' || asset === 'stamp' ? AdminComponent.BITCOIN_NETWORK
+    return asset === 'ordinal' || asset === 'stamp' || asset === 'counterparty' ? AdminComponent.BITCOIN_NETWORK
       : asset === 'ethscription' ? AdminComponent.ETHEREUM_NETWORK : null;
   }
   get draftNetwork() {
@@ -318,6 +319,14 @@ export class AdminComponent implements OnInit, OnDestroy {
     { value: 'all', label: 'All supported formats' },
   ];
   get assetChoices(): SelectChoice[] {return this.assetFilterChoices.slice(1);}
+  readonly counterpartyScopeChoices: SelectChoice[] = [
+    { value: 'asset', label: 'One asset (minimum balance)' },
+    { value: 'assets', label: 'List of assets' },
+    { value: 'issuer', label: 'Issuer address' },
+    { value: 'parent', label: 'Parent asset (subassets)' },
+  ];
+  /** Single-asset Counterparty rules use a token-style minimum balance. */
+  get counterpartyAmount() { return this.draft.asset_type === 'counterparty' && this.draft.xcp_scope === 'asset'; }
   get solanaScopeChoices(): SelectChoice[] { return [{value:'collection',label:'Verified collection'},{value:'verified_creator',label:'Verified creator'},{value:'asset_ids',label:'Specific asset IDs'}, ...(this.data?.capabilities?.solana_editions ? [{value:'master_edition',label:'Printed editions'}] : [])]; }
   readonly solanaProgramChoices = [{value:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',label:'SPL Token'},{value:'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',label:'Token-2022'}];
   readonly matchChoices: SelectChoice[] = [
@@ -926,6 +935,10 @@ export class AdminComponent implements OnInit, OnDestroy {
             .map((p: any) => (p[0] === p[1] ? p[0] : p.join('–')))
             .join(', ')
       : '';
+    if (r.counterparty_criteria) {
+      const c = r.counterparty_criteria;
+      return 'Counterparty: ' + (c.asset ? (r.token_symbol || c.asset) : c.assets ? (c.assets.length > 3 ? c.assets.length + ' assets' : c.assets.join(', ')) : c.issuer ? 'assets issued by ' + c.issuer : c.parent + '.* subassets');
+    }
     if (r.stamp_criteria) return `Bitcoin Stamps${r.stamp_criteria.stamp_ids ? ': ' + r.stamp_criteria.stamp_ids.map((id:string)=>'#'+id).join(', ') : ''}${r.stamp_criteria.creator ? ' · creator: '+r.stamp_criteria.creator : ''}`;
     const format = r.solana_criteria?.formats?.includes('compressed') ? (r.solana_criteria.formats.length === 1 ? ' · compressed NFTs' : ' · includes compressed NFTs') : '';
     return `${(r.solana_criteria ? ('Solana '+(r.solana_criteria.kind === 'master_edition' ? 'prints of master edition' : r.solana_criteria.kind)+': '+(r.solana_criteria.mint || (r.solana_criteria.addresses.length === 1 ? r.solana_criteria.addresses[0] : r.solana_criteria.addresses.length+' selected'))) : '') || r.rule_label || r.collection_name || r.slug || r.contract_address || r.asset_type}${format}${selection?.collection_slug ? ' · collection: ' + selection.collection_slug : ''}${picked ? ' · ' + picked : ''}${traits}`;
@@ -937,7 +950,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     );
   }
   minimum(r: any) {
-    if (!['erc20','solana_token','stamp'].includes(r.asset_type))
+    if (!['erc20','solana_token','stamp'].includes(r.asset_type) && !(r.asset_type === 'counterparty' && r.counterparty_criteria?.asset))
       return `${r.min_items || 1} item${r.min_items === 1 ? '' : 's'}`;
     return r.fields?.[0]?.value + ' ' + (r.token_symbol || 'tokens');
   }
@@ -1132,6 +1145,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       min_items: 1,
       network: 'ethereum',
       solana_kind:'collection', solana_addresses:'', solana_formats:'standard', solana_program:'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      xcp_scope: 'asset', xcp_value: '',
       trait_filter: { operator: 'AND', conditions: [] },
     };
     this.mode = 'collection';
@@ -1181,7 +1195,7 @@ export class AdminComponent implements OnInit, OnDestroy {
       ...this.roleRequest(),
     };
     const fields =
-      d.asset_type === 'stamp' ? ['min_items'] : d.asset_type === 'solana_token' ? ['min_balance'] : d.asset_type === 'solana_nft' ? ['min_items'] : d.asset_type === 'erc20'
+      d.asset_type === 'counterparty' ? [d.xcp_scope === 'asset' ? 'min_balance' : 'min_items'] : d.asset_type === 'stamp' ? ['min_items'] : d.asset_type === 'solana_token' ? ['min_balance'] : d.asset_type === 'solana_nft' ? ['min_items'] : d.asset_type === 'erc20'
         ? ['contract_address', 'network', 'min_balance']
         : d.asset_type === 'nft'
           ? [
@@ -1205,6 +1219,10 @@ export class AdminComponent implements OnInit, OnDestroy {
     for (const key of fields)
       if (d[key] !== undefined && d[key] !== null && d[key] !== '')
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
+    if (d.asset_type === 'counterparty') {
+      const value = (d.xcp_value || '').trim();
+      result.counterparty_criteria = d.xcp_scope === 'assets' ? { assets: value.split(/[\s,]+/).filter(Boolean) } : { [d.xcp_scope]: value };
+    }
     if (d.asset_type === 'stamp') result.stamp_criteria = {
       ...(d.stamp_creator?.trim() ? {creator:d.stamp_creator.trim()} : {}),
       ...(d.stamp_ids?.trim() ? {stamp_ids:d.stamp_ids.split(/[\s,]+/).filter(Boolean)} : {}),

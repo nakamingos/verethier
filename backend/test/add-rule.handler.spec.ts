@@ -1,5 +1,6 @@
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
+import { CounterpartyOwnershipService } from '../src/services/counterparty-ownership.service';
 import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
 import { validateEthscriptionCriteria } from '../src/services/discord-commands/utils/rule-validation.util';
 import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
@@ -121,6 +122,7 @@ describe('AddRuleHandler', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         { provide: StampsOwnershipService, useValue: undefined },
+        { provide: CounterpartyOwnershipService, useValue: undefined },
         { provide: SolanaOwnershipService, useValue: undefined },
         AddRuleHandler,
         { provide: Erc20OwnershipService, useValue: mockTokenService },

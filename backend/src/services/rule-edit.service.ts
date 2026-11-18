@@ -7,6 +7,7 @@ import { inscriptionCriteria, normalizeRuleLabel, parseInscriptionCriteria } fro
 import { nftTrait } from '@/utils/nft-trait.util';
 import { ordinalCollectionId, ordinalTrait, ordinalTraitHash, usableOrdinalTraitSnapshot } from '@/utils/ordinal-rule.util';
 import { parseTokenBalance } from '@/utils/erc20-rule.util';
+import { COUNTERPARTY_MAX_QUANTITY, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { ruleEditFields, ruleCriteriaKey } from '@/utils/rule-edit.util';
 import { normalizeTraitFilter, ruleTraits } from '@/utils/trait-filter.util';
 import { DataService } from './data.service';
@@ -22,12 +23,13 @@ export class RuleEditService {
 
   async prepare(before: VerifierRole, inputs: Record<string, string>): Promise<VerifierRole> {
     const allowed = new Set(ruleEditFields(before).map(field => field.key));
-    if (!before.inscription_criteria && !['erc20','solana_token','stamp'].includes(before.asset_type ?? '')) allowed.add('trait_filter');
+    if (!before.inscription_criteria && !['erc20','solana_token','stamp','counterparty'].includes(before.asset_type ?? '')) allowed.add('trait_filter');
     if (Object.keys(inputs).some(key => !allowed.has(key))) throw new Error('This field cannot be edited for this rule.');
     const candidate = { ...before };
-    if (['erc20','solana_token'].includes(before.asset_type ?? '')) {
+    if (isTokenAmountRule(before)) {
       candidate.min_balance = parseTokenBalance(inputs.min_balance, before.token_decimals!);
       if (before.asset_type === 'solana_token' && BigInt(candidate.min_balance) >= (1n << 64n)) throw new Error('Minimum exceeds Solana token supply limits.');
+      if (before.asset_type === 'counterparty' && BigInt(candidate.min_balance) > COUNTERPARTY_MAX_QUANTITY) throw new Error('That minimum is larger than any Counterparty balance can be.');
       return candidate;
     }
     const minimum = inputs.min_items?.trim();
@@ -35,7 +37,7 @@ export class RuleEditService {
       throw new RuleInputError('Minimum items must be a positive whole number.');
     }
     candidate.min_items = Number(minimum);
-    if (before.asset_type === 'stamp') return candidate;
+    if (before.asset_type === 'stamp' || before.asset_type === 'counterparty') return candidate;
     const criteria = inscriptionCriteria(before);
     if (criteria) {
       const selection = inputs.selection?.trim();

@@ -1,5 +1,6 @@
 export const RULE_CREATION_COMMANDS = [
   { name: 'add-stamps-rule', assetType: 'stamp' },
+  { name: 'add-counterparty-rule', assetType: 'counterparty' },
   { name: 'add-token-rule', assetType: 'erc20' },
   { name: 'add-nft-rule', assetType: 'nft' },
   { name: 'add-ordinals-rule', assetType: 'ordinal' },

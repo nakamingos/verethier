@@ -96,7 +96,7 @@ describe('Canonical NFT rules from a collection lookup', () => {
     );
   });
   it('chooses Solana rules as NFTs or Tokens on the Solana network',()=>{
-    expect(component.assetChoices.map(choice=>choice.label)).toEqual(['Ethscriptions','Ordinals','Bitcoin Stamps','NFTs','Tokens']);
+    expect(component.assetChoices.map(choice=>choice.label)).toEqual(['Ethscriptions','Ordinals','Bitcoin Stamps','Counterparty','NFTs','Tokens']);
     expect(component.ruleNetworkChoices.map(choice=>choice.value)).toEqual(['ethereum','base','robinhood']);
     component.data.capabilities.solana=true;
     expect(component.ruleNetworkChoices.map(choice=>choice.value)).toEqual(['ethereum','base','robinhood','solana']);
@@ -113,7 +113,7 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expect(component.payload().solana_criteria).toBeUndefined();
   });
   it('locks the network for single-network asset types',()=>{
-    for(const [asset,network] of [['ordinal','bitcoin'],['stamp','bitcoin'],['ethscription','ethereum']]){
+    for(const [asset,network] of [['ordinal','bitcoin'],['stamp','bitcoin'],['counterparty','bitcoin'],['ethscription','ethereum']]){
       component.draftAsset=asset;expect(component.fixedNetwork?.map(choice=>choice.value)).toEqual([network]);
     }
     for(const asset of ['nft','erc20']){component.draftAsset=asset;expect(component.fixedNetwork).toBeNull();}
@@ -185,6 +185,21 @@ describe('Canonical NFT rules from a collection lookup', () => {
     expect(component.payload().network).toBeUndefined();
     expect(component.payload().trait_filter).toBeUndefined();
     expect(component.describe({stamp_criteria:component.payload().stamp_criteria})).toContain('#0, #1');
+  });
+  it('creates each Counterparty scope with the right minimum',()=>{
+    component.draftAsset='counterparty';
+    expect(component.draft.xcp_scope).toBe('asset');expect(component.counterpartyAmount).toBeTrue();expect(component.hasTraitEditor).toBeFalse();
+    component.draft.xcp_value=' PEPECASH ';component.draft.min_balance='1000.5';
+    expect(component.payload()).toEqual(jasmine.objectContaining({asset_type:'counterparty',counterparty_criteria:{asset:'PEPECASH'},min_balance:'1000.5'}));
+    expect(component.payload().min_items).toBeUndefined();
+    component.draft.xcp_scope='assets';component.draft.xcp_value='RAREPEPE, PEPE.kek\nBBBB';component.draft.min_items=3;
+    expect(component.counterpartyAmount).toBeFalse();
+    expect(component.payload().counterparty_criteria).toEqual({assets:['RAREPEPE','PEPE.kek','BBBB']});
+    expect(component.payload().min_items).toBe(3);expect(component.payload().min_balance).toBeUndefined();
+    for(const scope of ['issuer','parent']){component.draft.xcp_scope=scope;component.draft.xcp_value='X';expect(component.payload().counterparty_criteria).toEqual({[scope]:'X'});}
+    expect(component.describe({counterparty_criteria:{asset:'PEPECASH'},token_symbol:'PEPECASH'})).toBe('Counterparty: PEPECASH');
+    expect(component.describe({counterparty_criteria:{parent:'PEPE'}})).toBe('Counterparty: PEPE.* subassets');
+    expect(component.assetFilterChoices.some(choice=>choice.value==='counterparty')).toBeTrue();
   });
 
 });

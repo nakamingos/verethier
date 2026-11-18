@@ -9,7 +9,22 @@ const UNAVAILABLE = 'Bitcoin Stamps ownership is temporarily unavailable. Please
 const LIMIT = 100;
 const MAX_PAGES = 100;
 interface Stamp { id: string; asset: string; creator: string; divisible: boolean }
-export interface StampHoldings { balances: Map<string, bigint>; divisible: Map<string, boolean>; height: number; outputs: Set<string> }
+export interface StampHoldings { balances: Map<string, bigint>; divisible: Map<string, boolean>; height: number; outputs: Set<string>;
+  /** Each held asset's original issuer and subasset long name, from the same confirmed inventory. */
+  info: Map<string, { issuer: string | null; longname: string | null }> }
+export interface CounterpartyAsset { asset: string; longname: string | null; issuer: string; divisible: boolean }
+
+/** Raw units from the API's exact decimal string, for quantities too large for a JSON number. */
+function rawQuantity(normalized: unknown, divisible: boolean): string | undefined {
+  if (typeof normalized !== 'string') return undefined;
+  const match = divisible ? /^(0|[1-9][0-9]{0,10})(?:\.([0-9]{1,8}))?$/.exec(normalized) : /^(0|[1-9][0-9]{0,18})$/.exec(normalized);
+  if (!match) return undefined;
+  return divisible ? BigInt(match[1] + (match[2] || '').padEnd(8, '0')).toString() : match[1];
+}
+
+function issuerAddress(value: unknown): string | null {
+  try { return typeof value === 'string' ? normalizeMainnetBitcoinAddress(value) : null; } catch { return null; }
+}
 
 @Injectable()
 export class StampsOwnershipService {
@@ -33,8 +48,7 @@ export class StampsOwnershipService {
   }
 
   async checkSetupHealth(): Promise<void> {
-    const data = await this.request('xcp', '/');
-    if (data?.result?.network !== 'mainnet' || data.result.server_ready !== true) throw new Error(UNAVAILABLE);
+    await this.checkCounterpartyHealth();
     const health = await this.request('stamps', '/health');
     if (health?.status !== 'OK' || health.services?.indexer !== true || health.services?.database !== true
       || health.services?.blockSync?.isSynced !== true) throw new Error(UNAVAILABLE);
@@ -63,9 +77,7 @@ export class StampsOwnershipService {
     let height: number | undefined;
     const outputs = new Set<string>();
     for (const wallet of addresses) {
-      context.stampBalances ||= new Map();
-      if (!context.stampBalances.has(wallet)) context.stampBalances.set(wallet, this.balances(wallet));
-      const holdings = (await context.stampBalances.get(wallet))!;
+      const holdings = await this.holdings(wallet, context);
       if (height !== undefined && height !== holdings.height) throw new Error(UNAVAILABLE);
       height = holdings.height;
       for (const output of holdings.outputs) {
@@ -141,8 +153,31 @@ export class StampsOwnershipService {
     throw new Error(UNAVAILABLE);
   }
 
+  async checkCounterpartyHealth(): Promise<void> {
+    const data = await this.request('xcp', '/');
+    if (data?.result?.network !== 'mainnet' || data.result.server_ready !== true) throw new Error(UNAVAILABLE);
+  }
+
+  /** One wallet's complete confirmed Counterparty inventory, shared by every rule in a check. */
+  holdings(wallet: string, context: NftCheckContext): Promise<StampHoldings> {
+    context.stampBalances ||= new Map();
+    if (!context.stampBalances.has(wallet)) context.stampBalances.set(wallet, this.balances(wallet));
+    return context.stampBalances.get(wallet)!;
+  }
+
+  /** Looks up an asset by name or subasset long name; `null` when it doesn't exist. */
+  async asset(name: string): Promise<CounterpartyAsset | null> {
+    const data = await this.request('xcp', '/assets/' + encodeURIComponent(name), true);
+    if (data === null) return null;
+    const row = data?.result;
+    if (!row || typeof row.asset !== 'string' || !/^(?:XCP|[A-Z][A-Z0-9]{3,20})$/.test(row.asset) || typeof row.divisible !== 'boolean'
+      || (row.asset_longname !== null && typeof row.asset_longname !== 'string')) throw new Error(UNAVAILABLE);
+    return { asset: row.asset, longname: row.asset_longname, issuer: issuerAddress(row.issuer) ?? '', divisible: row.divisible };
+  }
+
   private async balances(wallet: string): Promise<StampHoldings> {
     const balances = new Map<string, bigint>(), divisible = new Map<string, boolean>();
+    const info: StampHoldings['info'] = new Map();
     const rows = new Set<string>(), cursors = new Set<number>();
     let cursor: number | undefined, expected: number | undefined, height: number | undefined, count = 0;
     const outputs = new Set<string>();
@@ -159,7 +194,8 @@ export class StampsOwnershipService {
         const owner = row.utxo ? row.utxo_address : row.address;
         if (normalizeMainnetBitcoinAddress(owner) !== wallet || typeof row.asset !== 'string' || !/^[A-Z][A-Z0-9.]{0,249}$/.test(row.asset)
           || typeof row.asset_info?.divisible !== 'boolean') throw new Error(UNAVAILABLE);
-        const amount = typeof row.quantity === 'number' && Number.isSafeInteger(row.quantity) ? String(row.quantity) : row.quantity;
+        const amount = typeof row.quantity === 'number' && Number.isSafeInteger(row.quantity) ? String(row.quantity)
+          : typeof row.quantity === 'number' ? rawQuantity(row.quantity_normalized, row.asset_info.divisible) : row.quantity;
         if (typeof amount !== 'string' || !/^(0|[1-9][0-9]{0,18})$/.test(amount)) throw new Error(UNAVAILABLE);
         const key = JSON.stringify([row.asset, row.utxo || 'unbound']);
         if (rows.has(key) || (row.utxo && !/^[0-9a-f]{64}:[0-9]+$/.test(row.utxo))) throw new Error(UNAVAILABLE);
@@ -167,13 +203,18 @@ export class StampsOwnershipService {
         if (row.utxo) outputs.add(row.utxo);
         if (divisible.has(row.asset) && divisible.get(row.asset) !== row.asset_info.divisible) throw new Error(UNAVAILABLE);
         divisible.set(row.asset, row.asset_info.divisible);
+        info.set(row.asset, {
+          // Issuer only scopes Counterparty rules; an unusual value must not fail Stamps checks.
+          issuer: issuerAddress(row.asset_info.issuer),
+          longname: typeof row.asset_info.asset_longname === 'string' ? row.asset_info.asset_longname : null,
+        });
         // UTXO assets are keyed to their current owner, so each output occurs once per complete inventory.
         if (BigInt(amount)>0n) balances.set(row.asset, (balances.get(row.asset) || 0n) + BigInt(amount));
       }
       if (data.next_cursor === null) {
         // Holdings without an index height cannot be compared across wallets.
         if (count !== expected || height === undefined) throw new Error(UNAVAILABLE);
-        return { balances, divisible, height, outputs };
+        return { balances, divisible, height, outputs, info };
       }
       if (!data.result.length || !Number.isSafeInteger(data.next_cursor) || data.next_cursor < 0 || cursors.has(data.next_cursor)) throw new Error(UNAVAILABLE);
       cursor = data.next_cursor; cursors.add(data.next_cursor);

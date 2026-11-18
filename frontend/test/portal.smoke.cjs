@@ -1664,7 +1664,7 @@ const base = {
         (
           await page.getByRole('listbox').getByRole('option').allTextContents()
         ).map((label) => label.trim()),
-        ['Ethscriptions', 'Ordinals', 'Bitcoin Stamps', 'NFTs', 'Tokens'],
+        ['Ethscriptions', 'Ordinals', 'Bitcoin Stamps', 'Counterparty', 'NFTs', 'Tokens'],
       );
       await newAsset.press('Escape');
       await chooseOption(page, newRule.getByRole('combobox',{name:'Discord roles',exact:true}), 'Create a new role…');

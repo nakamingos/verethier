@@ -574,6 +574,15 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
           .addStringOption(o=>o.setName('creator_address').setDescription('Original stamp creator Bitcoin address'))
           .addStringOption(o=>o.setName('stamp_ids').setDescription('Stamp numbers, comma-separated (up to 100)').setMaxLength(1700))
           .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum owned copies').setMinValue(1)))
+        .addSubcommand(sc => sc.setName('add-counterparty-rule').setDescription('Add a Counterparty asset rule (Bitcoin)')
+          .addChannelOption(o=>o.setName('channel').setDescription('Verification channel').setRequired(true))
+          .addStringOption(o=>o.setName('role').setDescription('Role name or existing role ID').setRequired(true).setAutocomplete(true))
+          .addStringOption(o=>o.setName('asset').setDescription('One asset, with min_balance, e.g. PEPECASH').setMaxLength(270))
+          .addStringOption(o=>o.setName('assets').setDescription('Or: asset names, comma-separated (up to 100), counted with min_items').setMaxLength(4000))
+          .addStringOption(o=>o.setName('issuer').setDescription('Or: assets issued by this Bitcoin address, counted with min_items').setMaxLength(90))
+          .addStringOption(o=>o.setName('parent').setDescription('Or: subassets of this parent asset, counted with min_items').setMaxLength(12))
+          .addStringOption(o=>o.setName('min_balance').setDescription('Minimum balance for asset, e.g. 1000 or 0.5').setMaxLength(40))
+          .addIntegerOption(o=>o.setName('min_items').setDescription('Minimum copies for assets, issuer or parent (default 1)').setMinValue(1)))
         .addSubcommand(sc =>
           sc.setName('add-token-rule')
             .setDescription('Add a token balance verification rule (ERC-20 or Solana)')
@@ -642,7 +651,8 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
               { name: 'NFTs (EVM and Solana)', value: 'nft' },
               { name: 'Ordinals', value: 'ordinal' },
               { name: 'Ethscriptions', value: 'ethscription' },
-              { name: 'Bitcoin Stamps', value: 'stamp' }
+              { name: 'Bitcoin Stamps', value: 'stamp' },
+              { name: 'Counterparty', value: 'counterparty' }
             ))
         )
         .addSubcommand(sc =>

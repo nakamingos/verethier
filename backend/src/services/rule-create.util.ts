@@ -1,5 +1,6 @@
 import { RuleInputError } from '@/utils/rule-input-error';
 import { StampsOwnershipService } from './stamps-ownership.service';
+import { CounterpartyOwnershipService } from './counterparty-ownership.service';
 import { solanaCriteria, isSolanaRule } from '@/utils/solana-rule.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -22,6 +23,7 @@ import { validateEthscriptionCriteria } from './discord-commands/utils/rule-vali
 
 export interface RuleCreateInput {
   stamp_criteria?: import('@/utils/stamp-rule.util').StampCriteria;
+  counterparty_criteria?: import('./counterparty-ownership.service').CounterpartyRuleInput;
   solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria;
   trait_filter?: TraitFilter | null;
   asset_type: string;
@@ -41,6 +43,7 @@ export interface RuleCreateInput {
 }
 export interface RuleProviders {
   stamps?: StampsOwnershipService;
+  counterparty?: CounterpartyOwnershipService;
   solana?: SolanaOwnershipService;
   data: DataService;
   nfts: NftOwnershipService;
@@ -88,6 +91,16 @@ export async function prepareRuleCriteria(
     return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems,assetFields:await services.stamps.prepareRule(input.stamp_criteria)};
   }
   if (input.stamp_criteria !== undefined) throw new Error('Only Stamps rules use Stamps criteria.');
+  if (input.asset_type === 'counterparty') {
+    if (!services.counterparty) throw new Error('Counterparty verification is not configured.');
+    if (evmOptions || selected || input.slug != null || input.solana_criteria != null || input.expected_token_standard !== undefined
+      || !!filter || attributeKey !== 'ALL' || attributeValue !== 'ALL')
+      throw new Error('Counterparty rules use an asset, asset list, issuer or parent asset, with a minimum.');
+    const fields = await services.counterparty.prepareRule(input.counterparty_criteria, input.min_balance ?? undefined);
+    if (fields.min_balance != null && input.min_items != null) throw new Error('Single-asset Counterparty rules use a minimum balance, not min_items.');
+    return {slug:null,attributeKey:'ALL',attributeValue:'ALL',minItems,assetFields:fields};
+  }
+  if (input.counterparty_criteria !== undefined) throw new Error('Only Counterparty rules use Counterparty criteria.');
   if (isSolanaRule(input)) {
     if (!EnvironmentConfig.SOLANA_ENABLED || !services.solana) throw new Error('Solana is not enabled.');
     if (evmOptions || selected || input.slug != null || input.expected_token_standard !== undefined) throw new Error('Solana rules use Solana criteria, not EVM or inscription options.');

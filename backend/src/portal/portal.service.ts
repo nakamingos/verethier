@@ -3,6 +3,7 @@ import { expandRuleRoles, ruleRoles } from '@/utils/rule-roles.util';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { StampsOwnershipService } from '@/services/stamps-ownership.service';
+import { CounterpartyOwnershipService } from '@/services/counterparty-ownership.service';
 import { SolanaOwnershipService } from '@/services/solana-ownership.service';
 import { PrivacyService } from './privacy.service';
 import {
@@ -55,7 +56,7 @@ const snowflake = (s: string) => /^\d{17,22}$/.test(s || '');
 export const portalRule = (rule: VerifierRole) => {
   const { ordinal_trait_snapshot, ...safe } = rule;
   const fields = ruleEditFields(rule);
-  if (!rule.inscription_criteria && !['erc20','solana_token','stamp'].includes(rule.asset_type ?? '')) {
+  if (!rule.inscription_criteria && !['erc20','solana_token','stamp','counterparty'].includes(rule.asset_type ?? '')) {
     const first = fields.findIndex(f => ['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     const clean = fields.filter(f => !['attribute_key', 'attribute_value', 'trait_filter'].includes(f.key));
     clean.splice(first, 0, { key: 'trait_filter', label: 'Trait conditions', value: JSON.stringify(ruleTraits(rule)), maxLength: 20000 });
@@ -92,6 +93,7 @@ export class PortalService {
     private readonly solana?: SolanaOwnershipService,
     private readonly stamps?: StampsOwnershipService,
     private readonly walletChecks?: WalletCheckService,
+    private readonly counterparty?: CounterpartyOwnershipService,
   ) {}
 
   client() {
@@ -434,6 +436,7 @@ export class PortalService {
       tokens: this.tokens,
       solana: this.solana,
       stamps: this.stamps,
+      counterparty: this.counterparty,
     });
     // Provider preparation can be slow. Recheck the actor before changing Discord or the database.
     guild = await this.access(session, server);
