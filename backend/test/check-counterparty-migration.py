@@ -1,5 +1,5 @@
 """Rehearse the Counterparty rules migration against a private pre-upgrade backup.
-Usage: python3 backend/test/check-counterparty-migration.py BACKUP_DIRECTORY
+Usage: python3 backend/test/check-counterparty-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]
 Only a disposable local database is changed. Errors go to /tmp/bouncer-counterparty-migration-error.log.
 """
 from pathlib import Path
@@ -45,7 +45,14 @@ try:
     nullable = sql("SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='verifier_rules' AND column_name='min_items';").strip()
     print(f'min_items nullable before migration: {nullable}', flush=True)
     before = fingerprints()
-    sql(migration.read_text())
+    if len(sys.argv) > 2:
+        # Supabase dumps omit the migration ledger; recreate it at the expected version.
+        sql("CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]); INSERT INTO supabase_migrations.schema_migrations(version) VALUES('20261116010000') ON CONFLICT DO NOTHING;")
+        sql(Path(sys.argv[2]).read_text())
+        assert sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version='20261118010000';").strip() == '1'
+        print('PASS: exact guarded apply file, including its ledger entry', flush=True)
+    else:
+        sql(migration.read_text())
     assert before == fingerprints(), 'Counterparty migration changed existing application values'
     print('PASS: every existing application value preserved', flush=True)
     sql('BEGIN;\n'+(root/'backend/test/counterparty-migration.sql').read_text()+'\nROLLBACK;')

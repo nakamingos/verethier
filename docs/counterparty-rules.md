@@ -35,6 +35,8 @@ Balances come from the same confirmed Counterparty API v2 inventory as Bitcoin S
 `backend/supabase/migrations/20261118010000_counterparty_rules.sql` adds the nullable `counterparty_criteria` column, its validator, a constraint branch, and the column in rule definitions, duplicate checks, the rule mutation RPC and the wallet-network mapping. It also makes `min_items` explicitly nullable, which token rules already rely on. No existing values change.
 
 - `backend/test/counterparty-migration.sql` exercises the migration; it passes on a fresh database built from every migration, together with the Stamps test.
-- `backend/test/check-counterparty-migration.py BACKUP_DIRECTORY` rehearses it against a private production backup and checks that every existing value is preserved.
+- `backend/test/check-counterparty-migration.py BACKUP_DIRECTORY [GUARDED_APPLY_FILE]` rehearses it against a private production backup and checks that every existing value is preserved.
+
+Applied to production November 18, 2026, after a fresh private backup and a rehearsal of the exact guarded script (prerequisite version and fingerprints of the replaced functions and constraint). Production already allowed a NULL `min_items`. Read-only verification confirmed the ledger entry, column, constraint, functions, network mapping and service-role-only validator.
 
 Read-only live check (November 18, 2026): setup resolved PEPECASH (divisible, minimum 1000 → `100000000000` raw) and RAREPEPE, and the compiled checker read a public wallet's balances and issuer-scoped copies.
