@@ -7,6 +7,7 @@ import { normalizeBitcoinAddress } from '@/utils/wallet-address.util';
 import { DbService } from './db.service';
 import { NftCheckContext } from './nft-ownership.service';
 import { OrdinalRequestWork, OrdinalsRequestScheduler, ordinalRequestWork } from './ordinals-request-scheduler.service';
+import { ordiscanCallKind, recordProviderCall } from './utils/provider-usage.util';
 
 type Provider = OrdinalWalletInventory['provider'];
 type PublicProvider = Exclude<Provider, 'xverse'>;
@@ -166,6 +167,7 @@ export class OrdinalWalletInventoryService {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6000);
       try {
+        if (provider === 'ordiscan') recordProviderCall('ordiscan', ordiscanCallKind(url), work.priority);
         const response = await fetch(url, { ...options, signal: controller.signal, redirect: 'error' });
         if (!response.ok) {
           const header = response.headers.get('retry-after');

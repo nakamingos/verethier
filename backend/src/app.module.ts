@@ -62,6 +62,7 @@ import { OrdnetOwnershipService } from './services/ordnet-ownership.service';
 import { OrdinalsRequestScheduler } from './services/ordinals-request-scheduler.service';
 import { OrdinalCollectionCacheService } from './services/ordinal-collection-cache.service';
 import { OrdinalWalletInventoryService } from './services/ordinal-wallet-inventory.service';
+import { ProviderUsageLogService } from './services/provider-usage-log.service';
 import { RefreshCollectionHandler } from './services/discord-commands/handlers/refresh-collection.handler';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
 import { EvmSignatureService } from './services/evm-signature.service';
@@ -204,6 +205,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     OrdinalsOwnershipService,
     OrdinalCollectionCacheService,
     OrdinalWalletInventoryService,
+    ProviderUsageLogService,
     RefreshCollectionHandler,
     OrdnetApiService,
     OrdnetOwnershipService,

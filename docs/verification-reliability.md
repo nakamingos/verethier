@@ -78,3 +78,7 @@ The three authorized replays then each completed with one response containing al
 Interactive verification follows the selected and successfully proven wallet family. EVM checks Ethereum, Robinhood and Base NFT/token rules plus Ethscriptions; Bitcoin checks Ordinals and Bitcoin Stamps; Solana checks Solana NFT/token rules. The same scope applies to rule evaluation, earned-role reconciliation, completion recommendations and dormancy bookkeeping. EVM/Solana verification does not reserve the interactive Ordinals scheduler.
 
 Earned roles whose definitions include another wallet family are left for complete scheduled checks rather than revoked from an incomplete negative result. Same-family alternative and combined rules still use saved wallets in that family. Complete scheduled and operator bulk checks retain their existing scope and provider policy. Backend logs record the interactive family scope and time the earned-role reconciliation stage separately. [Saved-wallet checks](saved-wallet-checks.md) use the same family scope for the family the member picks.
+
+## Ordinals API usage logs
+
+Every outgoing Xverse and Ordiscan HTTP request, retries included, is counted in memory by provider, call type (for example `wallet-inventory`, `wallet-ids` or `batch-owners`) and priority (interactive or background). The `ProviderUsage` logger writes the past hour's totals at the top of each UTC hour and a daily total at midnight UTC. Hours with no calls are not logged. Counts reset when the backend restarts, and wallet addresses are never logged.
