@@ -87,6 +87,7 @@ export class BitcoinSignatureService {
       if (!/^[A-Za-z0-9+/]+={0,2}$/.test(simple) || simple.length > 200) throw new Error();
       const bytes = Buffer.from(simple, 'base64');
       if (bytes.toString('base64') !== simple) throw new Error();
+      let strict = true;
       if (address.startsWith('bc1p')) {
         // Ordinals remain key-path-only, without script-path or arbitrary witnesses.
         if (bytes[0] !== 1 || ![64,65].includes(bytes[1]) || bytes.length !== bytes[1]+2
@@ -94,13 +95,19 @@ export class BitcoinSignatureService {
       } else if (address.startsWith('1')) {
         // Legacy Stamps wallets use compact Bitcoin signed-message proofs.
         if (bytes.length !== 65 || bytes[0] < 27 || bytes[0] > 34) throw new Error();
+      } else if (bytes.length === 65 && bytes[0] >= 27 && bytes[0] <= 42) {
+        // Compact signed-message proof. Freewallet and similar wallets use the
+        // compressed P2PKH header (31–34) for SegWit addresses, so check that the
+        // recovered key owns the address; SegWit headers (35–42) stay strict.
+        if (bytes[0] < 31) throw new Error();
+        strict = bytes[0] >= 35;
       } else {
         // Restrict BIP-322 witnesses to single-key native/nested P2WPKH.
         const n = bytes[1];
         if (bytes[0] !== 2 || n < 8 || n > 73 || bytes[n+2] !== 33
           || ![2,3].includes(bytes[n+3]) || bytes.length !== n+36) throw new Error();
       }
-      if (!Verifier.verifySignature(address, message, simple, true)) throw new Error();
+      if (!Verifier.verifySignature(address, message, simple, strict)) throw new Error();
     } catch { throw new Error('Invalid Bitcoin signature. Please sign again with the selected Bitcoin address.'); }
   }
 }

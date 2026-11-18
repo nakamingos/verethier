@@ -11,7 +11,7 @@ Bouncer is split into two deployable apps:
 
 ## Features
 
-- **Wallet proofs.** EIP-712 signatures for EVM wallets, including deployed (ERC-1271) and undeployed (ERC-6492) smart wallets and Base Account; BIP-322/legacy message proofs for Bitcoin (Xverse, UniSat); Ed25519 signatures for Solana (Phantom, Solflare, Backpack, MetaMask and other Wallet Standard wallets). Signing never requests approvals or transactions.
+- **Wallet proofs.** EIP-712 signatures for EVM wallets, including deployed (ERC-1271) and undeployed (ERC-6492) smart wallets and Base Account; BIP-322/legacy message proofs for Bitcoin (Xverse, UniSat, or a pasted signature from wallets such as Freewallet); Ed25519 signatures for Solana (Phantom, Solflare, Backpack, MetaMask and other Wallet Standard wallets). Signing never requests approvals or transactions.
 - **Rules.** Collection, trait (up to ten AND/OR conditions), specific-ID/number and quantity rules for Ethscriptions, Ordinals, EVM NFTs (ERC-721/1155) and Stamps; exact-unit minimum balances for ERC-20 and Solana tokens; Solana Token Metadata, Core, compressed and printed-edition NFTs. One rule can grant up to 20 roles.
 - **Stacking and combined counts.** Holdings stack across a member's saved wallets. Collectible rules sharing a channel, role and minimum combine their counts, even across protocols; each asset counts once.
 - **Role upkeep.** Scheduled checks restore eligible previously earned roles and remove roles that are no longer earned. Newly eligible roles still need the member to verify. Provider failures never count as zero holdings, so uncertain checks keep existing roles.

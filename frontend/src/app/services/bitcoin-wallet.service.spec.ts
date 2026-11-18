@@ -312,3 +312,49 @@ describe('UniSat Ordinals wallet', () => {
   });
 
 });
+
+describe('Manual Bitcoin signing', () => {
+  const legacy = '1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH';
+  const native = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+  const pasted = 'H6AAW0Zgk6l5am8WGuCyZj2/bTLUqo3dAIzwgpVCIQ/JfdImX02qKthZ8pZJqlZ1aSmdqllNh/vcAV4MFM8B8JQ=';
+  let service: BitcoinWalletService;
+  beforeEach(() => (service = new BitcoinWalletService()));
+
+  it('uses an entered Stamps address and keeps Base58 case', async () => {
+    await service.connect('manual', true, ` ${legacy} `);
+    expect(await service.syncConnectedAccount()).toBe(legacy);
+    await service.connect('manual', true, native.toUpperCase());
+    expect(service.address$.value).toBe(native);
+  });
+
+  it('rejects addresses the channel does not accept', async () => {
+    await expectAsync(service.connect('manual', true, 'not-an-address')).toBeRejectedWithError(/Bitcoin mainnet address/);
+    await expectAsync(service.connect('manual', false, legacy)).toBeRejectedWithError(/Taproot/);
+    expect(service.address$.value).toBeNull();
+  });
+
+  it('shows the message and resolves with the pasted signature', async () => {
+    await service.connect('manual', true, native);
+    const signed = service.signMessage(native, 'Bouncer challenge');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(service.manualRequest$.value).toEqual({ address: native, message: 'Bouncer challenge' });
+    expect(() => service.submitManualSignature('not a signature')).toThrowError(/Paste the signature/);
+    service.submitManualSignature(`\n${pasted}\n`);
+    expect(await signed).toEqual({ signature: pasted, address: native });
+    expect(service.manualRequest$.value).toBeNull();
+  });
+
+  it('rejects the request when cancelled or disconnected', async () => {
+    await service.connect('manual', true, native);
+    const cancelled = service.signMessage(native, 'Bouncer challenge');
+    await new Promise((resolve) => setTimeout(resolve));
+    service.cancelManualSignature();
+    await expectAsync(cancelled).toBeRejectedWithError(/cancelled/);
+    const disconnected = service.signMessage(native, 'Bouncer challenge');
+    await new Promise((resolve) => setTimeout(resolve));
+    service.disconnect();
+    await expectAsync(disconnected).toBeRejected();
+    expect(service.manualRequest$.value).toBeNull();
+  });
+});

@@ -110,7 +110,9 @@
               state.walletType === "bitcoin"
                 ? state.bitcoinProvider === "unisat"
                   ? "Connect your UniSat wallet"
-                  : "Connect your Xverse wallet"
+                  : state.bitcoinProvider === "manual"
+                    ? "Enter your Bitcoin address"
+                    : "Connect your Xverse wallet"
                 : "Connect your wallet"
             }}
           </div>
@@ -160,7 +162,32 @@
               >
                 UniSat
               </button>
+              @if (state.bitcoinStamps) {
+                <button
+                  type="button"
+                  aria-label="Bitcoin with another wallet"
+                  [attr.aria-pressed]="state.bitcoinProvider === 'manual'"
+                  [disabled]="
+                    state.walletConnecting ||
+                    state.messageSigning ||
+                    state.verificationSubmitting
+                  "
+                  (click)="selectWallet('bitcoin', 'manual')"
+                >
+                  Other wallet
+                </button>
+              }
             </div>
+            @if (state.bitcoinProvider === "manual") {
+              <div class="sub">
+                For Freewallet or any wallet that can sign a Bitcoin message.
+                You'll sign Bouncer's message in your wallet and paste the
+                signature here.
+              </div>
+              @if (!state.walletConnected) {
+                <label>Bitcoin address:<input name="manualAddress" [(ngModel)]="manualAddress" autocomplete="off" spellcheck="false" [disabled]="state.walletConnecting" /></label>
+              }
+            }
             <div class="sub">
               {{ state.bitcoinStamps ? 'Choose the Bitcoin mainnet address holding your Stamps or Ordinals.' : 'Use your Bitcoin mainnet Ordinals address (bc1p…).' }}
               @if (state.bitcoinStamps && state.walletConnected && (bitcoinWalletSvc.addresses$ | async); as addresses) {
@@ -216,7 +243,9 @@
                       ? "Connecting..."
                       : state.walletConnected
                         ? "Connected"
-                        : 'Connect'
+                        : state.walletType === "bitcoin" && state.bitcoinProvider === "manual"
+                          ? "Use address"
+                          : "Connect"
                   }}</span></span
                 >
               </button>
@@ -269,6 +298,9 @@
               }}</span>
             }
           </div>
+          @if (state.walletType === "bitcoin" && state.bitcoinProvider === "manual") {
+            <app-manual-bitcoin-sign [bitcoin]="bitcoinWalletSvc" />
+          }
           @if (state.walletType === 'solana' && state.walletConnected && !state.messageVerified) {
             <p class="sub">To use a different account, switch accounts in {{ solanaWalletSvc.walletName }}.</p>
           }

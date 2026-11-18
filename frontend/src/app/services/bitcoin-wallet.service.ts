@@ -3,7 +3,9 @@ import { BehaviorSubject } from 'rxjs';
 
 const XVERSE_PROVIDER = 'XverseProviders.BitcoinProvider';
 
-export type BitcoinWalletProvider = 'xverse' | 'unisat';
+/** `manual`: the member signs Bouncer's message in their own wallet (such as Freewallet) and pastes the signature. */
+export type BitcoinWalletProvider = 'xverse' | 'unisat' | 'manual';
+export interface ManualSignatureRequest { address: string; message: string; }
 export const canonicalBitcoinAddress = (address: string) => /^bc1/i.test(address) ? address.toLowerCase() : address;
 
 interface UniSatProvider {
@@ -21,6 +23,9 @@ export class BitcoinWalletService {
   private stamps = false;
   readonly addresses$ = new BehaviorSubject<Array<{value:string;label:string;purpose:string}>>([]);
   private selectedPurpose = 'ordinals';
+  /** The message waiting for a pasted signature, when signing manually. */
+  readonly manualRequest$ = new BehaviorSubject<ManualSignatureRequest | null>(null);
+  private manualReply?: { resolve: (signature: string) => void; reject: (error: Error) => void };
 
   preferredProvider(): BitcoinWalletProvider {
     return this.isUniSatAvailable() && !(window as any).XverseProviders?.BitcoinProvider ? 'unisat' : 'xverse';
@@ -46,12 +51,17 @@ export class BitcoinWalletService {
     window.location.assign(this.uniSatMobileUrl());
   }
 
-  async connect(provider: BitcoinWalletProvider = 'xverse', stamps = false): Promise<void> {
+  async connect(provider: BitcoinWalletProvider = 'xverse', stamps = false, manualAddress = ''): Promise<void> {
     this.disconnect();
     this.stamps = stamps;
     const session = this.session;
     let address: string;
-    if (provider === 'unisat') {
+    if (provider === 'manual') {
+      const entered = manualAddress.trim();
+      if (!(stamps ? this.validStampAddress(entered) : /^bc1p[ac-hj-np-z02-9]{58}$/i.test(entered)))
+        throw new Error(stamps ? 'Enter a Bitcoin mainnet address (1…, 3…, bc1q… or bc1p…).' : 'Enter your Bitcoin mainnet Taproot Ordinals address (bc1p…).');
+      address = canonicalBitcoinAddress(entered);
+    } else if (provider === 'unisat') {
       const wallet = this.uniSat();
       const accounts = await this.uniSatCall('Wallet connection', () => wallet.requestAccounts());
       address = await this.uniSatAddress(wallet, accounts);
@@ -68,6 +78,7 @@ export class BitcoinWalletService {
   }
 
   disconnect(): void {
+    this.cancelManualSignature();
     this.session++;
     this.connectedProvider = null;
     this.addresses$.next([]);
@@ -97,7 +108,12 @@ export class BitcoinWalletService {
       throw new Error('Your wallet connection changed. Reconnect before signing.');
     }
     let signature: string;
-    if (provider === 'unisat') {
+    if (provider === 'manual') {
+      signature = await new Promise<string>((resolve, reject) => {
+        this.manualReply = { resolve, reject };
+        this.manualRequest$.next({ address, message });
+      });
+    } else if (provider === 'unisat') {
       const wallet = this.uniSat();
       signature = await this.uniSatCall('Message signing', () => wallet.signMessage(message, address.startsWith('1') ? 'ecdsa' : 'bip322-simple'));
       if (typeof signature !== 'string' || !signature) throw new Error('UniSat did not return a message signature. Please sign again.');
@@ -114,7 +130,30 @@ export class BitcoinWalletService {
     return { signature, address };
   }
 
+  /** Completes a manual signature request with the pasted signature. */
+  submitManualSignature(signature: string): void {
+    const value = signature.trim();
+    if (!/^[A-Za-z0-9+/]{40,}={0,2}$/.test(value))
+      throw new Error('Paste the signature exactly as your wallet shows it.');
+    const reply = this.manualReply;
+    this.manualReply = undefined;
+    this.manualRequest$.next(null);
+    reply?.resolve(value);
+  }
+
+  cancelManualSignature(): void {
+    const reply = this.manualReply;
+    this.manualReply = undefined;
+    if (this.manualRequest$.value) this.manualRequest$.next(null);
+    reply?.reject(new Error('Signing was cancelled. Sign again when you’re ready.'));
+  }
+
   private async readAddress(provider: BitcoinWalletProvider): Promise<string> {
+    if (provider === 'manual') {
+      const address = this.address$.value;
+      if (!address) throw new Error('Enter your Bitcoin address first.');
+      return address;
+    }
     if (provider === 'unisat') {
       const wallet = this.uniSat();
       return this.uniSatAddress(wallet, await this.uniSatCall('Wallet account lookup', () => wallet.getAccounts()));
@@ -156,7 +195,7 @@ export class BitcoinWalletService {
   }
 
   private name(provider: BitcoinWalletProvider): string {
-    return provider === 'unisat' ? 'UniSat' : 'Xverse';
+    return provider === 'unisat' ? 'UniSat' : provider === 'manual' ? 'Bitcoin' : 'Xverse';
   }
 
   private ordinalAddress(response: any): string {
