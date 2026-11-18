@@ -23,9 +23,7 @@ const POLL_MS = 2000;
             <a class="button" [href]="link.url" (click)="openFreewallet($event, link.id, request)">Sign with Freewallet</a>
           </div>
           @if (waiting()) {
-            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer. Nothing showed up? Quit Freewallet completely, then click the button again.</p>
-          } @else {
-            <p class="muted">Quit Freewallet first if it's open: it stops picking up requests after a couple per session. The button then starts Freewallet, which signs and sends the signature back.</p>
+            <p class="muted" role="status">Waiting for Freewallet. Click <strong>Yes</strong> there to send the signature. Nothing opened? Quit Freewallet and try again.</p>
           }
           <p>Or sign it yourself:</p>
         }
