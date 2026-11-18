@@ -1,5 +1,6 @@
 import { WalletCheckService } from '../src/services/wallet-check.service';
 import { StampsOwnershipService } from '../src/services/stamps-ownership.service';
+import { CounterpartyOwnershipService } from '../src/services/counterparty-ownership.service';
 import { SolanaOwnershipService } from '../src/services/solana-ownership.service';
 import { Erc20OwnershipService } from '../src/services/erc20-ownership.service';
 import { EthscriptionsOwnershipService } from '../src/services/ethscriptions-ownership.service';
@@ -101,6 +102,7 @@ describe('DynamicRoleService', () => {
       providers: [
         { provide: WalletCheckService, useValue: undefined },
         { provide: StampsOwnershipService, useValue: undefined },
+        { provide: CounterpartyOwnershipService, useValue: undefined },
         { provide: SolanaOwnershipService, useValue: undefined },
         { provide: Erc20OwnershipService, useValue: undefined },
         { provide: EthscriptionsOwnershipService, useValue: undefined },

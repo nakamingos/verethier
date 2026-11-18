@@ -251,7 +251,7 @@ export class WalletExportService {
   }
   private network(rule: any) {
     if (isSolanaRule(rule)) return 'solana';
-    return ["ordinal","stamp"].includes(rule.asset_type)
+    return ["ordinal","stamp","counterparty"].includes(rule.asset_type)
       ? "bitcoin"
       : getNftNetwork(rule.chain_id || 1).value;
   }

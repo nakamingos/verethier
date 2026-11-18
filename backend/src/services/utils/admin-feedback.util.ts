@@ -1,6 +1,7 @@
+import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import type { VerifierRole } from '@/models/verifier-role.interface';
 import { ruleTraits, traitFilterLabel , singleTrait } from '@/utils/trait-filter.util';
-import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
+import { tokenAmount, tokenMinimum, tokenRuleCriteria } from '@/utils/erc20-rule.util';
 import { nftRuleCriteria } from '@/utils/nft-rule.util';
 import { stampRuleLabel } from '@/utils/stamp-rule.util';
 import { ordinalRuleCriteria } from '@/utils/ordinal-rule.util';
@@ -164,6 +165,7 @@ export class AdminFeedback {
     if (rule.asset_type === 'nft') return result + `**Collection:** ${nftRuleCriteria(rule)}\n**Contract:** ${rule.contract_address}`;
     if (rule.inscription_criteria) return result + `**Inscriptions:** ${inscriptionRuleScope(rule as Partial<VerifierRole>)} · min ${rule.min_items || 1}`;
     if (rule.asset_type === 'stamp') return result + `**Stamps:** ${stampRuleLabel(rule)}`;
+    if (rule.asset_type === 'counterparty') return result + `**${counterpartyRuleLabel(rule)}**${isTokenAmountRule(rule) ? ` · min ${tokenAmount(rule, tokenMinimum(rule))}` : ` · min ${rule.min_items || 1}`}`;
     if (rule.asset_type === 'ordinal') return result + `**Collection:** ${ordinalRuleCriteria(rule as Partial<VerifierRole>)}`;
     result += `**Collection:** ${rule.slug}\n`;
     result += `**Attribute:** ${ruleTraits(rule) ? traitFilterLabel(rule) : formatAttribute(singleTrait(rule).key, singleTrait(rule).value)}\n`;

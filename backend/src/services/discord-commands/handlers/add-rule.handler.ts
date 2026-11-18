@@ -1,5 +1,6 @@
 import type { VerificationRule } from '@/models/verification-rule.interface';
 import { StampsOwnershipService } from '../../stamps-ownership.service';
+import { CounterpartyOwnershipService } from '../../counterparty-ownership.service';
 import { SolanaOwnershipService } from '../../solana-ownership.service';
 import { singleTrait } from '@/utils/trait-filter.util';
 import { prepareRuleCriteria } from '../../rule-create.util';
@@ -63,7 +64,8 @@ export class AddRuleHandler {
     private readonly ethscriptionsSvc?: EthscriptionsOwnershipService,
     private readonly tokensSvc?: Erc20OwnershipService,
     private readonly solanaSvc?: SolanaOwnershipService,
-    private readonly stampsSvc?: StampsOwnershipService
+    private readonly stampsSvc?: StampsOwnershipService,
+    private readonly counterpartySvc?: CounterpartyOwnershipService
   ) {}
 
   /**
@@ -162,6 +164,13 @@ export class AddRuleHandler {
       } else if (input.asset_type === 'nft') {
         if (solanaOnly.length) throw new Error(`${solanaOnly.join(', ')} ${solanaOnly.length === 1 ? 'is' : 'are'} for Solana NFTs; choose network: Solana.`);
       }
+      if (input.asset_type === 'counterparty') {
+        const scopes = ['asset', 'assets', 'issuer', 'parent'].filter(name => interaction.options.getString(name) != null);
+        if (scopes.length !== 1) throw new Error('Choose exactly one of asset, assets, issuer or parent.');
+        const value = interaction.options.getString(scopes[0])!.trim();
+        input.counterparty_criteria = scopes[0] === 'assets' ? { assets: value.split(/[\s,]+/).filter(Boolean) } : { [scopes[0]]: value };
+        if (scopes[0] === 'asset' && !input.min_balance) throw new Error('Single-asset rules need min_balance.');
+      }
       if (input.asset_type === 'stamp') input.stamp_criteria = {
         ...(interaction.options.getString('creator_address') ? {creator:interaction.options.getString('creator_address')} : {}),
         ...(interaction.options.getString('stamp_ids') ? {stamp_ids:interaction.options.getString('stamp_ids')!.split(/[\s,]+/).filter(Boolean)} : {})
@@ -177,7 +186,7 @@ export class AddRuleHandler {
         input.solana_criteria = {kind:'token',mint};
       }
       const criteria = await prepareRuleCriteria(input, { data: this.dataSvc, nfts: this.nftSvc,
-        ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc, solana: this.solanaSvc, stamps: this.stampsSvc });
+        ordinals: this.ordinalsSvc, ethscriptions: this.ethscriptionsSvc, tokens: this.tokensSvc, solana: this.solanaSvc, stamps: this.stampsSvc, counterparty: this.counterpartySvc });
       return { channel, roleName, ...criteria, slug: input.asset_type === 'nft' ? 'ALL' : criteria.slug, assetFields: input.asset_type === 'ethscription' && !criteria.assetFields.inscription_criteria ? undefined : criteria.assetFields };
     } catch (error) {
       await interaction.editReply({ content: AdminFeedback.simple(error.message || 'Could not validate this rule. Please try again.', true) });

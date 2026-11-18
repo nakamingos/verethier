@@ -56,6 +56,8 @@ export class SetupHealthService {
       const traits = !!ruleTraits(rule);
       if (rule.asset_type === 'solana_nft' || rule.asset_type === 'solana_token') {
         add('solana:mainnet','Solana mainnet RPC / DAS',rule,()=>this.solana!.checkSetupHealth(),'Checks capability configuration, provider mainnet identity and a finalized slot; indexed inventories and member holdings are checked separately.');
+      } else if (rule.asset_type === 'counterparty') {
+        add('bitcoin:counterparty','Counterparty',rule,()=>this.stamps!.checkCounterpartyHealth(),'Checks mainnet Counterparty readiness. Wallet balances are checked separately.');
       } else if (rule.asset_type === 'stamp') {
         add('bitcoin:stamps','Bitcoin Stamps / Counterparty',rule,()=>this.stamps!.checkSetupHealth(),'Checks mainnet Counterparty readiness and Stampchain indexer health. Wallet balances are checked separately.');
       } else if (rule.asset_type === 'nft' || rule.asset_type === 'erc20') {

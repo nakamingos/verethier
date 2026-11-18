@@ -6,9 +6,10 @@ export type AssetCount = number | string;
 
 export interface NftRuleFields {
   stamp_criteria?: import('@/utils/stamp-rule.util').StampCriteria | null;
+  counterparty_criteria?: import('@/utils/counterparty-rule.util').CounterpartyCriteria | null;
   solana_criteria?: import('@/utils/solana-rule.util').SolanaCriteria | null;
   trait_filter?: TraitFilter | null;
-  asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20' | 'solana_nft' | 'solana_token' | 'stamp';
+  asset_type?: 'ethscription' | 'nft' | 'ordinal' | 'erc20' | 'solana_nft' | 'solana_token' | 'stamp' | 'counterparty';
   min_balance?: string | null;
   token_decimals?: number | null;
   token_symbol?: string | null;

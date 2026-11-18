@@ -1,3 +1,4 @@
+import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { normalizeBlockedWallet } from '@/services/wallet-block.service';
 import { WalletCheckService } from '@/services/wallet-check.service';
 import { expandRuleRoles } from '@/utils/rule-roles.util';
@@ -129,7 +130,7 @@ export class MemberService {
             asset: rule.asset_type || 'ethscription',
             network: rule.chain_id,
             collection:
-              (rule.asset_type === 'stamp' ? stampRuleLabel(rule) : isSolanaRule(rule) ? solanaRuleLabel(rule) : null) ||
+              (rule.asset_type === 'stamp' ? stampRuleLabel(rule) : rule.asset_type === 'counterparty' ? counterpartyRuleLabel(rule) : isSolanaRule(rule) ? solanaRuleLabel(rule) : null) ||
               rule.rule_label ||
               rule.collection_name ||
               rule.slug ||

@@ -22,12 +22,13 @@ export class BitcoinSignatureService {
     if (!rules.length) throw new Error('No verification rules found for this channel.');
     if (context.expiry === undefined) throw new Error('This verification link has expired. Please request a new one in Discord.');
     const walletTypes: WalletType[] = [];
-    if (rules.some(rule => !['ordinal','stamp','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
-    if (rules.some(rule => ['ordinal','stamp'].includes(rule.asset_type))) walletTypes.push('bitcoin');
+    if (rules.some(rule => !['ordinal','stamp','counterparty','solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('evm');
+    if (rules.some(rule => ['ordinal','stamp','counterparty'].includes(rule.asset_type))) walletTypes.push('bitcoin');
     if (EnvironmentConfig.SOLANA_ENABLED && rules.some(rule => ['solana_nft','solana_token'].includes(rule.asset_type))) walletTypes.push('solana');
     return {
       walletTypes,
-      bitcoinStamps: rules.some(rule => rule.asset_type === 'stamp'),
+      // Stamps and Counterparty accept every single-key Bitcoin address type and manual signing.
+      bitcoinStamps: rules.some(rule => rule.asset_type === 'stamp' || rule.asset_type === 'counterparty'),
       ...(this.privacy ? {privacy: await this.privacy.policy(context.guildId,context.userId)} : {}),
       expiry: context.expiry,
       ...(context.verificationData ? { data: {

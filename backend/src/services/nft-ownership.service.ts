@@ -32,6 +32,7 @@ export interface NftCheckContext {
   dormancyJobId?: string;
   dormancyWorker?: string;
   stampHealth?: Promise<void>;
+  counterpartyHealth?: Promise<void>;
   stampBalances?: Map<string, Promise<import('./stamps-ownership.service').StampHoldings>>;
   stampDetails?: Map<string, Promise<{id:string;asset:string;creator:string;divisible:boolean} | null>>;
   stampCatalogs?: Map<string, Promise<Array<{id:string;asset:string;creator:string;divisible:boolean}>>>;

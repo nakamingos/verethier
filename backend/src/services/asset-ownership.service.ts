@@ -1,6 +1,7 @@
 import { checkFamily, ruleMatchesWalletScope } from '@/utils/check-priority.util';
 import { WalletCheckService } from './wallet-check.service';
 import { StampsOwnershipService } from './stamps-ownership.service';
+import { CounterpartyOwnershipService } from './counterparty-ownership.service';
 import { isBitcoinAddress } from '@/utils/wallet-address.util';
 import { SolanaOwnershipService } from './solana-ownership.service';
 import { isSolanaRule } from '@/utils/solana-rule.util';
@@ -22,7 +23,8 @@ export class AssetOwnershipService {
     private readonly tokensSvc?: Erc20OwnershipService,
     private readonly solanaSvc?: SolanaOwnershipService,
     private readonly stampsSvc?: StampsOwnershipService,
-    private readonly walletChecks?: WalletCheckService) {}
+    private readonly walletChecks?: WalletCheckService,
+    private readonly counterpartySvc?: CounterpartyOwnershipService) {}
 
   checkDetails(rule: VerifierRole, addresses: string[], context: NftCheckContext) {
     if (rule.asset_type === 'ordinal') return this.ordinalsSvc?.checkDetails(rule, addresses.filter(address => address.length === 62 && /^bc1p/i.test(address)), context);
@@ -35,6 +37,10 @@ export class AssetOwnershipService {
     if (rule.asset_type === 'stamp') {
       if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
       return this.stampsSvc.matchingAssets(rule, addresses.filter(isBitcoinAddress), context);
+    }
+    if (rule.asset_type === 'counterparty') {
+      if (!this.counterpartySvc) throw new Error('Counterparty verification is not configured.');
+      return this.counterpartySvc.matchingAssets(rule, addresses.filter(isBitcoinAddress), context);
     }
     if (isSolanaRule(rule)) {
       if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
@@ -73,6 +79,10 @@ export class AssetOwnershipService {
     if (rule.asset_type === 'stamp') {
       if (!this.stampsSvc) throw new Error('Bitcoin Stamps verification is not configured.');
       return this.stampsSvc.count(rule, addresses.filter(isBitcoinAddress), context);
+    }
+    if (rule.asset_type === 'counterparty') {
+      if (!this.counterpartySvc) throw new Error('Counterparty verification is not configured.');
+      return this.counterpartySvc.count(rule, addresses.filter(isBitcoinAddress), context);
     }
     if (isSolanaRule(rule)) {
       if (!this.solanaSvc) throw new Error('Solana verification is not configured.');
@@ -121,6 +131,8 @@ export class AssetOwnershipService {
 /** Assets from separate protocols/chains/contracts cannot overlap. */
 export function collectibleDomain(rule: VerifierRole): string {
   if (rule.asset_type === 'solana_nft') return 'solana:mainnet';
+  // Stamps are Counterparty assets; both key holdings by asset, so overlaps count once.
+  if (rule.asset_type === 'stamp' || rule.asset_type === 'counterparty') return 'counterparty';
   if (rule.asset_type === 'nft') return `nft:${rule.chain_id}:${rule.contract_address?.toLowerCase()}`;
   return rule.asset_type || 'ethscription';
 }

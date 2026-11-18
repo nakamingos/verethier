@@ -406,7 +406,8 @@ describe('DiscordService - Enhanced Tests', () => {
           { name: 'NFTs (EVM and Solana)', value: 'nft' },
           { name: 'Ordinals', value: 'ordinal' },
           { name: 'Ethscriptions', value: 'ethscription' },
-          { name: 'Bitcoin Stamps', value: 'stamp' }
+          { name: 'Bitcoin Stamps', value: 'stamp' },
+          { name: 'Counterparty', value: 'counterparty' }
         ]
       }));
       expect(list.options[0].required).not.toBe(true);
@@ -417,9 +418,9 @@ describe('DiscordService - Enhanced Tests', () => {
       const setup = mockRest.put.mock.calls.at(-1)[1].body.find(command => command.name === 'setup').toJSON();
       const rules = setup.options.filter(option => option.name.startsWith('add-'));
       expect(rules.map(rule => rule.name)).toEqual([
-        'add-stamps-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
+        'add-stamps-rule', 'add-counterparty-rule', 'add-token-rule', 'add-nft-rule', 'add-ordinals-rule', 'add-ethscription-rule'
       ]);
-      expect(rules.map(rule => rule.options.length)).toEqual([5, 5, 12, 9, 9]);
+      expect(rules.map(rule => rule.options.length)).toEqual([5, 8, 5, 12, 9, 9]);
       for (const rule of rules) {
         expect(rule.options.slice(0, 2)).toEqual([
           expect.objectContaining({ name: 'channel', required: true }),
@@ -427,11 +428,12 @@ describe('DiscordService - Enhanced Tests', () => {
         ]);
         expect(rule.options.some(option => option.name === 'asset_type')).toBe(false);
         for (const name of ['attribute_key', 'attribute_value']) {
-          if (!['add-token-rule','add-stamps-rule'].includes(rule.name)) expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
+          if (!['add-token-rule','add-stamps-rule','add-counterparty-rule'].includes(rule.name)) expect(rule.options.find(option => option.name === name).autocomplete).toBe(true);
         }
       }
-      const [stamps,token,nft,ordinals,ethscriptions] = rules;
+      const [stamps,counterparty,token,nft,ordinals,ethscriptions] = rules;
       expect(stamps.options.map(o=>o.name)).toEqual(['channel','role','creator_address','stamp_ids','min_items']);
+      expect(counterparty.options.map(o=>o.name)).toEqual(['channel','role','asset','assets','issuer','parent','min_balance','min_items']);
       const networks = [{name:'Ethereum',value:'ethereum'},{name:'Base',value:'base'},{name:'Robinhood',value:'robinhood'},{name:'Solana',value:'solana'}];
       for (const rule of [token, nft]) expect(rule.options.find(option => option.name === 'network').choices).toEqual(networks);
       expect(token.options[2]).toMatchObject({ name: 'contract_address', required: true, max_length: 44 });

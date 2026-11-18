@@ -2,7 +2,7 @@
 
 **Verify your wallet. Get your roles.**
 
-Bouncer is a Discord bot and web app that assigns Discord roles to members who prove they own a wallet holding the right assets. It supports Ethscriptions, EVM NFTs and ERC-20 tokens (Ethereum, Base and Robinhood), Bitcoin Ordinals, Bitcoin Stamps and Solana tokens/NFTs.
+Bouncer is a Discord bot and web app that assigns Discord roles to members who prove they own a wallet holding the right assets. It supports Ethscriptions, EVM NFTs and ERC-20 tokens (Ethereum, Base and Robinhood), Bitcoin Ordinals, Bitcoin Stamps, Counterparty assets and Solana tokens/NFTs.
 
 Bouncer is split into two deployable apps:
 
@@ -12,7 +12,7 @@ Bouncer is split into two deployable apps:
 ## Features
 
 - **Wallet proofs.** EIP-712 signatures for EVM wallets, including deployed (ERC-1271) and undeployed (ERC-6492) smart wallets and Base Account; BIP-322/legacy message proofs for Bitcoin (Xverse, UniSat, or a pasted signature from wallets such as Freewallet); Ed25519 signatures for Solana (Phantom, Solflare, Backpack, MetaMask and other Wallet Standard wallets). Signing never requests approvals or transactions.
-- **Rules.** Collection, trait (up to ten AND/OR conditions), specific-ID/number and quantity rules for Ethscriptions, Ordinals, EVM NFTs (ERC-721/1155) and Stamps; exact-unit minimum balances for ERC-20 and Solana tokens; Solana Token Metadata, Core, compressed and printed-edition NFTs. One rule can grant up to 20 roles.
+- **Rules.** Collection, trait (up to ten AND/OR conditions), specific-ID/number and quantity rules for Ethscriptions, Ordinals, EVM NFTs (ERC-721/1155) and Stamps; exact-unit minimum balances for ERC-20 and Solana tokens; Counterparty assets by asset, list, issuer or parent; Solana Token Metadata, Core, compressed and printed-edition NFTs. One rule can grant up to 20 roles.
 - **Stacking and combined counts.** Holdings stack across a member's saved wallets. Collectible rules sharing a channel, role and minimum combine their counts, even across protocols; each asset counts once.
 - **Role upkeep.** Scheduled checks restore eligible previously earned roles and remove roles that are no longer earned. Newly eligible roles still need the member to verify. Provider failures never count as zero holdings, so uncertain checks keep existing roles.
 - **Control Room.** Discord-authenticated admin dashboard: rules with review, Undo/Redo and duplicate; channel setup and **Check Setup**; verification messages; member lookup and repairs; wallet blocks; role actions; audit log; activity feed; privacy-aware exports; operator-only bulk role checks.
@@ -131,7 +131,7 @@ Both apps run on Railway (Railpack, Node 22) and deploy from `main`.
 
 - [Backend README](backend/README.md): configuration, rule behavior per asset family, providers, scripts
 - [Frontend README](frontend/README.md): wallet connections, diagnostics, smoke tests
-- Features: [portals (Control Room and member portal)](docs/portals.md) and [portal styling](docs/portal-styling.md) · [smart wallets](docs/smart-wallet-verification.md) · [Solana](docs/solana-verification.md) · [Bitcoin Stamps](docs/bitcoin-stamps.md) · [NFT collection lookup](docs/nft-collection-lookup.md) · [multiple role outputs](docs/multi-role-rules.md) · [bulk role checks](docs/bulk-role-checks.md) · [wallet checking and dormancy](docs/wallet-checking.md) · [activity feed](docs/bouncer-activity-log.md) · [wallet signing privacy](docs/wallet-signing-privacy.md)
+- Features: [portals (Control Room and member portal)](docs/portals.md) and [portal styling](docs/portal-styling.md) · [smart wallets](docs/smart-wallet-verification.md) · [Solana](docs/solana-verification.md) · [Bitcoin Stamps](docs/bitcoin-stamps.md) · [Counterparty rules](docs/counterparty-rules.md) · [NFT collection lookup](docs/nft-collection-lookup.md) · [multiple role outputs](docs/multi-role-rules.md) · [bulk role checks](docs/bulk-role-checks.md) · [wallet checking and dormancy](docs/wallet-checking.md) · [activity feed](docs/bouncer-activity-log.md) · [wallet signing privacy](docs/wallet-signing-privacy.md)
 - Operations: [database migrations and backups](docs/DATABASE_MIGRATION.md) · [privacy operations](docs/privacy-operations.md) · [verification incidents](docs/verification-reliability.md) · [domain reputation review](docs/blockaid-domain-review.md)
 - Plans: [optional feature backlog](docs/plans/optional-features.md) · [core implementation plan](docs/plans/halcyon-core-implementation-plan.md) and earlier feature plans in [docs/plans](docs/plans)
 

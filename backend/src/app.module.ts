@@ -3,6 +3,7 @@ import { BulkRoleController } from './portal/bulk-role.controller';
 import { BulkRoleService } from './portal/bulk-role.service';
 import { BouncerLogService } from './services/bouncer-log.service';
 import { StampsOwnershipService } from './services/stamps-ownership.service';
+import { CounterpartyOwnershipService } from './services/counterparty-ownership.service';
 import { SolanaOwnershipService } from './services/solana-ownership.service';
 import { SolanaSignatureService } from './services/solana-signature.service';
 import { PrivacyService } from './portal/privacy.service';
@@ -210,6 +211,7 @@ import { EnvironmentConfig } from '@/config/environment.config';
     SolanaSignatureService,
     SolanaOwnershipService,
     StampsOwnershipService,
+    CounterpartyOwnershipService,
     WalletCheckService,
     UserAddressService,         // Multi-wallet address management
 

@@ -83,6 +83,11 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
       inline: false
     },
     {
+      name: '🟠 `/setup add-counterparty-rule`',
+      value: 'One of **asset** with **min_balance**, or **assets**, **issuer** or **parent** with **min_items**.',
+      inline: false
+    },
+    {
       name: '🔄 `/setup refresh-collection`',
       value: 'Use **collection_slug** to refresh an Ordinals collection’s stored membership and traits now.\n' +
              'Collections refresh automatically with scheduled role checks, every six hours by default. Wallet ownership is always checked separately.',
@@ -138,7 +143,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '• **Role Creation**: Type new role names to create them automatically\n' +
              '• **Duplicate Rules**: Bot warns about conflicts before creating\n' +
              '• **Undo System**: Most actions can be undone within a few minutes\n' +
-             '• **Case Sensitivity**: Role names preserve your exact casing',
+             '• **Case**: Role names keep your casing',
       inline: false
     },
     {
@@ -147,8 +152,7 @@ export const SETUP_HELP_CONTENT: SetupHelpContent = {
              '**"Verification message missing"** → Use `/setup verification` with `action:recover`\n' +
              '**"Duplicate role warning"** → Decide if intentional, bot will prevent conflicts\n' +
              '**"Rule not found"** → Check with list-rules first to confirm IDs\n' +
-             '**"Permission denied"** → Ensure admin permissions for the user\n' +
-             '**"Option not in autocomplete"** → Just type it manually! Bot supports all valid options',
+             '**"Permission denied"** → Ensure admin permissions for the user',
       inline: false
     },
     {
