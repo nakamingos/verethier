@@ -244,11 +244,13 @@ describe('DiscordVerificationService', () => {
       expect(rows).toHaveLength(2);
       expect(rows[0].components.map((c: any) => c.label)).toEqual(['Verify Now', 'Check saved wallets']);
       expect(rows[1].components[0].custom_id).toBe('bouncer-recheck-family');
+      expect(mockInteraction.editReply.mock.calls.at(-1)[0].embeds[0].data.description).toMatch(/expires <t:\d+:R>\. Already verified\? Re-check your saved wallets without signing\.$/);
 
       await service.requestVerification(mockInteraction as any, jest.fn().mockRejectedValue(new Error('db down')));
       rows = mockInteraction.editReply.mock.calls.at(-1)[0].components.map((row: any) => row.toJSON());
       expect(rows).toHaveLength(1);
       expect(rows[0].components.map((c: any) => c.label)).toEqual(['Verify Now']);
+      expect(mockInteraction.editReply.mock.calls.at(-1)[0].embeds[0].data.description).not.toContain('Re-check');
     });
 
     it('releases an abandoned link\'s stored reply after the nonce expires', async () => {
