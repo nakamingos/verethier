@@ -8,7 +8,7 @@ Angular app serving the verification page (`/verify/:data`), the admin Control R
 - TypeScript 5.9
 - SCSS
 - Reown AppKit 1.8.24 with Wagmi Core 2.22.1 / Connectors 6.2.0 and viem (EVM)
-- Sats Connect and UniSat (Bitcoin), Wallet Standard (Solana: Phantom, Solflare, Backpack and others)
+- Sats Connect and UniSat (Bitcoin), plus pasted signatures for other Bitcoin wallets such as Freewallet; Wallet Standard (Solana: Phantom, Solflare, Backpack and others)
 
 ## What It Does
 

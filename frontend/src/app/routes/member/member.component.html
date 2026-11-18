@@ -215,6 +215,13 @@
                   @if (walletKind === 'solana' && address) {
                     <p class="muted">To use a different account, switch accounts in {{ solana.walletName }}.</p>
                   }
+                  @if (walletKind === 'manual') {
+                    @if (!address) {
+                      <p class="muted">For Freewallet or any wallet that can sign a Bitcoin message. You'll sign Bouncer's message in your wallet and paste the signature here.</p>
+                      <label>Bitcoin address:<input name="manualAddress" [(ngModel)]="manualAddress" autocomplete="off" spellcheck="false" [disabled]="busy || connecting" /></label>
+                    }
+                    <app-manual-bitcoin-sign [bitcoin]="bitcoin" />
+                  }
                   @if (walletKind === 'xverse' && address) {
                     <label>Bitcoin address:<app-pixel-select name="stampAddress" [ngModel]="address" (ngModelChange)="bitcoin.selectAddress($event); linkFlow = null" [options]="(bitcoin.addresses$ | async) || []" label="Bitcoin address" [disabled]="busy || connecting" /></label>
                   }
@@ -223,14 +230,16 @@
                       @for (name of solana.mobileWallets; track name) {
                         <button (click)="solana.openMobileWallet(name)" [disabled]="busy">Open in {{ name }}</button>
                       }
-                    } @else if (walletKind !== 'solana' || !address) {
+                    } @else if ((walletKind !== 'solana' && walletKind !== 'manual') || !address) {
                       <button (click)="connect()" [disabled]="busy || connecting || disconnecting">
                         {{
                           connecting
                             ? "Connecting…"
                             : address
                               ? "Change wallet"
-                              : "Connect wallet"
+                              : walletKind === "manual"
+                                ? "Use address"
+                                : "Connect wallet"
                         }}
                       </button>
                     }

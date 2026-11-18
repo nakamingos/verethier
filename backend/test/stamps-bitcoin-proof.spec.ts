@@ -46,6 +46,23 @@ describe('Stamps Bitcoin signature support',()=>{
   expect(()=>signatures.verifyMessage('1BoatSLRHtKNngkdXEeobR76b53LETtpyT','Bouncer challenge',signature)).toThrow();
   expect(()=>signatures.verifyMessage(address!,'Bouncer challenge',signature+'AA')).toThrow();
  });
+ // Freewallet signs every address type with the compressed P2PKH compact
+ // header, as signing for the key's legacy address does.
+ const compact=Signer.sign(key,legacy!,'test');
+ it.each([legacy,native,nested])('accepts a Freewallet-style compact signature for %s',address=>{
+  expect(Buffer.from(compact,'base64')[0]).toBeGreaterThanOrEqual(31);
+  expect(()=>signatures.verifyMessage(address!,'test',compact)).not.toThrow();
+  expect(()=>signatures.verifyMessage(address!,'tesT',compact)).toThrow();
+ });
+ it('rejects a compact signature for another SegWit address',()=>{
+  const other=new Uint8Array(32);other[31]=2;
+  const otherNative=payments.p2wpkh({pubkey:secp256k1.getPublicKey(other,true)}).address!;
+  expect(()=>signatures.verifyMessage(otherNative,'test',compact)).toThrow();
+ });
+ it('rejects an uncompressed-key compact header for a SegWit address',()=>{
+  const bytes=Buffer.from(compact,'base64');bytes[0]-=4;
+  expect(()=>signatures.verifyMessage(native!,'test',bytes.toString('base64'))).toThrow();
+ });
  it('does not offer EVM wallets for a Stamps-only channel',async()=>{
   const nonce=await nonces.createNonce('member','guild','message','channel');
   expect(await signatures.getContext('member','guild',nonce)).toMatchObject({walletTypes:['bitcoin'],bitcoinStamps:true});

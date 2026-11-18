@@ -20,7 +20,7 @@ describe('Verification page wallet choice', () => {
   beforeEach(async () => {
     originalUrl = window.location.href;
     ethereum = { syncConnectedAccount: jasmine.createSpy().and.resolveTo('0x' + '1'.repeat(40)), getSigningChainId: jasmine.createSpy().and.resolveTo(1), connectedState$: new BehaviorSubject({ isConnecting: false, isConnected: false }), connectionErrors$: new Subject<string | null>(), connect: jasmine.createSpy().and.resolveTo(), disconnectWeb3: jasmine.createSpy().and.resolveTo(), signTypedMessage: jasmine.createSpy().and.resolveTo({ address: '0x' + '1'.repeat(40), signature: 'eth-signature' }) };
-    bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null),
+    bitcoin = { address$: new BehaviorSubject<string | null>(null), disconnect: () => bitcoin.address$.next(null), cancelManualSignature: () => {}, manualRequest$: new BehaviorSubject(null),
       preferredProvider: jasmine.createSpy().and.returnValue('xverse'), isUniSatAvailable: jasmine.createSpy().and.returnValue(false),
       openUniSatMobile: jasmine.createSpy(),
       connect: jasmine.createSpy().and.callFake(async () => bitcoin.address$.next(address)),
@@ -371,7 +371,7 @@ describe('Verification page wallet choice', () => {
     expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(2);
     fixture.componentInstance.selectWallet('bitcoin');
     await fixture.componentInstance.connect();
-    expect(bitcoin.connect).toHaveBeenCalledWith('xverse',false);
+    expect(bitcoin.connect).toHaveBeenCalledWith('xverse',false,'');
     expect(ethereum.connect).not.toHaveBeenCalled();
     expect(fixture.componentInstance.state$.value.connectedAddress).toBe(address);
     fixture.componentInstance.selectWallet('evm');
@@ -388,7 +388,7 @@ describe('Verification page wallet choice', () => {
     fixture.detectChanges();
     expect(component.state$.value.bitcoinProvider).toBe('unisat');
     expect(fixture.nativeElement.textContent).toContain('Connect your UniSat wallet');
-    await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat',false);
+    await component.connect(); expect(bitcoin.connect).toHaveBeenCalledWith('unisat',false,'');
     const pending = component.verify(data); await new Promise(resolve => setTimeout(resolve, 0));
     http.expectOne(request => request.url.endsWith('/bitcoin-challenge')).flush({ address, message: 'UniSat challenge\nNonce: nonce', expiry });
     await new Promise(resolve => setTimeout(resolve, 0));

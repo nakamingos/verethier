@@ -13,6 +13,7 @@ import { BehaviorSubject, Observable, catchError, defer, startWith, firstValueFr
 
 import { WalletService } from '@/services/wallet.service';
 import { BitcoinWalletProvider, BitcoinWalletService } from '@/services/bitcoin-wallet.service';
+import { ManualBitcoinSignComponent } from '@/components/manual-bitcoin-sign/manual-bitcoin-sign.component';
 
 import { DecodedData } from '@/models/app.interface';
 
@@ -47,7 +48,8 @@ interface State {
         AsyncPipe, FormsModule, PixelSelectComponent,
         RouterLink,
         NgTemplateOutlet,
-        PrivacyChoicesComponent
+        PrivacyChoicesComponent,
+        ManualBitcoinSignComponent
     ],
     providers: [
         BitcoinWalletService
@@ -349,6 +351,7 @@ export class VerifyComponent {
         )
       );
     } catch (error) {
+      this.bitcoinWalletSvc.cancelManualSignature();
       // Handle wallet signing errors
       const errorMessage = error instanceof HttpErrorResponse
         ? this.verificationErrorMessage(error)
@@ -476,6 +479,8 @@ export class VerifyComponent {
   readonly isPhone = isPhone();
   /** The chosen Solana wallet when several are detected; blank uses the first. */
   solanaWallet = '';
+  /** The address entered for manual Bitcoin signing. */
+  manualAddress = '';
 
   get evmNetworks() { return this.walletSvc.evmNetworks; }
 
@@ -516,7 +521,7 @@ export class VerifyComponent {
     if (this.state$.value.walletConnecting || this.state$.value.messageSigning || this.state$.value.verificationSubmitting) return;
     this.setState({ walletConnecting: true, errorMessage: null });
     try {
-      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider, this.state$.value.bitcoinStamps);
+      if (this.state$.value.walletType === 'bitcoin') await this.bitcoinWalletSvc.connect(this.state$.value.bitcoinProvider, this.state$.value.bitcoinStamps, this.manualAddress);
       else if (this.state$.value.walletType === 'solana') await this.solanaWalletSvc.connect(this.solanaWallet || undefined);
       else await this.walletSvc.connect();
     } catch (error) {

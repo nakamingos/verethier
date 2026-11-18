@@ -12,6 +12,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { PortalSessionService } from '@/services/portal-session.service';
 import { WalletService } from '@/services/wallet.service';
 import { canonicalBitcoinAddress, BitcoinWalletService } from '@/services/bitcoin-wallet.service';
+import { ManualBitcoinSignComponent } from '@/components/manual-bitcoin-sign/manual-bitcoin-sign.component';
 import { PixelSelectComponent } from '@/components/pixel-select/pixel-select.component';
 
 interface Requirement {
@@ -82,6 +83,7 @@ interface Account {
     DatePipe, AsyncPipe,
     PixelSelectComponent,
     PrivacyChoicesComponent,
+    ManualBitcoinSignComponent,
     DeletionRequestsComponent,
   ],
   providers: [BitcoinWalletService],
@@ -115,6 +117,8 @@ export class MemberComponent {
   solanaWallet = '';
   addOpen = false;
   walletKind = 'evm';
+  /** The address entered for manual Bitcoin signing. */
+  manualAddress = '';
   walletCommunityId = '';
   address = '';
   connecting = false;
@@ -136,6 +140,7 @@ export class MemberComponent {
 
     { value: 'xverse', label: 'Bitcoin · Xverse' },
     { value: 'unisat', label: 'Bitcoin · UniSat' },
+    { value: 'manual', label: 'Bitcoin · Other wallet' },
     ...(this.data?.capabilities?.solana ? [{value:'solana',label:'Solana'}] : []),
   ];}
   get user() {
@@ -199,7 +204,7 @@ export class MemberComponent {
     });
     this.solana.address$.pipe(takeUntilDestroyed()).subscribe(address => {if(this.walletKind === 'solana') this.address = address || '';});
     this.bitcoin.address$.pipe(takeUntilDestroyed()).subscribe((address) => {
-      if (this.walletKind === 'xverse' || this.walletKind === 'unisat') this.address = address || '';
+      if (['xverse', 'unisat', 'manual'].includes(this.walletKind)) this.address = address || '';
     });
     void this.init();
   }
@@ -289,6 +294,7 @@ export class MemberComponent {
     try {
       await task();
     } catch (error) {
+      this.bitcoin.cancelManualSignature();
       if (this.live) this.fail(error);
     } finally {
       this.busy = false;
@@ -338,7 +344,7 @@ export class MemberComponent {
       else if (this.walletKind === 'evm') await this.evmWallet().connect();
       else
         await this.bitcoin.connect(
-          this.walletKind === 'unisat' ? 'unisat' : 'xverse', true,
+          this.walletKind === 'unisat' ? 'unisat' : this.walletKind === 'manual' ? 'manual' : 'xverse', true, this.manualAddress,
         );
     } catch (error) {
       this.fail(error);
