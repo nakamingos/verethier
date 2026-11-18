@@ -8,7 +8,7 @@ Add Solana mainnet as a separate wallet family and asset adapter. Keep Discord a
 
 | Capability | Initial release target | Later scope |
 | --- | --- | --- |
-| Wallets | Wallet Standard discovery; Phantom as the first explicitly supported desktop/mobile wallet. Add Solflare acceptance before advertising it. | Other wallets, hardware compatibility and program/multisig account proofs need their own acceptance. |
+| Wallets | Wallet Standard discovery; Phantom as the first explicitly supported desktop/mobile wallet. Solflare and MetaMask passed live on November 17, 2026. | Other wallets, hardware compatibility and program/multisig account proofs need their own acceptance. |
 | Fungible tokens | Minimum holdings of a specific mint, summed across all directly owned token accounts and saved Solana wallets. Original Token Program plus explicitly supported transparent Token-2022 balances. | Confidential balances, protocol staking, LP/deposit receipts and extension-specific economic balances. |
 | NFT rules | Verified collection, verified creator, or explicit asset IDs; positive integer minimum and optional existing AND/OR trait matching. Multiple addresses within one selected scope mean OR. | Master-edition print rules and their migration are complete; mixed creator-and-collection expressions and marketplace slug lookup remain follow-ups. |
 | NFT formats | Token Metadata ordinary/programmatic NFTs and Core assets are initial targets, enabled independently once their ownership and relationship checks are implemented. | Compressed Bubblegum V1/V2 implementation and local validation are complete; its migration is applied and support follows the overall Solana switch; community acceptance remains deferred. |
