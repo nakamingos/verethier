@@ -1,19 +1,19 @@
 # Saved-wallet checks
 
-Members can check their saved wallets again without signing. The **Check saved wallets** button appears on the private **Verify Now** reply in Discord, after a member clicks Request Verification.
+Members can check their saved wallets again without signing. The **Re-check saved wallets** button appears on the private **Verify Now** reply in Discord, after a member clicks Request Verification.
 
 ## How it looks
 
 ```
-[ Verify Now ↗ ]  [ Check saved wallets ]
+[ Verify Now ↗ ]  [ Re-check saved wallets ]
 [ EVM — 2 saved wallets               ▾ ]
 ```
 
 - The dropdown lists only the wallet families (EVM, Bitcoin, Solana) where the member has an active saved wallet that one of the channel's rules would read. The family with the most of those wallets is preselected.
-- With one family, there is no dropdown. The button names the family, for example **Check EVM wallets**.
+- With one family, there is no dropdown. The button names the family, for example **Re-check EVM wallets**.
 - With no saved wallets that apply, the reply looks the same as before: just Verify Now.
 - Picking a family only updates the member's own reply. Nothing is checked until they click the button.
-- After the check, the reply shows the result and keeps the Verify Now link.
+- After the check, the result appears below the Verify Now message, which keeps its link and expiry time.
 
 ## What a check does
 

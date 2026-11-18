@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, StringSelectMenuBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { MemberRecheckService, RECHECK_BUTTON, RECHECK_SELECT } from '../src/services/member-recheck.service';
 
 const evmA = '0x' + 'a'.repeat(40);
@@ -104,14 +104,14 @@ describe('MemberRecheckService', () => {
     it('shows one button when only one family applies, and nothing without saved wallets', async () => {
       const single = await service.controls('user', 'guild', [solRule]);
       expect(single!.rows).toEqual([]);
-      expect(single!.button.toJSON()).toMatchObject({ label: 'Check Solana wallets', custom_id: RECHECK_BUTTON + 'solana' });
+      expect(single!.button.toJSON()).toMatchObject({ label: 'Re-check Solana wallets', custom_id: RECHECK_BUTTON + 'solana' });
       wallets = [];
       expect(await service.controls('user', 'guild', [solRule])).toBeNull();
     });
 
     it('adds a family dropdown that preselects the family with the most wallets', async () => {
       const controls = await service.controls('user', 'guild', [ethRule, stampRule, solRule]);
-      expect(controls!.button.toJSON()).toMatchObject({ label: 'Check saved wallets', custom_id: RECHECK_BUTTON + 'evm' });
+      expect(controls!.button.toJSON()).toMatchObject({ label: 'Re-check saved wallets', custom_id: RECHECK_BUTTON + 'evm' });
       const menu = controls!.rows[0].toJSON().components[0] as any;
       expect(menu.custom_id).toBe(RECHECK_SELECT);
       expect(menu.options.map((o: any) => [o.value, o.description, !!o.default])).toEqual([
@@ -122,10 +122,11 @@ describe('MemberRecheckService', () => {
 
   function message() {
     const link = new ButtonBuilder().setLabel('Verify Now').setURL('https://example.com/verify/x').setStyle(ButtonStyle.Link);
-    const check = new ButtonBuilder().setCustomId(RECHECK_BUTTON + 'evm').setLabel('Check saved wallets').setStyle(ButtonStyle.Secondary);
+    const check = new ButtonBuilder().setCustomId(RECHECK_BUTTON + 'evm').setLabel('Re-check saved wallets').setStyle(ButtonStyle.Secondary);
     const menu = new StringSelectMenuBuilder().setCustomId(RECHECK_SELECT)
       .addOptions({ label: 'EVM', value: 'evm', default: true }, { label: 'Bitcoin', value: 'bitcoin' });
-    return { components: [new ActionRowBuilder().addComponents(link, check), new ActionRowBuilder().addComponents(menu)] };
+    const verify = new EmbedBuilder().setTitle('Wallet Verification').setDescription('Verify your wallet by clicking the unique link below. This link is personal and expires <t:1800000000:R>.');
+    return { embeds: [verify], components: [new ActionRowBuilder().addComponents(link, check), new ActionRowBuilder().addComponents(menu)] };
   }
 
   it('keeps the chosen family in the private reply and on the Check button', async () => {
@@ -145,7 +146,7 @@ describe('MemberRecheckService', () => {
       return { customId: RECHECK_BUTTON + family, guildId: 'guild', channelId: 'channel', guild: { name: 'Test Guild' },
         user: { id: 'user' }, message: message(), reply: jest.fn(), deferUpdate: jest.fn(), editReply: jest.fn() } as any;
     }
-    const last = (interaction: any) => interaction.editReply.mock.calls.at(-1)[0];
+    const last = (interaction: any) => { const reply = interaction.editReply.mock.calls.at(-1)[0]; return { ...reply, embeds: reply.embeds.slice(1) }; };
 
     it('checks one family against active saved wallets and grants roles as the member\'s own check', async () => {
       const interaction = click('evm');
@@ -161,6 +162,8 @@ describe('MemberRecheckService', () => {
       expect(verification.finishWalletChecks).toHaveBeenCalledWith(context);
       expect(ordinals.beginVerification).not.toHaveBeenCalled();
       const final = last(interaction);
+      // The Verify Now embed and its expiry stay above the result.
+      expect(interaction.editReply.mock.calls.at(-1)[0].embeds[0]).toMatchObject({ title: 'Wallet Verification', description: expect.stringContaining('expires <t:1800000000:R>') });
       expect(final.embeds[0].data).toMatchObject({ title: 'Wallet Check Complete' });
       expect(final.embeds[0].data.description).toContain('Checked your saved EVM wallets in Test Guild.');
       expect(final.embeds[0].data.description).toContain('New Roles Assigned');
