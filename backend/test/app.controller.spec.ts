@@ -4,6 +4,7 @@ import { BitcoinSignatureService } from '../src/services/bitcoin-signature.servi
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { AppController } from '../src/app.controller';
+import { BitcoinRelayService } from '../src/services/bitcoin-relay.service';
 import { AppService } from '../src/app.service';
 import { CONSTANTS } from '../src/constants';
 import { VerifyService } from '../src/services/verify.service';
@@ -42,6 +43,7 @@ describe('AppController', () => {
         { provide: SolanaSignatureService, useValue: undefined },
         { provide: MemberService, useValue: undefined },
         { provide: BitcoinSignatureService, useValue: undefined },
+        { provide: BitcoinRelayService, useValue: undefined },
         {
           provide: AppService,
           useValue: mockAppService,

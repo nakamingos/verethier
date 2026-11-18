@@ -72,6 +72,7 @@ import { SimpleRoleMonitorService } from './services/simple-role-monitor.service
 import { QueryOptimizer } from './services/query-optimizer.service';
 import { UserAddressService } from './services/user-address.service';
 import { CacheService } from './services/cache.service';
+import { BitcoinRelayService } from './services/bitcoin-relay.service';
 import { CONSTANTS } from '@/constants';
 import { createClient } from '@supabase/supabase-js';
 import { EnvironmentConfig } from '@/config/environment.config';
@@ -218,7 +219,8 @@ import { EnvironmentConfig } from '@/config/environment.config';
 
     // Performance and optimization
     QueryOptimizer,             // Database query optimization
-    CacheService               // High-performance caching layer
+    CacheService,              // High-performance caching layer
+    BitcoinRelayService
   ],
 })
 export class AppModule {}

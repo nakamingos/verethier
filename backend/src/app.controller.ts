@@ -1,5 +1,5 @@
 import { SolanaSignatureService } from './services/solana-signature.service';
-import { Body, Controller, Post, Get, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Body, Controller, Post, Get, HttpCode, HttpException, HttpStatus, Logger, Param } from '@nestjs/common';
 
 import { AppService } from './app.service';
 import { CONSTANTS } from './constants';
@@ -8,7 +8,8 @@ import { VerifySignatureDto } from './dtos/verify-signature.dto';
 import { DecodedData } from './models/app.interface';
 import { SecurityUtil } from './utils/security.util';
 import { BitcoinSignatureService } from './services/bitcoin-signature.service';
-import { BitcoinChallengeDto, VerificationContextDto } from './dtos/wallet-context.dto';
+import { BitcoinChallengeDto, BitcoinRelayDeliveryDto, BitcoinRelayDto, VerificationContextDto } from './dtos/wallet-context.dto';
+import { BitcoinRelayService } from './services/bitcoin-relay.service';
 import { MemberService } from './portal/member.service';
 import { WALLET_BLOCKED } from './services/wallet-block.service';
 
@@ -28,7 +29,8 @@ export class AppController {
     private readonly verifySvc: VerifyService,
     private readonly bitcoinSvc: BitcoinSignatureService,
     private readonly memberSvc: MemberService,
-    private readonly solanaSvc: SolanaSignatureService
+    private readonly solanaSvc: SolanaSignatureService,
+    private readonly relaySvc: BitcoinRelayService,
   ) {}
 
   /**
@@ -195,5 +197,27 @@ export class AppController {
     catch (error) {
       throw new HttpException(error.message?.startsWith('Use ') ? error.message : 'Could not create the Bitcoin verification message. Please return to Discord and request a new link.', HttpStatus.BAD_REQUEST);
     }
+  }
+
+  /** Starts a wallet-app signing request whose result the page collects. */
+  @Post('bitcoin-relay')
+  bitcoinRelay(@Body() body: BitcoinRelayDto) {
+    try { return this.relaySvc.create(body.address, body.message); }
+    catch { throw new HttpException('Request a new Bouncer message, then try again.', HttpStatus.BAD_REQUEST); }
+  }
+
+  /** Freewallet's sign callback. */
+  @Post('bitcoin-relay/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deliverBitcoinRelay(@Param('id') id: string, @Body() body: BitcoinRelayDeliveryDto) {
+    try { this.relaySvc.deliver(id, body.address, body.signature); }
+    catch { throw new HttpException('Invalid or expired signature request.', HttpStatus.BAD_REQUEST); }
+  }
+
+  @Get('bitcoin-relay/:id')
+  readBitcoinRelay(@Param('id') id: string) {
+    const signature = this.relaySvc.read(id);
+    if (signature === undefined) throw new HttpException('This signing request has expired. Start again.', HttpStatus.NOT_FOUND);
+    return { signature };
   }
 }

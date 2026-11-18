@@ -4,6 +4,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { EnvironmentConfig } from './config/environment.config';
 import { validationPipeOptions } from './config/validation.config';
+import { corsDelegate } from './config/cors.config';
 
 // Validate environment variables at startup
 EnvironmentConfig.validate();
@@ -59,27 +60,11 @@ async function bootstrap() {
       'http://localhost:4200', // Development frontend
       'http://localhost:3000', // Alternative dev port
     ] : [])
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
+  app.enableCors(corsDelegate(allowedOrigins, origin => {
+    if (EnvironmentConfig.NODE_ENV !== 'production') Logger.warn(`CORS blocked origin: ${origin}`, 'Security');
+  }));
 
-  app.enableCors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, etc.)
-      if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        if (EnvironmentConfig.NODE_ENV !== 'production') {
-          Logger.warn(`CORS blocked origin: ${origin}`, 'Security');
-        }
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
-  
   // Use Railway's PORT environment variable
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
