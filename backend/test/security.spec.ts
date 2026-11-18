@@ -1,6 +1,7 @@
 import { SolanaSignatureService } from '../src/services/solana-signature.service';
 import { MemberService } from '../src/portal/member.service';
 import { BitcoinSignatureService } from '../src/services/bitcoin-signature.service';
+import { BitcoinRelayService } from '../src/services/bitcoin-relay.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { AppController } from '../src/app.controller';
@@ -39,6 +40,7 @@ describe('Security and Input Validation', () => {
         { provide: SolanaSignatureService, useValue: undefined },
         { provide: MemberService, useValue: undefined },
         { provide: BitcoinSignatureService, useValue: undefined },
+        { provide: BitcoinRelayService, useValue: undefined },
         {
           provide: AppService,
           useValue: mockAppService,

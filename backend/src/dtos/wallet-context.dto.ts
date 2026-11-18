@@ -23,3 +23,20 @@ export class BitcoinChallengeDto extends WalletContextDto {
   @IsString() @IsNotEmpty() @MaxLength(90)
   address: string;
 }
+
+export class BitcoinRelayDto {
+  @IsString() @IsNotEmpty() @MaxLength(90)
+  address: string;
+  @IsString() @IsNotEmpty() @MaxLength(2000)
+  message: string;
+}
+
+/** What Freewallet posts to a `counterparty:` sign callback. */
+export class BitcoinRelayDeliveryDto {
+  @IsOptional() @IsString() @MaxLength(90)
+  address?: string;
+  @IsOptional() @IsString() @MaxLength(2000)
+  message?: string;
+  @IsString() @IsNotEmpty() @MaxLength(300)
+  signature: string;
+}

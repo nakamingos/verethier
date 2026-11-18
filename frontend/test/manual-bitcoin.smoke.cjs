@@ -18,6 +18,7 @@ const legacy=payments.p2pkh({pubkey}).address, native=payments.p2wpkh({pubkey}).
 // for the key's P2PKH address does.
 const sign=(message)=>Signer.sign(key,legacy,message);
 const signatures=new BitcoinSignatureService();
+const {BitcoinRelayService}=require(path.join(backend,'dist/services/bitcoin-relay.service'));
 const root=path.resolve(__dirname,'../dist/frontend/browser'),origin='https://bouncer.test';
 const nonce="a".repeat(64), expiry=Math.floor(Date.now()/1000)+600;
 const data={userId:"111111111111111111",userTag:"Collector",discordId:"222222222222222222",discordName:"Stamps community",avatar:"",discordIcon:"",nonce,expiry,address:""};
@@ -25,14 +26,16 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
 (async()=>{
   const browser=await chromium.launch({executablePath:process.env.CHROME_BIN||"/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",headless:true,args:["--no-sandbox"]});
   try{
-    for(const [width,address] of [[1280,legacy],[393,native],[320,legacy]]){
-      const context=await browser.newContext({viewport:{width,height:900},hasTouch:width<800});
+    for(const [width,address] of [[1280,legacy],[1024,native],[393,native],[320,legacy]]){
+      const phone=width<800;
+      const context=await browser.newContext({viewport:{width,height:900},hasTouch:phone,...(phone?{userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'}:{})});
       await context.grantPermissions(['clipboard-read','clipboard-write'],{origin});
       const page=await context.newPage();
       page.setDefaultTimeout(15000);
       const errors=[];
       page.on("pageerror",(error)=>errors.push(error.message));
       let challenge, submitted=0;
+      const relay=new BitcoinRelayService(signatures);
       await page.routeWebSocket("**",(socket)=>socket.close());
       await page.route("**/*",async(route)=>{
         const url=new URL(route.request().url());
@@ -43,6 +46,14 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
           assert.equal(input.address,address);
           challenge=['Bouncer wallet verification','',`Domain: ${origin}`,`Address: ${address}`,`Nonce: ${nonce}`].join('\n');
           return route.fulfill({json:{address,message:challenge,expiry}});
+        }
+        if(url.pathname==="/api/bitcoin-relay"){
+          const input=route.request().postDataJSON();
+          return route.fulfill({json:relay.create(input.address,input.message)});
+        }
+        if(url.pathname.startsWith("/api/bitcoin-relay/")){
+          const signature=relay.read(url.pathname.split('/').pop());
+          return signature===undefined?route.fulfill({status:404,json:{}}):route.fulfill({json:{signature}});
         }
         if(url.pathname==="/api/verify-signature"){
           const proof=route.request().postDataJSON();
@@ -74,6 +85,29 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
       await page.getByText(/Signing was cancelled/).waitFor();
       await page.getByRole("button",{name:"Sign Message",exact:true}).click();
       await page.getByRole("button",{name:"Copy message",exact:true}).waitFor();
+      const freewallet=page.getByRole("link",{name:"Sign with Freewallet",exact:true});
+      if(width===1280){
+        // Freewallet: open the counterparty: link, sign, and post to its callback.
+        await freewallet.waitFor();
+        const link=await freewallet.getAttribute("href");
+        assert.match(link,new RegExp('^counterparty:'+address+'\\?action=sign&message='));
+        const params=Object.fromEntries(link.split('?')[1].split('&').map(pair=>pair.split('=').map(decodeURIComponent)));
+        assert.equal(params.message,challenge);
+        const callback=new URL(params.callback);
+        assert.match(callback.pathname,/^\/api\/bitcoin-relay\/[A-Za-z0-9_-]{32}$/);
+        await page.evaluate(()=>{const a=document.querySelector('a.button[href^="counterparty:"]');a.addEventListener('click',e=>e.preventDefault(),{once:true});});
+        await freewallet.click();
+        await page.getByText(/Waiting for Freewallet/).waitFor();
+        relay.deliver(callback.pathname.split('/').pop(),address,sign(params.message));
+        await page.locator(".step-3.active").waitFor();
+        assert.equal(submitted,1);
+        assert.deepEqual(errors,[]);
+        console.log(JSON.stringify({width,address:'legacy',result:"passed",signature:"Freewallet link and callback relay"}));
+        await context.close();
+        continue;
+      }
+      if(phone) assert.equal(await freewallet.count(),0,"No Freewallet link on phones");
+      else await freewallet.waitFor();
       // The panel stays readable while waiting for the pasted signature.
       assert.equal(await page.locator(".step-2").evaluate(el=>el.classList.contains("disabled")),false);
       await page.getByText("Show message").click();

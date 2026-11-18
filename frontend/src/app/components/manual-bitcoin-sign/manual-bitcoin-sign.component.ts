@@ -1,7 +1,15 @@
 import { AsyncPipe } from '@angular/common';
-import { Component, Input, signal } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Component, DestroyRef, Input, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { catchError, firstValueFrom, map, of, switchMap } from 'rxjs';
+import { BitcoinWalletService, ManualSignatureRequest } from '@/services/bitcoin-wallet.service';
+import { isPhone } from '@/utils/smart-wallet.util';
+import { env } from 'src/env/env';
+
+const POLL_MS = 2000;
 
 /** Shows Bouncer's message for manual signing and takes the pasted signature. */
 @Component({
@@ -10,6 +18,17 @@ import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
   template: `
     @if (bitcoin.manualRequest$ | async; as request) {
       <div class="manual-bitcoin-sign">
+        @if (freewallet(); as link) {
+          <div class="actions">
+            <a class="button" [href]="link.url" (click)="waitForFreewallet(link.id, request)">Sign with Freewallet</a>
+          </div>
+          @if (waiting()) {
+            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer.</p>
+          } @else {
+            <p class="muted">Opens Freewallet on this computer to sign and send the signature back.</p>
+          }
+          <p>Or sign it yourself:</p>
+        }
         <ol>
           <li>Copy Bouncer's message.</li>
           <li>
@@ -47,11 +66,73 @@ import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
     textarea { overflow-wrap: anywhere; }
   `,
 })
-export class ManualBitcoinSignComponent {
+export class ManualBitcoinSignComponent implements OnInit {
   @Input({ required: true }) bitcoin!: BitcoinWalletService;
+  private readonly http = inject(HttpClient);
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly destroyRef = inject(DestroyRef);
   signature = '';
   readonly error = signal('');
   readonly copied = signal(false);
+  /** A `counterparty:` sign link whose signature Freewallet posts back to Bouncer. */
+  readonly freewallet = signal<{ id: string; url: SafeUrl } | null>(null);
+  readonly waiting = signal(false);
+  private polling?: ReturnType<typeof setTimeout>;
+
+  ngOnInit() {
+    this.destroyRef.onDestroy(() => this.stopWaiting());
+    this.bitcoin.manualRequest$.pipe(
+      switchMap((request) => {
+        this.stopWaiting();
+        this.freewallet.set(null);
+        // Freewallet reads "+" in a link as a space; phones have no Freewallet link handler.
+        if (!request || isPhone() || request.message.includes('+')) return of(null);
+        return this.http.post<{ id: string }>(env.apiUrl + '/bitcoin-relay', request).pipe(
+          map(({ id }) => ({ id, url: this.sanitizer.bypassSecurityTrustUrl(this.freewalletUrl(request, id)) })),
+          catchError(() => of(null)),
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe((link) => this.freewallet.set(link));
+  }
+
+  private freewalletUrl(request: ManualSignatureRequest, id: string): string {
+    const callback = new URL(`${env.apiUrl}/bitcoin-relay/${id}`, window.location.href).href;
+    return `counterparty:${request.address}?action=sign&message=${encodeURIComponent(request.message)}&callback=${encodeURIComponent(callback)}`;
+  }
+
+  /** Collects the signature once Freewallet sends it, then submits it like a pasted one. */
+  waitForFreewallet(id: string, request: ManualSignatureRequest) {
+    this.stopWaiting();
+    this.error.set('');
+    this.waiting.set(true);
+    const poll = async () => {
+      if (this.bitcoin.manualRequest$.value !== request) return this.stopWaiting();
+      try {
+        const { signature } = await firstValueFrom(this.http.get<{ signature: string | null }>(`${env.apiUrl}/bitcoin-relay/${id}`));
+        if (this.bitcoin.manualRequest$.value !== request) return this.stopWaiting();
+        if (signature) {
+          this.stopWaiting();
+          this.bitcoin.submitManualSignature(signature);
+          return;
+        }
+      } catch (error) {
+        if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.stopWaiting();
+          this.error.set('The Freewallet request expired. Click Sign Message to start again.');
+          return;
+        }
+      }
+      if (this.waiting()) this.polling = setTimeout(poll, POLL_MS);
+    };
+    this.polling = setTimeout(poll, POLL_MS);
+  }
+
+  private stopWaiting() {
+    clearTimeout(this.polling);
+    this.polling = undefined;
+    this.waiting.set(false);
+  }
 
   async copy(message: string) {
     try {
@@ -74,6 +155,7 @@ export class ManualBitcoinSignComponent {
   }
 
   cancel() {
+    this.stopWaiting();
     this.signature = '';
     this.error.set('');
     this.bitcoin.cancelManualSignature();
