@@ -14,6 +14,7 @@ import { OrdnetOwnershipService } from './ordnet-ownership.service';
 import { OrdinalRequestWork, ordinalRequestWork, OrdinalsRequestScheduler } from './ordinals-request-scheduler.service';
 import { OrdinalCollectionCacheService } from './ordinal-collection-cache.service';
 import { OrdinalWalletInventoryService } from './ordinal-wallet-inventory.service';
+import { recordProviderCall, xverseCallKind } from './utils/provider-usage.util';
 
 const API_URL = 'https://api.secretkeylabs.io';
 const PAGE_LIMIT = 25;
@@ -609,6 +610,7 @@ export class OrdinalsOwnershipService {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         try {
+          recordProviderCall('xverse', xverseCallKind(path), work.priority);
           const response = await fetch(API_URL + path, {
             // Checked non-empty before queueing.
             headers: { 'x-api-key': EnvironmentConfig.XVERSE_API_KEY ?? '', Accept: 'application/json' },
