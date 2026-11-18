@@ -10,16 +10,22 @@ import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
   template: `
     @if (bitcoin.manualRequest$ | async; as request) {
       <div class="manual-bitcoin-sign">
-        <p>
-          In your wallet, sign this exact message with
-          <span class="pink">{{ request.address }}</span>, then paste the
-          signature below. In Freewallet, use <strong>Sign Message</strong> on
-          that address.
-        </p>
-        <label>Message to sign:<textarea readonly rows="9" [value]="request.message"></textarea></label>
+        <ol>
+          <li>Copy Bouncer's message.</li>
+          <li>
+            In your wallet, sign it with
+            <span class="address">{{ request.address }}</span>. In Freewallet,
+            choose <strong>Sign Message</strong>, paste it into Message and sign.
+          </li>
+          <li>Paste the signature below.</li>
+        </ol>
         <div class="actions">
           <button type="button" (click)="copy(request.message)">{{ copied() ? 'Copied' : 'Copy message' }}</button>
         </div>
+        <details>
+          <summary>Show message</summary>
+          <label>Message to sign:<textarea readonly rows="9" [value]="request.message"></textarea></label>
+        </details>
         <label>Signature:<textarea name="manualSignature" rows="3" [(ngModel)]="signature" autocomplete="off" spellcheck="false"></textarea></label>
         @if (error()) {
           <p class="error" role="alert">{{ error() }}</p>
@@ -33,7 +39,11 @@ import { BitcoinWalletService } from '@/services/bitcoin-wallet.service';
   `,
   styles: `
     .manual-bitcoin-sign { min-width: 0; }
-    .manual-bitcoin-sign p { overflow-wrap: anywhere; }
+    .manual-bitcoin-sign ol { margin: 1rem 0; padding-left: 2rem; }
+    .manual-bitcoin-sign li { margin-bottom: 0.5rem; }
+    .address { overflow-wrap: anywhere; }
+    details { margin: 1rem 0; }
+    summary { cursor: pointer; }
     textarea { overflow-wrap: anywhere; }
   `,
 })

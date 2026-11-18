@@ -54,6 +54,12 @@ describe('Stamps Bitcoin signature support',()=>{
   expect(()=>signatures.verifyMessage(address!,'test',compact)).not.toThrow();
   expect(()=>signatures.verifyMessage(address!,'tesT',compact)).toThrow();
  });
+ it.each([legacy,native])('accepts a signature over the CRLF form of a multi-line challenge for %s',address=>{
+  const message='Bouncer wallet verification\n\nAddress: '+address+'\nNonce: abc';
+  const signature=Signer.sign(key,legacy!,message.replace(/\n/g,'\r\n'));
+  expect(()=>signatures.verifyMessage(address!,message,signature)).not.toThrow();
+  expect(()=>signatures.verifyMessage(address!,message.replace('abc','abd'),signature)).toThrow();
+ });
  it('rejects a compact signature for another SegWit address',()=>{
   const other=new Uint8Array(32);other[31]=2;
   const otherNative=payments.p2wpkh({pubkey:secp256k1.getPublicKey(other,true)}).address!;

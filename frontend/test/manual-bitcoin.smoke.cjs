@@ -73,8 +73,11 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
       await page.getByRole("button",{name:"Cancel",exact:true}).click();
       await page.getByText(/Signing was cancelled/).waitFor();
       await page.getByRole("button",{name:"Sign Message",exact:true}).click();
+      await page.getByRole("button",{name:"Copy message",exact:true}).waitFor();
+      // The panel stays readable while waiting for the pasted signature.
+      assert.equal(await page.locator(".step-2").evaluate(el=>el.classList.contains("disabled")),false);
+      await page.getByText("Show message").click();
       const shown=page.getByLabel("Message to sign");
-      await shown.waitFor();
       assert.equal(await shown.inputValue(),challenge);
       await page.getByRole("button",{name:"Copy message",exact:true}).click();
       await page.getByRole("button",{name:"Copied",exact:true}).waitFor();
@@ -84,7 +87,8 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
       await page.getByLabel("Signature").fill("not a signature");
       await page.getByRole("button",{name:"Submit signature",exact:true}).click();
       await page.getByText(/Paste the signature exactly/).waitFor();
-      await page.getByLabel("Signature").fill("\n"+sign(await page.evaluate(()=>navigator.clipboard.readText()))+"\n");
+      // Freewallet signs the pasted text with CRLF line breaks.
+      await page.getByLabel("Signature").fill("\n"+sign((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\n/g,"\r\n"))+"\n");
       await page.getByRole("button",{name:"Submit signature",exact:true}).click();
       await page.locator(".step-3.active").waitFor();
       assert.equal(submitted,1);
