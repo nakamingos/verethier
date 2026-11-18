@@ -162,7 +162,7 @@ export class MemberComponent {
     const community = this.walletCommunity;
     if (!community) return this.data?.wallets || [];
     return (this.data?.wallets || []).filter(wallet => this.walletSharing(wallet) || community.channels.some(channel => channel.rules.some(rule => {
-      if (wallet.wallet_type === 'bitcoin') return ['ordinal','stamp'].includes(rule.asset);
+      if (wallet.wallet_type === 'bitcoin') return ['ordinal','stamp','counterparty'].includes(rule.asset);
       if (wallet.wallet_type === 'solana') return ['solana_nft','solana_token'].includes(rule.asset);
       return ['ethscription','nft','erc20'].includes(rule.asset) &&
         (!wallet.evm_chain_ids?.length || wallet.evm_chain_ids.includes(rule.asset==='ethscription'?1:rule.network || 1));
@@ -595,6 +595,7 @@ export class MemberComponent {
           nft: 'NFTs',
           erc20: 'Tokens',
           stamp: 'Stamps',
+          counterparty: 'Counterparty',
           solana_nft: 'NFTs',
           solana_token: 'Tokens',
         } as Record<string, string>
@@ -619,6 +620,7 @@ export class MemberComponent {
   }
   network(rule: Requirement) {
     if (rule.asset === 'stamp') return 'Bitcoin Stamps';
+    if (rule.asset === 'counterparty') return 'Counterparty';
     if (rule.asset === 'solana_nft' || rule.asset === 'solana_token') return 'Solana';
     return rule.asset === 'nft' || rule.asset === 'erc20'
       ? evmNetworkLabel(rule.network || 1)

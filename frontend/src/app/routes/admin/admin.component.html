@@ -580,6 +580,22 @@
                           <label>Stamp numbers (optional):<textarea name="stampIds" [(ngModel)]="draft.stamp_ids" maxlength="1700" rows="2" placeholder="0,1,1234" [required]="!draft.stamp_creator?.trim()"></textarea></label>
                           <p class="muted wide">Enter a creator address, stamp numbers, or both. When both are set, each selected stamp must match the creator. Counts owned copies of indivisible Stamps; SRC-20 tokens are separate.</p>
                         }
+                        @if (draft.asset_type === 'counterparty') {
+                          <label>Match by:<span class="select-control"><app-pixel-select name="xcpScope" [(ngModel)]="draft.xcp_scope" [options]="counterpartyScopeChoices" label="Counterparty match scope" /></span></label>
+                          @if (draft.xcp_scope === 'assets') {
+                            <label>Asset names:<textarea name="xcpAssets" [(ngModel)]="draft.xcp_value" required maxlength="4000" rows="2" placeholder="RAREPEPE, PEPE.kek"></textarea></label>
+                            <p class="muted wide">Up to 100 indivisible assets. Owned copies of any listed asset count toward the minimum.</p>
+                          } @else if (draft.xcp_scope === 'issuer') {
+                            <label>Issuer address:<input name="xcpIssuer" [(ngModel)]="draft.xcp_value" required maxlength="90" /></label>
+                            <p class="muted wide">Counts indivisible assets first issued by this Bitcoin address.</p>
+                          } @else if (draft.xcp_scope === 'parent') {
+                            <label>Parent asset:<input name="xcpParent" [(ngModel)]="draft.xcp_value" required maxlength="12" placeholder="PEPE" /></label>
+                            <p class="muted wide">Counts indivisible subassets of this asset, such as PEPE.kek.</p>
+                          } @else {
+                            <label>Asset name:<input name="xcpAsset" [(ngModel)]="draft.xcp_value" required maxlength="270" placeholder="PEPECASH" /></label>
+                          }
+                          <p class="muted wide">Balances are summed across the member's verified Bitcoin wallets. Assets in open orders or dispensers don't count.</p>
+                        }
                         @if (draft.asset_type === 'solana_nft'  || draft.asset_type === 'solana_token') {
                           <p>Solana mainnet · directly held assets</p>
                           @if (draft.asset_type === 'solana_token') {
@@ -631,12 +647,12 @@
                           }
                         }
                         @if (
-                          !(["erc20", "solana_token", "stamp"].includes(draft.asset_type)) &&
+                          !(["erc20", "solana_token", "stamp", "counterparty"].includes(draft.asset_type)) &&
                           (draft.asset_type === "nft" || mode === "collection")
                         ) {
                           <ng-container *ngTemplateOutlet="traitControls" />
                         }
-                        @if (draft.asset_type === "erc20" || draft.asset_type === "solana_token") {
+                        @if (draft.asset_type === "erc20" || draft.asset_type === "solana_token" || counterpartyAmount) {
                           <label
                             >Minimum token balance:<input
                               name="balance"
