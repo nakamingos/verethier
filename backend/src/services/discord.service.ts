@@ -2,7 +2,8 @@ import { VERIFICATION_REQUEST_UNAVAILABLE } from '@/utils/verification-request-e
 import { BouncerLogService } from './bouncer-log.service';
 import { normalizeCollectionSlug, normalizeCriteriaOption } from '@/utils/collection-input.util';
 import { resolveEthscriptionSlug } from './discord-commands/utils/rule-validation.util';
-import { Inject, Injectable, Logger, forwardRef, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { MemberRecheckService, RECHECK_BUTTON, RECHECK_SELECT } from './member-recheck.service';
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, CacheType, ChannelType, ChatInputCommandInteraction, Client, EmbedBuilder, Events, GatewayIntentBits, GuildTextBasedChannel, InteractionResponse, MessageFlags, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, AutocompleteInteraction } from 'discord.js';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { NonceService } from '@/services/nonce.service';
@@ -89,6 +90,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
     private readonly ordinalsSvc?: OrdinalsOwnershipService,
     private readonly setupSvc?: ServerSetupService,
     private readonly activityLog?: BouncerLogService,
+    @Optional() private readonly recheck?: MemberRecheckService,
   ) {
     // Don't initialize during tests when Discord is disabled
     const isTestEnvironment = EnvironmentConfig.IS_TEST;
@@ -308,12 +310,19 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      if (interaction.isStringSelectMenu?.() && interaction.customId === RECHECK_SELECT) {
+        await this.recheck?.handleSelect(interaction);
+        return;
+      }
+
       // Handle button interactions (user verification)
       if (interaction.isButton()) {
         if (interaction.customId === 'bouncer-check-setup') {
           await this.handleSetupCheck(interaction);
         } else if (interaction.customId === 'requestVerification') {
           await this.handleVerificationRequest(interaction);
+        } else if (interaction.customId.startsWith(RECHECK_BUTTON)) {
+          await this.recheck?.handleButton(interaction);
         } else if (interaction.customId.startsWith('audit-log-')) {
           await this.discordCommandsSvc.handleAuditLogPagination(interaction);
         } else if (interaction.customId.startsWith('wallet-blocks-')) {
@@ -520,7 +529,11 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
    */
   async handleUnifiedVerification(interaction: ButtonInteraction<CacheType>): Promise<void> {
     Logger.debug('Routing to unified verification flow');
-    return this.discordVerificationSvc.requestVerification(interaction);
+    const recheck = this.recheck;
+    const guildId = interaction.guild?.id;
+    return recheck && guildId
+      ? this.discordVerificationSvc.requestVerification(interaction, rules => recheck.controls(interaction.user.id, guildId, rules))
+      : this.discordVerificationSvc.requestVerification(interaction);
   }
 
   /**

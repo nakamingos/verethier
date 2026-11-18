@@ -1,6 +1,4 @@
 import { interactiveWalletFamilies, ruleMatchesWalletScope } from '@/utils/check-priority.util';
-import { CONSTANTS } from '@/constants';
-import { RoleExcludedError } from '@/utils/role-excluded-error.util';
 import { BouncerLogService } from './bouncer-log.service';
 import { DynamicRoleService } from './dynamic-role.service';
 import { tokenRuleCriteria } from '@/utils/erc20-rule.util';
@@ -10,7 +8,7 @@ import { WalletService } from './wallet.service';
 import { NonceService }  from './nonce.service';
 import { DiscordVerificationService, RoleSyncContext } from './discord-verification.service';
 import { BulkVerificationResult } from './verification-engine.service';
-import { VerifierRole } from '@/models/verifier-role.interface';
+import { assignVerifiedRoles } from './utils/assign-verified-roles.util';
 import { DataService }   from './data.service';
 import { DbService }     from './db.service';
 import { VerificationService } from './verification.service';
@@ -262,51 +260,9 @@ export class VerifyService {
 
   private async assignVerifiedRoles(payload: DecodedData, result: BulkVerificationResult, provenPortalRequest = false) {
     return this.timed(payload.userId, 'role assignment and tracking', async () => {
-      const groups = new Map<string, VerifierRole[]>();
-      for (const rule of result.validRules) {
-        if (!rule.role_id) continue;
-        if (!groups.has(rule.role_id)) groups.set(rule.role_id, []);
-        groups.get(rule.role_id)!.push(rule);
-      }
-      const roleResults: any[] = [];
-      let excluded = 0;
-      let failures = 0;
       const members: RoleSyncContext = new Map();
       if (provenPortalRequest) members.portalVerification = { userId: payload.userId, guildId: payload.discordId, nonce: payload.nonce };
-      for (const [roleId, matches] of groups) {
-        try {
-          const roleResult = await this.discordVerificationSvc.addUserRole(
-            payload.userId, roleId, payload.discordId, payload.nonce, matches[0].id.toString(),
-            {
-              last_check_status: 'passed',
-              matched_rule_ids: matches.map(rule => rule.id),
-              rule_checks: (result.results || []).filter(check => check.rule?.role_id === roleId),
-            }, members
-          );
-          if (!roleResult) continue;
-          // Preserve every matching rule in the existing success-message layout.
-          // The assignment and its database record are each updated only once.
-          for (const rule of matches) roleResults.push({
-            ...roleResult,
-            ruleId: rule.id.toString(),
-            matchingCount: (() => {
-              const check = result.results?.find(r => String(r.ruleId) === String(rule.id) && r.rule?.role_id === roleId);
-              return check?.combinedAssetCount ?? check?.matchingAssetCount ?? result.matchingAssetCounts.get(rule.id.toString()) ?? 0;
-            })(),
-          });
-        } catch (error) {
-          if (error instanceof RoleExcludedError) { excluded++; continue; }
-          failures++;
-          Logger.error(`Failed to assign role ${roleId}:`, error.message);
-        }
-      }
-      if (excluded) Logger.log(`Verification skipped ${excluded} role(s) excluded by server role policies.`);
-      if (failures && !roleResults.length) {
-        const message = CONSTANTS.ERRORS.ROLE_ASSIGNMENT_FAILED;
-        await this.discordVerificationSvc.throwError(payload.nonce, message);
-        throw new Error(message);
-      }
-      return roleResults;
+      return assignVerifiedRoles(this.discordVerificationSvc, { userId: payload.userId, guildId: payload.discordId, nonce: payload.nonce }, result, members);
     });
   }
 

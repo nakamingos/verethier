@@ -39,7 +39,12 @@ const TRACKED_REQUEST_GRACE_MS = 60_000;
 export type RoleSyncContext = Map<string, Promise<GuildMember>> & {
   /** Set only after WalletService accepts a member-portal signature. Never client-supplied. */
   portalVerification?: Readonly<{ userId: string; guildId: string; nonce: string }>;
+  /** Set only by a member's own "Check saved wallets" click in Discord. */
+  memberRecheck?: Readonly<{ userId: string; guildId: string }>;
 };
+
+/** Extra controls for the private verification reply: a button beside Verify Now and optional rows below. */
+export type VerificationReplyControls = { button: ButtonBuilder; rows: ActionRowBuilder<any>[] } | null;
 
 type VerificationRoleResult = {
   roleId: string;
@@ -498,7 +503,10 @@ export class DiscordVerificationService {
    * @param interaction - The Discord button interaction triggered by the user
    * @throws Error if guild/channel/role not found or verification setup invalid
    */
-  async requestVerification(interaction: ButtonInteraction<CacheType>): Promise<void> {
+  async requestVerification(
+    interaction: ButtonInteraction<CacheType>,
+    controls?: (rules: Awaited<ReturnType<DbService['getRulesByChannel']>>) => Promise<VerificationReplyControls>,
+  ): Promise<void> {
     try {
       // Note: interaction should already be deferred by the caller
       
@@ -553,6 +561,10 @@ export class DiscordVerificationService {
 
       // Keep Discord's button URL short; display details live in the nonce cache.
       const url = `${EnvironmentConfig.BASE_URL}/verify/${nonce}`;
+      // Saved-wallet controls are optional; the link is sent without them on failure.
+      let extra: VerificationReplyControls = null;
+      try { extra = (await controls?.(rules)) ?? null; }
+      catch { Logger.warn('Saved-wallet check controls unavailable; sending the verification link only.'); }
 
       // Reply to the interaction
       await interaction.editReply({
@@ -568,8 +580,10 @@ export class DiscordVerificationService {
               new ButtonBuilder()
                 .setLabel('Verify Now')
                 .setURL(url)
-                .setStyle(ButtonStyle.Link)
-            )
+                .setStyle(ButtonStyle.Link),
+              ...(extra ? [extra.button] : []),
+            ),
+          ...(extra?.rows ?? []),
         ]
       });
 
@@ -628,7 +642,9 @@ export class DiscordVerificationService {
     // For reverification or other background processes, nonce might not have a stored interaction
     const portal = context?.portalVerification;
     const provenPortalRequest = portal?.userId === userId && portal.guildId === guildId && portal.nonce === nonce;
-    if (!storedInteraction && nonce !== 'reverification' && !provenPortalRequest) {
+    const recheck = context?.memberRecheck;
+    const memberRecheck = recheck?.userId === userId && recheck.guildId === guildId;
+    if (!storedInteraction && nonce !== 'reverification' && !provenPortalRequest && !memberRecheck) {
       throw new Error('No stored interaction found for this nonce');
     }
 
@@ -745,48 +761,8 @@ export class DiscordVerificationService {
     }
 
     try {
-      const groupedRoleResults = this.groupRoleResults(roleResults);
-
-      // Separate roles into newly assigned and already possessed
-      const newRoles = groupedRoleResults.filter(r => !r.wasAlreadyAssigned);
-      const existingRoles = groupedRoleResults.filter(r => r.wasAlreadyAssigned);
-      
-      let description = `You have been successfully verified in ${guild.name}`;
-      
-      // Get rule details for all assigned roles to show requirements
-      const channelId = storedInteraction.channelId;
-      const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId))
-        .filter(rule => ruleMatchesWalletScope(rule, ownershipContext?.verificationCheckFamilies));
-      const collectionNames = await this.getCollectionNamesForRules(allRules);
-      
-      // Add new roles section if any
-      if (newRoles.length > 0) {
-        description += `\n\n**🎉 New Roles Assigned:**\n${newRoles.map(r => {
-          return this.formatVerifiedRoleDisplay(r, allRules, collectionNames);
-        }).join('\n')}`;
-      }
-      
-      // Add existing roles section if any
-      if (existingRoles.length > 0) {
-        description += `\n\n**✅ Roles You Already Have:**\n${existingRoles.map(r => {
-          return this.formatVerifiedRoleDisplay(r, allRules, collectionNames);
-        }).join('\n')}`;
-      }
-      
-      // Add role recommendations if we have user address and there are unassigned roles
-      if (userAddress && storedInteraction?.user?.id && channelId) {
-        try {
-          const assignedRoleIds = groupedRoleResults.map(r => r.roleId);
-          const potentialRoles = await this.analyzePotentialRoles(guildId, channelId, storedInteraction.user.id, assignedRoleIds, userAddress, ownershipContext);
-
-          if (potentialRoles.length > 0) {
-            description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames)).join('\n')}`;
-          }
-        } catch (error) {
-          Logger.error('Failed to get role recommendations:', error);
-          // Don't fail the verification if recommendations fail
-        }
-      }
+      const description = `You have been successfully verified in ${guild.name}`
+        + await this.verificationSummary(guildId, storedInteraction.channelId, storedInteraction.user?.id, roleResults, userAddress, ownershipContext);
 
       if (!storedInteraction.isRepliable()) {
         Logger.warn(`Interaction for nonce ${nonce} is no longer repliable during success message`);
@@ -826,6 +802,45 @@ export class DiscordVerificationService {
       // Clean up the stored interaction
       this.clearTrackedRequest(nonce);
     }
+  }
+
+  /**
+   * Lists the roles a verification granted or confirmed, then roles still
+   * available in the channel within the same wallet family.
+   */
+  async verificationSummary(
+    guildId: string,
+    channelId: string | null | undefined,
+    userId: string | undefined,
+    roleResults: VerificationRoleResult[],
+    userAddress?: string,
+    ownershipContext?: NftCheckContext,
+  ): Promise<string> {
+    const groupedRoleResults = this.groupRoleResults(roleResults);
+    const newRoles = groupedRoleResults.filter(r => !r.wasAlreadyAssigned);
+    const existingRoles = groupedRoleResults.filter(r => r.wasAlreadyAssigned);
+    let description = '';
+    const allRules = expandRuleRoles(await this.dbSvc.getRoleMappings(guildId, channelId ?? undefined))
+      .filter(rule => ruleMatchesWalletScope(rule, ownershipContext?.verificationCheckFamilies));
+    const collectionNames = await this.getCollectionNamesForRules(allRules);
+    if (newRoles.length > 0) {
+      description += `\n\n**🎉 New Roles Assigned:**\n${newRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames)).join('\n')}`;
+    }
+    if (existingRoles.length > 0) {
+      description += `\n\n**✅ Roles You Already Have:**\n${existingRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames)).join('\n')}`;
+    }
+    if (userAddress && userId && channelId) {
+      try {
+        const assignedRoleIds = groupedRoleResults.map(r => r.roleId);
+        const potentialRoles = await this.analyzePotentialRoles(guildId, channelId, userId, assignedRoleIds, userAddress, ownershipContext);
+        if (potentialRoles.length > 0) {
+          description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames)).join('\n')}`;
+        }
+      } catch (error) {
+        Logger.error('Failed to get role recommendations:', error);
+      }
+    }
+    return description;
   }
 
   /**

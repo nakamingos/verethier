@@ -125,13 +125,13 @@ Both apps run on Railway (Railpack, Node 22) and deploy from `main`.
 
 - **Backend:** run exactly one instance; see [Deployment: run one instance](backend/README.md#deployment-run-one-instance).
 - **Frontend:** `yarn build`, then Caddy serves `dist/frontend/browser` using [frontend/Caddyfile](frontend/Caddyfile), which also forwards `/api/*` to the backend so portal cookies stay on the frontend origin.
-- **Database:** production has every migration in [backend/supabase/migrations](backend/supabase/migrations) applied, through `20261116010000_community_wallet_visibility.sql`. Apply new migrations to production before deploying code that depends on them; see [database migrations and backups](docs/DATABASE_MIGRATION.md).
+- **Database:** production has every migration in [backend/supabase/migrations](backend/supabase/migrations) applied, through `20261118010000_counterparty_rules.sql`. Apply new migrations to production before deploying code that depends on them; see [database migrations and backups](docs/DATABASE_MIGRATION.md).
 
 ## Documentation
 
 - [Backend README](backend/README.md): configuration, rule behavior per asset family, providers, scripts
 - [Frontend README](frontend/README.md): wallet connections, diagnostics, smoke tests
-- Features: [portals (Control Room and member portal)](docs/portals.md) and [portal styling](docs/portal-styling.md) · [smart wallets](docs/smart-wallet-verification.md) · [Solana](docs/solana-verification.md) · [Bitcoin Stamps](docs/bitcoin-stamps.md) · [Counterparty rules](docs/counterparty-rules.md) · [NFT collection lookup](docs/nft-collection-lookup.md) · [multiple role outputs](docs/multi-role-rules.md) · [bulk role checks](docs/bulk-role-checks.md) · [wallet checking and dormancy](docs/wallet-checking.md) · [activity feed](docs/bouncer-activity-log.md) · [wallet signing privacy](docs/wallet-signing-privacy.md)
+- Features: [portals (Control Room and member portal)](docs/portals.md) and [portal styling](docs/portal-styling.md) · [smart wallets](docs/smart-wallet-verification.md) · [Solana](docs/solana-verification.md) · [Bitcoin Stamps](docs/bitcoin-stamps.md) · [Counterparty rules](docs/counterparty-rules.md) · [NFT collection lookup](docs/nft-collection-lookup.md) · [multiple role outputs](docs/multi-role-rules.md) · [bulk role checks](docs/bulk-role-checks.md) · [wallet checking and dormancy](docs/wallet-checking.md) · [saved-wallet checks](docs/saved-wallet-checks.md) · [activity feed](docs/bouncer-activity-log.md) · [wallet signing privacy](docs/wallet-signing-privacy.md)
 - Operations: [database migrations and backups](docs/DATABASE_MIGRATION.md) · [privacy operations](docs/privacy-operations.md) · [verification incidents](docs/verification-reliability.md) · [domain reputation review](docs/blockaid-domain-review.md)
 - Plans: [optional feature backlog](docs/plans/optional-features.md) · [core implementation plan](docs/plans/halcyon-core-implementation-plan.md) and earlier feature plans in [docs/plans](docs/plans)
 
