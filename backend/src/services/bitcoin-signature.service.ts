@@ -2,6 +2,7 @@ import { consentCommitment, walletProofOrigin } from '@/utils/wallet-proof.util'
 import { PrivacyService, privacyChoice, privacyProof } from '@/portal/privacy.service';
 import { Injectable } from '@nestjs/common';
 import { Verifier } from 'bip322-js';
+import { bitcoinMessage } from '@/utils/bitcoin-message.util';
 import { EnvironmentConfig } from '@/config/environment.config';
 import { DecodedData } from '@/models/app.interface';
 import { normalizeBitcoinAddress, normalizeBitcoinProofAddress, WalletType } from '@/utils/wallet-address.util';
@@ -54,14 +55,8 @@ export class BitcoinSignatureService {
       if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
       domain = url.origin;
     } catch { throw new Error('Bitcoin verification is not configured. Set BASE_URL on the backend.'); }
-    const message = [
-      'Bouncer wallet verification', '',
-      `Domain: ${domain}`, 'Network: Bitcoin mainnet', `Address: ${normalizedAddress}`,
-      'Purpose: Verify wallet ownership', `Nonce: ${context.nonce}`,
-      `Expires at: ${new Date(expiry * 1000).toISOString()}`, '',
-      'Sign this message to verify your collection for eligible Discord roles.',
-      ...(choice !== undefined ? ['Consent hash: ' + consentCommitment(context.nonce, privacyProof(choice))] : []),
-    ].join('\n');
+    const message = bitcoinMessage({ purpose: 'verify', origin: domain, address: normalizedAddress, nonce: context.nonce, expiry,
+      ...(choice !== undefined ? { consent: consentCommitment(context.nonce, privacyProof(choice)) } : {}) });
     await this.nonceSvc.saveBitcoinChallenge(userId, guildId, nonce, { address: normalizedAddress, message, ...(choice !== undefined ? {privacy:privacyChoice(choice)} : {}) });
     return { address: normalizedAddress, message, expiry };
   }

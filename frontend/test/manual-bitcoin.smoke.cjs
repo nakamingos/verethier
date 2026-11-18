@@ -44,7 +44,7 @@ const artifacts=fs.mkdtempSync("/tmp/bouncer-manual-bitcoin-smoke-");
         if(url.pathname==="/api/bitcoin-challenge"){
           const input=route.request().postDataJSON();
           assert.equal(input.address,address);
-          challenge=['Bouncer wallet verification','',`Domain: ${origin}`,`Address: ${address}`,`Nonce: ${nonce}`].join('\n');
+          challenge=['Bouncer verification',`Site: ${origin}`,`Address: ${address}`,`Code: ${nonce.slice(0,32)}`,'Expires: 2030-03-17 17:46:40 UTC'].join('\n');
           return route.fulfill({json:{address,message:challenge,expiry}});
         }
         if(url.pathname==="/api/bitcoin-relay"){

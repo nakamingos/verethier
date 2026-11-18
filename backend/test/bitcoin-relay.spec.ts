@@ -12,6 +12,7 @@ import { SolanaSignatureService } from '../src/services/solana-signature.service
 import { BitcoinSignatureService } from '../src/services/bitcoin-signature.service';
 import { BitcoinRelayService } from '../src/services/bitcoin-relay.service';
 import { corsDelegate } from '../src/config/cors.config';
+import { bitcoinMessage } from '../src/utils/bitcoin-message.util';
 import { validationPipeOptions } from '../src/config/validation.config';
 
 const secret = new Uint8Array(32); secret[31] = 1;
@@ -19,7 +20,7 @@ const pubkey = secp256k1.getPublicKey(secret, true);
 const key = encode({ version: 128, privateKey: secret, compressed: true });
 const legacy = payments.p2pkh({ pubkey }).address!;
 const native = payments.p2wpkh({ pubkey }).address!;
-const challenge = (address: string) => `Bouncer wallet verification\n\nDomain: https://bouncer.test\nAddress: ${address}\nNonce: abc`;
+const challenge = (address: string) => bitcoinMessage({ purpose: 'verify', origin: 'https://bouncer.test', address, nonce: 'ab'.repeat(32), expiry: 1_900_000_000 });
 // Freewallet signs with the legacy compact format for every address type.
 const freewalletSign = (message: string) => Signer.sign(key, legacy, message);
 
@@ -41,6 +42,8 @@ describe('Bitcoin signing relay', () => {
     expect(() => relay.create(native, 'Sign anything\nAddress: ' + native + '\n')).toThrow();
     expect(() => relay.create(native, challenge(legacy))).toThrow();
     expect(() => relay.create('not-an-address', challenge(native))).toThrow();
+    expect(relay.create(legacy, bitcoinMessage({ purpose: 'link', origin: 'https://bouncer.test', address: legacy, nonce: 'cd'.repeat(32), expiry: 1_900_000_000 })).id).toBeTruthy();
+    // Challenges issued just before this release still use the long format.
     expect(relay.create(legacy, `Bouncer saved-wallet link\n\nAddress: ${legacy}\nNonce: abc`).id).toBeTruthy();
   });
 
@@ -62,6 +65,17 @@ describe('Bitcoin signing relay', () => {
     clock.mockReturnValue(now + 15 * 60 * 1000);
     expect(relay.read(id)).toBeUndefined();
     expect(() => relay.deliver(id, native, freewalletSign(message))).toThrow();
+  });
+});
+
+describe('Short Bitcoin messages', () => {
+  const base = { origin: 'https://bouncer.test', address: native, nonce: 'ab'.repeat(32), expiry: 1_900_000_000 };
+  it('distinguishes verification from wallet linking and binds a nonce code and expiry', () => {
+    expect(bitcoinMessage({ ...base, purpose: 'verify' })).toBe(
+      `Bouncer verification\nSite: https://bouncer.test\nAddress: ${native}\nCode: ${'ab'.repeat(16)}\nExpires: 2030-03-17 17:46:40 UTC`);
+    expect(bitcoinMessage({ ...base, purpose: 'link' }).split('\n')[0]).toBe('Bouncer wallet link');
+    expect(bitcoinMessage({ ...base, purpose: 'verify', consent: '0x' + 'ef'.repeat(32) })).toMatch(/\nConsent: (ef){16}$/);
+    expect(() => bitcoinMessage({ ...base, purpose: 'verify', nonce: 'short' })).toThrow();
   });
 });
 
