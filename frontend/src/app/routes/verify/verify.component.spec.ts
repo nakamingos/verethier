@@ -92,7 +92,7 @@ describe('Verification page wallet choice', () => {
   it('selects Xverse automatically for an Ordinals-only channel', () => {
     const fixture = page(['bitcoin']);
     expect(fixture.componentInstance.state$.value.walletType).toBe('bitcoin');
-    expect(fixture.nativeElement.textContent).toContain('Connect your Xverse wallet');
+    expect(fixture.nativeElement.textContent).toContain('Connect your wallet');
     expect(fixture.nativeElement.querySelectorAll('.wallet-choice button').length).toBe(1);
     expect(fixture.nativeElement.querySelectorAll('.bitcoin-wallet-choice button').length).toBe(2);
   });
