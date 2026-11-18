@@ -23,9 +23,9 @@ const POLL_MS = 2000;
             <a class="button" [href]="link.url" (click)="openFreewallet($event, link.id, request)">Sign with Freewallet</a>
           </div>
           @if (waiting()) {
-            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer. Nothing showed up? Close any Freewallet request dialogs, then click the button again.</p>
+            <p class="muted" role="status">Waiting for Freewallet. Check the message there and click <strong>Yes</strong> to send the signature to Bouncer. Nothing showed up? Quit Freewallet completely, then click the button again.</p>
           } @else {
-            <p class="muted">Close any open Freewallet request dialogs first: Freewallet handles one request at a time. It then signs and sends the signature back.</p>
+            <p class="muted">Quit Freewallet first if it's open: it stops picking up requests after a couple per session. The button then starts Freewallet, which signs and sends the signature back.</p>
           }
           <p>Or sign it yourself:</p>
         }
@@ -80,7 +80,7 @@ export class ManualBitcoinSignComponent implements OnInit {
   private polling?: ReturnType<typeof setTimeout>;
   private lastOpened = 0;
 
-  /** A second link while Freewallet shows a request opens an empty, stuck dialog, so ignore quick repeats. */
+  /** Each extra link uses up one of the few Freewallet handles per session, and stacks an empty dialog, so ignore quick repeats. */
   openFreewallet(event: Event, id: string, request: ManualSignatureRequest) {
     if (Date.now() - this.lastOpened < 5000) {
       event.preventDefault();
