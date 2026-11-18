@@ -231,6 +231,26 @@ describe('DiscordVerificationService', () => {
       });
     });
 
+    it('puts saved-wallet controls beside Verify Now and still sends the link when they fail', async () => {
+      const { ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = jest.requireActual('discord.js');
+      mockDbService.getRulesByChannel.mockResolvedValue([{ role_id: 'role-id' }]);
+      mockNonceService.createNonce.mockResolvedValue('test-nonce');
+      const button = new ButtonBuilder().setCustomId('bouncer-recheck:evm').setLabel('Check saved wallets').setStyle(ButtonStyle.Secondary);
+      const menu = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('bouncer-recheck-family').addOptions({ label: 'EVM', value: 'evm' }));
+      const controls = jest.fn().mockResolvedValue({ button, rows: [menu] });
+      await service.requestVerification(mockInteraction as any, controls);
+      expect(controls).toHaveBeenCalledWith([{ role_id: 'role-id' }]);
+      let rows = mockInteraction.editReply.mock.calls.at(-1)[0].components.map((row: any) => row.toJSON());
+      expect(rows).toHaveLength(2);
+      expect(rows[0].components.map((c: any) => c.label)).toEqual(['Verify Now', 'Check saved wallets']);
+      expect(rows[1].components[0].custom_id).toBe('bouncer-recheck-family');
+
+      await service.requestVerification(mockInteraction as any, jest.fn().mockRejectedValue(new Error('db down')));
+      rows = mockInteraction.editReply.mock.calls.at(-1)[0].components.map((row: any) => row.toJSON());
+      expect(rows).toHaveLength(1);
+      expect(rows[0].components.map((c: any) => c.label)).toEqual(['Verify Now']);
+    });
+
     it('releases an abandoned link\'s stored reply after the nonce expires', async () => {
       jest.useFakeTimers();
       try {
@@ -472,6 +492,14 @@ describe('DiscordVerificationService', () => {
       ]) {
         const wrong = Object.assign(new Map(),{portalVerification:invalid});
         await expect(service.addUserRole('user-id','role-id','guild-id','portal-nonce','1',undefined,wrong)).rejects.toThrow('No stored interaction');
+      }
+    });
+    it('accepts a member\'s own saved-wallet check only for that member and guild', async () => {
+      const context = Object.assign(new Map(), {memberRecheck:{userId:'user-id',guildId:'guild-id'}});
+      await expect(service.addUserRole('user-id','role-id','guild-id','recheck','1',undefined,context)).resolves.toEqual(expect.objectContaining({roleId:'role-id'}));
+      for (const invalid of [{userId:'other',guildId:'guild-id'},{userId:'user-id',guildId:'other'}]) {
+        const wrong = Object.assign(new Map(),{memberRecheck:invalid});
+        await expect(service.addUserRole('user-id','role-id','guild-id','recheck','1',undefined,wrong)).rejects.toThrow('No stored interaction');
       }
     });
     it('should handle error when no stored interaction', async () => {
