@@ -107,7 +107,9 @@ export class BitcoinSignatureService {
         if (bytes[0] !== 2 || n < 8 || n > 73 || bytes[n+2] !== 33
           || ![2,3].includes(bytes[n+3]) || bytes.length !== n+36) throw new Error();
       }
-      if (!Verifier.verifySignature(address, message, simple, strict)) throw new Error();
+      // Freewallet's sign dialog turns each line break into CRLF before signing.
+      const messages = message.includes('\n') ? [message, message.replace(/\r?\n/g, '\r\n')] : [message];
+      if (!messages.some(text => Verifier.verifySignature(address, text, simple, strict))) throw new Error();
     } catch { throw new Error('Invalid Bitcoin signature. Please sign again with the selected Bitcoin address.'); }
   }
 }

@@ -202,13 +202,13 @@ export class ListRulesHandler {
       await interaction.update({
         embeds: [embed],
         attachments: [], files,
-        components: [actionRow]
+        components: totalPages > 1 ? [actionRow] : []
       });
     } else {
       await interaction.editReply({
         embeds: [embed],
         attachments: [], files,
-        components: [actionRow]
+        components: totalPages > 1 ? [actionRow] : []
       });
     }
   }
