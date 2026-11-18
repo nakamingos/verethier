@@ -580,7 +580,8 @@ export class DiscordVerificationService {
         embeds: [
           new EmbedBuilder()
             .setTitle('Wallet Verification')
-            .setDescription(`Verify your wallet by clicking the unique link below. This link is personal and expires <t:${expiry}:R>.`)
+            .setDescription(`Verify your wallet by clicking the unique link below. This link is personal and expires <t:${expiry}:R>.`
+              + (extra ? ' Already verified? Re-check your saved wallets without signing.' : ''))
             .setColor('#00FF00')
         ],
         components: [

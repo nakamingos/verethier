@@ -11,6 +11,7 @@ Members can check their saved wallets again without signing. The **Re-check save
 
 - The dropdown lists only the wallet families (EVM, Bitcoin, Solana) where the member has an active saved wallet that one of the channel's rules would read. The family with the most of those wallets is preselected.
 - With one family, there is no dropdown. The button names the family, for example **Re-check EVM wallets**.
+- When the button is shown, the message adds: "Already verified? Re-check your saved wallets without signing."
 - With no saved wallets that apply, the reply looks the same as before: just Verify Now.
 - Picking a family only updates the member's own reply. Nothing is checked until they click the button.
 - After the check, the result appears below the Verify Now message, which keeps its link and expiry time. A **Member Portal** link appears beside Verify Now.
