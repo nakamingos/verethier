@@ -49,7 +49,7 @@ describe('Ordinals request scheduling', () => {
     expect(task).toHaveBeenCalledWith(0);
   });
 
-  it.each(['ordiscan', 'subfrost', 'sandshrew'] as const)('also pauses background %s requests during verification', async provider => {
+  it.each(['ordiscan', 'subfrost'] as const)('also pauses background %s requests during verification', async provider => {
     const finish = scheduler.beginVerification();
     const task = jest.fn().mockResolvedValue('complete');
     const pending = scheduler.enqueue(provider, background(), task);

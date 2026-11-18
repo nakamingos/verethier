@@ -19,9 +19,8 @@ describe('ordered Ordinals wallet ownership providers', () => {
   let xverse: jest.Mock;
   beforeEach(() => {
     jest.replaceProperty(EnvironmentConfig, 'ORDISCAN_API_KEY', 'ordiscan-mock');
-    jest.replaceProperty(EnvironmentConfig, 'SANDSHREW_API_KEY', 'sandshrew-mock');
     jest.replaceProperty(EnvironmentConfig, 'XVERSE_API_KEY', 'xverse-mock');
-    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'ordiscan,subfrost,sandshrew,xverse');
+    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'ordiscan,subfrost,xverse');
     db = { reserveOrdinalProviderRequest: jest.fn().mockResolvedValue(true) };
     requests = { enqueue: jest.fn((provider, work, execute) => execute(0)), promote: jest.fn() };
     xverse = jest.fn().mockResolvedValue(new Map([[id(1), 113558765]]));
@@ -99,15 +98,17 @@ describe('ordered Ordinals wallet ownership providers', () => {
     expect((await service.inventory(wallet, run(), false, xverse)).provider).toBe('subfrost');
   });
 
-  it('uses Sandshrew v1 after SUBFROST fails', async () => {
+  it('never contacts the retired Sandshrew domain, even when an old configuration lists it', async () => {
+    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'ordiscan,subfrost,sandshrew,xverse');
     db.reserveOrdinalProviderRequest.mockResolvedValue(false);
-    fetchMock.mockImplementation(async (url, options) => {
+    fetchMock.mockImplementation(async url => {
       if (String(url).includes('subfrost')) return response({}, 503);
-      const method = JSON.parse(options!.body as string).method;
-      return response({ jsonrpc: '2.0', id: 1, result: method === 'ord_address' ? { inscriptions: [id(1)] } : 900000 });
+      throw new Error(`unexpected request to ${url}`);
     });
-    expect((await service.inventory(wallet, run(), false, xverse)).provider).toBe('sandshrew');
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === 'https://mainnet.sandshrew.io/v1/sandshrew-mock')).toBe(true);
+    expect((await service.inventory(wallet, run(), false, xverse)).provider).toBe('xverse');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('sandshrew'))).toBe(false);
+    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'sandshrew');
+    await expect(service.inventory(wallet, run(), false, xverse)).rejects.toThrow('Invalid ORDINALS_OWNERSHIP_PROVIDERS');
   });
 
   it.each(['behind', 'invalid height', 'invalid wallet result'])('skips an ord node with %s', async problem => {
@@ -131,7 +132,6 @@ describe('ordered Ordinals wallet ownership providers', () => {
 
   it('skips providers with missing keys', async () => {
     jest.replaceProperty(EnvironmentConfig, 'ORDISCAN_API_KEY', undefined);
-    jest.replaceProperty(EnvironmentConfig, 'SANDSHREW_API_KEY', undefined);
     expect((await service.inventory(wallet, run(), false, xverse)).provider).toBe('subfrost');
     expect(db.reserveOrdinalProviderRequest).not.toHaveBeenCalled();
   });
@@ -162,14 +162,9 @@ describe('ordered Ordinals wallet ownership providers', () => {
     expect(xverse).not.toHaveBeenCalled();
   });
 
-  it.each(['subfrost', 'sandshrew'])('rescues ID checks through %s after numbered providers fail', async provider => {
+  it.each(['subfrost'])('rescues ID checks through %s after numbered providers fail', async provider => {
     db.reserveOrdinalProviderRequest.mockResolvedValue(false);
     xverse.mockRejectedValue(new Error('numbered lookup unavailable'));
-    if (provider === 'sandshrew') {
-      const healthy = fetchMock.getMockImplementation();
-      fetchMock.mockImplementation((url, options) => String(url).includes('subfrost')
-        ? Promise.resolve(response({}, 503)) : healthy!(url, options));
-    }
     const context = { ...run(), ordinalNeedsNumbers: true };
     const checks = await Promise.allSettled([
       service.inventory(wallet, context, false, xverse),
@@ -292,7 +287,7 @@ describe('ordered Ordinals wallet ownership providers', () => {
   });
 
   it('routes number ranges to Xverse when earlier providers cannot return numbers', async () => {
-    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'subfrost,sandshrew,xverse');
+    jest.replaceProperty(EnvironmentConfig, 'ORDINALS_OWNERSHIP_PROVIDERS', 'subfrost,xverse');
     const context = run();
     const ordinal = new OrdinalsOwnershipService(undefined, undefined, requests, undefined, service);
     jest.spyOn(ordinal as any, 'readInventory').mockResolvedValue(new Map([[id(1), 97305462], [id(2), 97308505]]));
