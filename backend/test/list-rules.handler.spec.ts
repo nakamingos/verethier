@@ -21,7 +21,7 @@ describe('ListRulesHandler', () => {
       text: `Showing ${shownRules} of ${totalRules} total rules`,
     });
 
-    expect(payload.components).toHaveLength(1);
+    expect(payload.components).toEqual([]);
     expect(payload.embeds).toHaveLength(1);
     expect(payload.embeds[0].toJSON()).toMatchObject(expectedEmbed.toJSON());
   };
@@ -116,6 +116,7 @@ describe('ListRulesHandler', () => {
 
       expect(mockDbService.getRoleMappings).toHaveBeenCalledWith('test-guild-id');
       expect(mockInteraction.options.getString).toHaveBeenCalledWith('asset_type');
+      expect(getLastEditReplyPayload().components).toEqual([]);
       const embed = getLastEditReplyPayload().embeds[0].toJSON();
       expect(embed.title).toBe(`📋 ${title} (Page 1/1)`);
       expect([...embed.description.matchAll(/ID: (\d+) \| Channel/g)].map(match => Number(match[1]))).toEqual(expectedIds);
