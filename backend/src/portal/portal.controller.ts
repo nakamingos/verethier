@@ -10,6 +10,7 @@ import {
   Get,
   HttpException,
   Injectable,
+  Logger,
   NestInterceptor,
   ExecutionContext,
   CallHandler,
@@ -42,7 +43,21 @@ import {
 @Catch()
 export class PortalErrors implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
-    const response = host.switchToHttp().getResponse<Response>();
+    const http = host.switchToHttp();
+    const response = http.getResponse<Response>();
+    if (!(error instanceof RuleInputError) && !(error instanceof HttpException)) {
+      const request = http.getRequest?.<Request>();
+      const route = request?.route?.path;
+      const operation = typeof route === 'string' && /^[a-z0-9_:/-]{1,180}$/i.test(route) ? route : 'unknown';
+      const type = error instanceof TypeError ? 'TypeError' : error instanceof Error ? 'Error' : 'Unknown';
+      // Stack locations identify the failing code without exposing provider
+      // payloads, signing requests, query strings, tokens or raw error messages.
+      const heading = error instanceof Error ? `${error.name}: ${error.message}` : '';
+      const frames = error instanceof Error && error.stack?.startsWith(heading) ? error.stack.slice(heading.length) : '';
+      const location = frames.split('\n').filter(line => /^\s+at\s/.test(line))
+        .map(line => line.match(/(?:src|dist)\/[a-z0-9/_.-]+:\d+:\d+/i)?.[0]).find(Boolean);
+      Logger.error(`Unexpected portal failure: operation=${operation}; type=${type}; source=${location || 'unknown'}`, 'PortalErrors');
+    }
     // Provider/database errors may include URLs or credentials. Never return their raw messages.
     const status = error instanceof RuleInputError ? 400 : error instanceof HttpException ? error.getStatus() : 503;
     const body =

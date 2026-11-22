@@ -1,3 +1,5 @@
+import { resolveOrdinalCollection } from '@/utils/ordinal-collection-resolution.util';
+import { OrdinalCollectionNotFoundError } from '@/utils/ordinal-collection-not-found.util';
 import { Injectable } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { OrdinalCollectionSnapshot } from '@/models/ordinal-collection.interface';
@@ -78,10 +80,14 @@ export class OrdnetOwnershipService {
   }
 
   async prepareRule(slug: string): Promise<{ id: string; name: string }> {
+    return resolveOrdinalCollection(slug, id => this.lookupCollection(id));
+  }
+
+  private async lookupCollection(slug: string): Promise<{ id: string; name: string }> {
     const id = ordinalCollectionId(slug);
     const data = await this.api.get('/collection-stats/floors?' + new URLSearchParams({ slugs: id }));
     if (data?.success !== true || !Array.isArray(data.data) || data.data.length > 1) throw new OrdnetUnavailableError('invalid collection lookup response');
-    if (!data.data.length) throw new Error('This collection was not found on ord.net. Check its collection slug.');
+    if (!data.data.length) throw new OrdinalCollectionNotFoundError('ord.net');
     if (data.data[0]?.slug !== id) throw new OrdnetUnavailableError('collection lookup returned a different slug');
     // The public API documents canonical slugs but no collection display-name endpoint.
     return { id, name: id };
