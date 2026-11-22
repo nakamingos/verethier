@@ -1,3 +1,4 @@
+import type { WalletType } from '@/utils/wallet-address.util';
 import { counterpartyRuleLabel, isTokenAmountRule } from '@/utils/counterparty-rule.util';
 import { VerificationRequestError, VERIFICATION_REQUEST_UNAVAILABLE } from '@/utils/verification-request-error.util';
 import { ruleMatchesWalletScope } from '@/utils/check-priority.util';
@@ -382,19 +383,24 @@ export class DiscordVerificationService {
     options: {
       style?: 'requirement' | 'holding';
       matchingCount?: AssetCount;
+      walletFamily?: WalletType;
     } = {}
   ): string {
+    const compact = (scope: string) => options.walletFamily === 'bitcoin'
+      ? scope.replace(/ · Bitcoin(?: · (?:Ordinals|Stamps|Counterparty))?/g, '')
+        .replace(/^(?:Bitcoin Stamps|Counterparty):?\s*/, '')
+      : options.walletFamily === 'solana' ? scope.replace(/ · Solana/g, '').replace(/^Solana /, '') : scope;
     const minItems = rule.min_items || 1;
     const style = options.style || 'requirement';
     const matchingCount = options.matchingCount;
     if (['erc20','solana_token'].includes(rule.asset_type ?? '')) {
       const minimum = tokenAmount(rule, tokenMinimum(rule));
-      const scope = tokenRuleScope(rule);
+      const scope = compact(tokenRuleScope(rule));
       return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
         : `Hold ${minimum}+ ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minimum})`}`;
     }
     if (rule.asset_type === 'counterparty') {
-      const scope = counterpartyRuleLabel(rule);
+      const scope = compact(counterpartyRuleLabel(rule));
       if (isTokenAmountRule(rule)) {
         const minimum = tokenAmount(rule, tokenMinimum(rule));
         return style === 'holding' ? `(${matchingCount ?? minimum}/${minimum}) ${scope}`
@@ -403,15 +409,15 @@ export class DiscordVerificationService {
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}` : `Own ${minItems}+ copies from ${scope}`;
     }
     if (rule.asset_type === 'stamp') {
-      const scope = stampRuleLabel(rule);
+      const scope = compact(stampRuleLabel(rule));
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}` : `Own ${minItems}+ copies from ${scope}`;
     }
     if (rule.asset_type === 'solana_nft') {
-      const scope = solanaRuleLabel(rule);
+      const scope = compact(solanaRuleLabel(rule));
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}` : `Own ${minItems}+ from ${scope}`;
     }
     if (rule.inscription_criteria || rule.asset_type === 'nft' || rule.asset_type === 'ordinal') {
-      const scope = rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule);
+      const scope = compact(rule.inscription_criteria ? inscriptionRuleScope(rule) : rule.asset_type === 'ordinal' ? ordinalRuleScope(rule) : nftRuleScope(rule));
       return style === 'holding' ? `(${matchingCount ?? minItems}/${minItems}) ${scope}`
         : `Own ${minItems}+ ${rule.inscription_criteria ? 'matching' : 'from'} ${scope}${matchingCount === undefined ? '' : ` (${matchingCount}/${minItems})`}`;
     }
@@ -825,6 +831,7 @@ export class DiscordVerificationService {
     roleResults: VerificationRoleResult[],
     userAddress?: string,
     ownershipContext?: NftCheckContext,
+    walletFamily?: WalletType,
   ): Promise<string> {
     const groupedRoleResults = this.groupRoleResults(roleResults);
     const newRoles = groupedRoleResults.filter(r => !r.wasAlreadyAssigned);
@@ -834,17 +841,17 @@ export class DiscordVerificationService {
       .filter(rule => ruleMatchesWalletScope(rule, ownershipContext?.verificationCheckFamilies));
     const collectionNames = await this.getCollectionNamesForRules(allRules);
     if (newRoles.length > 0) {
-      description += `\n\n**🎉 New Roles Assigned:**\n${newRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames)).join('\n')}`;
+      description += `\n\n**🎉 New Roles Assigned:**\n${newRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames, walletFamily)).join('\n')}`;
     }
     if (existingRoles.length > 0) {
-      description += `\n\n**✅ Roles You Already Have:**\n${existingRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames)).join('\n')}`;
+      description += `\n\n**✅ Roles You Already Have:**\n${existingRoles.map(r => this.formatVerifiedRoleDisplay(r, allRules, collectionNames, walletFamily)).join('\n')}`;
     }
     if (userAddress && userId && channelId) {
       try {
         const assignedRoleIds = groupedRoleResults.map(r => r.roleId);
         const potentialRoles = await this.analyzePotentialRoles(guildId, channelId, userId, assignedRoleIds, userAddress, ownershipContext);
         if (potentialRoles.length > 0) {
-          description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames)).join('\n')}`;
+          description += `\n\n**🚀 Additional Roles Available:**\n${potentialRoles.map(r => this.formatRequirementGroupDisplay(r, allRules, collectionNames, walletFamily)).join('\n')}`;
         }
       } catch (error) {
         Logger.error('Failed to get role recommendations:', error);
@@ -1102,8 +1109,10 @@ export class DiscordVerificationService {
       const guild = await this.client.guilds.fetch(guildId);
 
       let excludedRoleIds = new Set(assignedRoleIds);
+      let recommendationMember: GuildMember | undefined;
       try {
-        const member = await guild.members.fetch(userId);
+        const member = await guild.members.fetch({ user: userId, force: true });
+        recommendationMember = member;
         const currentDiscordRoleIds = Array.from(member.roles.cache.keys());
         excludedRoleIds = new Set([...currentDiscordRoleIds, ...assignedRoleIds]);
         Logger.debug(`Potential role analysis is excluding ${excludedRoleIds.size} current role(s) from Discord state`);
@@ -1131,8 +1140,12 @@ export class DiscordVerificationService {
       const context: NftCheckContext = ownershipContext || { checks: new Map() };
       const addressReads = context.userAddresses ||= new Map();
       const remainingRules: any[] = [];
+      if (this.roleActions && !recommendationMember) return [];
+      const blockedRoles = this.roleActions
+        ? await this.roleActions.blockedRoleIds(recommendationMember!) : new Set<string>();
       for (const rule of unassignedRules) {
         try {
+          if (blockedRoles.has(rule.role_id)) continue;
           const solana = isSolanaRule(rule);
           const chainId = solana ? undefined : ['ordinal','stamp','counterparty'].includes(rule.asset_type) ? 0 : rule.chain_id || 1;
           const key = `${userId}:${solana ? 'solana' : chainId}`;
@@ -1254,7 +1267,8 @@ export class DiscordVerificationService {
   private formatRequirementGroupDisplay(
     role: { roleId: string; roleName: string; matchedRules: RuleMatchSummary[] },
     allRules: VerificationDisplayRule[],
-    collectionNames: Record<string, CollectionDisplayName>
+    collectionNames: Record<string, CollectionDisplayName>,
+    walletFamily?: WalletType
   ): string {
     const matchedRules = this.getMatchedRulesForRole(role, allRules);
     const combinedCollectionRequirement = this.formatCombinedCollectionRequirement(
@@ -1274,6 +1288,7 @@ export class DiscordVerificationService {
           {
             style: this.isCollectionOnlyRule(rule) ? 'holding' : 'requirement',
             matchingCount,
+            walletFamily,
           }
         ))
         .filter(requirement => requirement.length > 0)
@@ -1359,7 +1374,8 @@ export class DiscordVerificationService {
   private formatVerifiedRoleDisplay(
     role: GroupedVerificationRoleResult,
     allRules: VerificationDisplayRule[],
-    collectionNames: Record<string, CollectionDisplayName>
+    collectionNames: Record<string, CollectionDisplayName>,
+    walletFamily?: WalletType
   ): string {
     const matchedRules = this.getMatchedRulesForRole(role, allRules);
     const combinedCollectionRequirement = this.formatCombinedCollectionRequirement(
@@ -1379,6 +1395,7 @@ export class DiscordVerificationService {
           {
             style: 'holding',
             matchingCount,
+            walletFamily,
           }
         ))
         .filter(requirement => requirement.length > 0)

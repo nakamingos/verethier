@@ -56,6 +56,18 @@ describe('Server role actions', () => {
       member,
     };
   }
+  it('loads all exclusions once and includes only currently held triggers', async () => {
+    const { service, reads, db, member } = setup();
+    reads.then = (resolve: any) => Promise.resolve({ data: [
+      { trigger_role_id: 'trigger', remove_role_ids: ['target', 'second'] },
+      { trigger_role_id: 'not-held', remove_role_ids: ['unblocked'] },
+    ], error: null }).then(resolve);
+    expect(await service.blockedRoleIds(member)).toEqual(new Set(['target', 'second']));
+    expect(db.from).toHaveBeenCalledTimes(1);
+    expect(reads.eq).toHaveBeenCalledWith('server_id', 'server');
+    reads.then = (resolve: any) => Promise.resolve({ data: null, error: {} }).then(resolve);
+    await expect(service.blockedRoleIds(member)).rejects.toThrow('Could not check');
+  });
   it('rechecks only affected earned roles after role-action edits, including revoked history', async () => {
     const db:any={getEarnedRoleAssignments:jest.fn().mockResolvedValue([
       {user_id:'member',server_id:'server',role_id:'affected',status:'revoked'},
