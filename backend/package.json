@@ -20,6 +20,7 @@
     "test:coverage": "jest --silent --coverage",
     "test:verbose": "jest --verbose",
     "test:debug": "jest --verbose --no-cache",
+    "supabase:production": "node scripts/supabase-production.cjs",
     "ordnet:wallet": "node scripts/ordnet-wallet.cjs",
     "ordnet:check": "node scripts/check-ordnet.cjs",
     "ordinals:grant-once": "node scripts/grant-ordinal-roles.cjs"
