@@ -5,6 +5,9 @@ import {
 } from './test-env';
 
 ensureExplicitTestSupabaseEnv();
+// Unit tests never inherit a production provider key from backend/.env.
+// Floored tests explicitly supply a synthetic key and mocked fetch.
+process.env.FLOORED_API_KEY = '';
 
 // Global test setup
 beforeAll(async () => {

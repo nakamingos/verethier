@@ -1,3 +1,4 @@
+import { FlooredEthscriptionsClient, FlooredReadError } from '@/services/floored-ethscriptions.client';
 import { AsyncSemaphore } from '@/utils/async-semaphore.util';
 import { EthscriptionDataUnavailableError } from '@/utils/ethscription-data-error.util';
 import { Injectable, Logger } from '@nestjs/common';
@@ -34,6 +35,7 @@ const supabase = createClient(
 export class DataService {
   private readonly logger = new Logger(DataService.name);
   private readonly traitReads = new AsyncSemaphore(2);
+  private readonly floored = new FlooredEthscriptionsClient(EnvironmentConfig.FLOORED_API_KEY);
 
   async checkSetupHealth(traits: boolean): Promise<void> {
     const result = await supabase.from('ethscriptions').select('hashId').limit(1).abortSignal(AbortSignal.timeout(6000));
@@ -409,12 +411,25 @@ export class DataService {
     if (!wallets.length) return [];
     const inventories: Map<string, Promise<EthscriptionAsset[]>> = context
       ? (context.ethscriptionAssets ||= new Map()) : new Map();
-    const key = JSON.stringify(wallets);
-    // Cache the promise before awaiting it, so parallel rules share one read.
-    // A failed read stays failed for this run rather than becoming an empty wallet.
-    if (!inventories.has(key)) inventories.set(key, this.readEthscriptionAssets(wallets));
-    const assets = (await inventories.get(key))!;
     const collection = slug?.trim();
+    const legacyKey = JSON.stringify(wallets);
+    const legacy = () => {
+      if (!inventories.has(legacyKey)) inventories.set(legacyKey, this.readEthscriptionAssets(wallets));
+      return inventories.get(legacyKey)!;
+    };
+    let assets: EthscriptionAsset[];
+    if (this.floored.supportsCollection(collection)) {
+      const key = `floored:${collection}:${legacyKey}`;
+      if (!inventories.has(key)) inventories.set(key, this.floored.inventory(wallets, collection!).catch(error => {
+        // No upstream response bodies, URLs, keys or wallet addresses in logs.
+        const reason = error instanceof FlooredReadError ? error.message : 'request_failed';
+        this.logger.warn(`Ethscriptions Floored unavailable; using marketplace fallback; reason=${reason}`);
+        return legacy();
+      }));
+      assets = (await inventories.get(key))!;
+    } else {
+      assets = await legacy();
+    }
     let scoped = collection && collection !== 'ALL' && collection !== 'all-collections'
       ? assets.filter(asset => asset.slug === collection) : assets;
     const filter = traitFilter !== undefined ? normalizeTraitFilter(traitFilter) : null;
@@ -477,7 +492,8 @@ export class DataService {
 
   private async withEthscriptionTraits(assets: EthscriptionAsset[], context?: NftCheckContext): Promise<EthscriptionAsset[]> {
     const traits = context ? (context.ethscriptionTraits ||= new Map()) : new Map();
-    const missing = [...new Map(assets.filter(asset => !traits.has(asset.hashId.toLowerCase()))
+    // Inline traits are collection-specific; never put them in the legacy hash-only cache.
+    const missing = [...new Map(assets.filter(asset => !asset.attributes_new && !traits.has(asset.hashId.toLowerCase()))
       .map(asset => [asset.hashId.toLowerCase(), asset])).values()];
     let failure: unknown;
     for (let index = 0; index < missing.length; index += 50) {
@@ -491,7 +507,8 @@ export class DataService {
       // both successful metadata and failures. Collection-only rules stay usable.
       for (const asset of batch) traits.set(asset.hashId.toLowerCase(), read.then(rows => rows.get(asset.hashId.toLowerCase()) ?? null));
     }
-    return Promise.all(assets.map(async asset => ({ ...asset, attributes_new: await traits.get(asset.hashId.toLowerCase()) })));
+    return Promise.all(assets.map(async asset => ({ ...asset,
+      attributes_new: asset.attributes_new || await traits.get(asset.hashId.toLowerCase()) || null })));
   }
 
   private async readEthscriptionTraits(ids: string[]): Promise<Map<string, EthscriptionAsset['attributes_new']>> {
