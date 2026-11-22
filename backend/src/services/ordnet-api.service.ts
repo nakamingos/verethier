@@ -1,3 +1,4 @@
+import { OrdinalCollectionNotFoundError } from '@/utils/ordinal-collection-not-found.util';
 import { Injectable } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
 import { Signer, Verifier, Address } from 'bip322-js';
@@ -154,7 +155,7 @@ export class OrdnetApiService {
           failure = `HTTP ${response.status}`;
           if (response.status === 401 && !options.body) throw new OrdnetUnauthorized();
           if (response.status === 403 && options.body) throw new Error('ord.net rejected the API wallet. Its payment address must hold at least 0.001 BTC confirmed and be eligible for API access.');
-          if (response.status === 404 && !options.body) throw new Error('This collection was not found on ord.net. Check its collection slug.');
+          if (response.status === 404 && !options.body) throw new OrdinalCollectionNotFoundError('ord.net');
           if (options.body || (response.status !== 429 && response.status < 500)) throw new OrdnetUnavailableError(`${route}: ${failure}`);
           if (response.status === 429) {
             const body = await response.json().catch(() => ({}));

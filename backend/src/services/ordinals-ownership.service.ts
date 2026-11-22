@@ -1,3 +1,5 @@
+import { resolveOrdinalCollection } from '@/utils/ordinal-collection-resolution.util';
+import { OrdinalCollectionNotFoundError } from '@/utils/ordinal-collection-not-found.util';
 import { RuleInputError } from '@/utils/rule-input-error';
 import { Injectable, Logger } from '@nestjs/common';
 import { address as bitcoinAddress, networks } from 'bitcoinjs-lib';
@@ -96,7 +98,7 @@ export class OrdinalsOwnershipService {
 
   async prepareRule(slug: string): Promise<NftRuleFields & { slug: string }> {
     const id = ordinalCollectionId(slug);
-    const collection = this.provider() === 'ordnet' ? await this.requireOrdnet().prepareRule(id) : await this.getCollection(id);
+    const collection = this.provider() === 'ordnet' ? await this.requireOrdnet().prepareRule(id) : await resolveOrdinalCollection(id, slug => this.getCollection(slug));
     return {
       asset_type: 'ordinal', slug: collection.id, chain_id: null,
       collection_name: collection.name, contract_address: null, token_standard: null, token_ids: null,
@@ -117,7 +119,8 @@ export class OrdinalsOwnershipService {
       try { criteria.collection_slug = ordinalCollectionId(collectionSlug); }
       catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
       this.provider(fields);
-      await this.requireOrdnet().prepareRule(criteria.collection_slug);
+      const collection = await this.requireOrdnet().prepareRule(criteria.collection_slug);
+      criteria.collection_slug = collection.id;
       return fields;
     }
     this.provider(fields);
@@ -620,14 +623,14 @@ export class OrdinalsOwnershipService {
             headers: { 'x-api-key': EnvironmentConfig.XVERSE_API_KEY ?? '', Accept: 'application/json' },
             signal: controller.signal, redirect: 'error',
           });
-          if (setup && response.status === 404) throw new Error('This collection was not found on Xverse. Check its collection slug.');
+          if (setup && response.status === 404) throw new OrdinalCollectionNotFoundError('Xverse');
           if (response.ok) return await response.json();
           if (summary && response.status === 500) throw new XverseSummaryError(UNAVAILABLE);
           if (response.status !== 429 && response.status < 500) throw new Error(UNAVAILABLE);
           const retryAfter = Number(response.headers.get('retry-after'));
           if (Number.isFinite(retryAfter) && retryAfter > 0) retryDelay = Math.min(retryAfter * 1000, 3000);
         } catch (error) {
-          if (error instanceof XverseSummaryError || error.message?.includes('not found on Xverse') || error.message === UNAVAILABLE) throw error;
+          if (error instanceof XverseSummaryError || error instanceof OrdinalCollectionNotFoundError || error.message === UNAVAILABLE) throw error;
           if (attempt === 2) throw new Error(UNAVAILABLE);
         } finally {
           clearTimeout(timeout);
