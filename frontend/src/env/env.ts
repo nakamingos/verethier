@@ -1,3 +1,3 @@
 export const env = {
-  apiUrl: '/api',
+  apiUrl: 'https://bouncer-be.up.railway.app/api',
 };
