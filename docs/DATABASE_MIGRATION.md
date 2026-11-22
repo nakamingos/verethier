@@ -1,14 +1,14 @@
 # Database migrations and backups
 
-Bouncer's application database is the Supabase project `cpwubaszhjdtqlvfdlbx` (`verethier`). Migrations live in [backend/supabase/migrations](../backend/supabase/migrations).
+Bouncer's live application database is Supabase project `tlundfjfwioejwdlbbqf`, migrated November 22, 2026. The original project `cpwubaszhjdtqlvfdlbx` is retained as a pre-cutover recovery source. Migrations live in [backend/supabase/migrations](../backend/supabase/migrations).
 
 ## Current state
 
-As of November 18, 2026, production has every migration in the repository applied, through `20261118010000_counterparty_rules.sql`. Check with:
+The November 22, 2026 cutover preserved all 51 source migration ledger entries. The restored production schema includes the later November 22 changes; inspect the current ledger rather than relying on the older release date below. Check with:
 
 ```bash
 cd backend
-supabase migration list --linked
+yarn supabase:production migration list --remote
 ```
 
 The remote history also contains six early versions (`20250101000000`–`20250706000002`) that predate the repository's migration files. Don't repair or erase them to make `supabase db push` proceed. Production migrations are applied one at a time with the guarded workflow below.
@@ -25,15 +25,15 @@ Keep private receipts (dumps, guarded SQL, hashes and apply logs) in the backup 
 
 ## Backups
 
-Log in with `supabase login` (personal access token) and link the project from `backend` with `supabase link --project-ref cpwubaszhjdtqlvfdlbx`; leave the database password blank if prompted. Then:
+The local CLI link now targets `tlundfjfwioejwdlbbqf`. Use `yarn supabase:production` from `backend`: the helper loads the scoped destination token from the gitignored `.env`, checks the linked project against `DB_SUPABASE_URL`, and preserves the global old-account login. Refresh `SUPABASE_TARGET_ACCESS_TOKEN` when it expires. Do not use the old cached login for new-project operations. Back up with:
 
 ```bash
 umask 077
 dir=../backup/$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$dir"
-supabase db dump --linked --role-only -f "$dir/roles.sql"
-supabase db dump --linked -f "$dir/schema.sql"
-supabase db dump --linked --data-only --use-copy -f "$dir/data.sql"
+yarn supabase:production db dump --remote --role-only -f "$dir/roles.sql"
+yarn supabase:production db dump --remote -f "$dir/schema.sql"
+yarn supabase:production db dump --remote --data-only --use-copy -f "$dir/data.sql"
 ```
 
 Test that a backup restores, from the repository root:
@@ -90,3 +90,9 @@ This destination is a rehearsal snapshot, not the live database. Final write-fro
 Final copy completed November 22, 2026 after the operator stopped the Railway backend. The backend health URL returned HTTP 404. A fresh private roles/schema/data/history export and deletion ledger were saved; the ledger contained zero completed-deletion markers. The new snapshot passed the local restore/value checks. Before replacement, source schema exports were byte-identical to the rehearsed schema, all destination fingerprints still matched our rehearsal copy, and the backend was still offline. Only the 32 explicitly named rehearsal tables in the destination were emptied and reloaded; no source data was changed and no schemas were dropped. The destination then matched all 28,459 final snapshot rows across all 32 tables. All five backed-up sequence states matched. The new service credential returned matching exact counts through REST for wallets, rules, earned-role history and the deletion ledger, and passed a read-only `get_ordinal_collection` RPC probe. Private final receipts are under the gitignored `backup/account-migration-final-*` directory.
 
 Remaining cutover: operator updates `DB_SUPABASE_URL` and `DB_SUPABASE_KEY` together on the existing Railway backend and deploys it. The value for the latter is the local `TARGET_DB_SUPABASE_KEY`, not the personal access token. Public/backend health and live application acceptance, local configuration/CLI relinking, and final documentation of the live project remain pending until restart is confirmed. The source project and source CLI link are retained for now.
+
+### Cutover confirmed
+
+After the operator updated the two Railway database variables and restarted the existing backend, both direct and frontend-proxied health endpoints returned healthy. At 17:04:53 UTC on November 22, a controlled portal login-start request returned the expected Discord redirect with the unchanged `https://bouncer.up.railway.app/api/portal/auth/callback` URL. The exact generated OAuth-state hash was then found in the new database, confirming that the running application—not just a separate diagnostic client—writes to `tlundfjfwioejwdlbbqf`. The test did not complete Discord OAuth, sign a wallet message or assign roles. Those member-operated acceptance checks remain available for the operator to perform.
+
+Local `.env` application credentials and CLI link now target the new project. The old local environment has a private recovery copy with the final backup. `yarn supabase:production` supplies the project-scoped token without exposing it in process arguments. Source backups, the original project and original global CLI login are retained; no source resource has been deleted. Because the destination is now receiving live writes, it must not be replaced with the old snapshot or rolled back to the stale source without reconciling new data.
