@@ -6,8 +6,8 @@
   encode gzip zstd
   @api path /api/*
   handle @api {
-    reverse_proxy https://bouncer-be.up.railway.app {
-      header_up Host bouncer-be.up.railway.app
+    reverse_proxy {$BACKEND_UPSTREAM:https://bouncer-be.up.railway.app} {
+      header_up Host {upstream_hostport}
       # Forwarding headers are not used as authorization or trusted for rate limits.
       header_up -X-Forwarded-For
       header_up -Forwarded

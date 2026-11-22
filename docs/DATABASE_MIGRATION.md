@@ -55,3 +55,29 @@ npx supabase db reset   # applies all migrations to the local database
 ```
 
 References: [Supabase backup and restore](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore), [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html).
+
+## New Supabase project and Railway account — migration preparation
+
+The November 22, 2026 move is a new-project migration, not an organization transfer. Destination project IDs, final frontend origin, and continued use of the existing Discord application must be confirmed before restoring or changing production. The existing production project remains the source until cutover. Never relink its working directory to the destination; use a separate CLI work directory/explicit destination connection and verify the target before every write.
+
+### Prepare and rehearse
+
+- Export the current schema, roles, COPY data, migration ledger and an independent current privacy-deletion ledger to a private gitignored backup directory. Rehearsal snapshots taken while production runs are not final cutover backups. Match the source PostgreSQL major version where possible.
+- Preserve database functions, grants, RLS, sequences and migration history as well as application rows. The source contains early migration versions without corresponding repository files: replaying only repository migrations is not a substitute for restoring the production schema. Follow Supabase's documented new-project restore procedure for platform-managed objects; do not blindly overwrite destination Auth/Storage internals or source managed-role passwords. Check actual Auth/Storage/extension use separately; the existing local restore checker covers public application data only.
+- Rehearse with `backend/test/check-backup.py`, then restore into the isolated destination and compare every application value, row counts, constraints, RLS/grants, RPCs and sequence positions. Verify copied deletion-ledger entries and apply the documented privacy recovery procedure before public access.
+- Create frontend and backend Railway services from the same reviewed commit, with roots `/frontend` and `/backend`, correct watch paths and production start commands. Configure the frontend's `BACKEND_UPSTREAM` as the new backend HTTPS origin, without `/api`. Browser API requests use same-origin `/api`, forwarded by Caddy. The Caddy default keeps the existing deployment working until the new variable is set.
+- Set the destination backend `DB_SUPABASE_URL` and service credential, and copy the current production environment securely. Local `.env` is not a complete authoritative copy of Railway configuration. Keep `DATA_SUPABASE_*` pointed at the external Ethscriptions provider. Preserve provider keys, RPC URLs, operator IDs, Discord configuration and ord.net wallet credentials without putting them in Git or logs.
+- Set backend `BASE_URL` to the final frontend HTTPS origin. Add `${BASE_URL}/api/portal/auth/callback` in the Discord application's OAuth redirects. Update the Reown project origin allowlist, user-facing official-site text and any provider domain restrictions for the new origin. Existing links/cookies and outstanding wallet challenges may require a new verification/sign-in after an origin change. Confirm whether the old Railway hostname can be retained; do not assume a new account can claim it.
+- Do not start a second production backend against either database during rehearsal. `DISCORD=0` disables the Discord connection, but scheduled jobs and queue workers are separate: it is not a general maintenance switch. Use isolated local database checks/builds, or explicitly paused workers, until cutover.
+
+### Coordinated cutover
+
+1. Prepare the destination infrastructure and origin configuration; retain the old services and database for recovery.
+2. Stop source backend workers and block public database-writing requests. Wait for in-flight work to finish; account for queued/claimed jobs. Take the final consistent database export and current deletion ledger after writes stop.
+3. Restore/validate the final copy in the new project, including migration history and privacy retention/deletions. Ensure pending tasks cannot execute in both environments. Do not open the destination merely because its health endpoint returns healthy.
+4. Start the destination backend once and route the frontend to it. Confirm the same Discord application connects, OAuth works, existing rules/history are preserved, wallet verification succeeds, privacy/admin boundaries hold, and background work runs once. Do not perform role-changing acceptance checks on real members without the operator's intended test scope.
+5. Keep the source offline and retained until acceptance. If destination writes have begun, routing back to the stale source would lose new records: reconcile destination changes before rollback. Do not delete the source infrastructure as part of the initial cutover.
+
+Reference: [Supabase CLI backup/restore](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore). This section documents preparation; it does not establish that a backup, destination restore or cutover has completed.
+
+Preparation completed November 22, 2026: a private preflight roles/schema/COPY-data export, separate migration-history export, and independent deletion-ledger snapshot were created while production remained online. The disposable local restore checker passed and compared every backed-up public application value. This rehearsal does not validate Supabase-managed Auth/Storage data, the not-yet-configured destination project, or a final write-frozen cutover copy. The frontend production build and Caddy 2.11.7 configuration adaptation passed with a substituted backend origin. No restore into a remote destination, credential change, source shutdown, or production deployment has occurred.
