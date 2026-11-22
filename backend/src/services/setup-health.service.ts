@@ -96,9 +96,9 @@ export class SetupHealthService {
       } else if (rule.asset_type === 'ordinal') {
         const criteria = inscriptionCriteria(rule);
         const provider = criteria
-          ? 'xverse'
+          ? criteria.collection_slug ? 'ordnet' : 'xverse'
           : EnvironmentConfig.ORDINALS_PROVIDER;
-        const numberOnly = criteria?.kind === 'numbers';
+        const numberOnly = criteria?.kind === 'numbers' && !criteria.collection_slug;
         add(
           `ordinals:${provider}:${numberOnly ? 'numbers' : traits ? 'traits' : 'collection'}`,
           `Ordinals ${provider}${traits ? ' and traits' : ''}`,

@@ -626,7 +626,7 @@ export class DiscordService implements OnModuleInit, OnModuleDestroy {
             .setDescription('Add a Bitcoin Ordinals collection, ID, or number verification rule')
             .addChannelOption(option => option.setName('channel').setDescription('Channel').setRequired(true))
             .addStringOption(option => option.setName('role').setDescription('Select existing role or type new role name to create').setRequired(true).setAutocomplete(true))
-            .addStringOption(option => option.setName('slug').setDescription('Collection slug; optional with number/range selections to check through ord.net').setAutocomplete(true))
+            .addStringOption(option => option.setName('slug').setDescription('Collection slug; optional with ID or number selections to check through ord.net').setAutocomplete(true))
             .addStringOption(option => option.setName('inscription_ids').setDescription('Full inscription ID or comma-separated IDs; leave slug empty').setMaxLength(6000))
             .addStringOption(option => option.setName('inscription_numbers').setDescription('Inscription numbers/ranges; optional slug restricts them to that ord.net collection').setMaxLength(6000))
             .addStringOption(option => option.setName('label').setDescription('Optional label for these IDs or numbers (display only)').setMaxLength(100))

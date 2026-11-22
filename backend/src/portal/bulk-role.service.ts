@@ -280,7 +280,7 @@ export class BulkRoleService {
     const expanded=expandRuleRoles(checkRules());
     const roleCollections=new Map(targetRoles.map(roleId=>[roleId,new Set(expanded
       .filter(rule=>rule.role_id===roleId && rule.asset_type==='ordinal')
-      .map(rule=>rule.inscription_criteria?.kind==='numbers' ? rule.inscription_criteria.collection_slug : rule.slug)
+      .map(rule=>rule.inscription_criteria ? rule.inscription_criteria.collection_slug : rule.slug)
       .filter(Boolean))]));
     const cacheKey = `${job.id}:${job.rules_version}:${bulkRunKey(job)}`;
     const timing={eligibility_work_ms:0,mutation_work_ms:0,guard_work_ms:Date.now()-memberStarted,mutation_queue_ms:0,role_checks:0};
@@ -338,9 +338,9 @@ export class BulkRoleService {
           const proof=checked.status==='passed' ? checked.results.filter(result=>result.isValid) : [];
           // A sufficient database-only alternative does not depend on Ordinals
           // evidence read for a different qualification path.
-          if(proof.length && proof.every(result=>result.rule && (result.rule.asset_type!=='ordinal' || (result.rule.inscription_criteria?.kind==='numbers' ? result.rule.inscription_criteria.collection_slug : result.rule.slug)))) return new Set<string>(proof
+          if(proof.length && proof.every(result=>result.rule && (result.rule.asset_type!=='ordinal' || (result.rule.inscription_criteria ? result.rule.inscription_criteria.collection_slug : result.rule.slug)))) return new Set<string>(proof
             .filter(result=>result.rule!.asset_type==='ordinal')
-            .map(result=>result.rule!.inscription_criteria?.kind==='numbers' ? result.rule!.inscription_criteria.collection_slug : result.rule!.slug)
+            .map(result=>result.rule!.inscription_criteria ? result.rule!.inscription_criteria.collection_slug : result.rule!.slug)
             .filter((slug): slug is string=>Boolean(slug)));
           return roleCollections.get(roleId);
         };

@@ -13,7 +13,7 @@ export function ordnetCompatible(rule: Partial<VerifierRole>): boolean {
   if (rule.asset_type !== 'ordinal') return true;
   try {
     const criteria = inscriptionCriteria(rule);
-    const slug = criteria ? criteria.kind === 'numbers' ? criteria.collection_slug : null : rule.slug;
+    const slug = criteria ? criteria.collection_slug : rule.slug;
     return !!slug && ordinalCollectionId(slug) === slug;
   } catch { return false; }
 }

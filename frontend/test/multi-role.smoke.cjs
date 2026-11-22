@@ -4,7 +4,7 @@ const artifacts=fs.mkdtempSync('/tmp/bouncer-multi-role-browser-');
 async function choose(page,name,label){await page.getByRole('combobox',{name,exact:true}).locator('.pixel-select-arrow').click();await page.getByRole('listbox').getByRole('option',{name:label,exact:true}).click();}
 (async()=>{const browser=await chromium.launch({executablePath:process.env.CHROME_BIN || '/home/snep/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome',headless:true,args:['--no-sandbox']});
 try{for(const width of [1280,768,393,320]){const context=await browser.newContext({viewport:{width,height:1000},hasTouch:width<800}),page=await context.newPage(),errors=[],writes=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
-const ruleData={id:204,server_id:server,channel_id:channel,role_id:role,role_name:'Comrade',primary_role_name:'Comrade',additional_roles:[],asset_type:'ordinal',slug:null,min_items:1,inscription_criteria:{kind:'numbers',ranges:[[1,10],[20,20]],collection_slug:'pizza-comrades'},version:'v1',fields:[{key:'selection',label:'Inscription numbers / ranges',value:'1-10,20',list:true,required:true},{key:'collection_slug',label:'ord.net collection slug (optional)',value:'pizza-comrades'},{key:'label',label:'Label (optional)',value:'Pizza selection'},{key:'min_items',label:'Minimum items',value:'1',required:true}]};
+const ruleData={id:204,server_id:server,channel_id:channel,role_id:role,role_name:'Comrade',primary_role_name:'Comrade',additional_roles:[],asset_type:'ordinal',slug:null,min_items:1,inscription_criteria:{kind:'numbers',ranges:[[1,10],[20,20]],collection_slug:'pizza-comrades'},version:'v1',fields:[{key:'selection',label:'Inscription numbers / ranges',value:'1-10,20',list:true},{key:'collection_slug',label:'ord.net collection slug (optional)',value:'pizza-comrades'},{key:'label',label:'Label (optional)',value:'Pizza selection'},{key:'min_items',label:'Minimum items',value:'1',required:true}]};
 await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url());if(url.origin!==origin)return route.abort();if(url.pathname.startsWith('/api/portal')){const p=url.pathname.slice(11);let data={};if(p==='/session')data={user:{id:'admin',name:'Admin'},csrf:'csrf',configured:true};else if(p==='/servers')data={servers:[{id:server,name:'NoMoreLabs',installed:true}]};else if(p===`/servers/${server}`)data={server:{id:server,name:'NoMoreLabs'},rules:[ruleData],roles:[{id:role,name:'Comrade',manageable:true},{id:extra,name:'Pizza Comrade',manageable:true},{id:other,name:'Another role',manageable:true}],channels:[{id:channel,name:'verify'}],diagnostics:[],role_actions:[],settings:{background_checks_enabled:true}};
 else if(p.endsWith('/edit') || p.endsWith('/duplicate') || p===`/servers/${server}/rules`){assert.equal(req.headers()['x-csrf-token'],'csrf');writes.push({path:p,body:req.postDataJSON()});if(req.postDataJSON().inputs?.selection==='10-1') return route.fulfill({status:400,json:{message:'Inscription ranges must use safe whole numbers with the start no greater than the end.'}});data={id:'action',kind:p.endsWith('/edit')?'edit':'create'};}else throw new Error('Unexpected '+p);return route.fulfill({json:data});}
 let file=url.pathname==='/' || url.pathname==='/admin'?path.join(root,'index.html'):path.join(root,decodeURIComponent(url.pathname));if(!fs.existsSync(file))file=path.join(root,'index.html');return route.fulfill({path:file});});
@@ -59,4 +59,34 @@ await page.screenshot({path:path.join(artifacts,`collection-numbers-${width}.png
 await page.getByRole('button',{name:'Save rule',exact:true}).click();
 await page.getByText('Rule created.',{exact:true}).waitFor();
 const created=writes.at(-1);assert.equal(created.path,`/servers/${server}/rules`);assert.equal(created.body.slug,'pizza-comrades');assert.equal(created.body.inscription_numbers,'100-105');assert.equal(created.body.inscription_ids,undefined);
+await page.getByRole('button',{name:'+ Add rule',exact:true}).click();
+await choose(page.locator('form').filter({has:page.getByRole('heading',{name:'Create a rule',exact:true})}),'Asset type','Ordinals');
+await choose(page,'Match by','Inscription IDs / hashes');
+await choose(page,'Discord roles','Comrade');await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Escape');
+await page.getByLabel('Inscription IDs / hashes:',{exact:true}).fill('a'.repeat(64)+'i0');
+await page.getByLabel('ord.net collection slug (optional):',{exact:true}).fill('pizza-comrades');
+await page.getByRole('button',{name:'Review changes',exact:true}).click();
+await page.getByRole('button',{name:'Save rule',exact:true}).click();
+await page.getByText('Rule created.',{exact:true}).waitFor();
+assert.equal(writes.at(-1).body.slug,'pizza-comrades');assert.equal(writes.at(-1).body.inscription_ids,'a'.repeat(64)+'i0');
+// Existing rule conversion uses the text fields directly, without a mode selector.
+for (const kind of ['ids','numbers']) {
+  const selection=kind==='ids'?'a'.repeat(64)+'i0':'100-105';
+  const label=kind==='ids'?'Inscription IDs':'Inscription numbers / ranges';
+  Object.assign(ruleData,{slug:null,min_items:5,inscription_criteria:kind==='ids'?{kind:'ids',ids:[selection]}:{kind:'numbers',ranges:[[100,105]]},
+    fields:[{key:'selection',label,value:selection,list:true},{key:'collection_slug',label:'ord.net collection slug (optional)',value:''},{key:'label',label:'Label (optional)',value:'Old selection'},{key:'min_items',label:'Minimum items',value:'5',required:true}]});
+  await page.reload(); await page.getByRole('button',{name:'Edit',exact:true}).click();
+  assert.equal(await page.getByLabel('ord.net collection slug (optional):',{exact:true}).count(),1);
+  await page.getByLabel(label+':',{exact:true}).fill('');
+  await page.getByLabel('ord.net collection slug (optional):',{exact:true}).fill('yonder');
+  assert.equal(await page.getByRole('button',{name:'Review changes',exact:true}).isDisabled(),false,'Cleared selection can be reviewed');
+  await page.getByRole('button',{name:'Review changes',exact:true}).click();
+  assert.ok((await page.locator('.notice').innerText()).includes('The previous inscription list will no longer limit this rule.'));
+  await page.screenshot({path:path.join(artifacts,`convert-${kind}-${width}.png`),fullPage:true});
+  await page.getByRole('button',{name:'Save rule',exact:true}).click();
+  await page.getByText('Rule saved. Compatible roles are queued for a fresh check. Ordinals automatic checks use ord.net only.',{exact:true}).waitFor();
+  const saved=writes.at(-1); assert.ok(saved.path.endsWith('/204/edit'));
+  assert.equal(saved.body.inputs.selection,''); assert.equal(saved.body.inputs.collection_slug,'yonder'); assert.equal(saved.body.inputs.min_items,'5');
+  assert.equal(saved.body.role_id,role);
+}
 assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');assert.deepEqual(errors,[]);console.log('PASS multi-role rules '+width);await context.close();}}finally{await browser.close();}console.log('Artifacts: '+artifacts);})().catch(e=>{console.error(e);process.exitCode=1});
