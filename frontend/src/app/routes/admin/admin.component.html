@@ -570,7 +570,7 @@
                                 placeholder="A name to recognize this selection"
                             /></label>
                             @if (draft.asset_type === 'ordinal') {
-                              <label>ord.net collection slug (optional):<input name="selectionCollection" [(ngModel)]="draft.slug" maxlength="100" placeholder="pizza-comrades" /></label>
+                              <label>ord.net collection slug (recommended):<input name="selectionCollection" [(ngModel)]="draft.slug" maxlength="100" placeholder="pizza-comrades" /></label>
                               <p class="muted wide">With a list, only selected inscriptions in this collection count. Clear the list to use the entire collection. Ownership is checked through ord.net.</p>
                             }
                           }

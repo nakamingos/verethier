@@ -24,7 +24,7 @@ await choose(page,'Discord roles','Another role');
 await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Tab');
 await page.getByLabel('Inscription numbers / ranges:',{exact:true}).fill('10100838');
 await page.getByLabel('Minimum items:',{exact:true}).fill('5');
-assert.equal(await page.getByLabel('ord.net collection slug (optional):',{exact:true}).inputValue(),'pizza-comrades');
+assert.equal(await page.getByLabel('ord.net collection slug (recommended):',{exact:true}).inputValue(),'pizza-comrades');
 await page.getByRole('button',{name:'Review changes',exact:true}).click();assert.ok(await page.getByText('This creates an independent rule. Changes here will not change the original.',{exact:true}).isVisible());await page.screenshot({path:path.join(artifacts,`duplicate-${width}.png`),fullPage:true});await page.getByRole('button',{name:'Save rule',exact:true}).click();await page.getByText('Rule created.',{exact:true}).waitFor();assert.ok(writes[1].path.endsWith('/204/duplicate'));assert.equal(writes[1].body.role_id,other);assert.deepEqual(writes[1].body.additional_roles,[]);assert.equal(writes[1].body.inputs.selection,'10100838');assert.equal(writes[1].body.inputs.min_items,'5');assert.equal(writes[1].body.inputs.collection_slug,'pizza-comrades');await page.getByRole('button',{name:'Edit',exact:true}).click();
 const roles=page.getByRole('combobox',{name:'Discord roles',exact:true});
 await roles.locator('.pixel-select-arrow').click();
@@ -53,7 +53,7 @@ await choose(page.locator('form').filter({has:page.getByRole('heading',{name:'Cr
 await choose(page,'Match by','Global inscription numbers');
 await choose(page,'Discord roles','Comrade');await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Escape');
 await page.getByLabel('Inscription numbers and ranges:',{exact:true}).fill('100-105');
-await page.getByLabel('ord.net collection slug (optional):',{exact:true}).fill('pizza-comrades');
+await page.getByLabel('ord.net collection slug (recommended):',{exact:true}).fill('pizza-comrades');
 await page.getByRole('button',{name:'Review changes',exact:true}).click();
 await page.screenshot({path:path.join(artifacts,`collection-numbers-${width}.png`),fullPage:true});
 await page.getByRole('button',{name:'Save rule',exact:true}).click();
@@ -64,7 +64,7 @@ await choose(page.locator('form').filter({has:page.getByRole('heading',{name:'Cr
 await choose(page,'Match by','Inscription IDs / hashes');
 await choose(page,'Discord roles','Comrade');await page.getByRole('combobox',{name:'Discord roles',exact:true}).press('Escape');
 await page.getByLabel('Inscription IDs / hashes:',{exact:true}).fill('a'.repeat(64)+'i0');
-await page.getByLabel('ord.net collection slug (optional):',{exact:true}).fill('pizza-comrades');
+await page.getByLabel('ord.net collection slug (recommended):',{exact:true}).fill('pizza-comrades');
 await page.getByRole('button',{name:'Review changes',exact:true}).click();
 await page.getByRole('button',{name:'Save rule',exact:true}).click();
 await page.getByText('Rule created.',{exact:true}).waitFor();
@@ -76,9 +76,9 @@ for (const kind of ['ids','numbers']) {
   Object.assign(ruleData,{slug:null,min_items:5,inscription_criteria:kind==='ids'?{kind:'ids',ids:[selection]}:{kind:'numbers',ranges:[[100,105]]},
     fields:[{key:'selection',label,value:selection,list:true},{key:'collection_slug',label:'ord.net collection slug (optional)',value:''},{key:'label',label:'Label (optional)',value:'Old selection'},{key:'min_items',label:'Minimum items',value:'5',required:true}]});
   await page.reload(); await page.getByRole('button',{name:'Edit',exact:true}).click();
-  assert.equal(await page.getByLabel('ord.net collection slug (optional):',{exact:true}).count(),1);
+  assert.equal(await page.getByLabel('ord.net collection slug (recommended):',{exact:true}).count(),1);
   await page.getByLabel(label+':',{exact:true}).fill('');
-  await page.getByLabel('ord.net collection slug (optional):',{exact:true}).fill('yonder');
+  await page.getByLabel('ord.net collection slug (recommended):',{exact:true}).fill('yonder');
   assert.equal(await page.getByRole('button',{name:'Review changes',exact:true}).isDisabled(),false,'Cleared selection can be reviewed');
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
   assert.ok((await page.locator('.notice').innerText()).includes('The previous inscription list will no longer limit this rule.'));
