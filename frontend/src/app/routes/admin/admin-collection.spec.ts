@@ -27,17 +27,24 @@ describe('Canonical NFT rules from a collection lookup', () => {
       trait_filter: { operator: 'AND', conditions: [] },
     };
   });
-  it('includes an optional collection only for Ordinals number selections',()=>{
+  it('includes an optional collection for Ordinals ID and number selections',()=>{
     component.draft.asset_type='ordinal';component.mode='numbers';
     component.draft.inscription_numbers='100-105';component.draft.slug='pizza-comrades';
     expect(component.payload()).toEqual(jasmine.objectContaining({inscription_numbers:'100-105',slug:'pizza-comrades'}));
     expect(component.payload().inscription_ids).toBeUndefined();
     component.mode='ids';component.draft.inscription_ids='a'.repeat(64)+'i0';
-    expect(component.payload().slug).toBeUndefined();
+    expect(component.payload()).toEqual(jasmine.objectContaining({inscription_ids:'a'.repeat(64)+'i0',slug:'pizza-comrades'}));
     component.mode='numbers';component.draft.asset_type='ethscription';
     expect(component.payload().slug).toBeUndefined();
     component.draft.asset_type='ordinal';component.draft.slug='';
     expect(component.payload().slug).toBeUndefined();
+  });
+  it('creates a whole collection when the selection is cleared without sending a selection label',()=>{
+    component.draft.asset_type='ordinal';component.mode='ids';
+    component.draft.inscription_ids='  ';component.draft.label='Old selection';component.draft.slug='pizza-comrades';
+    expect(component.payload().slug).toBe('pizza-comrades');
+    expect(component.payload().inscription_ids).toBeUndefined();
+    expect(component.payload().label).toBeUndefined();
   });
   it('shows the collection restriction in a saved rule summary',()=>{
     expect(component.describe({asset_type:'ordinal',rule_label:'Subset',inscription_criteria:{kind:'numbers',ranges:[[100,105]],collection_slug:'pizza-comrades'}})).toContain('collection: pizza-comrades');

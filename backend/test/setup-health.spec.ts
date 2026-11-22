@@ -73,6 +73,14 @@ describe('Setup provider probes', () => {
     expect(report[0].status).toBe('not_checked');
     expect(ordinals.checkSetupHealth).not.toHaveBeenCalled();
   });
+  it.each(['ids','numbers'])('checks scoped %s through ord.net without needing a member inventory',async kind=>{
+    const criteria=kind==='ids'?{kind:'ids',ids:['a'.repeat(64)+'i0'],collection_slug:'pizza-comrades'}:{kind:'numbers',ranges:[[1,100]],collection_slug:'pizza-comrades'};
+    const rule={id:1,asset_type:'ordinal',slug:null,inscription_criteria:criteria};
+    const report=await service.check([rule] as any);
+    expect(report[0].id).toBe('ordinals:ordnet:collection');
+    expect(report[0].status).toBe('healthy');
+    expect(ordinals.checkSetupHealth).toHaveBeenCalledWith(rule);
+  });
   it('checks the protocol index for specific Ethscriptions rather than the collection database', async () => {
     await service.check([
       {

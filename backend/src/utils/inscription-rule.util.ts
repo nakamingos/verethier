@@ -51,8 +51,8 @@ export function inscriptionCriteria(rule: Partial<VerifierRole>): InscriptionCri
   const idPattern = rule.asset_type === 'ordinal' ? CANONICAL_ID : ETHSCRIPTION_ID;
   const invalid = () => { throw new Error('Invalid specific-inscription verification rule.'); };
   if (typeof criteria !== 'object' || Array.isArray(criteria)) return invalid();
-  const scoped = criteria.kind === 'numbers' && criteria.collection_slug !== undefined;
-  const keys = criteria.kind === 'ids' ? ['kind', 'ids'] : ['kind', 'ranges', ...(scoped ? ['collection_slug'] : [])];
+  const scoped = criteria.collection_slug !== undefined;
+  const keys = ['kind', criteria.kind === 'ids' ? 'ids' : 'ranges', ...(scoped ? ['collection_slug'] : [])];
   if (Object.keys(criteria).length !== keys.length || Object.keys(criteria).some(key => !keys.includes(key))) return invalid();
   if (scoped && (rule.asset_type !== 'ordinal' || typeof criteria.collection_slug !== 'string'
     || criteria.collection_slug !== criteria.collection_slug.trim() || criteria.collection_slug === 'all' || !/^[a-z0-9][a-z0-9._-]{0,99}$/.test(criteria.collection_slug))) return invalid();
@@ -85,6 +85,6 @@ export function inscriptionRuleScope(rule: Partial<VerifierRole>, style: 'detail
     : entries.slice(0, limit).map(entry => entry.length > 100 ? entry.slice(0, 99) + '…' : entry).join(', ')
       + (entries.length > limit ? ` (+${entries.length - limit} more)` : '');
   const label = rule.rule_label ? `Label: ${escapeMarkdown(rule.rule_label)} · ` : '';
-  const collection = criteria.kind === 'numbers' && criteria.collection_slug ? `Collection: ${escapeMarkdown(criteria.collection_slug)} · ` : '';
+  const collection = criteria.collection_slug ? `Collection: ${escapeMarkdown(criteria.collection_slug)} · ` : '';
   return `${label}${collection}${rule.asset_type === 'ordinal' ? 'Inscription' : 'Ethscription'} ${criteria.kind === 'ids' ? 'IDs' : 'numbers'}: ${selection} · ${rule.asset_type === 'ordinal' ? 'Bitcoin · Ordinals' : 'Ethereum · Ethscriptions'}`;
 }

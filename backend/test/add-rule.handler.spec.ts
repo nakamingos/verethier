@@ -614,12 +614,12 @@ describe('AddRuleHandler', () => {
       expect(mockDbService.addRoleMapping).toHaveBeenCalledWith('guild-id', 'Guild', 'channel-id', 'verify', null, 'role-id', 'Special', 'ALL', 'ALL', 1, fields);
       expect(mockRuleConfirmationHandler.storeConfirmationData).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ ruleId: 12, slug: null }));
     });
-    it.each([{ slug: 'yonder' }, { attribute_key: 'Hat' }, { attribute_value: 'Pirate' }, { token_ids: '1' }, { network: 'ethereum' }])('rejects mixed selection criteria before creating roles: %s', async options => {
+    it.each([{ attribute_key: 'Hat' }, { attribute_value: 'Pirate' }, { token_ids: '1' }, { network: 'ethereum' }])('rejects mixed selection criteria before creating roles: %s', async options => {
       const interaction = interactionFor(options);
       await handler.handle(interaction);
       expect(mockDbService.addRoleMapping).not.toHaveBeenCalled();
       expect(mockOrdinalsService.prepareInscriptionRule).not.toHaveBeenCalled();
-      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Only Ordinals number/range rules may also specify an ord.net collection slug') });
+      expect(interaction.editReply).toHaveBeenCalledWith({ content: expect.stringContaining('Only Ordinals selections may also specify an ord.net collection slug') });
     });
     it('passes a collection slug with Ordinals numbers through the shared command validator', async () => {
       const fields={asset_type:'ordinal',slug:null,inscription_criteria:{kind:'numbers',ranges:[[100,105]],collection_slug:'pizza-comrades'}};

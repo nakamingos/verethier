@@ -59,7 +59,7 @@ export class OrdinalsOwnershipService {
   async checkSetupHealth(rule: VerifierRole): Promise<void> {
     const criteria = inscriptionCriteria(rule);
     if (this.provider(rule) === 'ordnet') {
-      await this.requireOrdnet().prepareRule((criteria?.kind === 'numbers' ? criteria.collection_slug : rule.slug) ?? '');
+      await this.requireOrdnet().prepareRule((criteria ? criteria.collection_slug : rule.slug) ?? '');
     } else if (rule.slug) {
       await this.loadCollection(ordinalCollectionId(rule.slug ?? ''), { priority: 'interactive' });
     } else {
@@ -84,7 +84,7 @@ export class OrdinalsOwnershipService {
     const provider = EnvironmentConfig.ORDINALS_PROVIDER;
     if (provider !== 'xverse' && provider !== 'ordnet') throw new Error('ORDINALS_PROVIDER must be xverse or ordnet.');
     const criteria = rule && inscriptionCriteria(rule);
-    if (criteria?.kind === 'numbers' && criteria.collection_slug) {
+    if (criteria?.collection_slug) {
       if (!this.ordnet) throw new Error('ord.net verification is not configured.');
       return 'ordnet';
     }
@@ -114,7 +114,6 @@ export class OrdinalsOwnershipService {
       contract_address: null, token_standard: null, token_ids: null, inscription_criteria: criteria,
     };
     if (collectionSlug?.trim()) {
-      if (criteria.kind !== 'numbers') throw new RuleInputError('An ord.net collection slug can only be combined with inscription numbers or ranges.');
       try { criteria.collection_slug = ordinalCollectionId(collectionSlug); }
       catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
       this.provider(fields);
@@ -164,8 +163,8 @@ export class OrdinalsOwnershipService {
     const run = context || { checks: new Map() };
     const provider = this.provider(rule, run);
     const key = this.checkKey(rule, addresses, run);
-    if (criteria?.kind === 'numbers' && criteria.collection_slug) {
-      if (!run.checks.has(key)) run.checks.set(key, this.collectionNumberAssets(rule, addresses, run).then(items => BigInt(items.size)));
+    if (criteria?.collection_slug) {
+      if (!run.checks.has(key)) run.checks.set(key, this.collectionSelectionAssets(rule, addresses, run).then(items => BigInt(items.size)));
       return run.checks.get(key);
     }
     if (!run.checks.has(key)) run.checks.set(key, criteria
@@ -179,7 +178,7 @@ export class OrdinalsOwnershipService {
     const addresses = [...new Set(wallets.map(normalizeBitcoinAddress))].sort();
     if (!addresses.length) return new Map();
     const criteria = inscriptionCriteria(rule);
-    if (criteria?.kind === 'numbers' && criteria.collection_slug) return this.collectionNumberAssets(rule, addresses, context);
+    if (criteria?.collection_slug) return this.collectionSelectionAssets(rule, addresses, context);
     const provider = this.provider(rule, context);
     if (!criteria && provider === 'ordnet') {
       try {
@@ -229,9 +228,9 @@ export class OrdinalsOwnershipService {
     return matching;
   }
 
-  private async collectionNumberAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
+  private async collectionSelectionAssets(rule: VerifierRole, addresses: string[], context: NftCheckContext): Promise<Map<string, bigint>> {
     const criteria = inscriptionCriteria(rule);
-    if (criteria?.kind !== 'numbers' || !criteria.collection_slug || !this.ordnet) throw new Error(UNAVAILABLE);
+    if (!criteria?.collection_slug || !this.ordnet) throw new Error(UNAVAILABLE);
     // Use the live, per-run collection scan. The persistent metadata catalog has
     // deliberately discarded owners and must never establish current ownership.
     const collection = await this.requireOrdnet().snapshot(criteria.collection_slug, context);
@@ -239,11 +238,16 @@ export class OrdinalsOwnershipService {
     const wallets = new Set(addresses);
     const matching = new Map<string, bigint>();
     const numbers = new Set<number>();
+    const selectedIds = new Set(criteria.kind === 'ids' ? criteria.ids : []);
     for (const [id, item] of collection.items) {
-      const number = item.number;
-      if (typeof number !== 'number' || !Number.isSafeInteger(number) || numbers.has(number)) throw new Error(UNAVAILABLE);
-      numbers.add(number);
-      if (!criteria.ranges.some(([start, end]) => number >= start && number <= end)) continue;
+      if (criteria.kind === 'ids') {
+        if (!selectedIds.has(id)) continue;
+      } else {
+        const number = item.number;
+        if (typeof number !== 'number' || !Number.isSafeInteger(number) || numbers.has(number)) throw new Error(UNAVAILABLE);
+        numbers.add(number);
+        if (!criteria.ranges.some(([start, end]) => number >= start && number <= end)) continue;
+      }
       if (item.owner === null) throw new Error(UNAVAILABLE);
       if (wallets.has(item.owner)) matching.set(id, 1n);
     }

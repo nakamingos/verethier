@@ -64,7 +64,7 @@ Portal and slash create/edit flows share validation, and Undo/Redo retains the c
 
 #### Ordinals number selections within an ord.net collection
 
-For an Ordinals number/range rule, **ord.net collection slug (optional)** can be set during creation, editing or duplication. In the slash command, supply `slug` alongside `inscription_numbers`. Only selected numbers belonging to that collection count. The optional scope is stored in `inscription_criteria.collection_slug`; top-level `slug` remains null for specific selections. Blank scope keeps the existing wallet-number provider path. It is not supported on Ethscription or explicit-ID rules.
+For an Ordinals ID or number/range rule, **ord.net collection slug (optional)** can be set during creation, editing or duplication. In the slash command, supply `slug` alongside `inscription_ids` or `inscription_numbers`. Only selected inscriptions belonging to that collection count. The optional scope is stored in `inscription_criteria.collection_slug`; top-level `slug` remains null for specific selections. Blank scope keeps the existing wallet-number provider path. It is not supported on Ethscription rules.
 
 A scoped check reads every page of the live ord.net collection and matches each selected inscription's reported owner against the member's proven wallets. It does not depend on Xverse/Ordiscan wallet inventory availability or the global collection-provider preference. Collection scans are shared within the ownership context; a new context reads fresh owners. The persistent six-hour metadata catalog never supplies ownership for this path. Missing numbers, ambiguous owners among matching inscriptions, inconsistent pages and API failures remain unavailable. Combined groups deduplicate by inscription ID; a small selection can still contribute toward a larger shared minimum. Exports use the same fresh matching-ID path.
 
@@ -140,3 +140,9 @@ Multi-trait rules store a canonical `trait_filter`; the old single-trait `attrib
 At that cleanup, compatible existing rules were consolidated into ten OR rules (74 rules became 52), keeping the lowest rule ID in each group. Each original definition is kept in the admin-action audit table as a nonreversible `merge` record, shown in the Audit Log as “Merged rule … into …”. Assignment and pending-job pointers moved to the retained rule, and affected roles were rechecked. `backend/scripts/plan-rule-consolidation.cjs RULES_JSON PRIVATE_OUTPUT_DIRECTORY` generates such a plan offline for review.
 
 Optional ideas are tracked in the [optional feature backlog](plans/optional-features.md).
+
+### Convert an Ordinals selection to a collection
+
+In Edit or Duplicate, keep the IDs/numbers and add an optional collection slug to restrict them to that ord.net collection. To use the entire collection, clear the selection and enter a slug. Both fields blank produces an actionable error. Collection metadata is validated before saving; failure leaves the original unchanged. No extra selector is needed. Conversion preserves the rule ID (for Edit), channel, all role outputs and minimum, clears the selection-only label, and uses normal duplicate detection, review, version guards and Undo/Redo.
+
+Migration `20261122010000_ordinal_id_collection_scopes.sql` extends the JSON validator and ord.net-only rule-save policy to ID scopes. It rewrites no existing rules. Apply before deploying the dependent backend/frontend. ID scopes use the same fresh, shared ord.net collection scan as numeric scopes, including matching-ID deduplication in combined rules and exports. They do not require inscription numbers in provider responses. Scoped IDs/numbers never fall back to a broader unscoped match during an outage.

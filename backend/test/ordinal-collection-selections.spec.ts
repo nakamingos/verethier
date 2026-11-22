@@ -4,6 +4,7 @@ import { RuleEditService } from '../src/services/rule-edit.service';
 import { prepareRuleCriteria } from '../src/services/rule-create.util';
 import { EnvironmentConfig } from '../src/config/environment.config';
 import { inscriptionCriteria, inscriptionRuleScope } from '../src/utils/inscription-rule.util';
+import { ordnetCompatible } from '../src/utils/ordinal-rule.util';
 import { ruleCriteriaKey, ruleEditFields, ruleEditVersion } from '../src/utils/rule-edit.util';
 import { NftCheckContext } from '../src/services/nft-ownership.service';
 import { AssetOwnershipService } from '../src/services/asset-ownership.service';
@@ -44,11 +45,11 @@ describe('ord.net collection-scoped inscription numbers',()=>{
     await expect(service.prepareInscriptionRule(null,'100',1,slug)).rejects.toThrow('collection slug');
     expect(get).not.toHaveBeenCalled();
   });
-  it('rejects an unknown collection and does not enable collection scopes for IDs or Ethscriptions',async()=>{
+  it('rejects an unknown collection and does not enable collection scopes for Ethscriptions',async()=>{
     get.mockResolvedValue({success:true,data:[]});
     await expect(service.prepareInscriptionRule(null,'100',1,'missing')).rejects.toThrow('not found');
     await expect(prepareRuleCriteria({asset_type:'ethscription',slug:'pizza-comrades',inscription_numbers:'100'}, {data:null as any,nfts:null as any})).rejects.toThrow('Only Ordinals');
-    await expect(prepareRuleCriteria({asset_type:'ordinal',slug:'pizza-comrades',inscription_ids:id(1)}, {data:null as any,nfts:null as any,ordinals:service})).rejects.toThrow('Only Ordinals');
+    await expect(prepareRuleCriteria({asset_type:'ordinal',slug:'pizza-comrades',inscription_ids:id(1)}, {data:null as any,nfts:null as any,ordinals:service})).rejects.toThrow('not found');
   });
   it('checks fresh owners only for selected numbers, stacks wallets and shares one complete scan across rules and members',async()=>{
     const context=run();
@@ -132,6 +133,57 @@ describe('ord.net collection-scoped inscription numbers',()=>{
   it('rejects malformed or incompatible persisted scope instead of silently checking all numbers',()=>{
     for(const scope of [null,'all','Pizza-Comrades','pizza-comrades\n','bad slug',[],{}])expect(()=>inscriptionCriteria({...rule,inscription_criteria:{...rule.inscription_criteria,collection_slug:scope}})).toThrow();
     expect(()=>inscriptionCriteria({...rule,asset_type:'ethscription'})).toThrow();
-    expect(()=>inscriptionCriteria({...rule,inscription_criteria:{kind:'ids',ids:[id(1)],collection_slug:'pizza-comrades'}})).toThrow();
+    expect(()=>inscriptionCriteria({...rule,asset_type:'ethscription',inscription_criteria:{kind:'ids',ids:['0x'+'a'.repeat(64)],collection_slug:'pizza-comrades'}})).toThrow();
   });
+  it('creates ID scopes and checks live matching IDs without requiring numbers or wallet inventories',async()=>{
+    const fields=await prepareRuleCriteria({asset_type:'ordinal',slug:' Pizza-Comrades ',inscription_ids:[id(1),id(3)].join(','),min_items:5},
+      {data:null as any,nfts:null as any,ordinals:service});
+    const selected={...rule,...fields.assetFields};
+    expect(inscriptionCriteria(selected)).toEqual({kind:'ids',ids:[id(1),id(3)],collection_slug:'pizza-comrades'});
+    expect(ordnetCompatible(selected)).toBe(true);
+    expect(ruleEditFields(selected).some(f=>f.key==='collection_slug')).toBe(true);
+    expect(inscriptionRuleScope(selected)).toContain('Collection: pizza-comrades');
+    await service.checkSetupHealth(selected);
+    const first=item(1), third=item(3); delete (first as any).inscription; delete (third as any).inscription;
+    get.mockResolvedValue(page([first,item(2,101,other),third]));
+    const context={...run(),ordinalProviderPolicy:'ordnet-only' as const,freshExport:true};
+    expect(await service.count(selected,[wallet],context)).toBe(2n);
+    expect([...await service.matchingAssets(selected,[wallet],context)]).toEqual([[id(1),1n],[id(3),1n]]);
+    expect(inventories.inventory).not.toHaveBeenCalled(); expect(catalog.snapshot).not.toHaveBeenCalled();
+    get.mockResolvedValue(page([item(1,100,other)]));
+    expect(await service.count(selected,[wallet],run())).toBe(0n);
+    get.mockResolvedValue(page([item(1,100,null)]));
+    await expect(service.count(selected,[wallet],run())).rejects.toThrow('unavailable');
+  });
+  it.each(['ids','numbers'])('converts %s to a whole collection in place when the list is cleared',async kind=>{
+    const before={...rule,additional_roles:[{id:'additional',name:'Collectors'}],rule_label:'Old label',
+      inscription_criteria:kind==='ids'?{kind:'ids',ids:[id(1)],collection_slug:'pizza-comrades'}:rule.inscription_criteria};
+    const original=JSON.stringify(before);
+    jest.spyOn(service,'prepareRule').mockResolvedValue({asset_type:'ordinal',slug:'yonder',chain_id:null,collection_name:'YONDER',contract_address:null,token_standard:null,token_ids:null});
+    const editor=new RuleEditService(null as any,null as any,service,null as any);
+    const after=await editor.prepare(before,{selection:'  ',collection_slug:' Yonder ',min_items:'5',label:'Old label'});
+    expect(after).toMatchObject({id:before.id,role_id:before.role_id,additional_roles:before.additional_roles,min_items:5,
+      slug:'yonder',collection_name:'YONDER',inscription_criteria:null,rule_label:null,ordinal_trait_snapshot:null});
+    expect(ruleEditFields(after).some(f=>f.key==='selection')).toBe(false);
+    expect(ruleEditFields(after).some(f=>f.key==='slug')).toBe(true);
+    expect(inscriptionCriteria(after)).toBeNull();
+    expect(JSON.stringify(before)).toBe(original);
+    await expect(editor.prepare(before,{collection_slug:'yonder',min_items:'5'})).rejects.toThrow('Enter at least');
+    await expect(editor.prepare(before,{selection:'',collection_slug:'',min_items:'5'})).rejects.toThrow('entire collection');
+    await expect(editor.prepare(before,{selection:'',collection_slug:'bad/slug',min_items:'5'})).rejects.toThrow('collection slug');
+    jest.mocked(service.prepareRule).mockRejectedValue(new Error('Collection not found'));
+    await expect(editor.prepare(before,{selection:'',collection_slug:'unknown',min_items:'5'})).rejects.toThrow('not found');
+    expect(JSON.stringify(before)).toBe(original);
+  });
+  it('adds and removes collection scope on an ID selection without changing its IDs',async()=>{
+    const before={...rule,inscription_criteria:{kind:'ids',ids:[id(1)]}};
+    const editor=new RuleEditService(null as any,null as any,service,null as any);
+    const after=await editor.prepare(before,{selection:id(1),min_items:'5',collection_slug:'pizza-comrades'});
+    expect(after.inscription_criteria).toEqual({...before.inscription_criteria,collection_slug:'pizza-comrades'});
+    jest.replaceProperty(EnvironmentConfig,'XVERSE_API_KEY','test');
+    jest.spyOn(service as any,'savedIdOwners').mockResolvedValue(new Map());
+    const removed=await editor.prepare(after,{selection:id(1),min_items:'5',collection_slug:''});
+    expect(removed.inscription_criteria).toEqual(before.inscription_criteria);
+  });
+
 });

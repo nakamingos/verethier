@@ -41,17 +41,30 @@ export class RuleEditService {
     const criteria = inscriptionCriteria(before);
     if (criteria) {
       const selection = inputs.selection?.trim();
+      const collectionSlug = before.asset_type === 'ordinal'
+        ? (inputs.collection_slug === undefined ? criteria.collection_slug : inputs.collection_slug.trim()) : undefined;
+      if (selection === '' && before.asset_type === 'ordinal') {
+        if (!collectionSlug) throw new RuleInputError('Enter inscription IDs or numbers, or clear the list and enter a collection slug to use the entire collection.');
+        let slug: string;
+        try { slug = ordinalCollectionId(collectionSlug); }
+        catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
+        const prepared = await this.ordinals.prepareRule(slug);
+        candidate.slug = prepared.slug;
+        candidate.collection_name = prepared.collection_name;
+        candidate.inscription_criteria = null;
+        candidate.rule_label = null;
+        candidate.ordinal_trait_snapshot = null;
+        return candidate;
+      }
       candidate.rule_label = normalizeRuleLabel(inputs.label ?? before.rule_label);
       const parsed = parseInscriptionCriteria(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, before.asset_type === 'ordinal' ? 'ordinal' : 'ethscription');
-      const collectionSlug = before.asset_type === 'ordinal' && criteria.kind === 'numbers'
-        ? (inputs.collection_slug === undefined ? criteria.collection_slug : inputs.collection_slug.trim()) : undefined;
-      if (parsed?.kind === 'numbers' && collectionSlug) {
+      if (parsed && collectionSlug) {
         try { parsed.collection_slug = ordinalCollectionId(collectionSlug); }
         catch { throw new RuleInputError('Enter one ord.net collection slug, such as pizza-comrades.'); }
       }
       if (candidate.min_items === before.min_items && JSON.stringify(parsed) === JSON.stringify(criteria)) return candidate;
       const prepared = before.asset_type === 'ordinal'
-        ? collectionSlug ? await this.ordinals.prepareInscriptionRule(null, selection, candidate.min_items, collectionSlug)
+        ? collectionSlug ? await this.ordinals.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items, collectionSlug)
           : await this.ordinals.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items)
         : await this.ethscriptions.prepareInscriptionRule(criteria.kind === 'ids' ? selection : null, criteria.kind === 'numbers' ? selection : null, candidate.min_items);
       candidate.inscription_criteria = prepared.inscription_criteria;

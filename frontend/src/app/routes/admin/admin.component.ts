@@ -1097,7 +1097,11 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.review = saved?.review || false;
     this.inputs = saved ? structuredClone(saved.inputs) : Object.fromEntries(rule.fields.map((field:any) => [field.key,field.value]));
     this.editTraits = saved ? structuredClone(saved.traits) : this.traitState(rule);
-    requestAnimationFrame(() => document.getElementById('edit-rule-'+rule.id)?.querySelector<HTMLElement>('select,input,textarea')?.focus({preventScroll:true}));
+    const origin = document.activeElement;
+    requestAnimationFrame(() => {
+      if (document.activeElement === origin)
+        document.getElementById('edit-rule-'+rule.id)?.querySelector<HTMLElement>('select,input,textarea')?.focus({preventScroll:true});
+    });
   }
   get chosenRoles(): {value:string;id?:string;name?:string}[] {
     return this.editor?.new ? (this.draft.role_selections ||= []) : this.editRoles;
@@ -1215,9 +1219,14 @@ export class AdminComponent implements OnInit, OnDestroy {
                 'label',
                 'min_items',
               ];
-    if (d.asset_type === 'ordinal' && this.mode === 'numbers') fields.push('slug');
+    if (d.asset_type === 'ordinal' && this.mode !== 'collection') {
+      fields.push('slug');
+      const selection = this.mode === 'ids' ? d.inscription_ids : d.inscription_numbers;
+      if (!selection?.trim() && d.slug?.trim()) fields.splice(fields.indexOf('label'), 1);
+    }
     for (const key of fields)
-      if (d[key] !== undefined && d[key] !== null && d[key] !== '')
+      if (d[key] !== undefined && d[key] !== null && d[key] !== '' &&
+          !(d.asset_type === 'ordinal' && ['inscription_ids','inscription_numbers'].includes(key) && !d[key].trim()))
         result[key] = key === 'min_items' ? Number(d[key]) : d[key];
     if (d.asset_type === 'counterparty') {
       const value = (d.xcp_value || '').trim();

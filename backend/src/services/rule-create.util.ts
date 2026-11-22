@@ -164,14 +164,14 @@ export async function prepareRuleCriteria(
         'Use /setup add-ordinals-rule or /setup add-ethscription-rule for inscription_ids or inscription_numbers.',
       );
     if (
-      (input.slug != null && !(input.asset_type === 'ordinal' && input.inscription_numbers != null && input.inscription_ids == null)) ||
+      (input.slug != null && input.asset_type !== 'ordinal') ||
       attributeKey !== 'ALL' ||
       attributeValue !== 'ALL' ||
       evmOptions
       || !!filter
     ) {
       throw new Error(
-        'Specific inscription rules use IDs or numbers with min_items. Only Ordinals number/range rules may also specify an ord.net collection slug. Leave attributes and NFT options empty.',
+        'Specific inscription rules use IDs or numbers with min_items. Only Ordinals selections may also specify an ord.net collection slug. Leave attributes and NFT options empty.',
       );
     }
     const provider =

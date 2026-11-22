@@ -553,7 +553,7 @@
                                       : 'inscription_numbers'
                                   ]
                                 "
-                                required
+                                [required]="draft.asset_type !== 'ordinal' || !draft.slug?.trim()"
                                 rows="3"
                                 maxlength="6000"
                                 [placeholder]="
@@ -569,9 +569,9 @@
                                 maxlength="100"
                                 placeholder="A name to recognize this selection"
                             /></label>
-                            @if (draft.asset_type === 'ordinal' && mode === 'numbers') {
-                              <label>ord.net collection slug (optional):<input name="numberCollection" [(ngModel)]="draft.slug" maxlength="100" placeholder="pizza-comrades" /></label>
-                              <p class="muted wide">When set, only selected numbers in this ord.net collection count. Ownership is checked through ord.net. Leave blank for numbers across any collection.</p>
+                            @if (draft.asset_type === 'ordinal') {
+                              <label>ord.net collection slug (optional):<input name="selectionCollection" [(ngModel)]="draft.slug" maxlength="100" placeholder="pizza-comrades" /></label>
+                              <p class="muted wide">With a list, only selected inscriptions in this collection count. Clear the list to use the entire collection. Ownership is checked through ord.net.</p>
                             }
                           }
                         }
@@ -720,8 +720,8 @@
                             </label>
                           }
                         }
-                        @if (editor.asset_type === 'ordinal' && editor.inscription_criteria?.kind === 'numbers') {
-                          <p class="muted wide">An ord.net collection slug restricts this selection to that collection and checks ownership through ord.net. Leave blank for numbers across any collection.</p>
+                        @if (editor.asset_type === 'ordinal' && editor.inscription_criteria) {
+                          <p class="muted wide">With a list, the collection slug restricts the selection to that collection. Clear the list and enter a slug to switch this rule to the entire collection. Leave the slug blank to keep an unrestricted selection.</p>
                         }
                         @if (hasTraitEditor) {
                           <ng-container *ngTemplateOutlet="traitControls" />
@@ -829,6 +829,9 @@
                   @if (review) {
                     <div class="notice">
                       <h3>Ready to save?</h3>
+                      @if (editor.asset_type === 'ordinal' && editor.inscription_criteria && inputs['selection']?.trim() === '' && inputs['collection_slug']?.trim()) {
+                        <p>Use the entire <strong>{{ inputs['collection_slug'] }}</strong> collection. The previous inscription list will no longer limit this rule.</p>
+                      }
                       @if (changedRole) {
                         <p class="role-change-preview">
                           <strong
