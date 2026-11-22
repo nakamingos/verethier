@@ -1348,4 +1348,29 @@ describe('DiscordVerificationService', () => {
     });
   });
 
+
+  it('omits role-action exclusions before spending requests on recommendation holdings', async () => {
+    mockDbService.getRoleMappings.mockResolvedValue([
+      { id: 55, role_id: 'role-id-3', slug: 'third-collection', min_items: 1 },
+    ]);
+    const blockedRoleIds = jest.fn().mockResolvedValue(new Set(['role-id-3']));
+    (service as any).roleActions = { blockedRoleIds };
+    try {
+      const roles = await service.analyzePotentialRoles('guild-id', 'channel-id', 'user-id', [], '0x123');
+      expect(roles).toEqual([]);
+      expect(blockedRoleIds).toHaveBeenCalledWith(mockGuildMember);
+      expect(blockedRoleIds).toHaveBeenCalledTimes(1);
+      expect(mockUserAddressService.getUserAddresses).not.toHaveBeenCalled();
+    } finally { (service as any).roleActions = undefined; }
+  });
+  it('compacts scoped Bitcoin labels while retaining inscription criteria and quantities', () => {
+    const rule = { asset_type: 'ordinal', inscription_criteria: { kind: 'numbers', ranges: [[123, 125]] }, min_items: 2 };
+    const compact = (service as any).formatRoleRequirement(rule, {}, { style: 'holding', matchingCount: 1, walletFamily: 'bitcoin' });
+    expect(compact).toContain('(1/2)');
+    expect(compact).toContain('123–125');
+    expect(compact).not.toContain('Bitcoin');
+    expect(compact).not.toContain('Ordinals');
+    const ordinary = (service as any).formatRoleRequirement(rule, {}, { style: 'holding', matchingCount: 1 });
+    expect(ordinary).toContain('Bitcoin · Ordinals');
+  });
 });

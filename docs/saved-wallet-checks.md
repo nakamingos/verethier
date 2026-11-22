@@ -6,15 +6,16 @@ Members can check their saved wallets again without signing. The **Re-check save
 
 ```
 [ Verify Now ↗ ]  [ Re-check saved wallets ]
-[ EVM — 2 saved wallets               ▾ ]
+
 ```
 
-- The dropdown lists only the wallet families (EVM, Bitcoin, Solana) where the member has an active saved wallet that one of the channel's rules would read. The family with the most of those wallets is preselected.
+- The initial message shows buttons only. Clicking **Re-check saved wallets** replaces the Verify Now message with a short explanation and a wallet-family dropdown. It lists only families (EVM, Bitcoin, Solana) with an active saved wallet that a channel rule would read. No family is preselected.
 - With one family, there is no dropdown. The button names the family, for example **Re-check EVM wallets**.
 - When the button is shown, the message adds: "Already verified? Re-check your saved wallets without signing."
 - With no saved wallets that apply, the reply looks the same as before: just Verify Now.
-- Picking a family only updates the member's own reply. Nothing is checked until they click the button.
-- After the check, the result appears below the Verify Now message, which keeps its link and expiry time. A **Member Portal** link appears beside Verify Now.
+- Choosing a family starts its check immediately. Opening the picker does not start a check or consume the cooldown.
+- Progress and results replace the original message; the old Verify Now link and expiry notice are removed. Results include a **Member Portal** link. To connect a new wallet, request verification again in Discord.
+- Bitcoin and Solana result lists omit network labels already supplied by the heading. EVM chain names remain because a single EVM check can include several chains. Roles excluded by current role actions are omitted from Additional Roles Available.
 
 ## What a check does
 
@@ -36,7 +37,7 @@ Linking a new wallet or moving one from another account still needs a signature.
 ## Limits
 
 - **Cooldown:** each member can check each family once per cooldown, per community. The cooldown is 5 minutes for EVM and Solana, and 15 minutes for Bitcoin because Ordinals lookups can use paid provider credits.
-- **When it starts:** the cooldown starts at the click, so a failed or slow check can't be repeated straight away. A click during the cooldown gets a private "You can check again …" reply and makes no lookups.
+- **When it starts:** the cooldown starts when the check starts, so a failed or slow check can't be repeated straight away. A click during the cooldown gets a private "You can check again …" reply and makes no lookups.
 - **Storage:** cooldowns are kept in memory, so a backend restart clears them.
 
 ## Activity and logs

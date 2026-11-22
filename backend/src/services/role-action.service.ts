@@ -8,6 +8,20 @@ export class RoleActionService {
   constructor(@Inject('SUPABASE_CLIENT') private readonly db: SupabaseClient,
     private readonly activityLog?: BouncerLogService) {}
 
+  /** One read for a recommendation list, rather than one query per role. */
+  async blockedRoleIds(member: GuildMember): Promise<Set<string>> {
+    const { data, error } = await this.db.from('verifier_role_actions')
+      .select('trigger_role_id,remove_role_ids').eq('server_id', member.guild.id);
+    if (error || !Array.isArray(data)) throw new Error('Could not check role actions.');
+    const blocked = new Set<string>();
+    for (const policy of data) {
+      if (!Array.isArray(policy.remove_role_ids)) throw new Error('Invalid role action.');
+      if (member.roles.cache.has(policy.trigger_role_id))
+        for (const roleId of policy.remove_role_ids) blocked.add(roleId);
+    }
+    return blocked;
+  }
+
   async blockedBy(member: GuildMember, role: string): Promise<boolean> {
     const { data, error } = await this.db
       .from('verifier_role_actions')

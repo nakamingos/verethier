@@ -109,14 +109,10 @@ describe('MemberRecheckService', () => {
       expect(await service.controls('user', 'guild', [solRule])).toBeNull();
     });
 
-    it('adds a family dropdown that preselects the family with the most wallets', async () => {
+    it('shows only a button before the member asks to re-check', async () => {
       const controls = await service.controls('user', 'guild', [ethRule, stampRule, solRule]);
-      expect(controls!.button.toJSON()).toMatchObject({ label: 'Re-check saved wallets', custom_id: RECHECK_BUTTON + 'evm' });
-      const menu = controls!.rows[0].toJSON().components[0] as any;
-      expect(menu.custom_id).toBe(RECHECK_SELECT);
-      expect(menu.options.map((o: any) => [o.value, o.description, !!o.default])).toEqual([
-        ['evm', '2 saved wallets', true], ['bitcoin', '2 saved wallets', false], ['solana', '1 saved wallet', false],
-      ]);
+      expect(controls!.button.toJSON()).toMatchObject({ label: 'Re-check saved wallets', custom_id: RECHECK_BUTTON + 'choose' });
+      expect(controls!.rows).toEqual([]);
     });
   });
 
@@ -129,24 +125,12 @@ describe('MemberRecheckService', () => {
     return { embeds: [verify], components: [new ActionRowBuilder().addComponents(link, check), new ActionRowBuilder().addComponents(menu)] };
   }
 
-  it('keeps the chosen family in the private reply and on the Check button', async () => {
-    const interaction: any = { values: ['bitcoin'], message: message(), update: jest.fn(), deferUpdate: jest.fn() };
-    await service.handleSelect(interaction);
-    const [buttons, select] = interaction.update.mock.calls[0][0].components;
-    expect(buttons.components.map((c: any) => c.custom_id ?? c.url)).toEqual(['https://example.com/verify/x', RECHECK_BUTTON + 'bitcoin']);
-    expect(select.components[0].options.map((o: any) => [o.value, o.default])).toEqual([['evm', false], ['bitcoin', true]]);
-
-    const bad: any = { values: ['dogecoin'], message: message(), update: jest.fn(), deferUpdate: jest.fn() };
-    await service.handleSelect(bad);
-    expect(bad.update).not.toHaveBeenCalled();
-  });
-
   describe('check', () => {
     function click(family = 'evm') {
       return { customId: RECHECK_BUTTON + family, guildId: 'guild', channelId: 'channel', guild: { name: 'Test Guild' },
         user: { id: 'user' }, message: message(), reply: jest.fn(), deferUpdate: jest.fn(), editReply: jest.fn() } as any;
     }
-    const last = (interaction: any) => { const reply = interaction.editReply.mock.calls.at(-1)[0]; return { ...reply, embeds: reply.embeds.slice(1) }; };
+    const last = (interaction: any) => interaction.editReply.mock.calls.at(-1)[0];
 
     it('checks one family against active saved wallets and grants roles as the member\'s own check', async () => {
       const interaction = click('evm');
@@ -162,20 +146,40 @@ describe('MemberRecheckService', () => {
       expect(verification.finishWalletChecks).toHaveBeenCalledWith(context);
       expect(ordinals.beginVerification).not.toHaveBeenCalled();
       const final = last(interaction);
-      // The Verify Now embed and its expiry stay above the result.
-      expect(interaction.editReply.mock.calls.at(-1)[0].embeds[0]).toMatchObject({ title: 'Wallet Verification', description: expect.stringContaining('expires <t:1800000000:R>') });
+      expect(final.embeds).toHaveLength(1);
       expect(final.embeds[0].data).toMatchObject({ title: 'Wallet Check Complete' });
       expect(final.embeds[0].data.description).toContain('Checked your saved EVM wallets in Test Guild.');
       expect(final.embeds[0].data.description).toContain('New Roles Assigned');
-      // Verify Now stays; the check controls are replaced by a Member Portal link.
-      expect(final.components).toHaveLength(1);
-      expect(final.components[0].components.map((c: any) => [c.label, c.url])).toEqual([
-        ['Verify Now', 'https://example.com/verify/x'], ['Member Portal', expect.stringMatching(/\/member$/)],
-      ]);
-      // While checking, only Verify Now is shown.
-      expect(interaction.editReply.mock.calls[0][0].components[0].components.map((c: any) => c.label)).toEqual(['Verify Now']);
+      expect(final.components[0].toJSON().components.map((c: any) => c.label)).toEqual(['Member Portal']);
+      expect(interaction.editReply.mock.calls[0][0].components).toEqual([]);
+      expect(discord.verificationSummary.mock.calls[0].at(-1)).toBe('evm');
     });
 
+    it('reveals the family picker only after Re-check and removes Verify Now', async () => {
+      const interaction = click('choose');
+      await service.handleButton(interaction);
+      const reply = last(interaction);
+      expect(reply.embeds[0].data.title).toBe('Re-check Saved Wallets');
+      const rows = reply.components.map((r: any) => r.toJSON());
+      expect(rows).toHaveLength(1);
+      expect(rows[0].components[0].custom_id).toBe(RECHECK_SELECT);
+      expect(rows[0].components[0].options.map((o: any) => o.value)).toEqual(['evm', 'bitcoin', 'solana']);
+      expect(verification.verifyUserBulk).not.toHaveBeenCalled();
+      expect(ordinals.beginVerification).not.toHaveBeenCalled();
+    });
+    it('starts the selected family check from the dropdown', async () => {
+      const interaction = { ...click(), values: ['bitcoin'] };
+      await service.handleSelect(interaction);
+      expect(verification.verifyUserBulk.mock.calls[0][1]).toEqual([3, 4]);
+      expect(last(interaction).embeds[0].data.description).toContain('saved Bitcoin wallets');
+    });
+    it('handles no saved wallets when opening the selector', async () => {
+      wallets = [];
+      const interaction = click('choose');
+      await service.handleButton(interaction);
+      expect(last(interaction).components).toEqual([]);
+      expect(last(interaction).embeds[0].data.description).toContain('No active saved wallets');
+    });
     it('applies a per-family cooldown, longer for Bitcoin', async () => {
       jest.useFakeTimers({ now: new Date('2026-11-18T12:00:00Z') });
       try {

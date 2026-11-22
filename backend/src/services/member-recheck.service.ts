@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import {
-  ActionRowBuilder, APIActionRowComponent, APIComponentInMessageActionRow, ButtonBuilder, ButtonInteraction, ButtonStyle,
-  CacheType, ComponentType, EmbedBuilder, MessageFlags, StringSelectMenuBuilder, StringSelectMenuInteraction,
+  ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle,
+  CacheType, EmbedBuilder, MessageFlags, StringSelectMenuBuilder, StringSelectMenuInteraction,
 } from 'discord.js';
 import { VerifierRole } from '@/models/verifier-role.interface';
 import { BoundedMap } from '@/utils/bounded-cache.util';
@@ -94,48 +94,59 @@ export class MemberRecheckService {
     return new Map(FAMILIES.filter(type => families.has(type)).map(type => [type, [...families.get(type)!]]));
   }
 
-  /** The Check button and family dropdown, or nothing when no saved wallet applies. */
+  /** Initial button only; the family picker appears after it is clicked. */
   async controls(userId: string, guildId: string, rules: Rule[]): Promise<VerificationReplyControls> {
     const active = await this.activeWallets(userId, guildId, rules);
     if (!active.size) return null;
-    // Preselect the family with the most active wallets (ties keep tab order).
     const families = [...active.keys()];
-    const selected = families.reduce((best, type) => active.get(type)!.length > active.get(best)!.length ? type : best);
-    const button = new ButtonBuilder().setCustomId(RECHECK_BUTTON + selected).setStyle(ButtonStyle.Secondary)
-      .setLabel(families.length === 1 ? `Re-check ${LABELS[selected]} wallets` : 'Re-check saved wallets');
-    if (families.length === 1) return { button, rows: [] };
-    const menu = new StringSelectMenuBuilder().setCustomId(RECHECK_SELECT).setMinValues(1).setMaxValues(1)
-      .addOptions(families.map(type => {
-        const count = active.get(type)!.length;
-        return { label: LABELS[type], value: type, description: `${count} saved wallet${count === 1 ? '' : 's'}`, default: type === selected };
-      }));
-    return { button, rows: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)] };
+    const only = families.length === 1 ? families[0] : 'choose';
+    const button = new ButtonBuilder().setCustomId(RECHECK_BUTTON + only).setStyle(ButtonStyle.Secondary)
+      .setLabel(families.length === 1 ? `Re-check ${LABELS[families[0]]} wallets` : 'Re-check saved wallets');
+    return { button, rows: [] };
   }
 
-  /** Keeps the member's choice in their private reply; the Check button carries it. */
+  /** Choosing a family starts the check; no separate confirmation is needed. */
   async handleSelect(interaction: StringSelectMenuInteraction<CacheType>): Promise<void> {
     const family = interaction.values[0];
     if (!isFamily(family)) { await interaction.deferUpdate(); return; }
-    const components = interaction.message.components.map(row => {
-      const json = row.toJSON() as APIActionRowComponent<APIComponentInMessageActionRow>;
-      return {
-        ...json,
-        components: json.components.map((component: any) =>
-          component.type === ComponentType.StringSelect && component.custom_id === RECHECK_SELECT
-            ? { ...component, options: component.options.map((option: any) => ({ ...option, default: option.value === family })) }
-            : component.type === ComponentType.Button && component.custom_id?.startsWith(RECHECK_BUTTON)
-            ? { ...component, custom_id: RECHECK_BUTTON + family }
-            : component),
-      };
-    });
-    await interaction.update({ components });
+    await this.runCheck(interaction, family);
   }
 
   async handleButton(interaction: ButtonInteraction<CacheType>): Promise<void> {
     const family = interaction.customId.slice(RECHECK_BUTTON.length);
+    if (family === 'choose') {
+      await interaction.deferUpdate();
+      if (!interaction.guildId || !interaction.channelId) return;
+      try {
+        const rules = await this.verificationSvc.getRulesForChannel(interaction.guildId, interaction.channelId);
+        const active = await this.activeWallets(interaction.user.id, interaction.guildId, rules);
+        const menu = new StringSelectMenuBuilder().setCustomId(RECHECK_SELECT)
+          .setPlaceholder('Choose wallets to re-check').setMinValues(1).setMaxValues(1)
+          .addOptions([...active].map(([type, wallets]) => ({ label: LABELS[type], value: type,
+            description: `${wallets.length} saved wallet${wallets.length === 1 ? '' : 's'}` })));
+        await interaction.editReply({
+          embeds: [new EmbedBuilder().setTitle('Re-check Saved Wallets').setColor('#5865F2')
+            .setDescription(active.size ? 'Choose which saved wallets to check for roles in this server. You do not need to connect or sign again.'
+              : 'No active saved wallets are available here. Request a new verification link in Discord to connect a wallet.')],
+          components: active.size ? [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)] : [],
+        });
+      } catch {
+        await interaction.editReply({
+          embeds: [new EmbedBuilder().setTitle('Saved Wallets Unavailable')
+            .setDescription('Could not load your saved wallets. Please request verification again in Discord and try Re-check once more.').setColor('#FF0000')],
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(memberPortalButton())],
+        });
+      }
+      return;
+    }
+    if (!isFamily(family)) { await interaction.deferUpdate(); return; }
+    await this.runCheck(interaction, family);
+  }
+
+  private async runCheck(interaction: ButtonInteraction<CacheType> | StringSelectMenuInteraction<CacheType>, family: WalletType): Promise<void> {
     const guildId = interaction.guildId;
     const channelId = interaction.channelId;
-    if (!isFamily(family) || !guildId || !channelId) { await interaction.deferUpdate(); return; }
+    if (!guildId || !channelId) { await interaction.deferUpdate(); return; }
     const userId = interaction.user.id;
     const cooldownKey = `${userId}:${guildId}:${family}`;
     const readyAt = this.cooldowns.get(cooldownKey) ?? 0;
@@ -149,34 +160,24 @@ export class MemberRecheckService {
     // The cooldown starts at the click, so failed or slow checks cannot be repeated rapidly.
     this.cooldowns.set(cooldownKey, Date.now() + COOLDOWN_MS[family]);
     await interaction.deferUpdate();
-    // Keep only the Verify Now link while checking and afterwards.
-    const linkRow = interaction.message.components
-      .map(row => row.toJSON() as APIActionRowComponent<APIComponentInMessageActionRow>)
-      .map(row => ({ ...row, components: row.components.filter((component: any) => component.type === ComponentType.Button && component.url) }))
-      .filter(row => row.components.length);
-    // Keep the Verify Now embed, with its expiry, above the check's result.
-    const verifyEmbeds = interaction.message.embeds.map(embed => embed.toJSON());
-    // Results add a Member Portal link beside Verify Now.
-    const resultRows = linkRow.length
-      ? [{ ...linkRow[0], components: [...linkRow[0].components, memberPortalButton().toJSON()] }, ...linkRow.slice(1)]
-      : [{ type: ComponentType.ActionRow, components: [memberPortalButton().toJSON()] }];
+    const resultRows = [new ActionRowBuilder<ButtonBuilder>().addComponents(memberPortalButton())];
     const show = (title: string, description: string, color: `#${string}`, rows: any[] = resultRows) => interaction.editReply({
-      embeds: [...verifyEmbeds, new EmbedBuilder().setTitle(title).setDescription(boundedEmbedDescription(description)).setColor(color)],
+      embeds: [new EmbedBuilder().setTitle(title).setDescription(boundedEmbedDescription(description)).setColor(color)],
       components: rows,
     });
-    await show('Checking Saved Wallets', `Checking your saved ${LABELS[family]} wallets…`, '#5865F2', linkRow);
+    await show('Checking Saved Wallets', `Checking your saved ${LABELS[family]} wallets… You do not need to connect or sign again.`, '#5865F2', []);
     try {
       const outcome = await this.check(userId, guildId, channelId, family);
       const guildName = interaction.guild?.name || 'this server';
       if (outcome.kind === 'no-rules') await show('No Matching Requirements', `This channel has no ${LABELS[family]} requirements.`, '#FF0000');
-      else if (outcome.kind === 'no-wallets') await show('No Saved Wallets', `You have no active saved ${LABELS[family]} wallets here. Use Verify Now to sign with one.`, '#FF0000');
+      else if (outcome.kind === 'no-wallets') await show('No Saved Wallets', `You have no active saved ${LABELS[family]} wallets here. Request a new verification link in Discord to connect one.`, '#FF0000');
       else if (outcome.kind === 'unavailable') await show('Wallet Check Unavailable', UNAVAILABLE, '#FF0000');
       else {
         const removed = outcome.revoked ? `\n\nRemoved ${outcome.revoked} role${outcome.revoked === 1 ? '' : 's'} you no longer qualify for.` : '';
         if (!outcome.roleResults.length) {
           await show('No Matching Roles', `Your saved ${LABELS[family]} wallets don't meet this channel's requirements.${removed}`, '#FF0000');
         } else {
-          const summary = await this.discord.verificationSummary(guildId, channelId, userId, outcome.roleResults, outcome.address, outcome.context)
+          const summary = await this.discord.verificationSummary(guildId, channelId, userId, outcome.roleResults, outcome.address, outcome.context, family)
             .catch(() => '');
           await show('Wallet Check Complete', `Checked your saved ${LABELS[family]} wallets in ${guildName}.${summary}${removed}`, '#00FF00');
         }
