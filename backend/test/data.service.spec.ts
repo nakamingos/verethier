@@ -354,4 +354,11 @@ describe('DataService', () => {
     expect(await context.ethscriptionTraits.get('a')).toEqual({ values: { Type: 'Blue' } });
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
+
+  it.each(['comrades-otd', 'misprint-mingos'])('keeps the original %s definition on fallback', async slug => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockRejectedValue(new Error('unavailable'));
+    queueInventory({ data: [{ hashId: 'a', slug }], error: null }, false);
+    expect(await service.matchingAssetIdsWithCriteria('wallet', slug)).toEqual(['a']);
+  });
 });

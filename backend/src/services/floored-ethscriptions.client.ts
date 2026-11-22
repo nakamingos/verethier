@@ -25,10 +25,8 @@ export class FlooredEthscriptionsClient {
   constructor(private readonly apiKey?: string) {}
 
   supportsCollection(slug?: string): boolean {
-    // Live comparisons found non-equivalent membership, not just renamed slugs.
-    // Keep the existing definitions until an explicit rule migration is agreed.
     return !!this.apiKey && !!slug &&
-      !['ALL', 'all-collections', 'comrades-otd', 'misprint-mingos'].includes(slug);
+      !['ALL', 'all-collections'].includes(slug);
   }
 
   async inventory(wallets: string[], slug: string): Promise<EthscriptionAsset[]> {
@@ -43,11 +41,14 @@ export class FlooredEthscriptionsClient {
   }
 
   private async walletInventory(wallet: string, slug: string, deadline: number): Promise<EthscriptionAsset[]> {
+    // Translate only outgoing Floored requests. Saved rules and fallback reads
+    // retain their original slug; small provider membership differences are accepted.
+    const providerSlug = slug === 'comrades-otd' ? 'comrades-of-the-dead' : slug;
     const items = new Map<string, EthscriptionAsset>();
     let expectedTotal: number | undefined;
     for (let page = 0; page < MAX_PAGES; page++) {
       const offset = page * PAGE_SIZE;
-      const params = new URLSearchParams({ collection: slug, limit: String(PAGE_SIZE), offset: String(offset) });
+      const params = new URLSearchParams({ collection: providerSlug, limit: String(PAGE_SIZE), offset: String(offset) });
       const body = await this.request(`/accounts/${wallet}/ethscriptions?${params}`, deadline);
       const pagination = body.pagination;
       if (!Array.isArray(body.data) || body.data.length > PAGE_SIZE || !object(pagination) ||
@@ -62,7 +63,7 @@ export class FlooredEthscriptionsClient {
       for (const row of body.data) {
         if (!object(row) || !HASH.test(row.transactionHash) || !ADDRESS.test(row.currentOwner) ||
           typeof row.isEscrowed !== 'boolean' || !object(row.collectionItem) ||
-          row.collectionItem.collectionSlug !== slug)
+          row.collectionItem.collectionSlug !== providerSlug)
           throw new FlooredReadError('invalid_asset');
         const id = row.transactionHash.toLowerCase();
         if (items.has(id)) throw new FlooredReadError('duplicate_asset');

@@ -12,10 +12,21 @@ describe('Floored Ethscriptions collection reads', () => {
   let fetchMock: jest.SpyInstance;
   beforeEach(() => { client = new FlooredEthscriptionsClient('synthetic-key'); fetchMock = jest.spyOn(global, 'fetch'); });
   afterEach(() => jest.restoreAllMocks());
-  it('requires a backend key and preserves incompatible legacy definitions', () => {
+  it('requires a backend key and supports both legacy collection names', () => {
     expect(new FlooredEthscriptionsClient().supportsCollection(slug)).toBe(false);
-    for (const s of ['ALL', 'all-collections', 'comrades-otd', 'misprint-mingos']) expect(client.supportsCollection(s)).toBe(false);
-    expect(client.supportsCollection(slug)).toBe(true);
+    for (const s of ['ALL', 'all-collections']) expect(client.supportsCollection(s)).toBe(false);
+    for (const s of [slug, 'comrades-otd', 'misprint-mingos']) expect(client.supportsCollection(s)).toBe(true);
+  });
+  it.each([
+    ['comrades-otd', 'comrades-of-the-dead'],
+    ['misprint-mingos', 'misprint-mingos'],
+  ])('maps %s only for the outgoing provider request', async (ruleSlug, providerSlug) => {
+    fetchMock.mockResolvedValue(response(page([{ ...item(), collectionItem: {
+      collectionSlug: providerSlug, attributes: { Type: 'Gold' },
+    } }])));
+    const result = await client.inventory([wallet], ruleSlug);
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('collection')).toBe(providerSlug);
+    expect(result[0].slug).toBe(ruleSlug);
   });
   it('reads every page, deduplicates input wallets, and retains array traits', async () => {
     fetchMock.mockResolvedValueOnce(response(page(Array.from({ length: 100 }, (_, i) => item(i + 1)), true, 0, 101)))
