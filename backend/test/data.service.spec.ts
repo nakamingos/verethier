@@ -1,3 +1,4 @@
+import { FlooredEthscriptionsClient } from '../src/services/floored-ethscriptions.client';
 import { Logger } from '@nestjs/common';
 import { EthscriptionDataUnavailableError } from '../src/utils/ethscription-data-error.util';
 import { IncompleteEthscriptionTraitsError } from '../src/utils/ethscription-traits.util';
@@ -311,4 +312,53 @@ describe('DataService', () => {
     await expect(service.getAllSlugs()).rejects.toThrow('timeout');
   });
 
+
+  it('uses collection-scoped Floored traits without reading marketplace metadata', async () => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    const read = jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockResolvedValue([
+      { hashId: 'a', slug: 'comrades', attributes_new: { values: { Type: ['Blue', 'Gold'] } } },
+    ]);
+    const context = { checks: new Map() };
+    const filter = { operator: 'OR' as const, conditions: [{ key: 'Type', value: 'Blue' }] };
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,filter)).toEqual(['a']);
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,filter)).toEqual(['a']);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+    expect((context as any).ethscriptionTraits?.has('a')).not.toBe(true);
+  });
+  it('falls back to a complete legacy inventory when Floored fails', async () => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockRejectedValue(new Error('provider unavailable'));
+    queueInventory({ data: [{ hashId: 'a', slug: 'comrades' }], error: null }, false);
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades')).toEqual(['a']);
+    expect(mockSupabase.from).toHaveBeenCalledTimes(2);
+  });
+  it('keeps ownership unavailable when both providers fail', async () => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockRejectedValue(new Error('provider unavailable'));
+    queueQuery({ data: [], error: { code: '57014' } });
+    queueQuery({ data: [], error: null });
+    await expect(service.matchingAssetIdsWithCriteria('wallet','comrades')).rejects.toThrow(EthscriptionDataUnavailableError);
+  });
+
+  it('does not substitute another collection metadata cached under the same hash', async () => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockResolvedValue([
+      { hashId: 'a', slug: 'comrades', attributes_new: { values: { Type: 'Gold' } } },
+    ]);
+    const context = { checks: new Map(), ethscriptionTraits: new Map([
+      ['a', Promise.resolve({ values: { Type: 'Blue' } })],
+    ]) };
+    const filter = { operator: 'AND' as const, conditions: [{ key: 'Type', value: 'Gold' }] };
+    expect(await service.matchingAssetIdsWithCriteria('wallet','comrades','ALL','ALL',1,context,filter)).toEqual(['a']);
+    expect(await context.ethscriptionTraits.get('a')).toEqual({ values: { Type: 'Blue' } });
+    expect(mockSupabase.from).not.toHaveBeenCalled();
+  });
+
+  it.each(['comrades-otd', 'misprint-mingos'])('keeps the original %s definition on fallback', async slug => {
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'supportsCollection').mockReturnValue(true);
+    jest.spyOn(FlooredEthscriptionsClient.prototype, 'inventory').mockRejectedValue(new Error('unavailable'));
+    queueInventory({ data: [{ hashId: 'a', slug }], error: null }, false);
+    expect(await service.matchingAssetIdsWithCriteria('wallet', slug)).toEqual(['a']);
+  });
 });

@@ -44,6 +44,7 @@ export class EnvironmentConfig {
   public static readonly SOLANA_DAS_URL = process.env.SOLANA_DAS_URL;
   public static readonly BASE_RPC_URL = process.env.BASE_RPC_URL;
   public static readonly ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL;
+  public static readonly FLOORED_API_KEY = process.env.FLOORED_API_KEY?.trim();
   public static readonly OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;
   public static readonly ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
   public static readonly XVERSE_API_KEY = process.env.XVERSE_API_KEY;
